@@ -13,7 +13,9 @@
 
 ## 어떻게 검증했나요?
 
-- [ ] `bash ./gradlew test`
+- [ ] `./gradlew clean test`
+- [ ] `./gradlew build`
+- [ ] `/health`와 Swagger UI 확인
 - [ ] 정상 요청
 - [ ] 잘못된 입력
 - [ ] 권한 부족
