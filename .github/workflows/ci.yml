@@ -1,0 +1,59 @@
+name: Server CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: server-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: fowoco_ci
+          POSTGRES_USER: fowoco
+          POSTGRES_PASSWORD: fowoco_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fowoco -d fowoco_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Run tests
+        run: ./gradlew clean test
+        env:
+          POSTGRES_TEST_ENABLED: 'true'
+          POSTGRES_TEST_URL: jdbc:postgresql://localhost:5432/fowoco_ci
+          POSTGRES_TEST_USERNAME: fowoco
+          POSTGRES_TEST_PASSWORD: fowoco_ci_only
+
+      - name: Build executable jar
+        run: ./gradlew build -x test

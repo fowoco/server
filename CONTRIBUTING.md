@@ -22,17 +22,36 @@
 feat/4-auth-multitenancy
 fix/7-worker-link-expiry
 docs/13-file-storage-guide
+agent/3-dev-environment-foundation
+```
+
+브랜치명은 도구 호환성을 위해 영문·숫자·하이픈을 사용합니다. Codex가 작업할 때는 `agent/{Issue 번호}-{짧은 설명}` 형식을 사용합니다.
+
+### Commit과 PR 작성 규칙
+
+- Commit message는 Conventional Commits 형식을 사용합니다.
+- type과 scope는 영문으로 쓰고, commit subject도 간결한 영문으로 작성합니다.
+- PR 제목은 `type: 한글 요약` 형식으로 작성합니다.
+- PR 본문은 변경 이유와 영향, 검증 결과가 명확하게 전달되는 것을 우선합니다. 코드 식별자와 기술 용어는 억지로 번역하지 않습니다.
+
+```text
+feat(auth): implement access token refresh
+fix(worker-link): validate token expiration
+chore: configure server development environment
+docs: update local setup guide
+
+PR title: feat: 인증 API 구현
 ```
 
 ## 3. 로컬 검증
 
 ```bash
-bash ./gradlew test
-bash ./gradlew bootRun
+./gradlew clean test
+./gradlew bootRun
 curl http://localhost:8080/health
 ```
 
-PostgreSQL, 인증, Swagger 등 아직 구현되지 않은 기능은 해당 Issue 완료 뒤 문서를 갱신합니다.
+브라우저에서 <http://localhost:8080/swagger-ui.html>도 열리는지 확인합니다. 기본 `local` Profile은 H2를 사용하므로 PostgreSQL 설치 없이 시작할 수 있습니다.
 
 ## 4. 구현 기본 순서
 
@@ -53,7 +72,7 @@ PR Template을 채우고 관련 Issue를 연결합니다.
 
 PR 전 확인:
 
-- `bash ./gradlew test`가 통과하는가?
+- `./gradlew clean test`가 통과하는가?
 - 다른 사업장의 데이터를 조회·수정할 수 없는가?
 - 민감정보·토큰·Secret이 DTO·로그·AI 입력에 없는가?
 - AI 오류가 자동 승인·발송으로 이어지지 않는가?
