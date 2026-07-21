@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 질문과 도움
+    url: https://github.com/fowoco/server/discussions/categories/q-a
+    about: 로컬 실행, 환경설정, API 연동 질문은 Q&A에서 답변받으세요.
+  - name: 설계·아이디어 제안
+    url: https://github.com/fowoco/server/discussions
+    about: 구현 방법이 아직 정해지지 않았다면 Discussion에서 먼저 합의하세요.
+  - name: 개발 Wiki
+    url: https://github.com/fowoco/server/wiki
+    about: 아키텍처, API, 보안, 배포 설명을 먼저 확인하세요.

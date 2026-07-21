@@ -1,0 +1,64 @@
+name: 버그 신고
+description: 재현 가능한 서버 오류를 알려주세요.
+title: "[Bug] "
+labels:
+  - type:bug
+  - status:backlog
+body:
+  - type: markdown
+    attributes:
+      value: |
+        실제 개인정보, JWT, Worker Link 토큰, API Key, 비밀번호, 전체 로그는 올리지 마세요.
+  - type: textarea
+    id: summary
+    attributes:
+      label: 한 줄 요약
+      description: 무엇이 잘못됐는지 짧게 적어 주세요.
+      placeholder: 만료된 근로자 링크가 200을 반환합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 순서
+      description: 비식별 테스트 데이터로 번호를 매겨 적어 주세요.
+      placeholder: |
+        1. 승인된 Task의 링크를 발급합니다.
+        2. 만료시각 이후 공개 조회 API를 호출합니다.
+        3. 응답 상태를 확인합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: 예상 결과와 실제 결과
+      placeholder: 예상 410 또는 정책 오류 / 실제 200
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 실행 환경
+      placeholder: macOS, Java 17, local profile, commit SHA
+    validations:
+      required: true
+  - type: input
+    id: request_id
+    attributes:
+      label: request_id
+      description: 있다면 적고 토큰이나 개인정보는 적지 마세요.
+  - type: textarea
+    id: safe_logs
+    attributes:
+      label: 비식별화한 오류 일부
+      description: 문제와 직접 관련된 짧은 부분만 붙여 주세요.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 제출 전 확인
+      options:
+        - label: 같은 버그가 이미 등록됐는지 검색했습니다.
+          required: true
+        - label: 개인정보·토큰·Secret·전체 로그를 제거했습니다.
+          required: true
