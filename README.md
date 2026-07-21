@@ -106,6 +106,7 @@ React Client
 | 구현이 확정된 작업 | [Issues](https://github.com/fowoco/server/issues) |
 | P0 핵심 일정 | [M3 Milestone](https://github.com/fowoco/server/milestone/1) |
 | P1 사용성 일정 | [M4 Milestone](https://github.com/fowoco/server/milestone/2) |
+| 서버 Issue·PR 로드맵 | [Server Roadmap · 팀원 전용](https://github.com/orgs/fowoco/projects/3) |
 | 팀 전체 진행 상태 | [Project · 팀원 전용](https://github.com/orgs/fowoco/projects/1) |
 | 아키텍처·보안·배포 설명 | [Server Wiki](https://github.com/fowoco/server/wiki) |
 
