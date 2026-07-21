@@ -1,7 +1,8 @@
 spring:
   profiles:
     active: local
-
+  jpa:
+    open-in-view: false
 ---
 spring:
   config:
@@ -17,7 +18,6 @@ spring:
   h2:
     console:
       enabled: true
-
 ---
 spring:
   config:
@@ -25,9 +25,34 @@ spring:
       on-profile: dev
   datasource:
     url: jdbc:postgresql://localhost:5432/fowoco
-    username: postgres
+    username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb-${random.uuid}
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
