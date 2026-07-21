@@ -1,6 +1,8 @@
 spring:
   profiles:
     active: local
+  jpa:
+    open-in-view: false
 ---
 spring:
   config:
@@ -23,7 +25,7 @@ spring:
       on-profile: dev
   datasource:
     url: jdbc:postgresql://localhost:5432/fowoco
-    username: postgres
+    username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD}
   jpa:
     hibernate:
