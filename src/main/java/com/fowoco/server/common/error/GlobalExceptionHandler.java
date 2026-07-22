@@ -156,7 +156,7 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiErrorResponse> response(
-            ErrorCode errorCode,
+            ApiErrorCode errorCode,
             String message,
             List<FieldErrorResponse> fieldErrors,
             HttpServletRequest request
@@ -164,7 +164,7 @@ public class GlobalExceptionHandler {
         ApiErrorResponse body = new ApiErrorResponse(
                 Instant.now(clock),
                 errorCode.status().value(),
-                errorCode.name(),
+                errorCode.code(),
                 message == null || message.isBlank() ? errorCode.defaultMessage() : message,
                 request.getRequestURI(),
                 requestId(request),

@@ -24,6 +24,7 @@ public class OpenApiConfig {
 
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final String BEARER_AUTH_SCHEME = "bearerAuth";
+    private static final String REFRESH_COOKIE_SCHEME = "refreshCookie";
 
     @Bean
     public OpenAPI fowocoOpenApi() {
@@ -48,14 +49,29 @@ public class OpenApiConfig {
                         .bearerFormat("JWT")
                         .description("로그인 응답의 Access Token을 Authorization: Bearer <access_token> 형식으로 전달합니다. "
                                 + "JWT에는 sub(user_id), company_id, roles, token_type, iss, aud, exp, jti가 포함됩니다."))
+                .addSecuritySchemes(REFRESH_COOKIE_SCHEME, new SecurityScheme()
+                        .type(SecurityScheme.Type.APIKEY)
+                        .in(SecurityScheme.In.COOKIE)
+                        .name("fowoco_refresh_token")
+                        .description("Refresh·Logout에서만 사용하는 HttpOnly 쿠키입니다. "
+                                + "JSON 본문이나 Authorization 헤더로 전송하지 않습니다."))
                 .addHeaders("RequestId", new Header()
                         .description("요청과 로그를 함께 찾기 위한 추적 ID")
                         .schema(new StringSchema()))
                 .addHeaders("RefreshTokenCookie", new Header()
-                        .description("Refresh Token을 전달하는 HttpOnly 쿠키. 원문은 JSON 응답에 포함하지 않습니다.")
+                        .description("Refresh Token을 전달하는 HttpOnly 쿠키입니다. 원문은 JSON 응답에 포함하지 않습니다. "
+                                + "MVP는 same-site 배포에서 SameSite=Strict 또는 Lax만 허용하며, "
+                                + "SameSite=None은 CSRF 또는 신뢰 Origin 검증을 갖추기 전에는 사용하지 않습니다.")
                         .schema(new StringSchema().example(
                                 "fowoco_refresh_token=<opaque-token>; Path=/api/v1/auth; "
                                         + "Max-Age=1209600; HttpOnly; SameSite=Strict"
+                        )))
+                .addHeaders("ExpiredRefreshTokenCookie", new Header()
+                        .description("브라우저에 저장된 Refresh Token을 삭제하는 만료 쿠키입니다. "
+                                + "발급 쿠키와 같은 이름과 Path를 사용하고 Max-Age=0으로 만료시킵니다.")
+                        .schema(new StringSchema().example(
+                                "fowoco_refresh_token=; Path=/api/v1/auth; "
+                                        + "Max-Age=0; HttpOnly; SameSite=Strict"
                         )))
                 .addResponses("BadRequest", errorResponse("요청 형식 또는 입력값 오류"))
                 .addResponses("Unauthorized", errorResponse("인증 필요"))
@@ -70,6 +86,31 @@ public class OpenApiConfig {
                                 "request_id", "01-example-request-id",
                                 "field_errors", java.util.List.of()
                         )
+                ))
+                .addResponses("InvalidRefreshToken", errorResponse(
+                        "Refresh Token이 없거나 유효하지 않아 재발급할 수 없음",
+                        Map.of(
+                                "timestamp", "2026-07-22T01:10:00Z",
+                                "status", 401,
+                                "code", "INVALID_REFRESH_TOKEN",
+                                "message", "로그인 정보를 갱신할 수 없습니다. 다시 로그인해 주세요.",
+                                "path", "/api/v1/auth/refresh",
+                                "request_id", "01-example-request-id",
+                                "field_errors", java.util.List.of()
+                        )
+                ).addHeaderObject(
+                        org.springframework.http.HttpHeaders.SET_COOKIE,
+                        new Header().$ref("#/components/headers/ExpiredRefreshTokenCookie")
+                ).addHeaderObject(
+                        org.springframework.http.HttpHeaders.CACHE_CONTROL,
+                        new Header()
+                                .description("오류 응답 저장 방지")
+                                .schema(new StringSchema().example("no-store"))
+                ).addHeaderObject(
+                        org.springframework.http.HttpHeaders.PRAGMA,
+                        new Header()
+                                .description("구형 캐시의 오류 응답 저장 방지")
+                                .schema(new StringSchema().example("no-cache"))
                 ))
                 .addResponses("Forbidden", errorResponse("권한 부족"))
                 .addResponses("NotFound", errorResponse("리소스를 찾을 수 없음"))

@@ -2,7 +2,9 @@ package com.fowoco.server.auth.infrastructure.persistence;
 
 import com.fowoco.server.auth.domain.UserAccount;
 import jakarta.persistence.EntityManager;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -13,6 +15,13 @@ public class JpaUserAccountRepository
 
     public JpaUserAccountRepository(EntityManager entityManager) {
         this.entityManager = entityManager;
+    }
+
+    @Override
+    public void insert(UserAccount userAccount) {
+        Objects.requireNonNull(userAccount, "userAccount must not be null");
+        entityManager.persist(UserAccountJpaEntity.fromDomain(userAccount));
+        entityManager.flush();
     }
 
     @Override
@@ -27,6 +36,24 @@ public class JpaUserAccountRepository
                 )
                 .setParameter("normalizedEmail", normalizedEmail)
                 .setMaxResults(1)
+                .getResultStream()
+                .findFirst()
+                .map(UserAccountJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<UserAccount> findByUserIdAndCompanyId(UUID userId, UUID companyId) {
+        return entityManager.createQuery(
+                        """
+                        select userAccount
+                        from UserAccountJpaEntity userAccount
+                        where userAccount.userId = :userId
+                          and userAccount.companyId = :companyId
+                        """,
+                        UserAccountJpaEntity.class
+                )
+                .setParameter("userId", userId)
+                .setParameter("companyId", companyId)
                 .getResultStream()
                 .findFirst()
                 .map(UserAccountJpaEntity::toDomain);

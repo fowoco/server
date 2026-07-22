@@ -50,6 +50,17 @@ class AuthOpenApiContractTest {
     }
 
     @Test
+    void refreshTokenCookieSecuritySchemeIsDocumented() {
+        JsonNode refreshCookie = openApi.at("/components/securitySchemes/refreshCookie");
+
+        assertThat(refreshCookie.path("type").asText()).isEqualTo("apiKey");
+        assertThat(refreshCookie.path("in").asText()).isEqualTo("cookie");
+        assertThat(refreshCookie.path("name").asText()).isEqualTo("fowoco_refresh_token");
+        assertThat(refreshCookie.path("description").asText())
+                .contains("Refresh", "Logout", "JSON", "Authorization");
+    }
+
+    @Test
     void loginDocumentsPublicRequestResponseCookieAndErrors() {
         JsonNode login = openApi.at("/paths/~1api~1v1~1auth~1login/post");
 
@@ -92,6 +103,90 @@ class AuthOpenApiContractTest {
                         "expires_at"
                 );
         assertThat(responseProperties.has("refresh_token")).isFalse();
+    }
+
+    @Test
+    void refreshDocumentsCookieOnlyRotationNoStoreAndStableError() {
+        JsonNode refresh = openApi.at("/paths/~1api~1v1~1auth~1refresh/post");
+
+        assertThat(refresh.path("operationId").asText()).isEqualTo("refreshAccessToken");
+        assertThat(refresh.at("/security/0/refreshCookie").isArray()).isTrue();
+        assertThat(refresh.has("requestBody")).isFalse();
+        assertThat(refresh.path("description").asText())
+                .contains("Bearer Access Token은 사용하지 않습니다", "한 번에 하나");
+        assertThat(refresh.path("parameters").toString())
+                .contains("fowoco_refresh_token", "cookie", "required");
+        assertThat(refresh.at("/responses/200/content/application~1json/schema/$ref").asText())
+                .isEqualTo("#/components/schemas/RefreshResponse");
+        assertThat(refresh.at("/responses/200/headers/Set-Cookie/$ref").asText())
+                .isEqualTo("#/components/headers/RefreshTokenCookie");
+        assertThat(refresh.at("/responses/200/headers/Cache-Control/schema/example").asText())
+                .isEqualTo("no-store");
+        assertThat(refresh.at("/responses/200/headers/Pragma/schema/example").asText())
+                .isEqualTo("no-cache");
+        assertThat(refresh.at("/responses/401/$ref").asText())
+                .isEqualTo("#/components/responses/InvalidRefreshToken");
+
+        JsonNode invalidRefresh = openApi.at("/components/responses/InvalidRefreshToken");
+        assertThat(invalidRefresh.at("/content/application~1json/example/code").asText())
+                .isEqualTo("INVALID_REFRESH_TOKEN");
+        assertThat(invalidRefresh.at("/content/application~1json/example/path").asText())
+                .isEqualTo("/api/v1/auth/refresh");
+        assertThat(invalidRefresh.at("/headers/Set-Cookie/$ref").asText())
+                .isEqualTo("#/components/headers/ExpiredRefreshTokenCookie");
+        assertThat(invalidRefresh.at("/headers/Cache-Control/schema/example").asText())
+                .isEqualTo("no-store");
+        assertThat(invalidRefresh.at("/headers/Pragma/schema/example").asText())
+                .isEqualTo("no-cache");
+    }
+
+    @Test
+    void refreshResponseDoesNotExposeRefreshToken() {
+        JsonNode responseProperties = openApi.at("/components/schemas/RefreshResponse/properties");
+
+        assertThat(responseProperties.properties())
+                .extracting(java.util.Map.Entry::getKey)
+                .containsExactlyInAnyOrder(
+                        "access_token",
+                        "token_type",
+                        "expires_in_seconds",
+                        "expires_at"
+                );
+        assertThat(responseProperties.has("refresh_token")).isFalse();
+    }
+
+    @Test
+    void logoutDocumentsOptionalCookieDeletionAndAccessTokenLifetime() {
+        JsonNode logout = openApi.at("/paths/~1api~1v1~1auth~1logout/post");
+
+        assertThat(logout.path("operationId").asText()).isEqualTo("logout");
+        assertThat(logout.has("requestBody")).isFalse();
+        assertThat(logout.path("description").asText())
+                .contains("Bearer Access Token은 사용하지 않으며", "최대 15분", "즉시 삭제");
+        assertThat(logout.path("parameters").toString())
+                .contains("fowoco_refresh_token", "cookie");
+        assertThat(logout.at("/responses/204/headers/Set-Cookie/$ref").asText())
+                .isEqualTo("#/components/headers/ExpiredRefreshTokenCookie");
+        assertThat(logout.at("/responses/204/headers/Cache-Control/schema/example").asText())
+                .isEqualTo("no-store");
+        assertThat(logout.at("/responses/204/headers/Pragma/schema/example").asText())
+                .isEqualTo("no-cache");
+        assertThat(logout.at("/responses/204/content").isMissingNode()).isTrue();
+    }
+
+    @Test
+    void refreshCookieHeadersDocumentSameSitePolicy() {
+        String issuedCookieDescription = openApi
+                .at("/components/headers/RefreshTokenCookie/description")
+                .asText();
+        String expiredCookieExample = openApi
+                .at("/components/headers/ExpiredRefreshTokenCookie/schema/example")
+                .asText();
+
+        assertThat(issuedCookieDescription)
+                .contains("SameSite=Strict", "Lax", "SameSite=None", "CSRF", "Origin");
+        assertThat(expiredCookieExample)
+                .contains("Max-Age=0", "Path=/api/v1/auth", "HttpOnly", "SameSite=Strict");
     }
 
     @Test

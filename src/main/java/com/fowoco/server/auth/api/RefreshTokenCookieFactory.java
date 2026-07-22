@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 final class RefreshTokenCookieFactory {
 
-    private static final Set<String> ALLOWED_SAME_SITE_VALUES = Set.of("Strict", "Lax", "None");
+    private static final Set<String> ALLOWED_SAME_SITE_VALUES = Set.of("Strict", "Lax");
 
     private final String cookieName;
     private final String cookiePath;
@@ -33,13 +33,10 @@ final class RefreshTokenCookieFactory {
             throw new IllegalArgumentException("refresh token cookie path must start with '/'");
         }
         if (!ALLOWED_SAME_SITE_VALUES.contains(sameSite)) {
-            throw new IllegalArgumentException("refresh token SameSite must be Strict, Lax, or None");
+            throw new IllegalArgumentException("refresh token SameSite must be Strict or Lax");
         }
         if (maxAge == null || maxAge.isZero() || maxAge.isNegative()) {
             throw new IllegalArgumentException("refresh token cookie max age must be positive");
-        }
-        if ("None".equals(sameSite) && !secure) {
-            throw new IllegalArgumentException("SameSite=None requires a Secure cookie");
         }
         if (environment.matchesProfiles("prod") && !secure) {
             throw new IllegalArgumentException("production refresh token cookies must be Secure");
@@ -58,6 +55,16 @@ final class RefreshTokenCookieFactory {
                 .sameSite(sameSite)
                 .path(cookiePath)
                 .maxAge(maxAge)
+                .build();
+    }
+
+    ResponseCookie clear() {
+        return ResponseCookie.from(cookieName, "")
+                .httpOnly(true)
+                .secure(secure)
+                .sameSite(sameSite)
+                .path(cookiePath)
+                .maxAge(Duration.ZERO)
                 .build();
     }
 }
