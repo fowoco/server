@@ -1,9 +1,11 @@
 package com.fowoco.server.auth.application;
 
 import com.fowoco.server.auth.application.error.AuthErrorCode;
+import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.AccessTokenIssuer;
 import com.fowoco.server.auth.application.port.PasswordVerifier;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
+import com.fowoco.server.auth.application.port.RefreshTokenHashPort;
 import com.fowoco.server.auth.application.port.RefreshTokenRepository;
 import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.RefreshToken;
@@ -15,11 +17,14 @@ import com.fowoco.server.company.application.CompanyAuthenticationSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
+
+    private static final Pattern RAW_REFRESH_TOKEN = Pattern.compile("[A-Za-z0-9_-]{43}");
 
     private final UserAccountRepository userAccountRepository;
     private final CompanyAuthenticationReader companyAuthenticationReader;
@@ -27,6 +32,8 @@ public class AuthService {
     private final AccessTokenIssuer accessTokenIssuer;
     private final RefreshTokenGenerator refreshTokenGenerator;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenHashPort refreshTokenHashPort;
+    private final RefreshTokenRotationTransaction refreshTokenRotationTransaction;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -37,6 +44,8 @@ public class AuthService {
             AccessTokenIssuer accessTokenIssuer,
             RefreshTokenGenerator refreshTokenGenerator,
             RefreshTokenRepository refreshTokenRepository,
+            RefreshTokenHashPort refreshTokenHashPort,
+            RefreshTokenRotationTransaction refreshTokenRotationTransaction,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -46,6 +55,8 @@ public class AuthService {
         this.accessTokenIssuer = accessTokenIssuer;
         this.refreshTokenGenerator = refreshTokenGenerator;
         this.refreshTokenRepository = refreshTokenRepository;
+        this.refreshTokenHashPort = refreshTokenHashPort;
+        this.refreshTokenRotationTransaction = refreshTokenRotationTransaction;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -84,7 +95,7 @@ public class AuthService {
                 generatedRefreshToken.expiresAt(),
                 issuedAt
         );
-        refreshTokenRepository.save(refreshToken);
+        refreshTokenRepository.insert(refreshToken);
 
         return new LoginResult(
                 userAccount.userId(),
@@ -97,6 +108,16 @@ public class AuthService {
                 generatedRefreshToken.rawValue(),
                 generatedRefreshToken.expiresAt()
         );
+    }
+
+    public RefreshResult refresh(String rawRefreshToken) {
+        if (rawRefreshToken == null || !RAW_REFRESH_TOKEN.matcher(rawRefreshToken).matches()) {
+            throw new InvalidRefreshTokenException();
+        }
+
+        String tokenHash = refreshTokenHashPort.hash(rawRefreshToken);
+        RefreshOutcome outcome = refreshTokenRotationTransaction.rotate(tokenHash);
+        return outcome.result().orElseThrow(InvalidRefreshTokenException::new);
     }
 
     private static ApiException invalidCredentials() {

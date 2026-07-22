@@ -2,6 +2,8 @@ package com.fowoco.server.auth.api;
 
 import com.fowoco.server.auth.application.AuthService;
 import com.fowoco.server.auth.application.LoginResult;
+import com.fowoco.server.auth.application.RefreshResult;
+import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -12,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,6 +22,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -92,6 +96,49 @@ public class AuthController {
                 .header(HttpHeaders.PRAGMA, "no-cache")
                 .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString())
                 .body(LoginResponse.from(result));
+    }
+
+    @Operation(
+            operationId = "refreshAccessToken",
+            summary = "Access Token 재발급",
+            description = "HttpOnly 쿠키의 Refresh Token을 한 번 사용하고 새 Access Token과 "
+                    + "새 Refresh Token 쿠키로 회전합니다. 누락·만료·폐기·재사용은 같은 401로 응답합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "토큰 회전 성공",
+                    headers = @Header(
+                            name = HttpHeaders.SET_COOKIE,
+                            ref = "#/components/headers/RefreshTokenCookie"
+                    ),
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = RefreshResponse.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+    })
+    @PostMapping(path = "/refresh", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<RefreshResponse> refresh(
+            @CookieValue(
+                    name = "${app.auth.refresh-token.cookie.name}",
+                    required = false
+            ) String rawRefreshToken,
+            HttpServletResponse response
+    ) {
+        try {
+            RefreshResult result = authService.refresh(rawRefreshToken);
+            ResponseCookie refreshTokenCookie = refreshTokenCookieFactory.create(result.refreshToken());
+            return ResponseEntity.ok()
+                    .cacheControl(CacheControl.noStore())
+                    .header(HttpHeaders.PRAGMA, "no-cache")
+                    .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString())
+                    .body(RefreshResponse.from(result));
+        } catch (InvalidRefreshTokenException exception) {
+            response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieFactory.clear().toString());
+            throw exception;
+        }
     }
 
     @Operation(

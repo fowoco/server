@@ -60,4 +60,14 @@ final class RefreshTokenCookieFactory {
                 .maxAge(maxAge)
                 .build();
     }
+
+    ResponseCookie clear() {
+        return ResponseCookie.from(cookieName, "")
+                .httpOnly(true)
+                .secure(secure)
+                .sameSite(sameSite)
+                .path(cookiePath)
+                .maxAge(Duration.ZERO)
+                .build();
+    }
 }

@@ -125,4 +125,24 @@ public class RefreshTokenJpaEntity {
         );
     }
 
+    void applyState(RefreshToken refreshToken) {
+        Objects.requireNonNull(refreshToken, "refreshToken must not be null");
+        if (!refreshTokenId.equals(refreshToken.refreshTokenId())
+                || !userId.equals(refreshToken.userId())
+                || !companyId.equals(refreshToken.companyId())
+                || !tokenFamilyId.equals(refreshToken.tokenFamilyId())
+                || !tokenHash.equals(refreshToken.tokenHash())
+                || !expiresAt.equals(refreshToken.expiresAt())
+                || !createdAt.equals(refreshToken.createdAt())) {
+            throw new IllegalArgumentException("immutable refresh token fields must not change");
+        }
+        if (version != refreshToken.version()) {
+            throw new IllegalArgumentException("refresh token version does not match");
+        }
+        this.usedAt = refreshToken.usedAt();
+        this.revokedAt = refreshToken.revokedAt();
+        this.replacedByTokenId = refreshToken.replacedByTokenId();
+        this.updatedAt = refreshToken.updatedAt();
+    }
+
 }
