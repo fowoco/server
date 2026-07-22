@@ -51,6 +51,8 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  flyway:
+    target: "1"
   jpa:
     show-sql: true
   h2:
@@ -80,6 +82,8 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  flyway:
+    target: "1"
   jpa:
     show-sql: false
   h2:
