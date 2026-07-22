@@ -3,6 +3,7 @@ package com.fowoco.server.auth.application;
 import com.fowoco.server.auth.application.error.AuthErrorCode;
 import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.AccessTokenIssuer;
+import com.fowoco.server.auth.application.port.AuthAuditPort;
 import com.fowoco.server.auth.application.port.PasswordVerifier;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
 import com.fowoco.server.auth.application.port.RefreshTokenHashPort;
@@ -32,6 +33,7 @@ public class AuthService {
     private final RefreshTokenHashPort refreshTokenHashPort;
     private final RefreshTokenRotationTransaction refreshTokenRotationTransaction;
     private final RefreshTokenLogoutTransaction refreshTokenLogoutTransaction;
+    private final AuthAuditPort authAuditPort;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -45,6 +47,7 @@ public class AuthService {
             RefreshTokenHashPort refreshTokenHashPort,
             RefreshTokenRotationTransaction refreshTokenRotationTransaction,
             RefreshTokenLogoutTransaction refreshTokenLogoutTransaction,
+            AuthAuditPort authAuditPort,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -57,6 +60,7 @@ public class AuthService {
         this.refreshTokenHashPort = refreshTokenHashPort;
         this.refreshTokenRotationTransaction = refreshTokenRotationTransaction;
         this.refreshTokenLogoutTransaction = refreshTokenLogoutTransaction;
+        this.authAuditPort = authAuditPort;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -68,19 +72,19 @@ public class AuthService {
 
         if (userAccountCandidate.isEmpty()) {
             passwordVerifier.performDummyCheck(command.password());
-            throw invalidCredentials();
+            throw invalidCredentialsWithAudit();
         }
 
         UserAccount userAccount = userAccountCandidate.orElseThrow();
         boolean passwordMatches = passwordVerifier.matches(command.password(), userAccount.passwordHash());
         if (!passwordMatches || !userAccount.canLogin()) {
-            throw invalidCredentials();
+            throw invalidCredentialsWithAudit();
         }
 
         CompanyAuthenticationSnapshot company = companyAuthenticationReader
                 .findByCompanyId(userAccount.companyId())
                 .filter(CompanyAuthenticationSnapshot::authenticationAllowed)
-                .orElseThrow(AuthService::invalidCredentials);
+                .orElseThrow(this::invalidCredentialsWithAudit);
 
         Instant issuedAt = clock.instant();
         AccessTokenIssuer.IssuedAccessToken accessToken = accessTokenIssuer.issue(userAccount, issuedAt);
@@ -96,6 +100,12 @@ public class AuthService {
                 issuedAt
         );
         refreshTokenRepository.insert(refreshToken);
+        authAuditPort.record(AuthAuditEvent.account(
+                AuthAuditEvent.Action.LOGIN_SUCCEEDED,
+                userAccount.userId(),
+                userAccount.companyId(),
+                issuedAt
+        ));
 
         return new LoginResult(
                 userAccount.userId(),
@@ -112,6 +122,10 @@ public class AuthService {
 
     public RefreshResult refresh(String rawRefreshToken) {
         if (!RefreshTokenFormat.isValidRawValue(rawRefreshToken)) {
+            authAuditPort.record(AuthAuditEvent.anonymous(
+                    AuthAuditEvent.Action.REFRESH_REJECTED,
+                    clock.instant()
+            ));
             throw new InvalidRefreshTokenException();
         }
 
@@ -122,13 +136,21 @@ public class AuthService {
 
     public void logout(String rawRefreshToken) {
         if (!RefreshTokenFormat.isValidRawValue(rawRefreshToken)) {
+            authAuditPort.record(AuthAuditEvent.anonymous(
+                    AuthAuditEvent.Action.LOGOUT_COMPLETED,
+                    clock.instant()
+            ));
             return;
         }
 
         refreshTokenLogoutTransaction.revokeIfKnown(refreshTokenHashPort.hash(rawRefreshToken));
     }
 
-    private static ApiException invalidCredentials() {
+    private ApiException invalidCredentialsWithAudit() {
+        authAuditPort.record(AuthAuditEvent.anonymous(
+                AuthAuditEvent.Action.LOGIN_REJECTED,
+                clock.instant()
+        ));
         return new ApiException(AuthErrorCode.INVALID_CREDENTIALS);
     }
 }

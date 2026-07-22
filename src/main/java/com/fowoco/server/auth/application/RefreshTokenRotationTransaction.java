@@ -1,6 +1,7 @@
 package com.fowoco.server.auth.application;
 
 import com.fowoco.server.auth.application.port.AccessTokenIssuer;
+import com.fowoco.server.auth.application.port.AuthAuditPort;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
 import com.fowoco.server.auth.application.port.RefreshTokenRepository;
 import com.fowoco.server.auth.application.port.UserAccountRepository;
@@ -22,6 +23,7 @@ public class RefreshTokenRotationTransaction {
     private final CompanyAuthenticationReader companyAuthenticationReader;
     private final AccessTokenIssuer accessTokenIssuer;
     private final RefreshTokenGenerator refreshTokenGenerator;
+    private final AuthAuditPort authAuditPort;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -31,6 +33,7 @@ public class RefreshTokenRotationTransaction {
             CompanyAuthenticationReader companyAuthenticationReader,
             AccessTokenIssuer accessTokenIssuer,
             RefreshTokenGenerator refreshTokenGenerator,
+            AuthAuditPort authAuditPort,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -39,6 +42,7 @@ public class RefreshTokenRotationTransaction {
         this.companyAuthenticationReader = companyAuthenticationReader;
         this.accessTokenIssuer = accessTokenIssuer;
         this.refreshTokenGenerator = refreshTokenGenerator;
+        this.authAuditPort = authAuditPort;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -49,15 +53,28 @@ public class RefreshTokenRotationTransaction {
         Optional<RefreshToken> presentedTokenCandidate =
                 refreshTokenRepository.findByTokenHashWithFamilyLock(tokenHash);
         if (presentedTokenCandidate.isEmpty()) {
+            authAuditPort.record(AuthAuditEvent.anonymous(
+                    AuthAuditEvent.Action.REFRESH_REJECTED,
+                    now
+            ));
             return RefreshOutcome.rejected(RefreshOutcome.Status.INVALID);
         }
 
         RefreshToken presentedToken = presentedTokenCandidate.orElseThrow();
         if (!presentedToken.isActiveAt(now)) {
-            refreshTokenRepository.revokeFamily(presentedToken.tokenFamilyId(), now);
             RefreshOutcome.Status status = presentedToken.isUsed() || presentedToken.isRevoked()
                     ? RefreshOutcome.Status.REPLAY_DETECTED
                     : RefreshOutcome.Status.INVALID;
+            revokeFamilyAndAudit(presentedToken, now);
+            if (status == RefreshOutcome.Status.REPLAY_DETECTED) {
+                recordTokenFamilyEvent(
+                        AuthAuditEvent.Action.REFRESH_REUSE_DETECTED,
+                        presentedToken,
+                        now
+                );
+            } else {
+                recordTokenFamilyEvent(AuthAuditEvent.Action.REFRESH_REJECTED, presentedToken, now);
+            }
             return RefreshOutcome.rejected(status);
         }
 
@@ -66,7 +83,8 @@ public class RefreshTokenRotationTransaction {
                 presentedToken.companyId()
         );
         if (userAccountCandidate.isEmpty() || !userAccountCandidate.orElseThrow().canLogin()) {
-            refreshTokenRepository.revokeFamily(presentedToken.tokenFamilyId(), now);
+            revokeFamilyAndAudit(presentedToken, now);
+            recordTokenFamilyEvent(AuthAuditEvent.Action.REFRESH_REJECTED, presentedToken, now);
             return RefreshOutcome.rejected(RefreshOutcome.Status.SUBJECT_DISABLED);
         }
 
@@ -76,7 +94,8 @@ public class RefreshTokenRotationTransaction {
                 .filter(company -> company.authenticationAllowed())
                 .isPresent();
         if (!companyCanAuthenticate) {
-            refreshTokenRepository.revokeFamily(presentedToken.tokenFamilyId(), now);
+            revokeFamilyAndAudit(presentedToken, now);
+            recordTokenFamilyEvent(AuthAuditEvent.Action.REFRESH_REJECTED, presentedToken, now);
             return RefreshOutcome.rejected(RefreshOutcome.Status.SUBJECT_DISABLED);
         }
 
@@ -94,6 +113,7 @@ public class RefreshTokenRotationTransaction {
 
         refreshTokenRepository.insert(replacementToken);
         refreshTokenRepository.update(presentedToken.rotateTo(replacementToken, now));
+        recordTokenFamilyEvent(AuthAuditEvent.Action.REFRESH_SUCCEEDED, presentedToken, now);
 
         return RefreshOutcome.succeeded(new RefreshResult(
                 accessToken.value(),
@@ -101,6 +121,27 @@ public class RefreshTokenRotationTransaction {
                 accessToken.expiresInSeconds(),
                 generatedRefreshToken.rawValue(),
                 generatedRefreshToken.expiresAt()
+        ));
+    }
+
+    private void revokeFamilyAndAudit(RefreshToken refreshToken, Instant now) {
+        int revokedTokens = refreshTokenRepository.revokeFamily(refreshToken.tokenFamilyId(), now);
+        if (revokedTokens > 0) {
+            recordTokenFamilyEvent(AuthAuditEvent.Action.TOKEN_FAMILY_REVOKED, refreshToken, now);
+        }
+    }
+
+    private void recordTokenFamilyEvent(
+            AuthAuditEvent.Action action,
+            RefreshToken refreshToken,
+            Instant occurredAt
+    ) {
+        authAuditPort.record(AuthAuditEvent.tokenFamily(
+                action,
+                refreshToken.userId(),
+                refreshToken.companyId(),
+                refreshToken.tokenFamilyId(),
+                occurredAt
         ));
     }
 }
