@@ -13,9 +13,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -23,6 +25,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     /**
@@ -49,7 +52,8 @@ public class SecurityConfig {
     @Order(2)
     public SecurityFilterChain applicationSecurityFilterChain(
             HttpSecurity http,
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+            JwtAuthenticationConverter jwtAuthenticationConverter
     ) throws Exception {
         AuthenticationEntryPoint authenticationEntryPoint = (request, response, exception) -> {
             response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
@@ -82,7 +86,11 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers("/api/v1/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/**")
+                        .hasAnyRole("ADMIN", "HR", "VIEWER")
+                        .requestMatchers(HttpMethod.HEAD, "/api/v1/**")
+                        .hasAnyRole("ADMIN", "HR", "VIEWER")
+                        .requestMatchers("/api/v1/**").hasAnyRole("ADMIN", "HR")
                         .anyRequest().denyAll()
                 )
                 .exceptionHandling(exceptions -> exceptions
@@ -90,7 +98,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler)
                 )
                 .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(Customizer.withDefaults())
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
                 )

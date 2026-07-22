@@ -1,8 +1,11 @@
 package com.fowoco.server.auth.infrastructure.security;
 
+import com.fowoco.server.auth.domain.UserRole;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -20,12 +23,16 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({JwtProperties.class, RefreshTokenProperties.class})
 public class AuthSecurityConfig {
 
-    private static final Set<String> ALLOWED_ROLES = Set.of("ADMIN", "HR", "VIEWER");
+    private static final Set<String> ALLOWED_ROLES = Arrays.stream(UserRole.values())
+            .map(Enum::name)
+            .collect(Collectors.toUnmodifiableSet());
 
     @Bean
     public JwtEncoder jwtEncoder(JwtProperties properties) {
@@ -56,6 +63,17 @@ public class AuthSecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
+    }
+
+    @Bean
+    public JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("roles");
+        authoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
+        authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return authenticationConverter;
     }
 
     private OAuth2TokenValidator<Jwt> audienceValidator(String requiredAudience) {

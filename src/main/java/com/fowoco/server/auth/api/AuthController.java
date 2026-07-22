@@ -2,12 +2,15 @@ package com.fowoco.server.auth.api;
 
 import com.fowoco.server.auth.application.AuthService;
 import com.fowoco.server.auth.application.LoginResult;
+import com.fowoco.server.auth.application.port.ActorContextProvider;
 import jakarta.validation.Valid;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,13 +22,16 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenCookieFactory refreshTokenCookieFactory;
+    private final ActorContextProvider actorContextProvider;
 
     public AuthController(
             AuthService authService,
-            RefreshTokenCookieFactory refreshTokenCookieFactory
+            RefreshTokenCookieFactory refreshTokenCookieFactory,
+            ActorContextProvider actorContextProvider
     ) {
         this.authService = authService;
         this.refreshTokenCookieFactory = refreshTokenCookieFactory;
+        this.actorContextProvider = actorContextProvider;
     }
 
     @PostMapping(
@@ -42,5 +48,11 @@ public class AuthController {
                 .header(HttpHeaders.PRAGMA, "no-cache")
                 .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString())
                 .body(LoginResponse.from(result));
+    }
+
+    @GetMapping(path = "/me", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
+    public CurrentActorResponse me() {
+        return CurrentActorResponse.from(actorContextProvider.requireCurrentActor());
     }
 }
