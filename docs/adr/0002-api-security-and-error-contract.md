@@ -81,6 +81,17 @@ roles
 - `VIEWER`는 조회만 가능하며 승인·수정·발송 Command를 실행할 수 없습니다.
 - `AI_AGENT`는 감사 출처이지 로그인 Role이나 승인 주체가 아닙니다.
 
+MVP의 tenant 격리 기준선은 서명된 JWT에서 만든 `ActorContext`, 모든 Repository의 `company_id` 범위 조건, tenant를 포함한 FK·UNIQUE 제약입니다. 어느 한 계층만 믿지 않고 Application과 DB 제약을 함께 적용합니다.
+
+PostgreSQL RLS는 다음 조건을 모두 갖춘 후 defense-in-depth 계층으로 별도 ADR과 후속 migration에서 도입합니다.
+
+- migration 계정과 분리된 `SUPERUSER`·`BYPASSRLS` 권한 없는 애플리케이션 DB 계정
+- 신뢰된 `ActorContext`를 transaction마다 `SET LOCAL app.company_id`로 전달하는 연결 코드
+- 로그인·Refresh Token·공개 Worker Link처럼 tenant를 찾기 전 요청의 bootstrap 방식
+- connection pool 재사용 시 tenant context가 다음 요청으로 새지 않고, context 누락 시 fail-closed 되는 PostgreSQL 통합 테스트
+
+RLS 도입 전후 모두 교차 사업장 연결은 tenant-aware 복합 FK·UNIQUE 제약으로 차단합니다. 로컬 H2 검증을 통과시키기 위해 `flyway.target`으로 최신 migration을 건너뛰지 않습니다.
+
 Worker Link 원본 token은 한 번만 반환하고 DB에는 안전한 hash만 저장합니다. 만료시각, 허용 Task와 action, 회전·폐기 상태를 검증하고 승인된 Task의 최소 정보만 노출합니다.
 
 Worker Link token은 URL path에 포함되므로 reverse proxy와 애플리케이션 access log에서 token segment를 반드시 redaction합니다. Audit에는 원본 token 대신 안전한 `worker_link_id`만 기록합니다.

@@ -18,6 +18,8 @@ spring:
   jackson:
     property-naming-strategy: SNAKE_CASE
     time-zone: UTC
+    deserialization:
+      fail-on-unknown-properties: true
 
 management:
   endpoints:
@@ -37,6 +39,17 @@ springdoc:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  auth:
+    jwt:
+      issuer: ${JWT_ISSUER:fowoco-server}
+      audience: ${JWT_AUDIENCE:fowoco-client}
+      access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+    refresh-token:
+      ttl: ${REFRESH_TOKEN_TTL:14d}
+      cookie:
+        name: ${REFRESH_TOKEN_COOKIE_NAME:fowoco_refresh_token}
+        path: /api/v1/auth
+        same-site: ${REFRESH_TOKEN_COOKIE_SAME_SITE:Strict}
 
 logging:
   pattern:
@@ -51,8 +64,6 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
-  flyway:
-    target: "1"
   jpa:
     show-sql: true
   h2:
@@ -61,6 +72,13 @@ spring:
       path: /h2-console
 server:
   address: 127.0.0.1
+app:
+  auth:
+    jwt:
+      secret-base64: ${JWT_SECRET_BASE64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+    refresh-token:
+      cookie:
+        secure: ${REFRESH_TOKEN_COOKIE_SECURE:false}
 ---
 spring:
   config:
@@ -72,6 +90,15 @@ spring:
     password: ${DB_PASSWORD}
   jpa:
     show-sql: true
+app:
+  auth:
+    jwt:
+      issuer: ${JWT_ISSUER:fowoco-server-dev}
+      audience: ${JWT_AUDIENCE:fowoco-client-dev}
+      secret-base64: ${JWT_SECRET_BASE64}
+    refresh-token:
+      cookie:
+        secure: ${REFRESH_TOKEN_COOKIE_SECURE:true}
 ---
 spring:
   config:
@@ -82,13 +109,18 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
-  flyway:
-    target: "1"
   jpa:
     show-sql: false
   h2:
     console:
       enabled: false
+app:
+  auth:
+    jwt:
+      secret-base64: ${JWT_SECRET_BASE64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+    refresh-token:
+      cookie:
+        secure: false
 ---
 spring:
   config:
@@ -111,3 +143,11 @@ springdoc:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  auth:
+    jwt:
+      issuer: ${JWT_ISSUER}
+      audience: ${JWT_AUDIENCE}
+      secret-base64: ${JWT_SECRET_BASE64}
+    refresh-token:
+      cookie:
+        secure: ${REFRESH_TOKEN_COOKIE_SECURE:true}

@@ -70,6 +70,8 @@ curl http://localhost:8080/health
 - `main`에 병합되어 공유 환경에 적용된 migration은 수정·삭제·번호 변경하지 않습니다.
 - PR 검토 중인 migration을 바꿀 때는 예약 번호와 공유 환경 적용 여부를 먼저 확인합니다.
 - migration은 가능한 한 PR 하나에 하나만 포함합니다.
+- migration은 관련 Issue가 소유한 aggregate만 만들고 다른 기능의 테이블을 미리 생성하지 않습니다.
+- 테스트를 통과시키기 위해 `flyway.target`으로 최신 migration을 건너뛰지 않습니다.
 - PostgreSQL CI가 validation과 pending migration 없음까지 확인해야 합니다.
 
 ## 5. Architecture Decision
