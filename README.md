@@ -151,6 +151,81 @@ Versioned Knowledge Bundle
 - 최종 데모에서는 배포된 AI Runtime이 외부 LLM API 또는 Cloud Endpoint를 호출합니다.
 - 상세 책임과 금지 의존성은 [ADR-0001](docs/adr/0001-repository-and-module-boundaries.md)을 따릅니다.
 
+### Server 프로젝트 구조
+
+Server는 하나의 Spring Boot 애플리케이션과 PostgreSQL로 배포하는 **modular monolith**입니다. Gradle 프로젝트를 기능마다 분리하지 않고, `com.fowoco.server` 아래에서 기능별 패키지 경계를 먼저 지킵니다.
+
+```text
+server/
+├── build.gradle
+├── settings.gradle
+├── .env.example
+├── README.md
+├── CONTRIBUTING.md
+├── docs/
+│   └── adr/
+│       ├── README.md
+│       ├── 0001-repository-and-module-boundaries.md
+│       ├── 0002-api-security-and-error-contract.md
+│       └── 0003-task-airun-event-and-retry-model.md
+└── src/
+    ├── main/
+    │   ├── java/com/fowoco/server/
+    │   │   ├── ServerApplication.java
+    │   │   ├── common/          # 기술 공통 코드만
+    │   │   │   ├── config/
+    │   │   │   ├── error/
+    │   │   │   ├── id/
+    │   │   │   ├── security/
+    │   │   │   └── web/
+    │   │   ├── health/          # 서버 상태
+    │   │   ├── auth/            # 로그인, JWT, Refresh Token
+    │   │   ├── company/         # 사업장과 사용자 권한
+    │   │   ├── worker/          # 근로자
+    │   │   ├── document/        # 서류 metadata
+    │   │   ├── file/            # Local/S3 호환 파일 저장
+    │   │   ├── workflow/        # 배포된 Workflow 조회
+    │   │   ├── task/            # 업무카드와 상태 전이
+    │   │   ├── approval/        # 승인 요청과 승인 snapshot
+    │   │   ├── audit/           # append-only 감사 로그
+    │   │   ├── workerlink/      # 근로자 보안 링크
+    │   │   ├── airun/           # AiRun, candidate, 재시도
+    │   │   ├── aiintegration/   # AI Runtime HTTP 연결
+    │   │   └── reliability/     # Outbox와 event 복구
+    │   └── resources/
+    │       ├── application.yaml
+    │       └── db/migration/
+    │           ├── V1__baseline.sql
+    │           ├── V2__create_auth_company.sql      # #4 구현 시 추가 예정
+    │           └── V3__create_worker_document.sql   # #5 구현 시 추가 예정
+    └── test/
+        └── java/com/fowoco/server/
+            ├── architecture/
+            ├── auth/
+            ├── worker/
+            ├── task/
+            └── airun/
+```
+
+기능 코드가 생기면 해당 기능 안에서 다음 방향으로 확장합니다.
+
+```text
+<feature>/
+├── api/             # Controller와 HTTP request/response DTO
+├── application/     # Use case, command, query, port, transaction orchestration
+├── domain/          # Aggregate, value object, 상태 전이와 불변식
+└── infrastructure/  # JPA, HTTP client, storage 등 port 구현
+```
+
+- `api`는 `application`만 호출하고 JPA Repository나 외부 Client를 직접 호출하지 않습니다.
+- `domain`은 Spring MVC, JPA, Provider SDK에 의존하지 않습니다.
+- 다른 기능의 `infrastructure`와 JPA Entity를 직접 import하지 않습니다.
+- `task` 이외의 기능은 Task 상태를 직접 변경하지 않습니다.
+- `aiintegration`은 AI Runtime 연결만 담당하며 Prompt와 Provider SDK는 `ai` 저장소에 둡니다.
+- 최상위 `package-info.java`는 기능 경계와 책임을 Git에 남기기 위한 뼈대입니다. 빈 하위 패키지는 미리 만들지 않고 실제 코드가 추가될 때 생성합니다.
+- Flyway migration은 적용 후 수정할 수 없으므로 `V2`와 `V3` 빈 파일을 미리 만들지 않습니다. 각각 #4와 #5의 실제 스키마와 함께 추가합니다.
+- 테스트 패키지는 구현 패키지를 따라가고, `architecture`에는 향후 ArchUnit 또는 Spring Modulith 경계 검증을 둡니다.
+
 ## 어디서 무엇을 찾나요?
 
 | 목적 | 위치 |
