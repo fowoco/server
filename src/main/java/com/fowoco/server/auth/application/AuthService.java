@@ -17,14 +17,11 @@ import com.fowoco.server.company.application.CompanyAuthenticationSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
-
-    private static final Pattern RAW_REFRESH_TOKEN = Pattern.compile("[A-Za-z0-9_-]{43}");
 
     private final UserAccountRepository userAccountRepository;
     private final CompanyAuthenticationReader companyAuthenticationReader;
@@ -114,7 +111,7 @@ public class AuthService {
     }
 
     public RefreshResult refresh(String rawRefreshToken) {
-        if (rawRefreshToken == null || !RAW_REFRESH_TOKEN.matcher(rawRefreshToken).matches()) {
+        if (!RefreshTokenFormat.isValidRawValue(rawRefreshToken)) {
             throw new InvalidRefreshTokenException();
         }
 
@@ -124,7 +121,7 @@ public class AuthService {
     }
 
     public void logout(String rawRefreshToken) {
-        if (rawRefreshToken == null || !RAW_REFRESH_TOKEN.matcher(rawRefreshToken).matches()) {
+        if (!RefreshTokenFormat.isValidRawValue(rawRefreshToken)) {
             return;
         }
 

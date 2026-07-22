@@ -1,5 +1,6 @@
 package com.fowoco.server.auth.infrastructure.security;
 
+import com.fowoco.server.auth.application.RefreshTokenFormat;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -9,8 +10,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public final class SecureRefreshTokenGenerator implements RefreshTokenGenerator {
-
-    private static final int TOKEN_BYTES = 32;
 
     private final SecureRandom secureRandom;
     private final RefreshTokenHasher refreshTokenHasher;
@@ -31,7 +30,7 @@ public final class SecureRefreshTokenGenerator implements RefreshTokenGenerator 
     @Override
     public GeneratedRefreshToken generate(Instant issuedAt) {
         Objects.requireNonNull(issuedAt, "issuedAt must not be null");
-        byte[] tokenBytes = new byte[TOKEN_BYTES];
+        byte[] tokenBytes = new byte[RefreshTokenFormat.ENTROPY_BYTES];
         secureRandom.nextBytes(tokenBytes);
         String rawValue = Base64.getUrlEncoder().withoutPadding().encodeToString(tokenBytes);
         String tokenHash = refreshTokenHasher.hash(rawValue);
