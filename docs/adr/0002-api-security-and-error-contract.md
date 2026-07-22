@@ -73,6 +73,23 @@ roles
 
 `request_id`와 `trace_id`는 actor identity가 아니라 요청 수명주기를 가진 `RequestContext`와 MDC에서 관리합니다.
 
+#### 인증 bootstrap API 계약
+
+인증 API의 canonical path와 credential은 다음 하나만 사용합니다. 아래 경로의 `/api/v1`을 생략한 `/auth/**` 별칭은 만들지 않습니다.
+
+| API | credential·요청 | 성공 계약 | 실패 계약 |
+| --- | --- | --- | --- |
+| `POST /api/v1/auth/login` | JSON `email`, `password` | `200`, Access Token JSON, HttpOnly Refresh Token 쿠키 | 잘못된 자격정보는 `401 INVALID_CREDENTIALS` |
+| `POST /api/v1/auth/refresh` | HttpOnly Refresh Token 쿠키만 사용. JSON body와 Bearer Token 없음 | `200`, 새 Access Token JSON, 회전된 새 Refresh Token 쿠키, `no-store` | 누락·형식 오류·미존재·만료·폐기·재사용은 모두 `401 INVALID_REFRESH_TOKEN` |
+| `POST /api/v1/auth/logout` | 선택적인 HttpOnly Refresh Token 쿠키. JSON body와 Bearer Token 없음 | 항상 `204`, token family 폐기, 같은 이름·Path의 `Max-Age=0` 쿠키 | DB 장애처럼 폐기를 보장할 수 없는 오류는 성공으로 숨기지 않음 |
+| `GET /api/v1/auth/me` | Bearer Access Token | `200`, 최소 `user_id`, `company_id`, `roles` | 없거나 유효하지 않은 JWT는 `401 AUTHENTICATION_REQUIRED` |
+
+Refresh Token 원문은 JSON, 일반 로그, 오류, Audit에 넣지 않고 hash만 저장합니다. 재발급에 성공하면 이전 토큰은 즉시 사용 처리하고 같은 family의 새 토큰으로 교체합니다. 사용한 토큰이 다시 들어오면 탈취 가능성이 있으므로 token family를 폐기합니다. 정상 Client도 동시 재발급으로 이 정책을 잘못 작동시키지 않도록 refresh 요청을 single-flight로 직렬화합니다.
+
+Refresh Token 쿠키는 same-site 배포에서 `HttpOnly`, 운영 환경 `Secure`, `SameSite=Strict` 또는 `Lax`, `Path=/api/v1/auth`를 사용합니다. `SameSite=None`은 CSRF token 또는 신뢰 Origin 검증을 구현하고 검증하기 전까지 금지합니다. CORS는 응답을 읽을 Origin을 제한할 뿐 CSRF 방어를 대신하지 않습니다.
+
+Logout은 Refresh Token family와 브라우저 쿠키를 폐기하지만 이미 발급된 stateless Access Token을 서버에서 즉시 무효화하지는 않습니다. Client는 로그아웃 즉시 Access Token을 삭제하며, 현재 기본 TTL에서는 기존 토큰이 만료까지 최대 15분 유효할 수 있습니다. 즉시 폐기가 필요해지면 deny-list 또는 session version 같은 별도 설계와 ADR을 추가합니다.
+
 - 쓰기 Request DTO에서 `company_id`를 받지 않습니다.
 - 조회 filter에 `company_id`가 있더라도 인증 Context와 다른 값을 허용하지 않습니다.
 - Repository query와 unique constraint에는 Company 범위를 포함합니다.
@@ -173,7 +190,7 @@ Server External API는 다음 `snake_case` 구조를 사용합니다.
 | HTTP | 의미 | 예시 code |
 | ---: | --- | --- |
 | `400` | JSON·형식·field validation 실패 | `VALIDATION_FAILED` |
-| `401` | 인증 없음·만료·위조 | `AUTHENTICATION_REQUIRED` |
+| `401` | 인증 없음·만료·위조, 로그인·재발급 자격정보 실패 | `AUTHENTICATION_REQUIRED`, `INVALID_CREDENTIALS`, `INVALID_REFRESH_TOKEN` |
 | `403` | 같은 tenant 안에서 Role·action 부족 | `ACCESS_DENIED` |
 | `404` | resource 없음, 타 tenant 은닉, 유효하지 않은 public token | `RESOURCE_NOT_FOUND` |
 | `405` | 지원하지 않는 HTTP method | `METHOD_NOT_ALLOWED` |
