@@ -31,6 +31,8 @@
 - [ ] 모든 사업장 데이터 접근에 `company_id` 범위를 검사합니다.
 - [ ] AI 결과가 자동 승인·발송되지 않습니다.
 - [ ] 중요한 변경이 AuditLog와 `request_id`로 추적됩니다.
+- [ ] 관련 Accepted ADR을 지켰거나 필요한 새 ADR을 이 PR에서 `Proposed`로 작성했습니다.
+- [ ] Server에 Prompt Builder·Provider SDK·모델 routing을 추가하지 않았습니다.
 
 ## API·DB·운영 영향
 

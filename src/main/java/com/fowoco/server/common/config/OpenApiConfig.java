@@ -33,7 +33,7 @@ public class OpenApiConfig {
         errorSchema.addProperty("status", new IntegerSchema().example(400));
         errorSchema.addProperty("code", new StringSchema().example("VALIDATION_FAILED"));
         errorSchema.addProperty("message", new StringSchema().example("입력값을 확인해 주세요."));
-        errorSchema.addProperty("path", new StringSchema().example("/workers"));
+        errorSchema.addProperty("path", new StringSchema().example("/api/v1/workers"));
         errorSchema.addProperty("request_id", new StringSchema().example("01-example-request-id"));
         errorSchema.addProperty("field_errors", new ArraySchema().items(fieldErrorSchema));
 

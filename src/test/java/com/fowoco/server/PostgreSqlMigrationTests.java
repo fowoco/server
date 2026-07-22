@@ -10,7 +10,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 class PostgreSqlMigrationTests {
 
     @Test
-    void migrationsApplyToPostgreSql() {
+    void migrationsApplyAndValidateOnPostgreSql() {
         Flyway flyway = Flyway.configure()
                 .dataSource(
                         requiredEnvironmentVariable("POSTGRES_TEST_URL"),
@@ -21,9 +21,10 @@ class PostgreSqlMigrationTests {
                 .load();
 
         flyway.migrate();
+        flyway.validate();
 
         assertThat(flyway.info().current()).isNotNull();
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+        assertThat(flyway.info().pending()).isEmpty();
     }
 
     private String requiredEnvironmentVariable(String name) {

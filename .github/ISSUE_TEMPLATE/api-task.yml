@@ -1,5 +1,5 @@
 name: API 구현 작업
-description: 42개 API 카탈로그의 endpoint 구현·변경 작업을 작성합니다.
+description: Server API 카탈로그의 endpoint 구현·변경 작업을 작성합니다.
 title: "[API] "
 labels:
   - area:server
@@ -13,7 +13,7 @@ body:
     id: endpoint
     attributes:
       label: Method와 Path
-      placeholder: POST /tasks/{taskId}/approve
+      placeholder: POST /api/v1/tasks/{taskId}/approve
     validations:
       required: true
   - type: dropdown
