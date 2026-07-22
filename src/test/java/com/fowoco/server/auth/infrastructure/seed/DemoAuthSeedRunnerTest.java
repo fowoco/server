@@ -7,6 +7,7 @@ import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.domain.Company;
+import com.fowoco.server.company.domain.CompanyStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -76,6 +77,28 @@ class DemoAuthSeedRunnerTest {
         assertThat(properties(ADMIN_PASSWORD).toString())
                 .contains("adminPassword=<redacted>")
                 .doesNotContain(ADMIN_PASSWORD);
+    }
+
+    @Test
+    void existingAdminDoesNotHideAnInactiveDemoCompany() throws Exception {
+        InMemoryCompanyRepository companyRepository = new InMemoryCompanyRepository();
+        InMemoryUserAccountRepository userAccountRepository = new InMemoryUserAccountRepository();
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        DemoAuthSeedRunner runner = runner(
+                properties(ADMIN_PASSWORD),
+                companyRepository,
+                userAccountRepository,
+                passwordEncoder
+        );
+        runner.run(new DefaultApplicationArguments(new String[0]));
+        companyRepository.companies.put(
+                COMPANY_ID,
+                new Company(COMPANY_ID, "FOWOCO Demo Company", CompanyStatus.SUSPENDED, NOW, NOW, 1L)
+        );
+
+        assertThatThrownBy(() -> runner.run(new DefaultApplicationArguments(new String[0])))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not active");
     }
 
     private DemoAuthSeedRunner runner(

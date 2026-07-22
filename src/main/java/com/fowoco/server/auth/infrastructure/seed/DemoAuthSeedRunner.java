@@ -56,6 +56,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
                 userAccountRepository.findByNormalizedEmail(normalizedEmail);
         if (existingUser.isPresent()) {
             verifyExistingUser(existingUser.orElseThrow());
+            verifyExistingCompany();
             LOGGER.info(
                     "demo_auth_seed already_exists company_id={} user_id={}",
                     properties.companyId(),
@@ -115,6 +116,14 @@ class DemoAuthSeedRunner implements ApplicationRunner {
             throw new IllegalStateException(
                     "the configured demo email already belongs to a different or inactive account"
             );
+        }
+    }
+
+    private void verifyExistingCompany() {
+        Company company = companyRepository.findById(properties.companyId())
+                .orElseThrow(() -> new IllegalStateException("the configured demo company does not exist"));
+        if (!company.isActive()) {
+            throw new IllegalStateException("the configured demo company is not active");
         }
     }
 
