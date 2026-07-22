@@ -134,6 +134,10 @@ class AuthOpenApiContractTest {
                 .isEqualTo("/api/v1/auth/refresh");
         assertThat(invalidRefresh.at("/headers/Set-Cookie/$ref").asText())
                 .isEqualTo("#/components/headers/ExpiredRefreshTokenCookie");
+        assertThat(invalidRefresh.at("/headers/Cache-Control/schema/example").asText())
+                .isEqualTo("no-store");
+        assertThat(invalidRefresh.at("/headers/Pragma/schema/example").asText())
+                .isEqualTo("no-cache");
     }
 
     @Test

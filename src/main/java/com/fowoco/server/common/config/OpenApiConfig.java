@@ -101,6 +101,16 @@ public class OpenApiConfig {
                 ).addHeaderObject(
                         org.springframework.http.HttpHeaders.SET_COOKIE,
                         new Header().$ref("#/components/headers/ExpiredRefreshTokenCookie")
+                ).addHeaderObject(
+                        org.springframework.http.HttpHeaders.CACHE_CONTROL,
+                        new Header()
+                                .description("오류 응답 저장 방지")
+                                .schema(new StringSchema().example("no-store"))
+                ).addHeaderObject(
+                        org.springframework.http.HttpHeaders.PRAGMA,
+                        new Header()
+                                .description("구형 캐시의 오류 응답 저장 방지")
+                                .schema(new StringSchema().example("no-cache"))
                 ))
                 .addResponses("Forbidden", errorResponse("권한 부족"))
                 .addResponses("NotFound", errorResponse("리소스를 찾을 수 없음"))

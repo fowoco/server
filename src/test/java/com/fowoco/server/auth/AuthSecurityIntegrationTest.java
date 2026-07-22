@@ -458,6 +458,8 @@ class AuthSecurityIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(401);
         assertThat(JsonPath.<String>read(response.body(), "$.code"))
                 .isEqualTo("INVALID_REFRESH_TOKEN");
+        assertThat(response.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+        assertThat(response.headers().firstValue(HttpHeaders.PRAGMA)).contains("no-cache");
     }
 
     private void assertLogoutResponse(HttpResponse<String> response) {

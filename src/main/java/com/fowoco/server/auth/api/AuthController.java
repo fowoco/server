@@ -159,6 +159,8 @@ public class AuthController {
                     .body(RefreshResponse.from(result));
         } catch (InvalidRefreshTokenException exception) {
             response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookieFactory.clear().toString());
+            response.setHeader(HttpHeaders.CACHE_CONTROL, CacheControl.noStore().getHeaderValue());
+            response.setHeader(HttpHeaders.PRAGMA, "no-cache");
             throw exception;
         }
     }
