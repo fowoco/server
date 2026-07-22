@@ -84,6 +84,20 @@ export SPRING_PROFILES_ACTIVE=dev
 
 실제 비밀번호·API Key·토큰은 Git, Issue, Discussion, 로그에 올리지 않습니다.
 
+### 선택 사항: 데모 로그인 계정 만들기
+
+빈 DB에 데모용 사업장과 `ADMIN` 계정이 필요할 때만 Seed를 명시적으로 켭니다. 기본값은 꺼짐이며 비밀번호 기본값도 없습니다.
+
+```bash
+export DEMO_SEED_ENABLED=true
+export DEMO_SEED_ADMIN_PASSWORD='로컬 또는 배포 Secret의 12자 이상 값'
+./gradlew bootRun
+```
+
+서버는 Flyway 적용 뒤 사업장과 계정을 한 번만 만들고, 비밀번호 원문이 아니라 BCrypt hash만 저장합니다. 같은 설정으로 다시 실행해도 중복 생성하지 않습니다. 같은 이메일이 다른 사업장·사용자·역할로 이미 존재하면 덮어쓰지 않고 시작을 중단합니다.
+
+이 값은 개인 `.env`나 배포 환경의 Secret에만 보관하고 `.env.example`, GitHub, 로그에 실제 비밀번호를 넣지 않습니다. ID·이메일·사업장 이름을 바꿔야 하면 `DEMO_SEED_COMPANY_ID`, `DEMO_SEED_ADMIN_USER_ID`, `DEMO_SEED_ADMIN_EMAIL`, `DEMO_SEED_COMPANY_NAME`을 함께 설정할 수 있습니다. 최초 계정을 확인한 뒤에는 `DEMO_SEED_ENABLED=false`로 되돌려 의도하지 않은 Seed 실행을 막습니다.
+
 ## 개발 기반은 어떻게 동작하나요?
 
 | 구성 | 초보자를 위한 설명 | 구현 위치 |
