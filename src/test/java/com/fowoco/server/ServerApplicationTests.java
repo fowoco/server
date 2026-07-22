@@ -74,7 +74,7 @@ class ServerApplicationTests {
 
 	@Test
 	void unfinishedApiIsProtected() throws Exception {
-		HttpResponse<String> response = get("/workers");
+		HttpResponse<String> response = get("/api/v1/workers");
 		String requestId = response.headers().firstValue("X-Request-Id").orElseThrow();
 
 		assertThat(response.statusCode()).isEqualTo(401);
@@ -85,9 +85,10 @@ class ServerApplicationTests {
 	}
 
 	@Test
-	void flywayAppliesBaselineMigration() {
+	void flywayAppliesAndValidatesAvailableMigrations() {
+		flyway.validate();
 		assertThat(flyway.info().current()).isNotNull();
-		assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+		assertThat(flyway.info().pending()).isEmpty();
 	}
 
 	private HttpResponse<String> get(String path) throws Exception {
