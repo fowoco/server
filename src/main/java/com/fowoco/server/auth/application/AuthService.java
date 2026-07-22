@@ -1,5 +1,6 @@
 package com.fowoco.server.auth.application;
 
+import com.fowoco.server.auth.application.error.AuthErrorCode;
 import com.fowoco.server.auth.application.port.AccessTokenIssuer;
 import com.fowoco.server.auth.application.port.PasswordVerifier;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
@@ -8,7 +9,6 @@ import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.RefreshToken;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.common.error.ApiException;
-import com.fowoco.server.common.error.ErrorCode;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.company.application.CompanyAuthenticationReader;
 import com.fowoco.server.company.application.CompanyAuthenticationSnapshot;
@@ -100,6 +100,6 @@ public class AuthService {
     }
 
     private static ApiException invalidCredentials() {
-        return new ApiException(ErrorCode.INVALID_CREDENTIALS);
+        return new ApiException(AuthErrorCode.INVALID_CREDENTIALS);
     }
 }

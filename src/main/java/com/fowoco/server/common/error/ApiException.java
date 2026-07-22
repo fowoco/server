@@ -2,18 +2,18 @@ package com.fowoco.server.common.error;
 
 public class ApiException extends RuntimeException {
 
-    private final ErrorCode errorCode;
+    private final ApiErrorCode errorCode;
 
-    public ApiException(ErrorCode errorCode) {
+    public ApiException(ApiErrorCode errorCode) {
         this(errorCode, errorCode.defaultMessage());
     }
 
-    public ApiException(ErrorCode errorCode, String message) {
+    public ApiException(ApiErrorCode errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
     }
 
-    public ErrorCode errorCode() {
+    public ApiErrorCode errorCode() {
         return errorCode;
     }
 }
