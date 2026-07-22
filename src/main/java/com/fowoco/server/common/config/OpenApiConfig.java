@@ -57,6 +57,12 @@ public class OpenApiConfig {
                                 "fowoco_refresh_token=<opaque-token>; Path=/api/v1/auth; "
                                         + "Max-Age=1209600; HttpOnly; SameSite=Strict"
                         )))
+                .addHeaders("ExpiredRefreshTokenCookie", new Header()
+                        .description("브라우저에 저장된 Refresh Token을 삭제하는 만료 쿠키")
+                        .schema(new StringSchema().example(
+                                "fowoco_refresh_token=; Path=/api/v1/auth; "
+                                        + "Max-Age=0; HttpOnly; SameSite=Strict"
+                        )))
                 .addResponses("BadRequest", errorResponse("요청 형식 또는 입력값 오류"))
                 .addResponses("Unauthorized", errorResponse("인증 필요"))
                 .addResponses("InvalidCredentials", errorResponse(

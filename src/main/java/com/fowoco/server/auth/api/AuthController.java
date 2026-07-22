@@ -142,6 +142,35 @@ public class AuthController {
     }
 
     @Operation(
+            operationId = "logout",
+            summary = "로그아웃",
+            description = "Refresh Token 묶음을 폐기하고 쿠키를 삭제합니다. "
+                    + "토큰이 없거나 이미 폐기되었어도 같은 204로 응답합니다."
+    )
+    @ApiResponse(
+            responseCode = "204",
+            description = "로그아웃 처리 완료",
+            headers = @Header(
+                    name = HttpHeaders.SET_COOKIE,
+                    ref = "#/components/headers/ExpiredRefreshTokenCookie"
+            )
+    )
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(
+            @CookieValue(
+                    name = "${app.auth.refresh-token.cookie.name}",
+                    required = false
+            ) String rawRefreshToken
+    ) {
+        authService.logout(rawRefreshToken);
+        return ResponseEntity.noContent()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .header(HttpHeaders.SET_COOKIE, refreshTokenCookieFactory.clear().toString())
+                .build();
+    }
+
+    @Operation(
             operationId = "getCurrentActor",
             summary = "현재 인증 사용자 확인",
             description = "검증된 Access Token에서 user_id, company_id, roles만 반환합니다.",

@@ -34,6 +34,7 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final RefreshTokenHashPort refreshTokenHashPort;
     private final RefreshTokenRotationTransaction refreshTokenRotationTransaction;
+    private final RefreshTokenLogoutTransaction refreshTokenLogoutTransaction;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -46,6 +47,7 @@ public class AuthService {
             RefreshTokenRepository refreshTokenRepository,
             RefreshTokenHashPort refreshTokenHashPort,
             RefreshTokenRotationTransaction refreshTokenRotationTransaction,
+            RefreshTokenLogoutTransaction refreshTokenLogoutTransaction,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -57,6 +59,7 @@ public class AuthService {
         this.refreshTokenRepository = refreshTokenRepository;
         this.refreshTokenHashPort = refreshTokenHashPort;
         this.refreshTokenRotationTransaction = refreshTokenRotationTransaction;
+        this.refreshTokenLogoutTransaction = refreshTokenLogoutTransaction;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -118,6 +121,14 @@ public class AuthService {
         String tokenHash = refreshTokenHashPort.hash(rawRefreshToken);
         RefreshOutcome outcome = refreshTokenRotationTransaction.rotate(tokenHash);
         return outcome.result().orElseThrow(InvalidRefreshTokenException::new);
+    }
+
+    public void logout(String rawRefreshToken) {
+        if (rawRefreshToken == null || !RAW_REFRESH_TOKEN.matcher(rawRefreshToken).matches()) {
+            return;
+        }
+
+        refreshTokenLogoutTransaction.revokeIfKnown(refreshTokenHashPort.hash(rawRefreshToken));
     }
 
     private static ApiException invalidCredentials() {
