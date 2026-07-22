@@ -28,9 +28,9 @@ public class RefreshTokenLogoutTransaction {
 
     @Transactional
     public void revokeIfKnown(String tokenHash) {
-        Instant now = clock.instant();
         Optional<RefreshToken> refreshTokenCandidate =
                 refreshTokenRepository.findByTokenHashWithFamilyLock(tokenHash);
+        Instant now = clock.instant();
         if (refreshTokenCandidate.isEmpty()) {
             authAuditPort.record(AuthAuditEvent.anonymous(
                     AuthAuditEvent.Action.LOGOUT_COMPLETED,

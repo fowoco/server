@@ -49,9 +49,9 @@ public class RefreshTokenRotationTransaction {
 
     @Transactional
     public RefreshOutcome rotate(String tokenHash) {
-        Instant now = clock.instant();
         Optional<RefreshToken> presentedTokenCandidate =
                 refreshTokenRepository.findByTokenHashWithFamilyLock(tokenHash);
+        Instant now = clock.instant();
         if (presentedTokenCandidate.isEmpty()) {
             authAuditPort.record(AuthAuditEvent.anonymous(
                     AuthAuditEvent.Action.REFRESH_REJECTED,
