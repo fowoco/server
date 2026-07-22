@@ -1,4 +1,43 @@
 package com.fowoco.server.auth.api;
 
-public class LoginRequest {
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fowoco.server.auth.api.validation.Utf8ByteLength;
+import com.fowoco.server.auth.application.LoginCommand;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public final class LoginRequest {
+
+    @NotBlank(message = "이메일을 입력해 주세요.")
+    @Email(message = "이메일 형식이 올바르지 않습니다.")
+    @Size(max = 254, message = "이메일은 254자 이하여야 합니다.")
+    private final String email;
+
+    @NotBlank(message = "비밀번호를 입력해 주세요.")
+    @Size(max = 128, message = "비밀번호는 128자 이하여야 합니다.")
+    @Utf8ByteLength(max = 72, message = "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.")
+    private final String password;
+
+    @JsonCreator
+    public LoginRequest(
+            @JsonProperty("email") String email,
+            @JsonProperty("password") String password
+    ) {
+        this.email = email;
+        this.password = password;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public LoginCommand toCommand() {
+        return new LoginCommand(email, password);
+    }
 }

@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -15,7 +16,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration(proxyBeanMethods = false)
@@ -23,7 +26,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 public class SecurityConfig {
 
     /**
-     * Prevents Boot from generating a temporary user and password before JWT authentication is added in #4.
+     * Prevents Boot from generating a temporary password because this service authenticates with JWT only.
      */
     @Bean
     public UserDetailsService emptyUserDetailsService() {
@@ -48,6 +51,23 @@ public class SecurityConfig {
             HttpSecurity http,
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver
     ) throws Exception {
+        AuthenticationEntryPoint authenticationEntryPoint = (request, response, exception) -> {
+            response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+            exceptionResolver.resolveException(
+                    request,
+                    response,
+                    null,
+                    new ApiException(ErrorCode.AUTHENTICATION_REQUIRED)
+            );
+        };
+        AccessDeniedHandler accessDeniedHandler = (request, response, exception) ->
+                exceptionResolver.resolveException(
+                        request,
+                        response,
+                        null,
+                        new ApiException(ErrorCode.ACCESS_DENIED)
+                );
+
         http
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
@@ -60,26 +80,19 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/swagger-ui/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll()
                 )
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint((request, response, exception) ->
-                                exceptionResolver.resolveException(
-                                        request,
-                                        response,
-                                        null,
-                                        new ApiException(ErrorCode.AUTHENTICATION_REQUIRED)
-                                )
-                        )
-                        .accessDeniedHandler((request, response, exception) ->
-                                exceptionResolver.resolveException(
-                                        request,
-                                        response,
-                                        null,
-                                        new ApiException(ErrorCode.ACCESS_DENIED)
-                                )
-                        )
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                )
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .jwt(Customizer.withDefaults())
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
                 )
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
