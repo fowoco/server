@@ -50,6 +50,7 @@ class AuthSecurityIntegrationTest {
     private static final String HR_A_EMAIL = "hr.a@example.com";
     private static final String VIEWER_B_EMAIL = "viewer.b@example.com";
     private static final String PASSWORD = "Test-password-1!";
+    private static final String REFRESH_TOKEN_COOKIE_NAME = "fowoco_refresh_token";
 
     @LocalServerPort
     private int port;
@@ -80,8 +81,14 @@ class AuthSecurityIntegrationTest {
     }
 
     @BeforeEach
-    void clearRefreshTokens() {
+    void resetAuthenticationState() {
         jdbcTemplate.update("DELETE FROM refresh_token");
+        jdbcTemplate.update(
+                "UPDATE user_account SET status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP, version = version + 1"
+        );
+        jdbcTemplate.update(
+                "UPDATE company SET status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP, version = version + 1"
+        );
     }
 
     @Test
@@ -120,6 +127,157 @@ class AuthSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(meResponse.body(), "$.user_id")).isEqualTo(VIEWER_A.toString());
         assertThat(JsonPath.<String>read(meResponse.body(), "$.company_id")).isEqualTo(COMPANY_A.toString());
         assertThat(JsonPath.<String>read(meResponse.body(), "$.roles[0]")).isEqualTo("VIEWER");
+    }
+
+    @Test
+    void refreshRotatesTokenAndPersistsTheReplacementChain() throws Exception {
+        HttpResponse<String> loginResponse = login(VIEWER_A_EMAIL, PASSWORD);
+        String oldRawRefreshToken = refreshToken(loginResponse);
+        String oldTokenHash = refreshTokenHasher.hash(oldRawRefreshToken);
+        UUID oldTokenId = tokenId(oldTokenHash);
+        UUID tokenFamilyId = tokenFamilyId(oldTokenHash);
+
+        HttpResponse<String> refreshResponse = refresh(oldRawRefreshToken);
+
+        assertThat(refreshResponse.statusCode()).isEqualTo(200);
+        assertThat(refreshResponse.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+        assertThat(refreshResponse.headers().firstValue(HttpHeaders.PRAGMA)).contains("no-cache");
+        assertThat(JsonPath.<String>read(refreshResponse.body(), "$.token_type")).isEqualTo("Bearer");
+        assertThat(JsonPath.<Number>read(refreshResponse.body(), "$.expires_in_seconds").longValue())
+                .isPositive();
+
+        String newRawRefreshToken = refreshToken(refreshResponse);
+        String newTokenHash = refreshTokenHasher.hash(newRawRefreshToken);
+        UUID replacementTokenId = tokenId(newTokenHash);
+        String refreshedAccessToken = JsonPath.read(refreshResponse.body(), "$.access_token");
+
+        assertThat(newRawRefreshToken).isNotEqualTo(oldRawRefreshToken);
+        assertThat(refreshResponse.body())
+                .doesNotContain(oldRawRefreshToken)
+                .doesNotContain(newRawRefreshToken);
+        assertThat(tokenFamilyId(newTokenHash)).isEqualTo(tokenFamilyId);
+        assertThat(replacedByTokenId(oldTokenHash)).isEqualTo(replacementTokenId);
+        assertThat(oldTokenStateCount(oldTokenId)).isEqualTo(1);
+        assertThat(activeTokenCount(tokenFamilyId)).isEqualTo(1);
+        assertThat(familyTokenCount(tokenFamilyId)).isEqualTo(2);
+
+        HttpResponse<String> meResponse = authorizedGet("/api/v1/auth/me", refreshedAccessToken);
+        assertThat(meResponse.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(meResponse.body(), "$.user_id")).isEqualTo(VIEWER_A.toString());
+        assertThat(JsonPath.<String>read(meResponse.body(), "$.company_id")).isEqualTo(COMPANY_A.toString());
+    }
+
+    @Test
+    void replayingAUsedRefreshTokenRevokesTheWholeFamily() throws Exception {
+        String oldRawRefreshToken = refreshToken(login(VIEWER_A_EMAIL, PASSWORD));
+        UUID tokenFamilyId = tokenFamilyId(refreshTokenHasher.hash(oldRawRefreshToken));
+        HttpResponse<String> firstRefresh = refresh(oldRawRefreshToken);
+        String newRawRefreshToken = refreshToken(firstRefresh);
+
+        HttpResponse<String> replayResponse = refresh(oldRawRefreshToken);
+
+        assertInvalidRefreshResponse(replayResponse);
+        assertCookieCleared(replayResponse);
+        assertThat(familyTokenCount(tokenFamilyId)).isEqualTo(2);
+        assertThat(revokedTokenCount(tokenFamilyId)).isEqualTo(2);
+        assertThat(activeTokenCount(tokenFamilyId)).isZero();
+
+        HttpResponse<String> replacementResponse = refresh(newRawRefreshToken);
+        assertInvalidRefreshResponse(replacementResponse);
+        assertCookieCleared(replacementResponse);
+    }
+
+    @Test
+    void missingMalformedAndUnknownRefreshTokensUseTheSameErrorAndClearTheCookie() throws Exception {
+        HttpResponse<String> missingTokenResponse = refresh(null);
+        HttpResponse<String> malformedTokenResponse = refresh("not-a-refresh-token");
+        HttpResponse<String> unknownTokenResponse = refresh("x".repeat(43));
+
+        assertInvalidRefreshResponse(missingTokenResponse);
+        assertInvalidRefreshResponse(malformedTokenResponse);
+        assertInvalidRefreshResponse(unknownTokenResponse);
+        assertThat(JsonPath.<String>read(missingTokenResponse.body(), "$.message"))
+                .isEqualTo(JsonPath.<String>read(malformedTokenResponse.body(), "$.message"))
+                .isEqualTo(JsonPath.<String>read(unknownTokenResponse.body(), "$.message"));
+        assertCookieCleared(missingTokenResponse);
+        assertCookieCleared(malformedTokenResponse);
+        assertCookieCleared(unknownTokenResponse);
+        assertThat(refreshTokenCount()).isZero();
+    }
+
+    @Test
+    void logoutIsIdempotentAndAlwaysClearsTheCookie() throws Exception {
+        HttpResponse<String> loginResponse = login(VIEWER_A_EMAIL, PASSWORD);
+        String accessToken = accessToken(loginResponse);
+        String rawRefreshToken = refreshToken(loginResponse);
+        UUID tokenFamilyId = tokenFamilyId(refreshTokenHasher.hash(rawRefreshToken));
+
+        HttpResponse<String> firstLogout = logout(rawRefreshToken);
+        HttpResponse<String> secondLogout = logout(rawRefreshToken);
+        HttpResponse<String> missingTokenLogout = logout(null);
+
+        assertLogoutResponse(firstLogout);
+        assertLogoutResponse(secondLogout);
+        assertLogoutResponse(missingTokenLogout);
+        assertThat(familyTokenCount(tokenFamilyId)).isEqualTo(1);
+        assertThat(revokedTokenCount(tokenFamilyId)).isEqualTo(1);
+        assertThat(activeTokenCount(tokenFamilyId)).isZero();
+        assertInvalidRefreshResponse(refresh(rawRefreshToken));
+        assertThat(authorizedGet("/api/v1/auth/me", accessToken).statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void logoutRevokesOnlyThePresentedLoginFamily() throws Exception {
+        String firstFamilyToken = refreshToken(login(VIEWER_A_EMAIL, PASSWORD));
+        String secondFamilyToken = refreshToken(login(VIEWER_A_EMAIL, PASSWORD));
+        UUID firstFamilyId = tokenFamilyId(refreshTokenHasher.hash(firstFamilyToken));
+        UUID secondFamilyId = tokenFamilyId(refreshTokenHasher.hash(secondFamilyToken));
+
+        HttpResponse<String> logoutResponse = logout(firstFamilyToken);
+
+        assertLogoutResponse(logoutResponse);
+        assertThat(firstFamilyId).isNotEqualTo(secondFamilyId);
+        assertThat(revokedTokenCount(firstFamilyId)).isEqualTo(1);
+        assertThat(activeTokenCount(firstFamilyId)).isZero();
+        assertThat(revokedTokenCount(secondFamilyId)).isZero();
+        assertThat(activeTokenCount(secondFamilyId)).isEqualTo(1);
+        assertThat(refresh(secondFamilyToken).statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void refreshRejectsInactiveUserAndCompanyAndRevokesTheirFamilies() throws Exception {
+        String inactiveUserToken = refreshToken(login(VIEWER_A_EMAIL, PASSWORD));
+        UUID inactiveUserFamilyId = tokenFamilyId(refreshTokenHasher.hash(inactiveUserToken));
+        jdbcTemplate.update(
+                "UPDATE user_account SET status = 'SUSPENDED', updated_at = CURRENT_TIMESTAMP, "
+                        + "version = version + 1 WHERE user_id = ?",
+                VIEWER_A
+        );
+
+        HttpResponse<String> inactiveUserResponse = refresh(inactiveUserToken);
+
+        assertInvalidRefreshResponse(inactiveUserResponse);
+        assertCookieCleared(inactiveUserResponse);
+        assertThat(revokedTokenCount(inactiveUserFamilyId)).isEqualTo(1);
+
+        jdbcTemplate.update(
+                "UPDATE user_account SET status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP, "
+                        + "version = version + 1 WHERE user_id = ?",
+                VIEWER_A
+        );
+        String inactiveCompanyToken = refreshToken(login(VIEWER_A_EMAIL, PASSWORD));
+        UUID inactiveCompanyFamilyId = tokenFamilyId(refreshTokenHasher.hash(inactiveCompanyToken));
+        jdbcTemplate.update(
+                "UPDATE company SET status = 'SUSPENDED', updated_at = CURRENT_TIMESTAMP, "
+                        + "version = version + 1 WHERE company_id = ?",
+                COMPANY_A
+        );
+
+        HttpResponse<String> inactiveCompanyResponse = refresh(inactiveCompanyToken);
+
+        assertInvalidRefreshResponse(inactiveCompanyResponse);
+        assertCookieCleared(inactiveCompanyResponse);
+        assertThat(revokedTokenCount(inactiveCompanyFamilyId)).isEqualTo(1);
     }
 
     @Test
@@ -262,6 +420,64 @@ class AuthSecurityIntegrationTest {
         return postJson("/api/v1/auth/login", body, null);
     }
 
+    private HttpResponse<String> refresh(String rawRefreshToken) throws Exception {
+        return postWithRefreshTokenCookie("/api/v1/auth/refresh", rawRefreshToken);
+    }
+
+    private HttpResponse<String> logout(String rawRefreshToken) throws Exception {
+        return postWithRefreshTokenCookie("/api/v1/auth/logout", rawRefreshToken);
+    }
+
+    private HttpResponse<String> postWithRefreshTokenCookie(String path, String rawRefreshToken)
+            throws Exception {
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri(path));
+        if (rawRefreshToken != null) {
+            requestBuilder.header(
+                    HttpHeaders.COOKIE,
+                    REFRESH_TOKEN_COOKIE_NAME + "=" + rawRefreshToken
+            );
+        }
+        HttpRequest request = requestBuilder
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private String refreshToken(HttpResponse<String> response) {
+        assertThat(response.statusCode()).isEqualTo(200);
+        String setCookie = response.headers().firstValue(HttpHeaders.SET_COOKIE).orElseThrow();
+        assertThat(setCookie)
+                .contains(REFRESH_TOKEN_COOKIE_NAME + "=")
+                .contains("HttpOnly")
+                .contains("SameSite=Strict")
+                .contains("Path=/api/v1/auth");
+        return cookieValue(setCookie);
+    }
+
+    private void assertInvalidRefreshResponse(HttpResponse<String> response) {
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("INVALID_REFRESH_TOKEN");
+    }
+
+    private void assertLogoutResponse(HttpResponse<String> response) {
+        assertThat(response.statusCode()).isEqualTo(204);
+        assertThat(response.body()).isEmpty();
+        assertThat(response.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+        assertThat(response.headers().firstValue(HttpHeaders.PRAGMA)).contains("no-cache");
+        assertCookieCleared(response);
+    }
+
+    private void assertCookieCleared(HttpResponse<String> response) {
+        String setCookie = response.headers().firstValue(HttpHeaders.SET_COOKIE).orElseThrow();
+        assertThat(setCookie)
+                .contains(REFRESH_TOKEN_COOKIE_NAME + "=;")
+                .contains("Max-Age=0")
+                .contains("HttpOnly")
+                .contains("SameSite=Strict")
+                .contains("Path=/api/v1/auth");
+    }
+
     private String accessToken(HttpResponse<String> loginResponse) {
         assertThat(loginResponse.statusCode()).isEqualTo(200);
         return JsonPath.read(loginResponse.body(), "$.access_token");
@@ -315,6 +531,81 @@ class AuthSecurityIntegrationTest {
 
     private int refreshTokenCount() {
         return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM refresh_token", Integer.class);
+    }
+
+    private UUID tokenId(String tokenHash) {
+        return jdbcTemplate.queryForObject(
+                "SELECT refresh_token_id FROM refresh_token WHERE token_hash = ?",
+                UUID.class,
+                tokenHash
+        );
+    }
+
+    private UUID tokenFamilyId(String tokenHash) {
+        return jdbcTemplate.queryForObject(
+                "SELECT token_family_id FROM refresh_token WHERE token_hash = ?",
+                UUID.class,
+                tokenHash
+        );
+    }
+
+    private UUID replacedByTokenId(String tokenHash) {
+        return jdbcTemplate.queryForObject(
+                "SELECT replaced_by_token_id FROM refresh_token WHERE token_hash = ?",
+                UUID.class,
+                tokenHash
+        );
+    }
+
+    private int oldTokenStateCount(UUID refreshTokenId) {
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM refresh_token
+                WHERE refresh_token_id = ?
+                  AND used_at IS NOT NULL
+                  AND revoked_at IS NULL
+                  AND replaced_by_token_id IS NOT NULL
+                """,
+                Integer.class,
+                refreshTokenId
+        );
+    }
+
+    private int familyTokenCount(UUID tokenFamilyId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM refresh_token WHERE token_family_id = ?",
+                Integer.class,
+                tokenFamilyId
+        );
+    }
+
+    private int activeTokenCount(UUID tokenFamilyId) {
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM refresh_token
+                WHERE token_family_id = ?
+                  AND used_at IS NULL
+                  AND revoked_at IS NULL
+                  AND expires_at > CURRENT_TIMESTAMP
+                """,
+                Integer.class,
+                tokenFamilyId
+        );
+    }
+
+    private int revokedTokenCount(UUID tokenFamilyId) {
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM refresh_token
+                WHERE token_family_id = ?
+                  AND revoked_at IS NOT NULL
+                """,
+                Integer.class,
+                tokenFamilyId
+        );
     }
 
     @TestConfiguration(proxyBeanMethods = false)
