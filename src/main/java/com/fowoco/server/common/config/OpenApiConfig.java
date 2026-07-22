@@ -13,6 +13,8 @@ import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.HeaderParameter;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import java.util.Map;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,7 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfig {
 
     private static final String REQUEST_ID_HEADER = "X-Request-Id";
+    private static final String BEARER_AUTH_SCHEME = "bearerAuth";
 
     @Bean
     public OpenAPI fowocoOpenApi() {
@@ -39,11 +42,35 @@ public class OpenApiConfig {
 
         Components components = new Components()
                 .addSchemas("ApiErrorResponse", errorSchema)
+                .addSecuritySchemes(BEARER_AUTH_SCHEME, new SecurityScheme()
+                        .type(SecurityScheme.Type.HTTP)
+                        .scheme("bearer")
+                        .bearerFormat("JWT")
+                        .description("로그인 응답의 Access Token을 Authorization: Bearer <access_token> 형식으로 전달합니다. "
+                                + "JWT에는 sub(user_id), company_id, roles, token_type, iss, aud, exp, jti가 포함됩니다."))
                 .addHeaders("RequestId", new Header()
                         .description("요청과 로그를 함께 찾기 위한 추적 ID")
                         .schema(new StringSchema()))
+                .addHeaders("RefreshTokenCookie", new Header()
+                        .description("Refresh Token을 전달하는 HttpOnly 쿠키. 원문은 JSON 응답에 포함하지 않습니다.")
+                        .schema(new StringSchema().example(
+                                "fowoco_refresh_token=<opaque-token>; Path=/api/v1/auth; "
+                                        + "Max-Age=1209600; HttpOnly; SameSite=Strict"
+                        )))
                 .addResponses("BadRequest", errorResponse("요청 형식 또는 입력값 오류"))
                 .addResponses("Unauthorized", errorResponse("인증 필요"))
+                .addResponses("InvalidCredentials", errorResponse(
+                        "이메일·비밀번호·계정 또는 사업장 상태로 인한 로그인 실패",
+                        Map.of(
+                                "timestamp", "2026-07-22T01:00:00Z",
+                                "status", 401,
+                                "code", "INVALID_CREDENTIALS",
+                                "message", "이메일 또는 비밀번호를 확인해 주세요.",
+                                "path", "/api/v1/auth/login",
+                                "request_id", "01-example-request-id",
+                                "field_errors", java.util.List.of()
+                        )
+                ))
                 .addResponses("Forbidden", errorResponse("권한 부족"))
                 .addResponses("NotFound", errorResponse("리소스를 찾을 수 없음"))
                 .addResponses("MethodNotAllowed", errorResponse("지원하지 않는 HTTP 메서드"))
@@ -76,25 +103,29 @@ public class OpenApiConfig {
                                     REQUEST_ID_HEADER,
                                     new Header().$ref("#/components/headers/RequestId")
                             ));
-                    operation.getResponses().putIfAbsent("400", responseReference("BadRequest"));
-                    operation.getResponses().putIfAbsent("401", responseReference("Unauthorized"));
-                    operation.getResponses().putIfAbsent("403", responseReference("Forbidden"));
-                    operation.getResponses().putIfAbsent("404", responseReference("NotFound"));
                     operation.getResponses().putIfAbsent("405", responseReference("MethodNotAllowed"));
                     operation.getResponses().putIfAbsent("406", responseReference("NotAcceptable"));
-                    operation.getResponses().putIfAbsent("415", responseReference("UnsupportedMediaType"));
                     operation.getResponses().putIfAbsent("500", responseReference("InternalServerError"));
                 })
         );
     }
 
     private ApiResponse errorResponse(String description) {
+        return errorResponse(description, null);
+    }
+
+    private ApiResponse errorResponse(String description, Object example) {
+        MediaType mediaType = new MediaType()
+                .schema(new ObjectSchema().$ref("#/components/schemas/ApiErrorResponse"));
+        if (example != null) {
+            mediaType.example(example);
+        }
         return new ApiResponse()
                 .description(description)
                 .addHeaderObject(REQUEST_ID_HEADER, new Header().$ref("#/components/headers/RequestId"))
                 .content(new Content().addMediaType(
                         org.springframework.http.MediaType.APPLICATION_JSON_VALUE,
-                        new MediaType().schema(new ObjectSchema().$ref("#/components/schemas/ApiErrorResponse"))
+                        mediaType
                 ));
     }
 
