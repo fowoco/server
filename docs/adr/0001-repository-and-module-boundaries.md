@@ -142,6 +142,7 @@ DB Schema 변경은 코드 branch와 별도로 재정렬할 수 없으므로 두
 - `main`에 병합되어 공유 환경에 적용된 migration은 수정·삭제·번호 변경하지 않습니다.
 - PR 검토 중인 migration은 예약 번호와 공유 환경 적용 여부를 확인한 뒤 수정할 수 있습니다. 이미 공유 환경에 적용했다면 새 migration으로 교정합니다.
 - 같은 번호를 두 branch에서 사용하지 않으며 migration은 가능한 한 PR 하나에 하나만 포함합니다.
+- 하나의 migration은 소유 Issue의 aggregate만 생성합니다. 후속 Feature의 테이블을 편의를 위해 미리 만들거나 여러 모듈의 책임을 범용 테이블에 섞지 않습니다.
 - PostgreSQL migration test는 최신 번호를 하드코딩하지 않고 validation 성공과 pending migration 없음으로 검증합니다.
 
 ### 8. Server의 AI 경계

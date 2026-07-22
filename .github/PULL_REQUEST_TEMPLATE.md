@@ -39,6 +39,7 @@
 - [ ] Swagger/OpenAPI와 Notion 계약을 갱신했습니다.
 - [ ] Client에 알려야 할 호환성 변경을 적었습니다.
 - [ ] DB 변경에 Flyway migration이 있습니다.
+- [ ] migration 번호와 소유 Issue를 확인했고 다른 기능의 테이블을 미리 만들지 않았습니다.
 - [ ] 환경변수는 이름만 `.env.example`에 적었습니다.
 - [ ] 배포 후 Smoke Test와 롤백 방법을 적었습니다.
 

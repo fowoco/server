@@ -257,6 +257,7 @@ server/
 ## 변하지 않는 보안 원칙
 
 - 모든 사업장 데이터는 인증 Context의 `company_id`로 격리합니다.
+- MVP는 `ActorContext`, `company_id` 범위 Repository, tenant-aware DB 제약을 함께 사용합니다. PostgreSQL RLS는 DB Role·transaction context·connection pool 격리까지 검증한 후 도입합니다.
 - 근로자는 로그인하지 않고 만료되는 보안 링크만 사용합니다.
 - 외국인등록번호·여권번호·전화번호·계좌번호를 AI에 보내지 않습니다.
 - AI 결과와 요청 초안은 HR 승인 전 자동 발송하지 않습니다.
