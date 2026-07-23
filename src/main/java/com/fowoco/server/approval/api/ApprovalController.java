@@ -49,8 +49,8 @@ public class ApprovalController {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "승인 요청 생성"),
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
-            @ApiResponse(responseCode = "409", description = "버전 충돌 또는 진행 중 승인 존재"),
-            @ApiResponse(responseCode = "422", description = "상태·필수정보·민감정보 규칙 위반")
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
     })
     @PostMapping(
             path = "/approval-requests",
@@ -76,8 +76,8 @@ public class ApprovalController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "현재 Task version 승인"),
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
-            @ApiResponse(responseCode = "409", description = "Task 또는 승인 대상 version 충돌"),
-            @ApiResponse(responseCode = "422", description = "허용되지 않은 상태")
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
     })
     @PostMapping(
             path = "/approve",
@@ -102,6 +102,12 @@ public class ApprovalController {
             summary = "업무 반려",
             description = "승인 요청을 종료하고 Task를 DRAFT로 되돌립니다."
     )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "반려 완료"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+    })
     @PostMapping(
             path = "/reject",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -125,6 +131,12 @@ public class ApprovalController {
             summary = "외부기관 제출 기록",
             description = "서버가 기관에 대신 제출하지 않고 HR이 수행한 제출 결과만 기록합니다."
     )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "외부 제출 기록 생성"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+    })
     @PostMapping(
             path = "/external-submissions",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -146,6 +158,11 @@ public class ApprovalController {
     }
 
     @Operation(operationId = "recordTaskEvidence", summary = "업무 증빙 기록")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "증빙 기록 생성"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+    })
     @PostMapping(
             path = "/evidence",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -167,6 +184,12 @@ public class ApprovalController {
     }
 
     @Operation(operationId = "completeTask", summary = "업무 완료")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "업무 완료"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+    })
     @PostMapping(
             path = "/complete",
             consumes = MediaType.APPLICATION_JSON_VALUE,

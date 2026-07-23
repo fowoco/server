@@ -114,6 +114,8 @@ public class OpenApiConfig {
                 ))
                 .addResponses("Forbidden", errorResponse("권한 부족"))
                 .addResponses("NotFound", errorResponse("리소스를 찾을 수 없음"))
+                .addResponses("Conflict", errorResponse("동시성 또는 현재 상태 충돌"))
+                .addResponses("UnprocessableEntity", errorResponse("업무 규칙 또는 상태 전이 위반"))
                 .addResponses("MethodNotAllowed", errorResponse("지원하지 않는 HTTP 메서드"))
                 .addResponses("NotAcceptable", errorResponse("제공할 수 없는 응답 형식"))
                 .addResponses("UnsupportedMediaType", errorResponse("지원하지 않는 요청 형식"))
@@ -147,6 +149,10 @@ public class OpenApiConfig {
                     operation.getResponses().putIfAbsent("405", responseReference("MethodNotAllowed"));
                     operation.getResponses().putIfAbsent("406", responseReference("NotAcceptable"));
                     operation.getResponses().putIfAbsent("500", responseReference("InternalServerError"));
+                    if (operation.getSecurity() != null && !operation.getSecurity().isEmpty()) {
+                        operation.getResponses().putIfAbsent("401", responseReference("Unauthorized"));
+                        operation.getResponses().putIfAbsent("403", responseReference("Forbidden"));
+                    }
                 })
         );
     }

@@ -254,7 +254,7 @@ public class ApprovalService implements ApprovalControlPort {
         if (task.status() != TaskStatus.APPROVED
                 && task.status() != TaskStatus.WAITING_WORKER
                 && task.status() != TaskStatus.WAITING_EXTERNAL) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         Instant now = Instant.now(clock);
         Instant recordedAt = command.recordedAt() == null ? now : command.recordedAt();

@@ -96,7 +96,7 @@ public final class Task {
             Instant now
     ) {
         if (initialStatus != TaskStatus.DRAFT && initialStatus != TaskStatus.NEEDS_INFO) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         return new Task(
                 taskId,
@@ -125,7 +125,7 @@ public final class Task {
     public TaskStatus requestReview(boolean requirementsSatisfied, long expectedVersion, UUID actorId, Instant now) {
         requireVersion(expectedVersion);
         if (status != TaskStatus.DRAFT && status != TaskStatus.NEEDS_INFO) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         if (!requirementsSatisfied) {
             throw new ApiException(TaskErrorCode.TASK_REQUIREMENTS_MISSING);
@@ -148,7 +148,7 @@ public final class Task {
     public TaskStatus recordExternalSubmission(long expectedVersion, UUID actorId, Instant now) {
         requireVersion(expectedVersion);
         if (status != TaskStatus.APPROVED && status != TaskStatus.WAITING_WORKER) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         return transition(TaskStatus.WAITING_EXTERNAL, actorId, now);
     }
@@ -164,7 +164,7 @@ public final class Task {
         if (status != TaskStatus.APPROVED
                 && status != TaskStatus.WAITING_WORKER
                 && status != TaskStatus.WAITING_EXTERNAL) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         if (!currentVersionApproved) {
             throw new ApiException(TaskErrorCode.APPROVAL_REQUIRED);
@@ -178,7 +178,7 @@ public final class Task {
     public TaskStatus cancel(long expectedVersion, UUID actorId, Instant now) {
         requireVersion(expectedVersion);
         if (status.isTerminal()) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         return transition(TaskStatus.CANCELLED, actorId, now);
     }
@@ -195,7 +195,7 @@ public final class Task {
     ) {
         requireVersion(expectedVersion);
         if (status.isTerminal()) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         String nextFingerprint = requireFingerprint(criticalFingerprint);
         boolean criticalChanged = !this.criticalFingerprint.equals(nextFingerprint);
@@ -230,13 +230,13 @@ public final class Task {
 
     private void requireStatus(TaskStatus expected) {
         if (status != expected) {
-            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
     }
 
     private void requireVersion(long expectedVersion) {
         if (version != expectedVersion) {
-            throw new ApiException(TaskErrorCode.TASK_VERSION_CONFLICT);
+            throw new ApiException(TaskErrorCode.CONCURRENT_MODIFICATION);
         }
     }
 

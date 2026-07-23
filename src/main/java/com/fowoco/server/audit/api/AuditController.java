@@ -80,11 +80,11 @@ public class AuditController {
     @GetMapping(path = "/audit-events", produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
     public AuditPageResponse search(
-            @RequestParam(required = false) ActorType actorType,
+            @RequestParam(name = "actor_type", required = false) ActorType actorType,
             @RequestParam(required = false) AuditAction action,
-            @RequestParam(required = false) AuditTargetType targetType,
-            @RequestParam(required = false) UUID targetId,
-            @RequestParam(required = false)
+            @RequestParam(name = "target_type", required = false) AuditTargetType targetType,
+            @RequestParam(name = "target_id", required = false) UUID targetId,
+            @RequestParam(name = "trace_id", required = false)
             @Pattern(regexp = "^[0-9a-f]{32}$") String traceId,
             @RequestParam(name = "created_from", required = false) Instant createdFrom,
             @RequestParam(name = "created_to", required = false) Instant createdTo,
