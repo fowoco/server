@@ -10,6 +10,11 @@ import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -329,6 +334,49 @@ class ApprovalAuditIntegrationTest {
     }
 
     @Test
+    void concurrentApprovalRequestsAllowOnlyOneWinner() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+        String body = """
+                {"expected_version":1,"reason":"동시 승인 테스트"}
+                """;
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<HttpResponse<String>> first = executor.submit(
+                    () -> postAfterSignal(taskPath("/approve"), body, hrToken, ready, start)
+            );
+            Future<HttpResponse<String>> second = executor.submit(
+                    () -> postAfterSignal(taskPath("/approve"), body, hrToken, ready, start)
+            );
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            List<Integer> statuses = List.of(
+                    first.get(10, TimeUnit.SECONDS).statusCode(),
+                    second.get(10, TimeUnit.SECONDS).statusCode()
+            );
+            assertThat(statuses).containsExactlyInAnyOrder(200, 409);
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        assertThat(taskStatus()).isEqualTo("APPROVED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM approval_request WHERE task_id = ? AND status = 'APPROVED'",
+                Integer.class,
+                TASK_A
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'TASK_APPROVED'",
+                Integer.class,
+                TASK_A
+        )).isEqualTo(1);
+    }
+
+    @Test
     void approvedTaskWithEvidenceCanCompleteWithoutEnteringExternalWaiting() throws Exception {
         String hrToken = accessToken(login(HR_A_EMAIL));
         assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
@@ -416,6 +464,20 @@ class ApprovalAuditIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> postAfterSignal(
+            String path,
+            String body,
+            String token,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws Exception {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("concurrent approval start signal timed out");
+        }
+        return authorizedPost(path, body, token);
     }
 
     private HttpResponse<String> authorizedGet(String path, String token) throws Exception {
