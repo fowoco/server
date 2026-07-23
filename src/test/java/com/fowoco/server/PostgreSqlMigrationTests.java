@@ -24,10 +24,12 @@ class PostgreSqlMigrationTests {
     private static final String COMPANY_B = "20000000-0000-0000-0000-000000000002";
     private static final String USER_A = "11000000-0000-0000-0000-000000000001";
     private static final String USER_B = "22000000-0000-0000-0000-000000000002";
+    private static final String WORKER_A = "12000000-0000-0000-0000-000000000001";
+    private static final String TASK_A = "13000000-0000-0000-0000-000000000001";
     private static final String TOKEN_HASH_A = "a".repeat(64);
 
     @Test
-    void migrationsApplyCanonicalAuthSchemaOnPostgreSql() throws SQLException {
+    void migrationsApplyCanonicalServerSchemaOnPostgreSql() throws SQLException {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String username = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         String password = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
@@ -55,7 +57,19 @@ class PostgreSqlMigrationTests {
 
     private void assertSchemaContract(Connection connection) throws SQLException {
         assertThat(tableNames(connection))
-                .contains("company", "user_account", "refresh_token");
+                .contains(
+                        "company",
+                        "user_account",
+                        "refresh_token",
+                        "worker",
+                        "task",
+                        "task_checklist_item",
+                        "task_transition_history",
+                        "approval_request",
+                        "external_submission",
+                        "task_evidence",
+                        "audit_event"
+                );
 
         assertThat(columnSpecs(connection, "company"))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
@@ -80,6 +94,31 @@ class PostgreSqlMigrationTests {
                 .containsEntry("used_at", new ColumnSpec("timestamptz", true))
                 .containsEntry("revoked_at", new ColumnSpec("timestamptz", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker"))
+                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("stay_expiry_date", new ColumnSpec("date", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "task"))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("content_revision", new ColumnSpec("int8", false))
+                .containsEntry("critical_fingerprint", new ColumnSpec("varchar", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "approval_request"))
+                .containsEntry("approval_request_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("target_task_version", new ColumnSpec("int8", false))
+                .containsEntry("target_content_revision", new ColumnSpec("int8", false))
+                .containsEntry("target_fingerprint", new ColumnSpec("varchar", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "audit_event"))
+                .containsEntry("audit_event_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("request_id", new ColumnSpec("varchar", false))
+                .containsEntry("trace_id", new ColumnSpec("varchar", true));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -90,14 +129,24 @@ class PostgreSqlMigrationTests {
                         "uq_user_account_user_company",
                         "pk_refresh_token",
                         "uq_refresh_token_hash",
-                        "fk_refresh_token_user_company"
+                        "fk_refresh_token_user_company",
+                        "fk_worker_company",
+                        "fk_task_worker_company",
+                        "fk_task_created_by_company",
+                        "fk_approval_request_task_company",
+                        "fk_approval_request_requester_company",
+                        "fk_audit_event_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
                         "idx_user_account_company",
                         "idx_refresh_token_company_user",
                         "idx_refresh_token_family_revoked",
-                        "idx_refresh_token_expires_at"
+                        "idx_refresh_token_expires_at",
+                        "idx_worker_company_stay_expiry",
+                        "idx_task_company_status_due",
+                        "idx_approval_request_task_status",
+                        "idx_audit_event_company_time"
                 );
     }
 
@@ -129,6 +178,39 @@ class PostgreSqlMigrationTests {
                     '%s', CURRENT_TIMESTAMP + INTERVAL '1 day'
                 )
                 """.formatted(USER_A, COMPANY_A, TOKEN_HASH_A));
+        execute(connection, """
+                INSERT INTO worker (
+                    worker_id, company_id, display_name, nationality,
+                    preferred_language, employment_status, stay_expiry_date
+                ) VALUES (
+                    '%s', '%s', 'Worker A', 'VNM', 'vi', 'ACTIVE', CURRENT_DATE + 30
+                )
+                """.formatted(WORKER_A, COMPANY_A));
+        execute(connection, """
+                INSERT INTO task (
+                    task_id, company_id, worker_id, case_id, task_type,
+                    workflow_id, workflow_catalog_version, title,
+                    business_data_json, critical_fingerprint, content_revision,
+                    source, status, created_by, updated_by
+                ) VALUES (
+                    '%s', '%s', '%s', '14000000-0000-0000-0000-000000000001',
+                    'RECONTRACT', 'e9-recontract', '2026.07', 'Recontract',
+                    '{}', '%s', 0, 'MANUAL', 'DRAFT', '%s', '%s'
+                )
+                """.formatted(TASK_A, COMPANY_A, WORKER_A, "f".repeat(64), USER_A, USER_A));
+        execute(connection, """
+                INSERT INTO approval_request (
+                    approval_request_id, task_id, company_id,
+                    target_task_version, target_content_revision, target_fingerprint,
+                    status, hr_snapshot_json, changed_fields_json, source_versions_json,
+                    requested_by, requested_at, created_at, updated_at
+                ) VALUES (
+                    '15000000-0000-0000-0000-000000000001',
+                    '%s', '%s', 0, 0, '%s', 'PENDING',
+                    '{}', '[]', '{}', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(TASK_A, COMPANY_A, "f".repeat(64), USER_A));
 
         assertSqlState(connection, "23505", """
                 INSERT INTO user_account (
@@ -232,6 +314,31 @@ class PostgreSqlMigrationTests {
                 "23503",
                 "DELETE FROM company WHERE company_id = '%s'".formatted(COMPANY_A)
         );
+        assertSqlState(connection, "23503", """
+                INSERT INTO approval_request (
+                    approval_request_id, task_id, company_id,
+                    target_task_version, target_content_revision, target_fingerprint,
+                    status, hr_snapshot_json, changed_fields_json, source_versions_json,
+                    requested_by, requested_at, created_at, updated_at
+                ) VALUES (
+                    '16000000-0000-0000-0000-000000000001',
+                    '%s', '%s', 0, 0, '%s', 'PENDING',
+                    '{}', '[]', '{}', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(TASK_A, COMPANY_A, "f".repeat(64), USER_B));
+        assertSqlState(connection, "23514", """
+                INSERT INTO audit_event (
+                    audit_event_id, company_id, actor_type, actor_id, user_role,
+                    action, target_type, target_id, request_id,
+                    event_version, change_summary, created_at
+                ) VALUES (
+                    '17000000-0000-0000-0000-000000000001',
+                    '%s', 'HR_USER', '%s', 'ADMIN',
+                    'TASK_APPROVED', 'TASK', '%s', '',
+                    '1', 'approved', CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, USER_A, TASK_A));
     }
 
     private Set<String> tableNames(Connection connection) throws SQLException {

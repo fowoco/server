@@ -73,6 +73,7 @@ class TaskTest {
 
         assertThat(outcome.criticalChanged()).isTrue();
         assertThat(outcome.approvalInvalidated()).isTrue();
+        assertThat(task.contentRevision()).isEqualTo(1);
         assertThat(task.status()).isEqualTo(TaskStatus.READY_FOR_REVIEW);
     }
 
@@ -82,7 +83,7 @@ class TaskTest {
 
         assertThatThrownBy(() -> task.approve(1, ACTOR_ID, NOW))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
-                        assertThat(exception.errorCode()).isEqualTo(TaskErrorCode.TASK_VERSION_CONFLICT));
+                        assertThat(exception.errorCode()).isEqualTo(TaskErrorCode.CONCURRENT_MODIFICATION));
     }
 
     @Test
@@ -91,7 +92,8 @@ class TaskTest {
 
         assertThatThrownBy(() -> task.cancel(0, ACTOR_ID, NOW))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
-                        assertThat(exception.errorCode()).isEqualTo(TaskErrorCode.INVALID_TASK_TRANSITION));
+                        assertThat(exception.errorCode())
+                                .isEqualTo(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED));
     }
 
     private Task task(TaskStatus status) {
