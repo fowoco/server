@@ -1,0 +1,80 @@
+{
+  "bundle_id": "FOWOCO-KNOWLEDGE",
+  "bundle_version": "0.2.0",
+  "bundle_status": "DRAFT",
+  "source_repository": "fowoco/knowledge",
+  "generated_at": "2026-07-23T00:00:00Z",
+  "workflows": [
+    {
+      "workflow_id": "WF-CON-001",
+      "name": "근로계약 갱신과 고용허가기간 연장 준비",
+      "intent": "EXPIRY_RENEWAL",
+      "sensitivity": "high",
+      "supported_task_types": ["RECONTRACT", "EMPLOYMENT_PERIOD_EXTENSION"],
+      "required_slots": ["worker_id", "due_at"],
+      "checklist_items": [
+        {
+          "item_code": "EMPLOYMENT_CONTRACT_USE_CURRENT_STANDARD_FORM",
+          "label": "최신 표준근로계약서 양식을 사용했는지 확인",
+          "required": true
+        },
+        {
+          "item_code": "EMPLOYMENT_PERMIT_VERIFY_PERIOD",
+          "label": "고용허가기간과 연장 적용 여부 확인",
+          "required": true
+        }
+      ],
+      "completion_evidence": [
+        "worker_intent",
+        "signed_contract_record",
+        "employment_permit_extension_receipt_or_note",
+        "hr_approval_id"
+      ],
+      "source_ids": [
+        "SRC-MOEL-CONTRACT-2026",
+        "SRC-EPS-FORMS",
+        "SRC-EPS-EMPLOYMENT-PROCESS"
+      ]
+    },
+    {
+      "workflow_id": "WF-STY-001",
+      "name": "체류기간 연장 준비와 제출 추적",
+      "intent": "EXPIRY_RENEWAL",
+      "sensitivity": "high",
+      "supported_task_types": ["STAY_PERIOD_EXTENSION"],
+      "required_slots": ["worker_id", "due_at"],
+      "checklist_items": [
+        {
+          "item_code": "PASSPORT_COPY_VERIFY_CURRENT",
+          "label": "여권 사본 보유·유효 상태 확인",
+          "required": true
+        },
+        {
+          "item_code": "ALIEN_REGISTRATION_CARD_VERIFY_CURRENT",
+          "label": "외국인등록증 사본 보유·유효 상태 확인",
+          "required": true
+        },
+        {
+          "item_code": "EMPLOYMENT_CONTRACT_VERIFY_PERIOD",
+          "label": "근로계약기간 확인",
+          "required": true
+        },
+        {
+          "item_code": "APPLICATION_FORM_SELECT_CURRENT",
+          "label": "최신 공식 통합신청서 양식 확인",
+          "required": true
+        }
+      ],
+      "completion_evidence": [
+        "hr_approval_id",
+        "stay_extension_receipt_or_note",
+        "next_review_at"
+      ],
+      "source_ids": [
+        "SRC-HIKOREA",
+        "SRC-LAW-IMMIGRATION-ACT-25",
+        "SRC-KEIS-REQUIRED-DOCS"
+      ]
+    }
+  ]
+}
