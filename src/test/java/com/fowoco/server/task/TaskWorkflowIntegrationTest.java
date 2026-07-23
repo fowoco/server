@@ -285,14 +285,16 @@ class TaskWorkflowIntegrationTest {
         );
 
         assertThat(updated.statusCode()).isEqualTo(200);
-        assertThat(JsonPath.<String>read(updated.body(), "$.status")).isEqualTo("DRAFT");
+        assertThat(JsonPath.<String>read(updated.body(), "$.status"))
+                .isEqualTo("READY_FOR_REVIEW");
+        assertThat(JsonPath.<Number>read(updated.body(), "$.version").longValue()).isEqualTo(4);
         assertThat(JsonPath.<Number>read(updated.body(), "$.content_revision").longValue())
                 .isEqualTo(1);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT status FROM approval_request WHERE task_id = ?",
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT status FROM approval_request WHERE task_id = ? ORDER BY created_at",
                 String.class,
                 taskId
-        )).isEqualTo("INVALIDATED");
+        )).containsExactly("INVALIDATED", "PENDING");
     }
 
     @Test

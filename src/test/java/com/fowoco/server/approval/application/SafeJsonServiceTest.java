@@ -35,6 +35,14 @@ class SafeJsonServiceTest {
         assertRejected(Map.of("authorization", "Bearer secret-value"));
     }
 
+    @Test
+    void snapshotAllowsDocumentTypeAndStatusWithoutDocumentNumber() {
+        assertThat(safeJsonService.write(
+                Map.of("passport_copy_status", "VERIFIED"),
+                true
+        )).contains("passport_copy_status", "VERIFIED");
+    }
+
     private void assertRejected(Map<String, Object> snapshot) {
         assertThatThrownBy(() -> safeJsonService.write(snapshot, true))
                 .isInstanceOfSatisfying(ApiException.class, exception ->

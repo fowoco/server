@@ -224,6 +224,10 @@ public class TaskWorkflowService {
                 command.dueDate(),
                 businessData
         );
+        List<TaskChecklistItem> checklistItems =
+                checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId());
+        boolean checklistSatisfied = checklistItems.stream()
+                .noneMatch(item -> item.required() && !item.completed());
         EncodedTaskContent content = contentCodec.encode(
                 task.workerId(),
                 task.workflowId(),
@@ -241,21 +245,12 @@ public class TaskWorkflowService {
                 content.businessDataJson(),
                 content.criticalFingerprint(),
                 command.dueDate(),
-                missingSlots.isEmpty(),
+                missingSlots.isEmpty() && checklistSatisfied,
                 command.expectedVersion(),
                 actor.actorId(),
                 now
         );
         Task savedTask = taskRepository.save(task);
-        if (outcome.approvalInvalidated()) {
-            approvalControl.invalidateForCriticalChange(
-                    taskId,
-                    actor,
-                    "업무 핵심값이 변경됨",
-                    now,
-                    metadata
-            );
-        }
         recordTransitionIfChanged(
                 savedTask,
                 previous,
@@ -264,6 +259,25 @@ public class TaskWorkflowService {
                 metadata,
                 now
         );
+        if (outcome.approvalInvalidated()) {
+            if (savedTask.status() == TaskStatus.DRAFT) {
+                savedTask = approvalControl.replaceReviewAfterCriticalChange(
+                        taskId,
+                        actor,
+                        "업무 핵심값이 변경됨",
+                        now,
+                        metadata
+                );
+            } else {
+                approvalControl.invalidateForCriticalChange(
+                        taskId,
+                        actor,
+                        "업무 핵심값이 변경됨",
+                        now,
+                        metadata
+                );
+            }
+        }
         appendAudit(
                 savedTask,
                 actor,
@@ -276,7 +290,7 @@ public class TaskWorkflowService {
         );
         return toResult(
                 savedTask,
-                checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId()),
+                checklistItems,
                 worker,
                 workflow
         );
