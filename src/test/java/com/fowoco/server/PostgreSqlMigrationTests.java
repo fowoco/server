@@ -191,11 +191,12 @@ class PostgreSqlMigrationTests {
                     task_id, company_id, worker_id, case_id, task_type,
                     workflow_id, workflow_catalog_version, title,
                     business_data_json, critical_fingerprint, content_revision,
-                    source, status, created_by, updated_by
+                    source, status, created_by, updated_by, created_at, updated_at
                 ) VALUES (
                     '%s', '%s', '%s', '14000000-0000-0000-0000-000000000001',
                     'RECONTRACT', 'e9-recontract', '2026.07', 'Recontract',
-                    '{}', '%s', 0, 'MANUAL', 'DRAFT', '%s', '%s'
+                    '{}', '%s', 0, 'MANUAL', 'DRAFT', '%s', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """.formatted(TASK_A, COMPANY_A, WORKER_A, "f".repeat(64), USER_A, USER_A));
         execute(connection, """
