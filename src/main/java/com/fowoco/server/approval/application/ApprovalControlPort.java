@@ -7,7 +7,12 @@ import java.util.UUID;
 
 public interface ApprovalControlPort {
 
-    boolean hasValidApproval(UUID taskId, UUID companyId, String criticalFingerprint);
+    boolean hasValidApproval(
+            UUID taskId,
+            UUID companyId,
+            long contentRevision,
+            String criticalFingerprint
+    );
 
     void invalidateForCriticalChange(
             UUID taskId,

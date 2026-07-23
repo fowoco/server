@@ -25,6 +25,8 @@ class ApprovalRequestJpaEntity {
     private UUID companyId;
     @Column(name = "target_task_version", nullable = false, updatable = false)
     private long targetTaskVersion;
+    @Column(name = "target_content_revision", nullable = false, updatable = false)
+    private long targetContentRevision;
     @Column(name = "approved_task_version")
     private Long approvedTaskVersion;
     @Column(name = "target_fingerprint", nullable = false, length = 64, updatable = false)
@@ -70,6 +72,7 @@ class ApprovalRequestJpaEntity {
         this.taskId = request.taskId();
         this.companyId = request.companyId();
         this.targetTaskVersion = request.targetTaskVersion();
+        this.targetContentRevision = request.targetContentRevision();
         this.targetFingerprint = request.targetFingerprint();
         this.aiSnapshotJson = request.aiSnapshotJson();
         this.hrSnapshotJson = request.hrSnapshotJson();
@@ -99,6 +102,7 @@ class ApprovalRequestJpaEntity {
                 taskId,
                 companyId,
                 targetTaskVersion,
+                targetContentRevision,
                 approvedTaskVersion,
                 targetFingerprint,
                 status,

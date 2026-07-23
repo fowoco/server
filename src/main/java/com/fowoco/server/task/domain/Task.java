@@ -20,6 +20,7 @@ public final class Task {
     private String description;
     private String businessDataJson;
     private String criticalFingerprint;
+    private long contentRevision;
     private final TaskSource source;
     private TaskStatus status;
     private LocalDate dueDate;
@@ -41,6 +42,7 @@ public final class Task {
             String description,
             String businessDataJson,
             String criticalFingerprint,
+            long contentRevision,
             TaskSource source,
             TaskStatus status,
             LocalDate dueDate,
@@ -61,6 +63,10 @@ public final class Task {
         this.description = normalizeNullable(description);
         this.businessDataJson = requireText(businessDataJson, "businessDataJson");
         this.criticalFingerprint = requireFingerprint(criticalFingerprint);
+        if (contentRevision < 0) {
+            throw new IllegalArgumentException("contentRevision must not be negative");
+        }
+        this.contentRevision = contentRevision;
         this.source = Objects.requireNonNull(source);
         this.status = Objects.requireNonNull(status);
         this.dueDate = dueDate;
@@ -104,6 +110,7 @@ public final class Task {
                 description,
                 businessDataJson,
                 criticalFingerprint,
+                0,
                 source,
                 initialStatus,
                 dueDate,
@@ -140,7 +147,9 @@ public final class Task {
 
     public TaskStatus recordExternalSubmission(long expectedVersion, UUID actorId, Instant now) {
         requireVersion(expectedVersion);
-        requireStatus(TaskStatus.APPROVED);
+        if (status != TaskStatus.APPROVED && status != TaskStatus.WAITING_WORKER) {
+            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+        }
         return transition(TaskStatus.WAITING_EXTERNAL, actorId, now);
     }
 
@@ -152,7 +161,11 @@ public final class Task {
             Instant now
     ) {
         requireVersion(expectedVersion);
-        requireStatus(TaskStatus.WAITING_EXTERNAL);
+        if (status != TaskStatus.APPROVED
+                && status != TaskStatus.WAITING_WORKER
+                && status != TaskStatus.WAITING_EXTERNAL) {
+            throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
+        }
         if (!currentVersionApproved) {
             throw new ApiException(TaskErrorCode.APPROVAL_REQUIRED);
         }
@@ -195,6 +208,9 @@ public final class Task {
         this.description = normalizeNullable(description);
         this.businessDataJson = requireText(businessDataJson, "businessDataJson");
         this.criticalFingerprint = nextFingerprint;
+        if (criticalChanged) {
+            this.contentRevision++;
+        }
         this.dueDate = dueDate;
         this.updatedBy = Objects.requireNonNull(actorId);
         this.updatedAt = Objects.requireNonNull(now);
@@ -285,6 +301,10 @@ public final class Task {
 
     public String criticalFingerprint() {
         return criticalFingerprint;
+    }
+
+    public long contentRevision() {
+        return contentRevision;
     }
 
     public TaskSource source() {

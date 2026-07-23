@@ -11,6 +11,7 @@ public record ApprovalResponse(
         UUID taskId,
         ApprovalStatus approvalStatus,
         TaskStatus taskStatus,
+        long contentRevision,
         long taskVersion,
         Instant requestedAt,
         Instant decidedAt
@@ -22,6 +23,7 @@ public record ApprovalResponse(
                 result.taskId(),
                 result.approvalStatus(),
                 result.taskStatus(),
+                result.contentRevision(),
                 result.taskVersion(),
                 result.requestedAt(),
                 result.decidedAt()

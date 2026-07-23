@@ -50,6 +50,8 @@ public class TaskJpaEntity {
     private String businessDataJson;
     @Column(name = "critical_fingerprint", nullable = false, length = 64)
     private String criticalFingerprint;
+    @Column(name = "content_revision", nullable = false)
+    private long contentRevision;
     @Enumerated(EnumType.STRING)
     @Column(name = "source", nullable = false, length = 30, updatable = false)
     private TaskSource source;
@@ -83,6 +85,7 @@ public class TaskJpaEntity {
         this.description = task.description();
         this.businessDataJson = task.businessDataJson();
         this.criticalFingerprint = task.criticalFingerprint();
+        this.contentRevision = task.contentRevision();
         this.status = task.status();
         this.dueDate = task.dueDate();
         this.updatedBy = task.updatedBy();
@@ -101,6 +104,7 @@ public class TaskJpaEntity {
         this.description = task.description();
         this.businessDataJson = task.businessDataJson();
         this.criticalFingerprint = task.criticalFingerprint();
+        this.contentRevision = task.contentRevision();
         this.source = task.source();
         this.status = task.status();
         this.dueDate = task.dueDate();
@@ -123,6 +127,7 @@ public class TaskJpaEntity {
                 description,
                 businessDataJson,
                 criticalFingerprint,
+                contentRevision,
                 source,
                 status,
                 dueDate,

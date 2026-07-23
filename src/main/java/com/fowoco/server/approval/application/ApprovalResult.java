@@ -10,6 +10,7 @@ public record ApprovalResult(
         UUID taskId,
         ApprovalStatus approvalStatus,
         TaskStatus taskStatus,
+        long contentRevision,
         long taskVersion,
         Instant requestedAt,
         Instant decidedAt

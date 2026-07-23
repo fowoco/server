@@ -10,6 +10,7 @@ CREATE TABLE task (
     description VARCHAR(2000),
     business_data_json TEXT NOT NULL,
     critical_fingerprint VARCHAR(64) NOT NULL,
+    content_revision BIGINT NOT NULL DEFAULT 0,
     source VARCHAR(30) NOT NULL,
     status VARCHAR(30) NOT NULL,
     due_date DATE,
@@ -48,6 +49,7 @@ CREATE TABLE task (
     CONSTRAINT ck_task_fingerprint_lowercase CHECK (
         critical_fingerprint = LOWER(critical_fingerprint)
     ),
+    CONSTRAINT ck_task_content_revision CHECK (content_revision >= 0),
     CONSTRAINT ck_task_source CHECK (
         source IN ('MANUAL', 'SYSTEM_DDAY', 'AI_CANDIDATE')
     ),

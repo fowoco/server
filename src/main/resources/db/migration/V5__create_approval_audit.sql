@@ -3,6 +3,7 @@ CREATE TABLE approval_request (
     task_id UUID NOT NULL,
     company_id UUID NOT NULL,
     target_task_version BIGINT NOT NULL,
+    target_content_revision BIGINT NOT NULL,
     approved_task_version BIGINT,
     target_fingerprint VARCHAR(64) NOT NULL,
     status VARCHAR(20) NOT NULL,
@@ -33,6 +34,7 @@ CREATE TABLE approval_request (
         FOREIGN KEY (decided_by, company_id)
         REFERENCES user_account (user_id, company_id) ON DELETE RESTRICT,
     CONSTRAINT ck_approval_request_target_version CHECK (target_task_version >= 0),
+    CONSTRAINT ck_approval_request_target_revision CHECK (target_content_revision >= 0),
     CONSTRAINT ck_approval_request_approved_version CHECK (
         approved_task_version IS NULL OR approved_task_version >= target_task_version
     ),

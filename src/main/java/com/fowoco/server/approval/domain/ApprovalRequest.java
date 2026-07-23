@@ -12,6 +12,7 @@ public final class ApprovalRequest {
     private final UUID taskId;
     private final UUID companyId;
     private final long targetTaskVersion;
+    private final long targetContentRevision;
     private Long approvedTaskVersion;
     private final String targetFingerprint;
     private ApprovalStatus status;
@@ -35,6 +36,7 @@ public final class ApprovalRequest {
             UUID taskId,
             UUID companyId,
             long targetTaskVersion,
+            long targetContentRevision,
             Long approvedTaskVersion,
             String targetFingerprint,
             ApprovalStatus status,
@@ -57,6 +59,10 @@ public final class ApprovalRequest {
         this.taskId = Objects.requireNonNull(taskId);
         this.companyId = Objects.requireNonNull(companyId);
         this.targetTaskVersion = targetTaskVersion;
+        if (targetContentRevision < 0) {
+            throw new IllegalArgumentException("targetContentRevision must not be negative");
+        }
+        this.targetContentRevision = targetContentRevision;
         this.approvedTaskVersion = approvedTaskVersion;
         this.targetFingerprint = requireText(targetFingerprint);
         this.status = Objects.requireNonNull(status);
@@ -81,6 +87,7 @@ public final class ApprovalRequest {
             UUID taskId,
             UUID companyId,
             long targetTaskVersion,
+            long targetContentRevision,
             String targetFingerprint,
             String aiSnapshotJson,
             String hrSnapshotJson,
@@ -94,6 +101,7 @@ public final class ApprovalRequest {
                 taskId,
                 companyId,
                 targetTaskVersion,
+                targetContentRevision,
                 null,
                 targetFingerprint,
                 ApprovalStatus.PENDING,
@@ -116,6 +124,7 @@ public final class ApprovalRequest {
 
     public void approve(
             long currentTaskVersion,
+            long currentContentRevision,
             String currentFingerprint,
             long approvedTaskVersion,
             UUID actorId,
@@ -123,7 +132,9 @@ public final class ApprovalRequest {
             Instant now
     ) {
         requirePending();
-        if (targetTaskVersion != currentTaskVersion || !targetFingerprint.equals(currentFingerprint)) {
+        if (targetTaskVersion != currentTaskVersion
+                || targetContentRevision != currentContentRevision
+                || !targetFingerprint.equals(currentFingerprint)) {
             throw new ApiException(ApprovalErrorCode.APPROVAL_VERSION_MISMATCH);
         }
         status = ApprovalStatus.APPROVED;
@@ -161,8 +172,10 @@ public final class ApprovalRequest {
         updatedAt = now;
     }
 
-    public boolean isValidFor(String fingerprint) {
-        return status == ApprovalStatus.APPROVED && targetFingerprint.equals(fingerprint);
+    public boolean isValidFor(long contentRevision, String fingerprint) {
+        return status == ApprovalStatus.APPROVED
+                && targetContentRevision == contentRevision
+                && targetFingerprint.equals(fingerprint);
     }
 
     private void requirePending() {
@@ -196,6 +209,10 @@ public final class ApprovalRequest {
 
     public long targetTaskVersion() {
         return targetTaskVersion;
+    }
+
+    public long targetContentRevision() {
+        return targetContentRevision;
     }
 
     public Long approvedTaskVersion() {

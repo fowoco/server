@@ -107,6 +107,7 @@ public class ApprovalService implements ApprovalControlPort {
                 taskId,
                 actor.companyId(),
                 savedTask.version(),
+                savedTask.contentRevision(),
                 savedTask.criticalFingerprint(),
                 aiSnapshot,
                 hrSnapshot,
@@ -143,6 +144,7 @@ public class ApprovalService implements ApprovalControlPort {
         Task savedTask = taskRepository.save(task);
         approval.approve(
                 currentVersion,
+                task.contentRevision(),
                 savedTask.criticalFingerprint(),
                 savedTask.version(),
                 actor.actorId(),
@@ -249,7 +251,9 @@ public class ApprovalService implements ApprovalControlPort {
     ) {
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
-        if (task.status() != TaskStatus.APPROVED && task.status() != TaskStatus.WAITING_EXTERNAL) {
+        if (task.status() != TaskStatus.APPROVED
+                && task.status() != TaskStatus.WAITING_WORKER
+                && task.status() != TaskStatus.WAITING_EXTERNAL) {
             throw new ApiException(TaskErrorCode.INVALID_TASK_TRANSITION);
         }
         Instant now = Instant.now(clock);
@@ -293,11 +297,13 @@ public class ApprovalService implements ApprovalControlPort {
     ) {
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
-        boolean approved = hasValidApproval(taskId, actor.companyId(), task.criticalFingerprint());
+        boolean approved = hasValidApproval(
+                taskId,
+                actor.companyId(),
+                task.contentRevision(),
+                task.criticalFingerprint()
+        );
         boolean evidencePresent = evidenceRepository.existsByTaskIdAndCompanyId(taskId, actor.companyId());
-        if (!externalSubmissionRepository.existsByTaskIdAndCompanyId(taskId, actor.companyId())) {
-            throw new ApiException(ApprovalErrorCode.INVALID_EXTERNAL_SUBMISSION);
-        }
         Instant now = Instant.now(clock);
         TaskStatus previous = task.complete(
                 approved,
@@ -321,9 +327,14 @@ public class ApprovalService implements ApprovalControlPort {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean hasValidApproval(UUID taskId, UUID companyId, String criticalFingerprint) {
+    public boolean hasValidApproval(
+            UUID taskId,
+            UUID companyId,
+            long contentRevision,
+            String criticalFingerprint
+    ) {
         return approvalRepository.findLatestApprovedByTaskIdAndCompanyId(taskId, companyId)
-                .filter(approval -> approval.isValidFor(criticalFingerprint))
+                .filter(approval -> approval.isValidFor(contentRevision, criticalFingerprint))
                 .isPresent();
     }
 
@@ -370,10 +381,13 @@ public class ApprovalService implements ApprovalControlPort {
 
     private ApprovalRequest requireValidApproval(Task task) {
         return approvalRepository.findLatestApprovedByTaskIdAndCompanyId(
-                        task.taskId(),
-                        task.companyId()
+                task.taskId(),
+                task.companyId()
                 )
-                .filter(approval -> approval.isValidFor(task.criticalFingerprint()))
+                .filter(approval -> approval.isValidFor(
+                        task.contentRevision(),
+                        task.criticalFingerprint()
+                ))
                 .orElseThrow(() -> new ApiException(ApprovalErrorCode.APPROVAL_INVALIDATED));
     }
 
@@ -443,6 +457,7 @@ public class ApprovalService implements ApprovalControlPort {
                 task.taskId(),
                 approval.status(),
                 task.status(),
+                task.contentRevision(),
                 task.version(),
                 approval.requestedAt(),
                 approval.decidedAt()

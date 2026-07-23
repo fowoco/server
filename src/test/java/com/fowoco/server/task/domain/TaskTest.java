@@ -107,6 +107,7 @@ class TaskTest {
                 null,
                 "{\"wage\":3000000}",
                 FINGERPRINT_A,
+                0,
                 TaskSource.MANUAL,
                 status,
                 LocalDate.of(2026, 7, 31),
