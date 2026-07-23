@@ -122,4 +122,24 @@ public class WorkerJpaEntity {
                 version
         );
     }
+
+    public void applyState(Worker worker) {
+        Objects.requireNonNull(worker, "worker must not be null");
+        if (!workerId.equals(worker.workerId())
+                || !companyId.equals(worker.companyId())
+                || !createdAt.equals(worker.createdAt())) {
+            throw new IllegalArgumentException("immutable worker fields must not change");
+        }
+        if (version != worker.version()) {
+            throw new IllegalArgumentException("worker version does not match");
+        }
+        this.displayName = worker.displayName();
+        this.nationalityCode = worker.nationalityCode();
+        this.preferredLanguage = worker.preferredLanguage();
+        this.workStatus = worker.workStatus();
+        this.visaExpiryDate = worker.visaExpiryDate();
+        this.contractStartDate = worker.contractStartDate();
+        this.contractEndDate = worker.contractEndDate();
+        this.updatedAt = worker.updatedAt();
+    }
 }
