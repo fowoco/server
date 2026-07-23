@@ -131,7 +131,7 @@ public class WorkerController {
             @ApiResponse(
                     responseCode = "409",
                     description = "expected_version이 현재 값과 달라 다른 사용자의 수정과 충돌함. "
-                            + "OpenApiConfig에 공통 Conflict 응답이 아직 없어 인라인으로 정의함 — 팀장님 확인 필요",
+                            + "OpenApiConfig에 공통 Conflict 응답이 아직 없어 인라인으로 정의함",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = com.fowoco.server.common.error.ApiErrorResponse.class)
