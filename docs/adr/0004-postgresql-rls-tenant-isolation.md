@@ -211,9 +211,11 @@ classpath:db/migration-postgresql    # PostgreSQL 전용 RLS·policy·함수
 - PostgreSQL 전용 migration도 실제 제한된 role 테스트에서 `migrate`, `validate`,
   pending 없음 상태를 확인합니다.
 
-V3가 `main`에 병합되기 전에는 V4 파일이나 빈 placeholder를 만들지 않습니다.
-실제 번호는 최신 `main`에서 다시 확인하며, 현재 합의대로라면 Issue #34의 첫
-PostgreSQL 전용 migration은 V3 다음 번호를 사용합니다.
+후행 migration은 의존하는 선행 migration이 `main`에 병합되어 실제 schema가
+확정되기 전에 파일이나 빈 placeholder로 예약하지 않습니다. 구현 직전에 최신
+`main`의 migration 목록과 진행 중인 PR을 확인하고, 아직 사용되지 않은 다음 번호를
+선택합니다. 특정 Issue에 migration 번호를 영구적으로 고정하지 않으며, 실제 의존
+관계와 병합 순서를 기준으로 번호를 확정합니다.
 
 활성화는 두 단계의 expand-and-enforce 방식으로 진행합니다.
 
