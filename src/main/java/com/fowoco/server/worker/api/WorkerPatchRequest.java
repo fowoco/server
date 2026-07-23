@@ -2,6 +2,7 @@ package com.fowoco.server.worker.api;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fowoco.server.worker.domain.WorkerStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
@@ -39,6 +40,11 @@ public final class WorkerPatchRequest {
     private final String preferredLanguage;
 
     @Schema(
+            description = "근무 상태. 생략 시 변경하지 않습니다."
+    )
+    private final WorkerStatus workStatus;
+
+    @Schema(
             description = "체류 만료일. 생략 시 변경하지 않습니다.",
             example = "2027-03-01",
             format = "date"
@@ -73,6 +79,7 @@ public final class WorkerPatchRequest {
             @JsonProperty("display_name") String displayName,
             @JsonProperty("nationality_code") String nationalityCode,
             @JsonProperty("preferred_language") String preferredLanguage,
+            @JsonProperty("work_status") WorkerStatus workStatus,
             @JsonProperty("visa_expiry_date") LocalDate visaExpiryDate,
             @JsonProperty("contract_start_date") LocalDate contractStartDate,
             @JsonProperty("contract_end_date") LocalDate contractEndDate,
@@ -81,6 +88,7 @@ public final class WorkerPatchRequest {
         this.displayName = displayName;
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
+        this.workStatus = workStatus;
         this.visaExpiryDate = visaExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
@@ -112,6 +120,10 @@ public final class WorkerPatchRequest {
 
     public String getPreferredLanguage() {
         return preferredLanguage;
+    }
+
+    public WorkerStatus getWorkStatus() {
+        return workStatus;
     }
 
     public LocalDate getVisaExpiryDate() {
