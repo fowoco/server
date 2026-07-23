@@ -197,7 +197,6 @@ class ApprovalAuditIntegrationTest {
         String body = """
                 {
                   "expected_version":0,
-                  "requirements_satisfied":true,
                   "ai_snapshot":null,
                   "hr_snapshot":{"phone":"010-1234-5678"},
                   "changed_fields":[],
@@ -334,6 +333,31 @@ class ApprovalAuditIntegrationTest {
     }
 
     @Test
+    void incompleteRequiredChecklistCannotBeOverriddenByClient() throws Exception {
+        jdbcTemplate.update(
+                """
+                INSERT INTO task_checklist_item (
+                    checklist_item_id, task_id, company_id, item_code, label,
+                    required, completed, created_at, updated_at, version
+                ) VALUES (?, ?, ?, 'SIGNED_CONTRACT', '서명 계약서 확인',
+                          TRUE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                UUID.fromString("a7000000-0000-0000-0000-000000000001"),
+                TASK_A,
+                COMPANY_A
+        );
+        String hrToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = requestApproval(hrToken, validApprovalBody());
+
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("TASK_REQUIREMENTS_MISSING");
+        assertThat(taskStatus()).isEqualTo("DRAFT");
+        assertThat(count("approval_request")).isZero();
+    }
+
+    @Test
     void concurrentApprovalRequestsAllowOnlyOneWinner() throws Exception {
         String hrToken = accessToken(login(HR_A_EMAIL));
         assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
@@ -417,7 +441,6 @@ class ApprovalAuditIntegrationTest {
         return """
                 {
                   "expected_version":0,
-                  "requirements_satisfied":true,
                   "ai_snapshot":{
                     "intent":"EXPIRY_RENEWAL",
                     "confidence":0.94

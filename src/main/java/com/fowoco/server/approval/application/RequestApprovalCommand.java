@@ -5,7 +5,6 @@ import java.util.Map;
 
 public record RequestApprovalCommand(
         long expectedVersion,
-        boolean requirementsSatisfied,
         Map<String, Object> aiSnapshot,
         Map<String, Object> hrSnapshot,
         List<String> changedFields,

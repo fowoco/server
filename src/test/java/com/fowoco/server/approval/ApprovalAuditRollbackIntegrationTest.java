@@ -122,7 +122,6 @@ class ApprovalAuditRollbackIntegrationTest {
                 TASK_ID,
                 new RequestApprovalCommand(
                         0,
-                        true,
                         null,
                         Map.of("monthly_wage", 2_500_000),
                         List.of("monthly_wage"),

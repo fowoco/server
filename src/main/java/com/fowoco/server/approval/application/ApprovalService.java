@@ -19,6 +19,7 @@ import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.task.application.error.TaskErrorCode;
+import com.fowoco.server.task.application.TaskReadinessChecker;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.application.port.TaskTransitionRecorder;
 import com.fowoco.server.task.domain.Task;
@@ -39,6 +40,7 @@ public class ApprovalService implements ApprovalControlPort {
     private final ActorAuthorizer actorAuthorizer;
     private final TaskRepository taskRepository;
     private final TaskTransitionRecorder transitionRecorder;
+    private final TaskReadinessChecker taskReadinessChecker;
     private final ApprovalRequestRepository approvalRepository;
     private final ExternalSubmissionRepository externalSubmissionRepository;
     private final EvidenceRepository evidenceRepository;
@@ -51,6 +53,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorAuthorizer actorAuthorizer,
             TaskRepository taskRepository,
             TaskTransitionRecorder transitionRecorder,
+            TaskReadinessChecker taskReadinessChecker,
             ApprovalRequestRepository approvalRepository,
             ExternalSubmissionRepository externalSubmissionRepository,
             EvidenceRepository evidenceRepository,
@@ -62,6 +65,7 @@ public class ApprovalService implements ApprovalControlPort {
         this.actorAuthorizer = actorAuthorizer;
         this.taskRepository = taskRepository;
         this.transitionRecorder = transitionRecorder;
+        this.taskReadinessChecker = taskReadinessChecker;
         this.approvalRepository = approvalRepository;
         this.externalSubmissionRepository = externalSubmissionRepository;
         this.evidenceRepository = evidenceRepository;
@@ -87,7 +91,7 @@ public class ApprovalService implements ApprovalControlPort {
         Task task = requireTask(taskId, actor.companyId());
         Instant now = Instant.now(clock);
         TaskStatus previous = task.requestReview(
-                command.requirementsSatisfied(),
+                taskReadinessChecker.isReadyForReview(task),
                 command.expectedVersion(),
                 actor.actorId(),
                 now

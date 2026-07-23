@@ -10,7 +10,6 @@ import java.util.Map;
 
 public record ApprovalRequestBody(
         @JsonProperty("expected_version") @PositiveOrZero long expectedVersion,
-        @JsonProperty("requirements_satisfied") boolean requirementsSatisfied,
         @JsonProperty("ai_snapshot") Map<String, Object> aiSnapshot,
         @JsonProperty("hr_snapshot") @NotNull Map<String, Object> hrSnapshot,
         @JsonProperty("changed_fields")
@@ -21,7 +20,6 @@ public record ApprovalRequestBody(
     public RequestApprovalCommand toCommand() {
         return new RequestApprovalCommand(
                 expectedVersion,
-                requirementsSatisfied,
                 aiSnapshot,
                 hrSnapshot,
                 changedFields,

@@ -88,7 +88,7 @@ class ApprovalOpenApiContractTest {
         JsonNode response = openApi.at("/components/schemas/ApprovalResponse/properties");
 
         assertThat(request.has("expected_version")).isTrue();
-        assertThat(request.has("requirements_satisfied")).isTrue();
+        assertThat(request.has("requirements_satisfied")).isFalse();
         assertThat(request.has("ai_snapshot")).isTrue();
         assertThat(request.has("hr_snapshot")).isTrue();
         assertThat(request.has("source_versions")).isTrue();
