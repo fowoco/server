@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
@@ -104,6 +105,14 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         return response(ErrorCode.ACCESS_DENIED, null, List.of(), request);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLock(
+            ObjectOptimisticLockingFailureException exception,
+            HttpServletRequest request
+    ) {
+        return response(ErrorCode.CONCURRENT_MODIFICATION, null, List.of(), request);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
