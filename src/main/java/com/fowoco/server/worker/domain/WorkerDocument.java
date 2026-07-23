@@ -57,11 +57,6 @@ public final class WorkerDocument {
         this.version = version;
     }
 
-    /**
-     * 서류 등록. submissionStatus를 Worker.create()처럼 고정값으로 두지 않고 그대로 받는다 —
-     * POST /workers/{workerId}/documents 요청 body에 submissionStatus가 포함되어 있기 때문이다
-     * (#5 API 명세). fileId는 등록 시점에는 없고, #13 경계에 따라 이후 별도로 연결된다.
-     */
     public static WorkerDocument create(
             UUID workerDocumentId,
             UUID workerId,
