@@ -266,6 +266,69 @@ class ApprovalAuditIntegrationTest {
     }
 
     @Test
+    void rejectionReturnsTaskToDraftAndClosesTheApprovalRequest() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> reject = authorizedPost(
+                taskPath("/reject"),
+                """
+                {"expected_version":1,"reason":"계약기간 재확인 필요"}
+                """,
+                hrToken
+        );
+
+        assertThat(reject.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(reject.body(), "$.approval_status"))
+                .isEqualTo("REJECTED");
+        assertThat(JsonPath.<String>read(reject.body(), "$.task_status")).isEqualTo("DRAFT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM approval_request WHERE task_id = ?",
+                String.class,
+                TASK_A
+        )).isEqualTo("REJECTED");
+
+        HttpResponse<String> reuse = authorizedPost(
+                taskPath("/approve"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        );
+        assertThat(reuse.statusCode()).isEqualTo(404);
+        assertThat(taskStatus()).isEqualTo("DRAFT");
+    }
+
+    @Test
+    void missingExternalReferenceCannotEnterWaitingExternal() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/approve"),
+                """
+                {"expected_version":1}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(200);
+
+        HttpResponse<String> response = authorizedPost(
+                taskPath("/external-submissions"),
+                """
+                {
+                  "expected_version":2,
+                  "destination":"고용센터",
+                  "safe_reference":" "
+                }
+                """,
+                hrToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(taskStatus()).isEqualTo("APPROVED");
+        assertThat(count("external_submission")).isZero();
+    }
+
+    @Test
     void approvedTaskWithEvidenceCanCompleteWithoutEnteringExternalWaiting() throws Exception {
         String hrToken = accessToken(login(HR_A_EMAIL));
         assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
