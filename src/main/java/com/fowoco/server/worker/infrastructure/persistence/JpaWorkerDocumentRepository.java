@@ -52,7 +52,7 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository {
     }
 
     @Override
-    public void update(WorkerDocument document) {
+    public WorkerDocument update(WorkerDocument document) {
         Objects.requireNonNull(document, "document must not be null");
         WorkerDocumentJpaEntity entity = entityManager.find(
                 WorkerDocumentJpaEntity.class,
@@ -62,5 +62,7 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository {
             throw new IllegalStateException("worker document to update was not found");
         }
         entity.applyState(document);
+        entityManager.flush();
+        return entity.toDomain();
     }
 }

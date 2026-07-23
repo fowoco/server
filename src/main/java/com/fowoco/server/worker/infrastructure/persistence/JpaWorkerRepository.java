@@ -45,12 +45,14 @@ public class JpaWorkerRepository implements WorkerRepository {
     }
 
     @Override
-    public void update(Worker worker) {
+    public Worker update(Worker worker) {
         Objects.requireNonNull(worker, "worker must not be null");
         WorkerJpaEntity entity = entityManager.find(WorkerJpaEntity.class, worker.workerId());
         if (entity == null) {
             throw new IllegalStateException("worker to update was not found");
         }
         entity.applyState(worker);
+        entityManager.flush();
+        return entity.toDomain();
     }
 }

@@ -72,8 +72,7 @@ public class WorkerService {
                 existing.version()
         );
 
-        workerRepository.update(updated);
-        return updated;
+        return workerRepository.update(updated);
     }
 
     private static <T> T orElseKeep(T newValue, T existingValue) {

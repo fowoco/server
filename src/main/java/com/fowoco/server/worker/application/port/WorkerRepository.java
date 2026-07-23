@@ -10,5 +10,5 @@ public interface WorkerRepository {
 
     Optional<Worker> findByWorkerIdAndCompanyId(UUID workerId, UUID companyId);
 
-    void update(Worker worker);
+     Worker update(Worker worker);
 }

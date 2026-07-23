@@ -14,5 +14,5 @@ public interface WorkerDocumentRepository {
             UUID companyId
     );
 
-    void update(WorkerDocument document);
+    WorkerDocument update(WorkerDocument document);
 }

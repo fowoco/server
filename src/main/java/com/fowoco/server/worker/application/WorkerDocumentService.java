@@ -76,8 +76,7 @@ public class WorkerDocumentService {
                 existing.version()
         );
 
-        workerDocumentRepository.update(updated);
-        return updated;
+        return workerDocumentRepository.update(updated);
     }
 
     private static <T> T orElseKeep(T newValue, T existingValue) {
