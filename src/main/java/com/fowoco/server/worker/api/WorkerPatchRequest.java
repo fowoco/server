@@ -8,17 +8,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
-/**
- * 근로자 부분 수정 요청.
- *
- * <p><b>알려진 제한:</b> 필드가 없는(null) 경우 "값 변경 없음"으로 취급하며, 필드를
- * 의도적으로 null로 지우는 것은 이 버전에서 지원하지 않는다. 필요해지면
- * JsonNullable&lt;T&gt; 도입을 팀장님과 상의한다 (MVP 완료조건에 null 초기화 요구는 없음).
- *
- * <p>계약기간(contract_start_date/contract_end_date) cross-field 검증은 두 값이
- * 이 요청에 함께 왔을 때만 가능하다. 한쪽만 수정하는 경우 기존 DB 값과의 정합성은
- * Application Service/도메인이 책임진다.
- */
 @Schema(
         name = "WorkerPatchRequest",
         description = "근로자 부분 수정 요청. 보낸 필드만 갱신되며, 생략한 필드는 값이 없어도 변경하지 않습니다."
@@ -27,7 +16,7 @@ public final class WorkerPatchRequest {
 
     @Schema(
             description = "화면 표시용 근로자 이름. 생략 시 변경하지 않습니다.",
-            example = "응웬반A",
+            example = "응우옌반A",
             maxLength = 120
     )
     @Size(max = 120, message = "표시 이름은 120자 이하여야 합니다.")
