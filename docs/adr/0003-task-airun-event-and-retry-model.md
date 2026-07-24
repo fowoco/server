@@ -200,7 +200,11 @@ allow-list payload
 - 영구 실패를 성공으로 바꾸지 않고 운영 검토 대상으로 남깁니다.
 - Event에는 JWT, Worker Link 원본 token, 민감 식별정보, 전체 Prompt를 넣지 않습니다.
 
-MVP는 `DomainEventPublisher` Port 뒤의 **PostgreSQL-backed durable publication**을 사용합니다. #25의 작은 spike에서 Spring Modulith Event Publication Registry와 Spring Boot 4.1 호환성을 확인하고, 적합하면 해당 adapter를 사용하며 부적합하면 Transactional Outbox adapter를 구현합니다. Adapter 선택 때문에 Domain 코드를 바꾸지 않으며 Kafka·RabbitMQ를 필수로 도입하지 않습니다.
+MVP는 `DomainEventPublisher` Port 뒤의 **PostgreSQL-backed durable publication**을
+사용합니다. #25 구현에서는 현재 모듈 경계와 Spring Boot 4.1 호환성을 유지하면서
+lease, 실패 분류, 지수 backoff, handler별 멱등 완료 기록을 명시적으로 통제할 수 있는
+Transactional Outbox adapter를 선택했습니다. Adapter 선택 때문에 Domain 코드를
+바꾸지 않으며 Kafka·RabbitMQ를 필수로 도입하지 않습니다.
 
 대표 event 이름은 과거형의 versioned business fact로 작성합니다.
 

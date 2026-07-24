@@ -12,6 +12,7 @@ import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.web.RequestMetadata;
+import com.fowoco.server.reliability.application.port.DomainEventPublisher;
 import com.fowoco.server.task.application.TaskContentCodec.EncodedTaskContent;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskChecklistRepository;
@@ -51,6 +52,7 @@ public class TaskWorkflowService {
     private final WorkflowCatalogService catalogService;
     private final ApprovalControlPort approvalControl;
     private final AuditEventRepository auditRepository;
+    private final DomainEventPublisher eventPublisher;
     private final TaskContentCodec contentCodec;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
@@ -64,6 +66,7 @@ public class TaskWorkflowService {
             WorkflowCatalogService catalogService,
             ApprovalControlPort approvalControl,
             AuditEventRepository auditRepository,
+            DomainEventPublisher eventPublisher,
             TaskContentCodec contentCodec,
             UuidGenerator uuidGenerator,
             Clock clock
@@ -76,6 +79,7 @@ public class TaskWorkflowService {
         this.catalogService = catalogService;
         this.approvalControl = approvalControl;
         this.auditRepository = auditRepository;
+        this.eventPublisher = eventPublisher;
         this.contentCodec = contentCodec;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
@@ -154,6 +158,13 @@ public class TaskWorkflowService {
                 metadata,
                 now
         );
+        eventPublisher.publish(TaskDomainEvents.taskCreated(
+                uuidGenerator.generate(),
+                savedTask,
+                actor,
+                metadata,
+                now
+        ));
         return toResult(savedTask, checklistItems, worker, workflow);
     }
 
@@ -406,6 +417,14 @@ public class TaskWorkflowService {
                 metadata,
                 now
         );
+        eventPublisher.publish(TaskDomainEvents.taskCancelled(
+                uuidGenerator.generate(),
+                savedTask,
+                previous,
+                actor,
+                metadata,
+                now
+        ));
         return toResult(
                 savedTask,
                 checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId()),
