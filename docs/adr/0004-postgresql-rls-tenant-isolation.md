@@ -1,6 +1,7 @@
 # ADR-0004: PostgreSQL RLS 기반 tenant 2차 격리와 안전한 도입
 
-- Status: Proposed
+- Status: Accepted
+- Accepted: 2026-07-23
 - Date: 2026-07-23
 - Deciders: FOWOCO Server Team
 - Related Issue: [#34](https://github.com/fowoco/server/issues/34)
