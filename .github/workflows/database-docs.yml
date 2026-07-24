@@ -4,13 +4,21 @@ on:
   push:
     branches: [main]
     paths:
+      - 'build.gradle'
+      - 'src/main/java/**'
+      - 'src/main/resources/application.yaml'
       - 'src/main/resources/db/migration/**'
+      - 'scripts/api-docs/**'
       - 'scripts/db-docs/**'
       - '.github/workflows/database-docs.yml'
   pull_request:
     branches: [main]
     paths:
+      - 'build.gradle'
+      - 'src/main/java/**'
+      - 'src/main/resources/application.yaml'
       - 'src/main/resources/db/migration/**'
+      - 'scripts/api-docs/**'
       - 'scripts/db-docs/**'
       - '.github/workflows/database-docs.yml'
   workflow_dispatch:
@@ -74,10 +82,51 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  build-api-docs:
+    name: Build API documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+
+      - name: Test API documentation generator
+        run: node --test scripts/api-docs/generate-site.test.mjs
+
+      - name: Generate API documentation
+        run: ./scripts/api-docs/generate.sh
+        env:
+          API_DOCS_GIT_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Upload API documentation preview
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: api-docs-site
+          path: build/api-docs/site
+          if-no-files-found: error
+          retention-days: 14
+
   deploy-pages:
-    name: Deploy database documentation
+    name: Deploy server documentation
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build-docs
+    needs:
+      - build-docs
+      - build-api-docs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -94,6 +143,12 @@ jobs:
         with:
           name: database-docs-site
           path: site
+
+      - name: Download API documentation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: api-docs-site
+          path: site/api
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
