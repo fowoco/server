@@ -401,6 +401,23 @@ class ApprovalAuditIntegrationTest {
     }
 
     @Test
+    void staleApprovalReturnsConflictBeforeLookingUpPendingApproval() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+        String body = """
+                {"expected_version":1,"reason":"중복 승인 방지"}
+                """;
+        assertThat(authorizedPost(taskPath("/approve"), body, hrToken).statusCode())
+                .isEqualTo(200);
+
+        HttpResponse<String> stale = authorizedPost(taskPath("/approve"), body, hrToken);
+
+        assertThat(stale.statusCode()).isEqualTo(409);
+        assertThat(JsonPath.<String>read(stale.body(), "$.code"))
+                .isEqualTo("CONCURRENT_MODIFICATION");
+    }
+
+    @Test
     void approvedTaskWithEvidenceCanCompleteWithoutEnteringExternalWaiting() throws Exception {
         String hrToken = accessToken(login(HR_A_EMAIL));
         assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);

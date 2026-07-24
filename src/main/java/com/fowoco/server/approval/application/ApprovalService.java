@@ -141,6 +141,7 @@ public class ApprovalService implements ApprovalControlPort {
     ) {
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
+        requireTaskVersion(task, command.expectedVersion());
         ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
         Instant now = Instant.now(clock);
         long currentVersion = task.version();
@@ -177,6 +178,7 @@ public class ApprovalService implements ApprovalControlPort {
     ) {
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
+        requireTaskVersion(task, command.expectedVersion());
         ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
         Instant now = Instant.now(clock);
         long currentVersion = task.version();
@@ -381,6 +383,12 @@ public class ApprovalService implements ApprovalControlPort {
     private ApprovalRequest requirePendingApproval(UUID taskId, UUID companyId) {
         return approvalRepository.findPendingByTaskIdAndCompanyId(taskId, companyId)
                 .orElseThrow(() -> new ApiException(ApprovalErrorCode.APPROVAL_REQUEST_NOT_FOUND));
+    }
+
+    private void requireTaskVersion(Task task, long expectedVersion) {
+        if (task.version() != expectedVersion) {
+            throw new ApiException(TaskErrorCode.CONCURRENT_MODIFICATION);
+        }
     }
 
     private ApprovalRequest requireValidApproval(Task task) {
