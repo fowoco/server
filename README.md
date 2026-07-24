@@ -58,6 +58,8 @@ API 문서는 아래 주소에서 확인합니다.
 
 - Swagger UI: <http://localhost:8080/swagger-ui.html>
 - OpenAPI JSON: <http://localhost:8080/v3/api-docs>
+- 팀 공유용 Swagger HTML: <https://fowoco.github.io/server/api/>
+- 공유 문서 사용법: [API 문서 사용법](docs/api-documentation.md)
 - H2 Console(local 전용): <http://localhost:8080/h2-console>
 
 local은 기본 Profile이라 별도 데이터베이스가 필요하지 않습니다. 서버를 다시 실행하면 메모리 DB가 초기화되고 Flyway migration이 처음부터 적용됩니다. H2 Console 보호를 위해 local 서버는 기본적으로 내 PC(`127.0.0.1`)에서만 접근할 수 있습니다.
