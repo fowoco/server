@@ -32,7 +32,7 @@ Wiki와 Notion은 중요한 내용을 이해하기 쉽게 설명하는 mirror입
 | [ADR-0001](0001-repository-and-module-boundaries.md) | 저장소·모듈 경계와 계약 소유권 | Accepted |
 | [ADR-0002](0002-api-security-and-error-contract.md) | API·보안·오류 계약 | Accepted |
 | [ADR-0003](0003-task-airun-event-and-retry-model.md) | Task·AiRun·Event·Retry 모델 | Accepted |
-| [ADR-0004](0004-postgresql-rls-tenant-isolation.md) | PostgreSQL RLS 기반 tenant 2차 격리와 안전한 도입 | Proposed |
+| [ADR-0004](0004-postgresql-rls-tenant-isolation.md) | PostgreSQL RLS 기반 tenant 2차 격리와 안전한 도입 | Accepted |
 
 ## 작성과 승인 절차
 
