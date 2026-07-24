@@ -1,4 +1,4 @@
-package com.fowoco.server.worker.api;
+package com.fowoco.server.worker.application;
 
 import com.fowoco.server.worker.domain.WorkerStatus;
 import java.time.LocalDate;
