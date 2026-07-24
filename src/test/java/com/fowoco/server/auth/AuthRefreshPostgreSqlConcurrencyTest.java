@@ -85,6 +85,10 @@ class AuthRefreshPostgreSqlConcurrencyTest {
                 () -> requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD")
         );
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+        registry.add(
+                "spring.flyway.locations",
+                () -> "classpath:db/migration,classpath:db/migration-postgresql"
+        );
     }
 
     @BeforeEach

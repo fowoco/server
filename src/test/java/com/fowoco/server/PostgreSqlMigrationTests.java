@@ -33,7 +33,10 @@ class PostgreSqlMigrationTests {
         String password = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
         Flyway flyway = Flyway.configure()
                 .dataSource(url, username, password)
-                .locations("classpath:db/migration")
+                .locations(
+                        "classpath:db/migration",
+                        "classpath:db/migration-postgresql"
+                )
                 .load();
 
         flyway.migrate();
