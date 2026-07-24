@@ -15,6 +15,7 @@ import java.time.LocalDate;
 public final class WorkerCreateRequest {
 
     @Schema(
+            name = "display_name",
             description = "화면 표시용 근로자 이름",
             example = "응웬반A",
             maxLength = 120,
@@ -25,6 +26,7 @@ public final class WorkerCreateRequest {
     private final String displayName;
 
     @Schema(
+            name = "nationality_code",
             description = "국적 코드",
             example = "VN",
             maxLength = 10
@@ -33,6 +35,7 @@ public final class WorkerCreateRequest {
     private final String nationalityCode;
 
     @Schema(
+            name = "preferred_language",
             description = "선호 언어",
             example = "vi",
             maxLength = 20
@@ -41,6 +44,7 @@ public final class WorkerCreateRequest {
     private final String preferredLanguage;
 
     @Schema(
+            name = "stay_expiry_date",
             description = "체류 만료일",
             example = "2027-03-01",
             format = "date"
@@ -48,6 +52,7 @@ public final class WorkerCreateRequest {
     private final LocalDate stayExpiryDate;
 
     @Schema(
+            name = "contract_start_date",
             description = "계약 시작일",
             example = "2026-01-01",
             format = "date"
@@ -55,6 +60,7 @@ public final class WorkerCreateRequest {
     private final LocalDate contractStartDate;
 
     @Schema(
+            name = "contract_end_date",
             description = "계약 종료일. contract_start_date보다 빠를 수 없습니다.",
             example = "2027-12-31",
             format = "date"
