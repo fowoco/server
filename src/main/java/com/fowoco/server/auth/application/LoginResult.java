@@ -10,6 +10,7 @@ public final class LoginResult {
     private final UUID userId;
     private final UUID companyId;
     private final String companyName;
+    private final String displayName;
     private final UserRole role;
     private final String accessToken;
     private final Instant accessTokenExpiresAt;
@@ -21,6 +22,7 @@ public final class LoginResult {
             UUID userId,
             UUID companyId,
             String companyName,
+            String displayName,
             UserRole role,
             String accessToken,
             Instant accessTokenExpiresAt,
@@ -31,6 +33,7 @@ public final class LoginResult {
         this.userId = Objects.requireNonNull(userId, "userId must not be null");
         this.companyId = Objects.requireNonNull(companyId, "companyId must not be null");
         this.companyName = requireText(companyName, "companyName");
+        this.displayName = requireText(displayName, "displayName");
         this.role = Objects.requireNonNull(role, "role must not be null");
         this.accessToken = requireText(accessToken, "accessToken");
         this.accessTokenExpiresAt = Objects.requireNonNull(
@@ -58,6 +61,10 @@ public final class LoginResult {
 
     public String companyName() {
         return companyName;
+    }
+
+    public String displayName() {
+        return displayName;
     }
 
     public UserRole role() {

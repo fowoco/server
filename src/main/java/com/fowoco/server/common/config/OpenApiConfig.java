@@ -74,6 +74,18 @@ public class OpenApiConfig {
                                         + "Max-Age=0; HttpOnly; SameSite=Strict"
                         )))
                 .addResponses("BadRequest", errorResponse("요청 형식 또는 입력값 오류"))
+                .addResponses("EmailAlreadyRegistered", errorResponse(
+                        "이미 등록된 이메일로 가입할 수 없음",
+                        Map.of(
+                                "timestamp", "2026-07-24T04:00:00Z",
+                                "status", 409,
+                                "code", "EMAIL_ALREADY_REGISTERED",
+                                "message", "이미 가입된 이메일입니다.",
+                                "path", "/api/v1/auth/signup",
+                                "request_id", "01-example-request-id",
+                                "field_errors", java.util.List.of()
+                        )
+                ))
                 .addResponses("Unauthorized", errorResponse("인증 필요"))
                 .addResponses("InvalidCredentials", errorResponse(
                         "이메일·비밀번호·계정 또는 사업장 상태로 인한 로그인 실패",

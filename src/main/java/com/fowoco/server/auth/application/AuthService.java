@@ -111,6 +111,7 @@ public class AuthService {
                 userAccount.userId(),
                 userAccount.companyId(),
                 company.companyName(),
+                userAccount.displayName(),
                 userAccount.role(),
                 accessToken.value(),
                 accessToken.expiresAt(),

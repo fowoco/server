@@ -8,6 +8,8 @@ public interface UserAccountRepository {
 
     void insert(UserAccount userAccount);
 
+    boolean existsByNormalizedEmail(String normalizedEmail);
+
     Optional<UserAccount> findByNormalizedEmail(String normalizedEmail);
 
     Optional<UserAccount> findByUserIdAndCompanyId(UUID userId, UUID companyId);

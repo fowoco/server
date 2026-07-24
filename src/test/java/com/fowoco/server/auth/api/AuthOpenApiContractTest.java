@@ -61,6 +61,64 @@ class AuthOpenApiContractTest {
     }
 
     @Test
+    void signupDocumentsPublicAtomicCompanyAndAdminCreation() {
+        JsonNode signup = openApi.at("/paths/~1api~1v1~1auth~1signup/post");
+
+        assertThat(signup.path("operationId").asText()).isEqualTo("signup");
+        assertThat(signup.has("security") && !signup.path("security").isEmpty()).isFalse();
+        assertThat(signup.path("description").asText())
+                .contains("ADMIN", "transaction", "자동 로그인하거나 Token을 발급하지 않으며");
+        assertThat(signup.at("/requestBody/content/application~1json/schema/$ref").asText())
+                .isEqualTo("#/components/schemas/SignupRequest");
+        assertThat(signup.at("/responses/201/content/application~1json/schema/$ref").asText())
+                .isEqualTo("#/components/schemas/SignupResponse");
+        assertThat(signup.at("/responses/201/headers/Cache-Control/schema/example").asText())
+                .isEqualTo("no-store");
+        assertThat(signup.at("/responses/201/headers/Pragma/schema/example").asText())
+                .isEqualTo("no-cache");
+        assertThat(signup.at("/responses/201/headers/Set-Cookie").isMissingNode()).isTrue();
+        assertThat(signup.at("/responses/400/$ref").asText())
+                .isEqualTo("#/components/responses/BadRequest");
+        assertThat(signup.at("/responses/409/$ref").asText())
+                .isEqualTo("#/components/responses/EmailAlreadyRegistered");
+        assertThat(signup.has("401")).isFalse();
+        assertThat(signup.has("403")).isFalse();
+    }
+
+    @Test
+    void signupSchemasUseSnakeCaseAndDoNotAcceptAuthorityOrExposeSecrets() {
+        JsonNode request = openApi.at("/components/schemas/SignupRequest");
+        JsonNode requestProperties = request.path("properties");
+        JsonNode responseProperties = openApi.at("/components/schemas/SignupResponse/properties");
+
+        assertThat(request.path("required").toString())
+                .contains("company_name", "display_name", "email", "password");
+        assertThat(requestProperties.properties())
+                .extracting(java.util.Map.Entry::getKey)
+                .containsExactlyInAnyOrder("company_name", "display_name", "email", "password");
+        assertThat(request.at("/properties/password/minLength").asInt()).isEqualTo(8);
+        assertThat(request.at("/properties/password/maxLength").asInt()).isEqualTo(128);
+        assertThat(request.at("/properties/password/writeOnly").asBoolean()).isTrue();
+        assertThat(requestProperties.has("role")).isFalse();
+        assertThat(requestProperties.has("company_id")).isFalse();
+        assertThat(responseProperties.properties())
+                .extracting(java.util.Map.Entry::getKey)
+                .containsExactlyInAnyOrder(
+                        "user_id",
+                        "company_id",
+                        "company_name",
+                        "display_name",
+                        "email",
+                        "role",
+                        "created_at"
+                );
+        assertThat(responseProperties.has("password")).isFalse();
+        assertThat(responseProperties.has("password_hash")).isFalse();
+        assertThat(responseProperties.has("access_token")).isFalse();
+        assertThat(responseProperties.has("refresh_token")).isFalse();
+    }
+
+    @Test
     void loginDocumentsPublicRequestResponseCookieAndErrors() {
         JsonNode login = openApi.at("/paths/~1api~1v1~1auth~1login/post");
 
@@ -96,6 +154,7 @@ class AuthOpenApiContractTest {
                         "user_id",
                         "company_id",
                         "company_name",
+                        "display_name",
                         "role",
                         "access_token",
                         "token_type",

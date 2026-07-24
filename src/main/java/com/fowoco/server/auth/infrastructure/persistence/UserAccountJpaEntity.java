@@ -38,6 +38,9 @@ public class UserAccountJpaEntity {
     @Column(name = "company_id", nullable = false, updatable = false)
     private UUID companyId;
 
+    @Column(name = "display_name", nullable = false, length = 80)
+    private String displayName;
+
     @Column(name = "email", nullable = false, length = 254)
     private String email;
 
@@ -71,6 +74,7 @@ public class UserAccountJpaEntity {
     private UserAccountJpaEntity(
             UUID userId,
             UUID companyId,
+            String displayName,
             String email,
             String normalizedEmail,
             String passwordHash,
@@ -82,6 +86,7 @@ public class UserAccountJpaEntity {
     ) {
         this.userId = userId;
         this.companyId = companyId;
+        this.displayName = displayName;
         this.email = email;
         this.normalizedEmail = normalizedEmail;
         this.passwordHash = passwordHash;
@@ -97,6 +102,7 @@ public class UserAccountJpaEntity {
         return new UserAccountJpaEntity(
                 userAccount.userId(),
                 userAccount.companyId(),
+                userAccount.displayName(),
                 userAccount.email(),
                 userAccount.normalizedEmail(),
                 userAccount.passwordHash(),
@@ -112,6 +118,7 @@ public class UserAccountJpaEntity {
         return new UserAccount(
                 userId,
                 companyId,
+                displayName,
                 email,
                 normalizedEmail,
                 passwordHash,
