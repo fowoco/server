@@ -334,6 +334,7 @@ class PostgreSqlTenantDatabaseContextTest {
                 "classpath:db/migration,classpath:db/migration-postgresql"
         );
         properties.put("app.demo-seed.enabled", "false");
+        properties.put("app.database.tenant-context-mode", "postgresql");
         properties.put("server.port", "0");
 
         StandardEnvironment environment = new StandardEnvironment();

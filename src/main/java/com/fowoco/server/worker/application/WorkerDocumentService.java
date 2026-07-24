@@ -1,11 +1,14 @@
 package com.fowoco.server.worker.application;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.domain.WorkerDocument;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,25 +17,29 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkerDocumentService {
 
     private final WorkerDocumentRepository workerDocumentRepository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
     public WorkerDocumentService(
             WorkerDocumentRepository workerDocumentRepository,
+            TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
         this.workerDocumentRepository = workerDocumentRepository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
 
     @Transactional
-    public WorkerDocument register(WorkerDocumentCreateCommand command) {
+    public WorkerDocument register(WorkerDocumentCreateCommand command, ActorContext actor) {
+        bindTenant(actor);
         WorkerDocument document = WorkerDocument.create(
                 uuidGenerator.generate(),
                 command.workerId(),
-                command.companyId(),
+                actor.companyId(),
                 command.documentType(),
                 command.submissionStatus(),
                 command.expiryDate(),
@@ -45,17 +52,27 @@ public class WorkerDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public WorkerDocument findDetail(UUID workerDocumentId, UUID workerId, UUID companyId) {
-        return workerDocumentRepository.findByIdAndWorkerIdAndCompanyId(workerDocumentId, workerId, companyId)
+    public WorkerDocument findDetail(
+            UUID workerDocumentId,
+            UUID workerId,
+            ActorContext actor
+    ) {
+        bindTenant(actor);
+        return workerDocumentRepository.findByIdAndWorkerIdAndCompanyId(
+                        workerDocumentId,
+                        workerId,
+                        actor.companyId()
+                )
                 .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_DOCUMENT_NOT_FOUND));
     }
 
     @Transactional
-    public WorkerDocument patch(WorkerDocumentPatchCommand command) {
+    public WorkerDocument patch(WorkerDocumentPatchCommand command, ActorContext actor) {
+        bindTenant(actor);
         WorkerDocument existing = findDetail(
                 command.workerDocumentId(),
                 command.workerId(),
-                command.companyId()
+                actor
         );
         if (existing.version() != command.expectedVersion()) {
             throw new ApiException(WorkerErrorCode.WORKER_DOCUMENT_VERSION_CONFLICT);
@@ -72,7 +89,7 @@ public class WorkerDocumentService {
                 orElseKeep(command.note(), existing.note()),
                 existing.fileId(),
                 existing.createdAt(),
-                clock.instant(),
+                updateTime(existing.createdAt()),
                 existing.version()
         );
 
@@ -81,5 +98,14 @@ public class WorkerDocumentService {
 
     private static <T> T orElseKeep(T newValue, T existingValue) {
         return newValue != null ? newValue : existingValue;
+    }
+
+    private void bindTenant(ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+    }
+
+    private Instant updateTime(Instant createdAt) {
+        Instant now = clock.instant();
+        return now.isBefore(createdAt) ? createdAt : now;
     }
 }
