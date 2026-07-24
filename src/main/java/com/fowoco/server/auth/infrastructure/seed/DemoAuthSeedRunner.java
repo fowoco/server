@@ -80,6 +80,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
         UserAccount demoAdmin = UserAccount.create(
                 properties.adminUserId(),
                 properties.companyId(),
+                properties.adminDisplayName(),
                 properties.adminEmail(),
                 passwordEncoder.encode(properties.adminPassword()),
                 UserRole.ADMIN,
@@ -97,6 +98,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
         Objects.requireNonNull(properties.companyId(), "demo seed companyId must not be null");
         Objects.requireNonNull(properties.adminUserId(), "demo seed adminUserId must not be null");
         requireText(properties.companyName(), "demo seed companyName");
+        requireText(properties.adminDisplayName(), "demo seed adminDisplayName");
         requireText(properties.adminEmail(), "demo seed adminEmail");
         String password = requireText(properties.adminPassword(), "DEMO_SEED_ADMIN_PASSWORD");
         if (password.length() < MINIMUM_DEMO_PASSWORD_LENGTH) {

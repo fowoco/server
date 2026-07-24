@@ -3,6 +3,8 @@ package com.fowoco.server.auth.api;
 import com.fowoco.server.auth.application.AuthService;
 import com.fowoco.server.auth.application.LoginResult;
 import com.fowoco.server.auth.application.RefreshResult;
+import com.fowoco.server.auth.application.SignupResult;
+import com.fowoco.server.auth.application.SignupService;
 import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,23 +32,70 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Authentication", description = "사업장 사용자 로그인과 현재 인증 정보")
+@Tag(name = "Authentication", description = "사업장 회원가입·로그인과 현재 인증 정보")
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
     private final AuthService authService;
+    private final SignupService signupService;
     private final RefreshTokenCookieFactory refreshTokenCookieFactory;
     private final ActorContextProvider actorContextProvider;
 
     public AuthController(
             AuthService authService,
+            SignupService signupService,
             RefreshTokenCookieFactory refreshTokenCookieFactory,
             ActorContextProvider actorContextProvider
     ) {
         this.authService = authService;
+        this.signupService = signupService;
         this.refreshTokenCookieFactory = refreshTokenCookieFactory;
         this.actorContextProvider = actorContextProvider;
+    }
+
+    @Operation(
+            operationId = "signup",
+            summary = "사업장과 최초 관리자 회원가입",
+            description = "사업장과 최초 ADMIN 계정을 하나의 transaction으로 생성합니다. "
+                    + "자동 로그인하거나 Token을 발급하지 않으며, 성공 후 기존 로그인 API를 사용합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "사업장과 최초 ADMIN 계정 생성 성공",
+                    headers = {
+                            @Header(
+                                    name = HttpHeaders.CACHE_CONTROL,
+                                    description = "회원가입 응답 저장 방지",
+                                    schema = @Schema(type = "string", example = "no-store")
+                            ),
+                            @Header(
+                                    name = HttpHeaders.PRAGMA,
+                                    description = "구형 캐시의 회원가입 응답 저장 방지",
+                                    schema = @Schema(type = "string", example = "no-cache")
+                            )
+                    },
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = SignupResponse.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/EmailAlreadyRegistered"),
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType")
+    })
+    @PostMapping(
+            path = "/signup",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
+        SignupResult result = signupService.signup(request.toCommand());
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(SignupResponse.from(result));
     }
 
     @Operation(

@@ -36,6 +36,14 @@ public final class LoginResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final String companyName;
+    @JsonProperty("display_name")
+    @Schema(
+            name = "display_name",
+            description = "로그인한 담당자의 화면 표시 이름",
+            example = "김경민",
+            requiredMode = Schema.RequiredMode.REQUIRED
+    )
+    private final String displayName;
     @Schema(
             description = "사용자 역할",
             allowableValues = {"ADMIN", "HR", "VIEWER"},
@@ -83,6 +91,7 @@ public final class LoginResponse {
             UUID userId,
             UUID companyId,
             String companyName,
+            String displayName,
             String role,
             String accessToken,
             String tokenType,
@@ -92,6 +101,7 @@ public final class LoginResponse {
         this.userId = userId;
         this.companyId = companyId;
         this.companyName = companyName;
+        this.displayName = displayName;
         this.role = role;
         this.accessToken = accessToken;
         this.tokenType = tokenType;
@@ -104,6 +114,7 @@ public final class LoginResponse {
                 result.userId(),
                 result.companyId(),
                 result.companyName(),
+                result.displayName(),
                 result.role().name(),
                 result.accessToken(),
                 "Bearer",
@@ -122,6 +133,10 @@ public final class LoginResponse {
 
     public String getCompanyName() {
         return companyName;
+    }
+
+    public String getDisplayName() {
+        return displayName;
     }
 
     public String getRole() {

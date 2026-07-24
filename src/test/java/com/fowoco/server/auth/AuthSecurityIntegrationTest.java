@@ -100,6 +100,7 @@ class AuthSecurityIntegrationTest {
                 .isEqualTo(VIEWER_A.toString());
         assertThat(JsonPath.<String>read(loginResponse.body(), "$.company_id"))
                 .isEqualTo(COMPANY_A.toString());
+        assertThat(JsonPath.<String>read(loginResponse.body(), "$.display_name")).isEqualTo("사용자");
         assertThat(JsonPath.<String>read(loginResponse.body(), "$.role")).isEqualTo("VIEWER");
         assertThat(loginResponse.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
         assertThat(loginResponse.headers().firstValue(HttpHeaders.PRAGMA)).contains("no-cache");

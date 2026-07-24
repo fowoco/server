@@ -8,10 +8,12 @@ import java.util.UUID;
 public final class UserAccount {
 
     private static final int MAX_EMAIL_LENGTH = 254;
+    private static final int MAX_DISPLAY_NAME_LENGTH = 80;
     private static final int MAX_PASSWORD_HASH_LENGTH = 255;
 
     private final UUID userId;
     private final UUID companyId;
+    private final String displayName;
     private final String email;
     private final String normalizedEmail;
     private final String passwordHash;
@@ -24,6 +26,7 @@ public final class UserAccount {
     public UserAccount(
             UUID userId,
             UUID companyId,
+            String displayName,
             String email,
             String normalizedEmail,
             String passwordHash,
@@ -35,6 +38,7 @@ public final class UserAccount {
     ) {
         this.userId = Objects.requireNonNull(userId, "userId must not be null");
         this.companyId = Objects.requireNonNull(companyId, "companyId must not be null");
+        this.displayName = requireDisplayName(displayName);
         this.email = requireEmail(email);
         String expectedNormalizedEmail = normalizeEmail(this.email);
         if (!expectedNormalizedEmail.equals(normalizedEmail)) {
@@ -58,6 +62,7 @@ public final class UserAccount {
     public static UserAccount create(
             UUID userId,
             UUID companyId,
+            String displayName,
             String email,
             String passwordHash,
             UserRole role,
@@ -67,6 +72,7 @@ public final class UserAccount {
         return new UserAccount(
                 userId,
                 companyId,
+                displayName,
                 email,
                 normalizeEmail(email),
                 passwordHash,
@@ -96,6 +102,10 @@ public final class UserAccount {
 
     public UUID companyId() {
         return companyId;
+    }
+
+    public String displayName() {
+        return displayName;
     }
 
     public String email() {
@@ -139,6 +149,22 @@ public final class UserAccount {
             throw new IllegalArgumentException("email must not exceed " + MAX_EMAIL_LENGTH + " characters");
         }
         return stripped;
+    }
+
+    private static String requireDisplayName(String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            throw new IllegalArgumentException("displayName must not be blank");
+        }
+        String normalized = displayName.strip();
+        if (normalized.length() > MAX_DISPLAY_NAME_LENGTH) {
+            throw new IllegalArgumentException(
+                    "displayName must not exceed " + MAX_DISPLAY_NAME_LENGTH + " characters"
+            );
+        }
+        if (normalized.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("displayName must not contain control characters");
+        }
+        return normalized;
     }
 
     private static String requirePasswordHash(String passwordHash) {

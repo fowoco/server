@@ -7,6 +7,8 @@ import java.util.UUID;
 public final class AuthAuditEvent {
 
     public enum Action {
+        SIGNUP_SUCCEEDED,
+        SIGNUP_REJECTED,
         LOGIN_SUCCEEDED,
         LOGIN_REJECTED,
         REFRESH_SUCCEEDED,

@@ -78,6 +78,9 @@ public final class Company {
         if (normalized.length() > MAX_NAME_LENGTH) {
             throw new IllegalArgumentException("name must not exceed " + MAX_NAME_LENGTH + " characters");
         }
+        if (normalized.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("name must not contain control characters");
+        }
         return normalized;
     }
 }
