@@ -59,13 +59,13 @@ public final class WorkerResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final WorkerStatus workStatus;
-    @JsonProperty("visa_expiry_date")
+    @JsonProperty("stay_expiry_date")
     @Schema(
-            name = "visa_expiry_date",
+            name = "stay_expiry_date",
             description = "체류 만료일",
             format = "date"
     )
-    private final LocalDate visaExpiryDate;
+    private final LocalDate stayExpiryDate;
     @JsonProperty("contract_start_date")
     @Schema(
             name = "contract_start_date",
@@ -112,7 +112,7 @@ public final class WorkerResponse {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
-            LocalDate visaExpiryDate,
+            LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
             Instant createdAt,
@@ -125,7 +125,7 @@ public final class WorkerResponse {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
-        this.visaExpiryDate = visaExpiryDate;
+        this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
         this.createdAt = createdAt;
@@ -141,7 +141,7 @@ public final class WorkerResponse {
                 worker.nationalityCode(),
                 worker.preferredLanguage(),
                 worker.workStatus(),
-                worker.visaExpiryDate(),
+                worker.stayExpiryDate(),
                 worker.contractStartDate(),
                 worker.contractEndDate(),
                 worker.createdAt(),
@@ -174,8 +174,8 @@ public final class WorkerResponse {
         return workStatus;
     }
 
-    public LocalDate getVisaExpiryDate() {
-        return visaExpiryDate;
+    public LocalDate getStayExpiryDate() {
+        return stayExpiryDate;
     }
 
     public LocalDate getContractStartDate() {

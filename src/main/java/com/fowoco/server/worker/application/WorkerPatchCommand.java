@@ -12,7 +12,7 @@ public final class WorkerPatchCommand {
     private final String nationalityCode;
     private final String preferredLanguage;
     private final WorkerStatus workStatus;
-    private final LocalDate visaExpiryDate;
+    private final LocalDate stayExpiryDate;
     private final LocalDate contractStartDate;
     private final LocalDate contractEndDate;
     private final long expectedVersion;
@@ -24,7 +24,7 @@ public final class WorkerPatchCommand {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
-            LocalDate visaExpiryDate,
+            LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
             long expectedVersion
@@ -35,7 +35,7 @@ public final class WorkerPatchCommand {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
-        this.visaExpiryDate = visaExpiryDate;
+        this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
         this.expectedVersion = expectedVersion;
@@ -65,8 +65,8 @@ public final class WorkerPatchCommand {
         return workStatus;
     }
 
-    public LocalDate visaExpiryDate() {
-        return visaExpiryDate;
+    public LocalDate stayExpiryDate() {
+        return stayExpiryDate;
     }
 
     public LocalDate contractStartDate() {

@@ -49,7 +49,7 @@ public final class WorkerPatchRequest {
             example = "2027-03-01",
             format = "date"
     )
-    private final LocalDate visaExpiryDate;
+    private final LocalDate stayExpiryDate;
 
     @Schema(
             description = "계약 시작일. 생략 시 변경하지 않습니다.",
@@ -80,7 +80,7 @@ public final class WorkerPatchRequest {
             @JsonProperty("nationality_code") String nationalityCode,
             @JsonProperty("preferred_language") String preferredLanguage,
             @JsonProperty("work_status") WorkerStatus workStatus,
-            @JsonProperty("visa_expiry_date") LocalDate visaExpiryDate,
+            @JsonProperty("stay_expiry_date") LocalDate stayExpiryDate,
             @JsonProperty("contract_start_date") LocalDate contractStartDate,
             @JsonProperty("contract_end_date") LocalDate contractEndDate,
             @JsonProperty("expected_version") Long expectedVersion
@@ -89,7 +89,7 @@ public final class WorkerPatchRequest {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
-        this.visaExpiryDate = visaExpiryDate;
+        this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
         this.expectedVersion = expectedVersion;
@@ -126,8 +126,8 @@ public final class WorkerPatchRequest {
         return workStatus;
     }
 
-    public LocalDate getVisaExpiryDate() {
-        return visaExpiryDate;
+    public LocalDate getStayExpiryDate() {
+        return stayExpiryDate;
     }
 
     public LocalDate getContractStartDate() {

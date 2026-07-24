@@ -82,7 +82,7 @@ class WorkerSecurityIntegrationTest {
                   "display_name": "응우웬반A",
                   "nationality_code": "VN",
                   "preferred_language": "vi",
-                  "visa_expiry_date": "2027-03-01",
+                  "stay_expiry_date": "2027-03-01",
                   "contract_start_date": "2026-01-01",
                   "contract_end_date": "2027-12-31"
                 }

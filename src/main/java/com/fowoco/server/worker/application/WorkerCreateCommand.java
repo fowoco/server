@@ -9,7 +9,7 @@ public final class WorkerCreateCommand {
     private final String displayName;
     private final String nationalityCode;
     private final String preferredLanguage;
-    private final LocalDate visaExpiryDate;
+    private final LocalDate stayExpiryDate;
     private final LocalDate contractStartDate;
     private final LocalDate contractEndDate;
 
@@ -18,7 +18,7 @@ public final class WorkerCreateCommand {
             String displayName,
             String nationalityCode,
             String preferredLanguage,
-            LocalDate visaExpiryDate,
+            LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate
     ) {
@@ -26,7 +26,7 @@ public final class WorkerCreateCommand {
         this.displayName = displayName;
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
-        this.visaExpiryDate = visaExpiryDate;
+        this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
     }
@@ -47,8 +47,8 @@ public final class WorkerCreateCommand {
         return preferredLanguage;
     }
 
-    public LocalDate visaExpiryDate() {
-        return visaExpiryDate;
+    public LocalDate stayExpiryDate() {
+        return stayExpiryDate;
     }
 
     public LocalDate contractStartDate() {

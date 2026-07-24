@@ -45,7 +45,7 @@ public final class WorkerCreateRequest {
             example = "2027-03-01",
             format = "date"
     )
-    private final LocalDate visaExpiryDate;
+    private final LocalDate stayExpiryDate;
 
     @Schema(
             description = "계약 시작일",
@@ -66,14 +66,14 @@ public final class WorkerCreateRequest {
             @JsonProperty("display_name") String displayName,
             @JsonProperty("nationality_code") String nationalityCode,
             @JsonProperty("preferred_language") String preferredLanguage,
-            @JsonProperty("visa_expiry_date") LocalDate visaExpiryDate,
+            @JsonProperty("stay_expiry_date") LocalDate stayExpiryDate,
             @JsonProperty("contract_start_date") LocalDate contractStartDate,
             @JsonProperty("contract_end_date") LocalDate contractEndDate
     ) {
         this.displayName = displayName;
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
-        this.visaExpiryDate = visaExpiryDate;
+        this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
     }
@@ -99,8 +99,8 @@ public final class WorkerCreateRequest {
         return preferredLanguage;
     }
 
-    public LocalDate getVisaExpiryDate() {
-        return visaExpiryDate;
+    public LocalDate getStayExpiryDate() {
+        return stayExpiryDate;
     }
 
     public LocalDate getContractStartDate() {

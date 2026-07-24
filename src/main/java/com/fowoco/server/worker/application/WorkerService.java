@@ -35,7 +35,7 @@ public class WorkerService {
                 command.displayName(),
                 command.nationalityCode(),
                 command.preferredLanguage(),
-                command.visaExpiryDate(),
+                command.stayExpiryDate(),
                 command.contractStartDate(),
                 command.contractEndDate(),
                 clock.instant()
@@ -64,7 +64,7 @@ public class WorkerService {
                 orElseKeep(command.nationalityCode(), existing.nationalityCode()),
                 orElseKeep(command.preferredLanguage(), existing.preferredLanguage()),
                 orElseKeep(command.workStatus(), existing.workStatus()),
-                orElseKeep(command.visaExpiryDate(), existing.visaExpiryDate()),
+                orElseKeep(command.stayExpiryDate(), existing.stayExpiryDate()),
                 orElseKeep(command.contractStartDate(), existing.contractStartDate()),
                 orElseKeep(command.contractEndDate(), existing.contractEndDate()),
                 existing.createdAt(),

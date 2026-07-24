@@ -38,8 +38,8 @@ public class WorkerJpaEntity {
     @Column(name = "work_status", nullable = false, length = 20)
     private WorkerStatus workStatus;
 
-    @Column(name = "visa_expiry_date")
-    private LocalDate visaExpiryDate;
+    @Column(name = "stay_expiry_date")
+    private LocalDate stayExpiryDate;
 
     @Column(name = "contract_start_date")
     private LocalDate contractStartDate;
@@ -67,7 +67,7 @@ public class WorkerJpaEntity {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
-            LocalDate visaExpiryDate,
+            LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
             Instant createdAt,
@@ -80,7 +80,7 @@ public class WorkerJpaEntity {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
-        this.visaExpiryDate = visaExpiryDate;
+        this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
         this.createdAt = createdAt;
@@ -97,7 +97,7 @@ public class WorkerJpaEntity {
                 worker.nationalityCode(),
                 worker.preferredLanguage(),
                 worker.workStatus(),
-                worker.visaExpiryDate(),
+                worker.stayExpiryDate(),
                 worker.contractStartDate(),
                 worker.contractEndDate(),
                 worker.createdAt(),
@@ -114,7 +114,7 @@ public class WorkerJpaEntity {
                 nationalityCode,
                 preferredLanguage,
                 workStatus,
-                visaExpiryDate,
+                stayExpiryDate,
                 contractStartDate,
                 contractEndDate,
                 createdAt,
@@ -137,7 +137,7 @@ public class WorkerJpaEntity {
         this.nationalityCode = worker.nationalityCode();
         this.preferredLanguage = worker.preferredLanguage();
         this.workStatus = worker.workStatus();
-        this.visaExpiryDate = worker.visaExpiryDate();
+        this.stayExpiryDate = worker.stayExpiryDate();
         this.contractStartDate = worker.contractStartDate();
         this.contractEndDate = worker.contractEndDate();
         this.updatedAt = worker.updatedAt();

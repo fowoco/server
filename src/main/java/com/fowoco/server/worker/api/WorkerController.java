@@ -72,7 +72,7 @@ public class WorkerController {
                 request.getDisplayName(),
                 request.getNationalityCode(),
                 request.getPreferredLanguage(),
-                request.getVisaExpiryDate(),
+                request.getStayExpiryDate(),
                 request.getContractStartDate(),
                 request.getContractEndDate()
         );
@@ -156,7 +156,7 @@ public class WorkerController {
                 request.getNationalityCode(),
                 request.getPreferredLanguage(),
                 request.getWorkStatus(),
-                request.getVisaExpiryDate(),
+                request.getStayExpiryDate(),
                 request.getContractStartDate(),
                 request.getContractEndDate(),
                 request.getExpectedVersion()

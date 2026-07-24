@@ -5,7 +5,7 @@ CREATE TABLE worker (
     nationality_code VARCHAR(10),
     preferred_language VARCHAR(20),
     work_status VARCHAR(20) NOT NULL,
-    visa_expiry_date DATE,
+    stay_expiry_date DATE,
     contract_start_date DATE,
     contract_end_date DATE,
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,

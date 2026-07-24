@@ -15,7 +15,7 @@ public final class Worker {
     private final String nationalityCode;
     private final String preferredLanguage;
     private final WorkerStatus workStatus;
-    private final LocalDate visaExpiryDate;
+    private final LocalDate stayExpiryDate;
     private final LocalDate contractStartDate;
     private final LocalDate contractEndDate;
     private final Instant createdAt;
@@ -29,7 +29,7 @@ public final class Worker {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
-            LocalDate visaExpiryDate,
+            LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
             Instant createdAt,
@@ -42,7 +42,7 @@ public final class Worker {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = Objects.requireNonNull(workStatus, "workStatus must not be null");
-        this.visaExpiryDate = visaExpiryDate;
+        this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
@@ -66,7 +66,7 @@ public final class Worker {
             String displayName,
             String nationalityCode,
             String preferredLanguage,
-            LocalDate visaExpiryDate,
+            LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
             Instant now
@@ -79,7 +79,7 @@ public final class Worker {
                 nationalityCode,
                 preferredLanguage,
                 WorkerStatus.ACTIVE,
-                visaExpiryDate,
+                stayExpiryDate,
                 contractStartDate,
                 contractEndDate,
                 now,
@@ -116,8 +116,8 @@ public final class Worker {
         return workStatus;
     }
 
-    public LocalDate visaExpiryDate() {
-        return visaExpiryDate;
+    public LocalDate stayExpiryDate() {
+        return stayExpiryDate;
     }
 
     public LocalDate contractStartDate() {
