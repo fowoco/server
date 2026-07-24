@@ -1,6 +1,7 @@
 # ADR-0002: API·보안·오류 계약
 
-- Status: Proposed
+- Status: Accepted
+- Accepted: 2026-07-23
 - Date: 2026-07-22
 - Deciders: FOWOCO Server Team
 - Related Issue: [#23](https://github.com/fowoco/server/issues/23)
