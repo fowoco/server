@@ -59,6 +59,8 @@ class TaskWorkflowIntegrationTest {
 
     @BeforeEach
     void resetAndSeed() {
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM task_evidence");
         jdbcTemplate.update("DELETE FROM external_submission");
@@ -98,6 +100,12 @@ class TaskWorkflowIntegrationTest {
         assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("DRAFT");
         assertThat(JsonPath.<String>read(created.body(), "$.workflow_catalog_version"))
                 .isEqualTo("0.2.0");
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT event_type FROM event_publication "
+                        + "WHERE aggregate_id = ? ORDER BY occurred_at",
+                String.class,
+                taskId
+        )).containsExactly("TaskCreated");
         List<String> checklistIds = JsonPath.read(
                 created.body(),
                 "$.checklist_items[*].checklist_item_id"
@@ -130,6 +138,12 @@ class TaskWorkflowIntegrationTest {
         );
         assertThat(updated.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<Number>read(updated.body(), "$.version").longValue()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_publication "
+                        + "WHERE aggregate_id = ? AND event_type = 'TaskCancelled'",
+                Integer.class,
+                taskId
+        )).isZero();
 
         HttpResponse<String> checklist = patch(
                 "/api/v1/tasks/" + taskId + "/checklist-items/" + checklistIds.get(0),
@@ -162,6 +176,21 @@ class TaskWorkflowIntegrationTest {
                 Integer.class,
                 taskId
         )).isEqualTo(4);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT event_type FROM event_publication "
+                        + "WHERE aggregate_id = ?",
+                String.class,
+                taskId
+        )).containsExactlyInAnyOrder("TaskCreated", "TaskCancelled");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT payload_json FROM event_publication "
+                        + "WHERE aggregate_id = ? AND event_type = 'TaskCancelled'",
+                String.class,
+                taskId
+        ))
+                .contains("\"previous_status\":\"NEEDS_INFO\"")
+                .contains("\"status\":\"CANCELLED\"")
+                .doesNotContain("display_name", "passport", "phone", "token");
     }
 
     @Test

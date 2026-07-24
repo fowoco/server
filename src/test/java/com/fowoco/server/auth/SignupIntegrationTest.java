@@ -50,6 +50,8 @@ class SignupIntegrationTest {
 
     @BeforeEach
     void cleanSignupData() {
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM refresh_token");
         jdbcTemplate.update("DELETE FROM user_account");
         jdbcTemplate.update("DELETE FROM company");
