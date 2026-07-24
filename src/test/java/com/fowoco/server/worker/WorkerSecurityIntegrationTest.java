@@ -54,6 +54,13 @@ class WorkerSecurityIntegrationTest {
 
     @BeforeAll
     void seedCompaniesAndUsers() {
+        jdbcTemplate.update("DELETE FROM task_evidence");
+        jdbcTemplate.update("DELETE FROM external_submission");
+        jdbcTemplate.update("DELETE FROM approval_request");
+        jdbcTemplate.update("DELETE FROM task_transition_history");
+        jdbcTemplate.update("DELETE FROM task_checklist_item");
+        jdbcTemplate.update("DELETE FROM task");
+        jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
         jdbcTemplate.update("DELETE FROM refresh_token");

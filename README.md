@@ -243,7 +243,7 @@ server/
     │       └── db/migration/
     │           ├── V1__baseline.sql
     │           ├── V2__create_auth_company.sql      # Auth·Company·Refresh Token
-    │           ├── V3__create_worker_core.sql       # #11 참조용 Worker 최소 core
+    │           ├── V3__create_worker_document.sql   # Worker·Document metadata
     │           ├── V4__create_task_workflow_core.sql # Task·Checklist·전이 이력
     │           └── V5__create_approval_audit.sql    # 승인·제출·증빙·감사
     └── test/

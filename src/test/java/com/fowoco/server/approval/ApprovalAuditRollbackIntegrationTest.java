@@ -80,8 +80,8 @@ class ApprovalAuditRollbackIntegrationTest {
         jdbcTemplate.update(
                 """
                 INSERT INTO worker (
-                    worker_id, company_id, display_name, nationality, preferred_language,
-                    employment_status, stay_expiry_date, created_at, updated_at, version
+                    worker_id, company_id, display_name, nationality_code, preferred_language,
+                    work_status, stay_expiry_date, created_at, updated_at, version
                 ) VALUES (?, ?, '근로자', 'VNM', 'vi', 'ACTIVE', ?,
                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
                 """,

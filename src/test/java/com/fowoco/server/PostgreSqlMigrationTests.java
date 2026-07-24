@@ -62,6 +62,7 @@ class PostgreSqlMigrationTests {
                         "user_account",
                         "refresh_token",
                         "worker",
+                        "worker_document",
                         "task",
                         "task_checklist_item",
                         "task_transition_history",
@@ -97,7 +98,16 @@ class PostgreSqlMigrationTests {
         assertThat(columnSpecs(connection, "worker"))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
-                .containsEntry("stay_expiry_date", new ColumnSpec("date", false))
+                .containsEntry("nationality_code", new ColumnSpec("varchar", true))
+                .containsEntry("work_status", new ColumnSpec("varchar", false))
+                .containsEntry("stay_expiry_date", new ColumnSpec("date", true))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker_document"))
+                .containsEntry("worker_document_id", new ColumnSpec("uuid", false))
+                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("document_type", new ColumnSpec("varchar", false))
+                .containsEntry("submission_status", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "task"))
                 .containsEntry("task_id", new ColumnSpec("uuid", false))
@@ -131,6 +141,7 @@ class PostgreSqlMigrationTests {
                         "uq_refresh_token_hash",
                         "fk_refresh_token_user_company",
                         "fk_worker_company",
+                        "fk_worker_document_worker",
                         "fk_task_worker_company",
                         "fk_task_created_by_company",
                         "fk_approval_request_task_company",
@@ -143,7 +154,8 @@ class PostgreSqlMigrationTests {
                         "idx_refresh_token_company_user",
                         "idx_refresh_token_family_revoked",
                         "idx_refresh_token_expires_at",
-                        "idx_worker_company_stay_expiry",
+                        "idx_worker_company",
+                        "idx_worker_document_company_status",
                         "idx_task_company_status_due",
                         "idx_approval_request_task_status",
                         "idx_audit_event_company_time"
@@ -180,8 +192,8 @@ class PostgreSqlMigrationTests {
                 """.formatted(USER_A, COMPANY_A, TOKEN_HASH_A));
         execute(connection, """
                 INSERT INTO worker (
-                    worker_id, company_id, display_name, nationality,
-                    preferred_language, employment_status, stay_expiry_date
+                    worker_id, company_id, display_name, nationality_code,
+                    preferred_language, work_status, stay_expiry_date
                 ) VALUES (
                     '%s', '%s', 'Worker A', 'VNM', 'vi', 'ACTIVE', CURRENT_DATE + 30
                 )
