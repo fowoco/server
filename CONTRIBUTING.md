@@ -29,15 +29,16 @@ docs/23-architecture-adr
 ### Commit과 PR 작성 규칙
 
 - Commit message는 Conventional Commits 형식을 사용합니다.
-- type과 scope는 영문으로 쓰고, commit subject도 간결한 영문으로 작성합니다.
+- type과 scope는 영문으로 쓰고, commit subject와 필요한 설명은 팀이 읽기 쉬운 한국어로 작성합니다.
+- class·method·API·JWT·Workflow 같은 코드 식별자와 일반 기술 용어는 억지로 번역하지 않습니다.
 - PR 제목은 한국어로 핵심을 설명합니다. 코드 식별자와 일반적인 기술 용어는 영어를 그대로 사용해도 됩니다.
 - PR 본문은 변경 이유와 영향, 검증 결과가 명확하게 전달되는 것을 우선합니다. 코드 식별자와 기술 용어는 억지로 번역하지 않습니다.
 
 ```text
-feat(auth): implement access token refresh
-fix(worker-link): validate token expiration
-chore: configure server development environment
-docs: update local setup guide
+feat(auth): Access Token 재발급 구현
+fix(worker-link): token 만료 검증 보완
+chore: 서버 개발환경 구성
+docs: 로컬 실행 가이드 갱신
 
 PR title: feat: 인증 API와 Refresh Token rotation 구현
 ```
