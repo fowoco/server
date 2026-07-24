@@ -64,7 +64,7 @@ public class JpaWorkerRepository implements WorkerRepository {
         Objects.requireNonNull(companyId, "companyId must not be null");
         Objects.requireNonNull(query, "query must not be null");
         TypedQuery<WorkerJpaEntity> jpaQuery = entityManager.createQuery(
-                buildJpql("select worker", query),
+                buildWhereClause(query) + " order by worker.createdAt desc",
                 WorkerJpaEntity.class
         );
         bindParameters(jpaQuery, companyId, query);
@@ -82,16 +82,15 @@ public class JpaWorkerRepository implements WorkerRepository {
         Objects.requireNonNull(companyId, "companyId must not be null");
         Objects.requireNonNull(query, "query must not be null");
         TypedQuery<Long> jpaQuery = entityManager.createQuery(
-                buildJpql("select count(worker)", query),
+                "select count(worker) " + buildWhereClause(query).replaceFirst("^select worker ", ""),
                 Long.class
         );
         bindParameters(jpaQuery, companyId, query);
         return jpaQuery.getSingleResult();
     }
 
-    private String buildJpql(String selectClause, WorkerSearchQuery query) {
-        StringBuilder jpql = new StringBuilder(selectClause)
-                .append(" from WorkerJpaEntity worker where worker.companyId = :companyId");
+    private String buildWhereClause(WorkerSearchQuery query) {
+        StringBuilder jpql = new StringBuilder("select worker from WorkerJpaEntity worker where worker.companyId = :companyId");
         if (query.status() != null) {
             jpql.append(" and worker.workStatus = :status");
         }
@@ -101,7 +100,6 @@ public class JpaWorkerRepository implements WorkerRepository {
         if (query.expiryBefore() != null) {
             jpql.append(" and worker.stayExpiryDate < :expiryBefore");
         }
-        jpql.append(" order by worker.createdAt desc");
         return jpql.toString();
     }
 
