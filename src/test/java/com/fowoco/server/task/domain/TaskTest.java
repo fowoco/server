@@ -9,6 +9,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class TaskTest {
 
@@ -66,6 +68,7 @@ class TaskTest {
                 "{\"wage\":3100000}",
                 FINGERPRINT_B,
                 LocalDate.of(2026, 8, 1),
+                true,
                 0,
                 ACTOR_ID,
                 NOW.plusSeconds(1)
@@ -74,7 +77,7 @@ class TaskTest {
         assertThat(outcome.criticalChanged()).isTrue();
         assertThat(outcome.approvalInvalidated()).isTrue();
         assertThat(task.contentRevision()).isEqualTo(1);
-        assertThat(task.status()).isEqualTo(TaskStatus.READY_FOR_REVIEW);
+        assertThat(task.status()).isEqualTo(TaskStatus.DRAFT);
     }
 
     @Test
@@ -94,6 +97,63 @@ class TaskTest {
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.errorCode())
                                 .isEqualTo(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = TaskStatus.class,
+            names = {
+                    "DRAFT",
+                    "NEEDS_INFO",
+                    "READY_FOR_REVIEW",
+                    "APPROVED",
+                    "WAITING_WORKER",
+                    "WAITING_EXTERNAL"
+            }
+    )
+    void everyNonTerminalTaskCanBeCancelled(TaskStatus status) {
+        Task task = task(status);
+
+        TaskStatus previous = task.cancel(0, ACTOR_ID, NOW.plusSeconds(1));
+
+        assertThat(previous).isEqualTo(status);
+        assertThat(task.status()).isEqualTo(TaskStatus.CANCELLED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TaskStatus.class, names = {"COMPLETED", "CANCELLED"})
+    void terminalTasksRejectCancellation(TaskStatus status) {
+        Task task = task(status);
+
+        assertThatThrownBy(() -> task.cancel(0, ACTOR_ID, NOW.plusSeconds(1)))
+                .isInstanceOfSatisfying(ApiException.class, exception ->
+                        assertThat(exception.errorCode())
+                                .isEqualTo(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = TaskStatus.class,
+            names = {
+                    "READY_FOR_REVIEW",
+                    "APPROVED",
+                    "WAITING_WORKER",
+                    "WAITING_EXTERNAL"
+            }
+    )
+    void missingRequiredChecklistInvalidatesReviewOrApproval(TaskStatus status) {
+        Task task = task(status);
+
+        Task.RequirementsOutcome outcome = task.reassessRequirements(
+                false,
+                0,
+                ACTOR_ID,
+                NOW.plusSeconds(1)
+        );
+
+        assertThat(outcome.approvalInvalidated()).isTrue();
+        assertThat(task.status()).isEqualTo(TaskStatus.NEEDS_INFO);
+        assertThat(task.contentRevision()).isEqualTo(1);
     }
 
     private Task task(TaskStatus status) {

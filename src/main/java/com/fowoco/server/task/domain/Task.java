@@ -189,6 +189,7 @@ public final class Task {
             String businessDataJson,
             String criticalFingerprint,
             LocalDate dueDate,
+            boolean requirementsSatisfied,
             long expectedVersion,
             UUID actorId,
             Instant now
@@ -200,7 +201,8 @@ public final class Task {
         String nextFingerprint = requireFingerprint(criticalFingerprint);
         boolean criticalChanged = !this.criticalFingerprint.equals(nextFingerprint);
         boolean approvalInvalidated = criticalChanged
-                && (status == TaskStatus.APPROVED
+                && (status == TaskStatus.READY_FOR_REVIEW
+                || status == TaskStatus.APPROVED
                 || status == TaskStatus.WAITING_WORKER
                 || status == TaskStatus.WAITING_EXTERNAL);
 
@@ -214,10 +216,48 @@ public final class Task {
         this.dueDate = dueDate;
         this.updatedBy = Objects.requireNonNull(actorId);
         this.updatedAt = Objects.requireNonNull(now);
-        if (approvalInvalidated) {
-            this.status = TaskStatus.READY_FOR_REVIEW;
+        if (criticalChanged && (approvalInvalidated
+                || status == TaskStatus.DRAFT
+                || status == TaskStatus.NEEDS_INFO)) {
+            this.status = requirementsSatisfied ? TaskStatus.DRAFT : TaskStatus.NEEDS_INFO;
         }
         return new UpdateOutcome(criticalChanged, approvalInvalidated);
+    }
+
+    /**
+     * Re-evaluates required slots and checklist items after a checklist command.
+     *
+     * <p>A completed checklist item never approves a task automatically. If all requirements become
+     * complete the task only returns to {@link TaskStatus#DRAFT}. If a required item becomes
+     * incomplete after review or approval, the approved content revision is invalidated.</p>
+     */
+    public RequirementsOutcome reassessRequirements(
+            boolean requirementsSatisfied,
+            long expectedVersion,
+            UUID actorId,
+            Instant now
+    ) {
+        requireVersion(expectedVersion);
+        if (status.isTerminal()) {
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
+        }
+        TaskStatus previous = status;
+        boolean approvalInvalidated = !requirementsSatisfied
+                && (status == TaskStatus.READY_FOR_REVIEW
+                || status == TaskStatus.APPROVED
+                || status == TaskStatus.WAITING_WORKER
+                || status == TaskStatus.WAITING_EXTERNAL);
+        if (approvalInvalidated) {
+            contentRevision++;
+            status = TaskStatus.NEEDS_INFO;
+        } else if (status == TaskStatus.NEEDS_INFO && requirementsSatisfied) {
+            status = TaskStatus.DRAFT;
+        }
+        if (status != previous) {
+            updatedBy = Objects.requireNonNull(actorId);
+            updatedAt = Objects.requireNonNull(now);
+        }
+        return new RequirementsOutcome(previous, approvalInvalidated);
     }
 
     private TaskStatus transition(TaskStatus next, UUID actorId, Instant now) {
@@ -340,5 +380,8 @@ public final class Task {
     }
 
     public record UpdateOutcome(boolean criticalChanged, boolean approvalInvalidated) {
+    }
+
+    public record RequirementsOutcome(TaskStatus previousStatus, boolean approvalInvalidated) {
     }
 }

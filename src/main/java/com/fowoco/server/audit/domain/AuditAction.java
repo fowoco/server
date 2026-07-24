@@ -3,6 +3,7 @@ package com.fowoco.server.audit.domain;
 public enum AuditAction {
     TASK_CREATED,
     TASK_UPDATED,
+    CHECKLIST_ITEM_UPDATED,
     TASK_CANCELLED,
     APPROVAL_REQUESTED,
     TASK_APPROVED,

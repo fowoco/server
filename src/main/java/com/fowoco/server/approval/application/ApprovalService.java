@@ -27,7 +27,9 @@ import com.fowoco.server.task.domain.TaskStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -355,14 +357,12 @@ public class ApprovalService implements ApprovalControlPort {
     ) {
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
-        List<ApprovalRequest> active = approvalRepository.findActiveByTaskIdAndCompanyId(
+        List<ApprovalRequest> active = invalidateActiveApprovals(
                 taskId,
-                actor.companyId()
+                actor.companyId(),
+                reason,
+                occurredAt
         );
-        active.forEach(approval -> {
-            approval.invalidate(reason, occurredAt);
-            approvalRepository.save(approval);
-        });
         if (!active.isEmpty()) {
             appendAudit(
                     task,
@@ -373,6 +373,108 @@ public class ApprovalService implements ApprovalControlPort {
                     occurredAt
             );
         }
+    }
+
+    @Override
+    @Transactional
+    public Task replaceReviewAfterCriticalChange(
+            UUID taskId,
+            ActorContext actor,
+            String reason,
+            Instant occurredAt,
+            RequestMetadata metadata
+    ) {
+        actorAuthorizer.requireHrWrite(actor);
+        Task task = requireTask(taskId, actor.companyId());
+        List<ApprovalRequest> invalidated = invalidateActiveApprovals(
+                taskId,
+                actor.companyId(),
+                reason,
+                occurredAt
+        );
+        if (!invalidated.isEmpty()) {
+            appendAudit(
+                    task,
+                    actor,
+                    AuditAction.APPROVAL_INVALIDATED,
+                    "중요 업무값 변경으로 기존 승인을 무효화함",
+                    metadata,
+                    occurredAt
+            );
+        }
+
+        TaskStatus previous = task.requestReview(
+                taskReadinessChecker.isReadyForReview(task),
+                task.version(),
+                actor.actorId(),
+                occurredAt
+        );
+        Task savedTask = taskRepository.save(task);
+        recordTransition(
+                savedTask,
+                previous,
+                actor.actorId(),
+                "중요값 수정 후 재승인 요청",
+                metadata,
+                occurredAt
+        );
+
+        Map<String, Object> hrSnapshot = new LinkedHashMap<>();
+        hrSnapshot.put("worker_id", savedTask.workerId().toString());
+        hrSnapshot.put("task_type", savedTask.taskType().name());
+        hrSnapshot.put("workflow_id", savedTask.workflowId());
+        hrSnapshot.put("title", savedTask.title());
+        hrSnapshot.put("description", savedTask.description());
+        hrSnapshot.put(
+                "due_date",
+                savedTask.dueDate() == null ? null : savedTask.dueDate().toString()
+        );
+        hrSnapshot.put("business_data_json", savedTask.businessDataJson());
+        ApprovalRequest replacement = ApprovalRequest.create(
+                uuidGenerator.generate(),
+                taskId,
+                actor.companyId(),
+                savedTask.version(),
+                savedTask.contentRevision(),
+                savedTask.criticalFingerprint(),
+                null,
+                safeJsonService.write(hrSnapshot, true),
+                safeJsonService.write(List.of("task_content"), true),
+                safeJsonService.write(
+                        Map.of(
+                                "workflow_catalog_version",
+                                savedTask.workflowCatalogVersion()
+                        ),
+                        true
+                ),
+                actor.actorId(),
+                occurredAt
+        );
+        approvalRepository.save(replacement);
+        appendAudit(
+                savedTask,
+                actor,
+                AuditAction.APPROVAL_REQUESTED,
+                "수정된 현재 Task version의 재승인을 요청함",
+                metadata,
+                occurredAt
+        );
+        return savedTask;
+    }
+
+    private List<ApprovalRequest> invalidateActiveApprovals(
+            UUID taskId,
+            UUID companyId,
+            String reason,
+            Instant occurredAt
+    ) {
+        List<ApprovalRequest> active =
+                approvalRepository.findActiveByTaskIdAndCompanyId(taskId, companyId);
+        active.forEach(approval -> {
+            approval.invalidate(reason, occurredAt);
+            approvalRepository.save(approval);
+        });
+        return active;
     }
 
     private Task requireTask(UUID taskId, UUID companyId) {
