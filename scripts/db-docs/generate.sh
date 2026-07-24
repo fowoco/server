@@ -123,8 +123,7 @@ docker run --rm \
   -db "${DATABASE_NAME}" \
   -u "${DATABASE_USER}" \
   -p "${DB_DOCS_PASSWORD}" \
-  -s public \
-  -o /output
+  -s public
 
 chmod -R a+rX "${OUTPUT_ROOT}"
 
