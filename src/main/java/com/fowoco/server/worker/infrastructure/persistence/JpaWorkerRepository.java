@@ -1,8 +1,11 @@
 package com.fowoco.server.worker.infrastructure.persistence;
 
+import com.fowoco.server.worker.application.WorkerSearchQuery;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,5 +57,66 @@ public class JpaWorkerRepository implements WorkerRepository {
         entity.applyState(worker);
         entityManager.flush();
         return entity.toDomain();
+    }
+
+    @Override
+    public List<Worker> findPage(UUID companyId, WorkerSearchQuery query) {
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        Objects.requireNonNull(query, "query must not be null");
+        TypedQuery<WorkerJpaEntity> jpaQuery = entityManager.createQuery(
+                buildWhereClause(query) + " order by worker.createdAt desc",
+                WorkerJpaEntity.class
+        );
+        bindParameters(jpaQuery, companyId, query);
+        return jpaQuery
+                .setFirstResult(query.page() * query.size())
+                .setMaxResults(query.size())
+                .getResultList()
+                .stream()
+                .map(WorkerJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
+    public long countPage(UUID companyId, WorkerSearchQuery query) {
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        Objects.requireNonNull(query, "query must not be null");
+        TypedQuery<Long> jpaQuery = entityManager.createQuery(
+                "select count(worker) " + buildWhereClause(query).replaceFirst("^select worker ", ""),
+                Long.class
+        );
+        bindParameters(jpaQuery, companyId, query);
+        return jpaQuery.getSingleResult();
+    }
+
+    private String buildWhereClause(WorkerSearchQuery query) {
+        StringBuilder jpql = new StringBuilder("select worker from WorkerJpaEntity worker where worker.companyId = :companyId");
+        if (query.status() != null) {
+            jpql.append(" and worker.workStatus = :status");
+        }
+        if (query.language() != null) {
+            jpql.append(" and worker.preferredLanguage = :language");
+        }
+        if (query.expiryBefore() != null) {
+            jpql.append(" and worker.stayExpiryDate < :expiryBefore");
+        }
+        return jpql.toString();
+    }
+
+    private void bindParameters(
+            jakarta.persistence.Query jpaQuery,
+            UUID companyId,
+            WorkerSearchQuery query
+    ) {
+        jpaQuery.setParameter("companyId", companyId);
+        if (query.status() != null) {
+            jpaQuery.setParameter("status", query.status());
+        }
+        if (query.language() != null) {
+            jpaQuery.setParameter("language", query.language());
+        }
+        if (query.expiryBefore() != null) {
+            jpaQuery.setParameter("expiryBefore", query.expiryBefore());
+        }
     }
 }
