@@ -19,6 +19,15 @@ RLS는 기존 `ActorContext`, Repository의 `company_id` 조건, tenant-aware DB
 transaction-local tenant context와 connection pool 비누수 테스트만 준비합니다.
 아직 policy를 만들거나 RLS를 활성화하지 않습니다.
 
+현재 `main`의 V1~V5에는 아래 12개 tenant table이 존재합니다. 기반 단계의 제한
+role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
+`REFERENCES` 권한과 RLS 우회 권한이 없음을 확인합니다.
+
+- `company`, `user_account`, `refresh_token`
+- `worker`, `worker_document`
+- `task`, `task_checklist_item`, `task_transition_history`
+- `approval_request`, `external_submission`, `task_evidence`, `audit_event`
+
 ## 설정 계약
 
 PostgreSQL `dev`·`prod` Profile은 같은 DB에 서로 다른 계정으로 연결합니다.

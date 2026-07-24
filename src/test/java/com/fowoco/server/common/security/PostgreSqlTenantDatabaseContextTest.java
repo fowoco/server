@@ -41,6 +41,22 @@ class PostgreSqlTenantDatabaseContextTest {
             UUID.fromString("a0000000-0000-0000-0000-000000000001");
     private static final UUID COMPANY_B =
             UUID.fromString("b0000000-0000-0000-0000-000000000002");
+    private static final String[] TENANT_TABLES = {
+            "company",
+            "user_account",
+            "refresh_token",
+            "worker",
+            "worker_document",
+            "task",
+            "task_checklist_item",
+            "task_transition_history",
+            "approval_request",
+            "external_submission",
+            "task_evidence",
+            "audit_event"
+    };
+    private static final String TENANT_TABLE_SQL =
+            "public." + String.join(", public.", TENANT_TABLES);
 
     private String migrationUrl;
     private String migrationUsername;
@@ -98,9 +114,9 @@ class PostgreSqlTenantDatabaseContextTest {
             statement.execute("GRANT USAGE ON SCHEMA public TO " + quotedRole);
             statement.execute("""
                     GRANT SELECT, INSERT, UPDATE, DELETE
-                    ON TABLE public.company, public.user_account, public.refresh_token
+                    ON TABLE %s
                     TO %s
-                    """.formatted(quotedRole));
+                    """.formatted(TENANT_TABLE_SQL, quotedRole));
         }
 
         migrationDataSource = new DriverManagerDataSource();
@@ -208,7 +224,7 @@ class PostgreSqlTenantDatabaseContextTest {
                 Boolean.class
         )).isFalse();
 
-        for (String table : new String[]{"company", "user_account", "refresh_token"}) {
+        for (String table : TENANT_TABLES) {
             assertThat(hasTablePrivilege(table, "SELECT")).isTrue();
             assertThat(hasTablePrivilege(table, "INSERT")).isTrue();
             assertThat(hasTablePrivilege(table, "UPDATE")).isTrue();
