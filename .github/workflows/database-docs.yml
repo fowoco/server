@@ -1,0 +1,107 @@
+name: Database Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/resources/db/migration/**'
+      - 'scripts/db-docs/**'
+      - '.github/workflows/database-docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/main/resources/db/migration/**'
+      - 'scripts/db-docs/**'
+      - '.github/workflows/database-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-docs:
+    name: Build database documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: fowoco_docs
+          POSTGRES_USER: fowoco_docs
+          POSTGRES_PASSWORD: fowoco_docs_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fowoco_docs -d fowoco_docs"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+
+      - name: Test documentation generator
+        run: node --test scripts/db-docs/generate-site.test.mjs
+
+      - name: Generate database documentation
+        run: ./scripts/db-docs/generate.sh
+        env:
+          DB_DOCS_CONTAINER_HOST: 127.0.0.1
+          DB_DOCS_EPHEMERAL: 'true'
+          DB_DOCS_PORT: '5432'
+          DB_DOCS_DATABASE: fowoco_docs
+          DB_DOCS_USER: fowoco_docs
+          DB_DOCS_PASSWORD: fowoco_docs_ci_only
+
+      - name: Upload database documentation preview
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: database-docs-site
+          path: build/db-docs/site
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy-pages:
+    name: Deploy database documentation
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Download database documentation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: database-docs-site
+          path: site
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
