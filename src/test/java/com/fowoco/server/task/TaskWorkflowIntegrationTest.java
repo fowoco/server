@@ -66,6 +66,7 @@ class TaskWorkflowIntegrationTest {
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM task_checklist_item");
         jdbcTemplate.update("DELETE FROM task");
+        jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
         jdbcTemplate.update("DELETE FROM refresh_token");
         jdbcTemplate.update("DELETE FROM user_account");
@@ -190,6 +191,25 @@ class TaskWorkflowIntegrationTest {
                 .isEqualTo(403);
         assertThat(get("/api/v1/tasks/" + taskId, otherCompanyToken).statusCode())
                 .isEqualTo(404);
+    }
+
+    @Test
+    void resignedAndTerminatedWorkersCannotReceiveNewTasks() throws Exception {
+        String token = login(HR_A_EMAIL);
+
+        for (String status : List.of("RESIGNED", "TERMINATED")) {
+            jdbcTemplate.update(
+                    "UPDATE worker SET work_status = ?, version = version + 1 WHERE worker_id = ?",
+                    status,
+                    WORKER_A
+            );
+
+            HttpResponse<String> response = post("/api/v1/tasks", validCreateBody(), token);
+
+            assertThat(response.statusCode()).isEqualTo(422);
+            assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                    .isEqualTo("WORKER_NOT_ELIGIBLE");
+        }
     }
 
     @Test
@@ -470,8 +490,8 @@ class TaskWorkflowIntegrationTest {
         jdbcTemplate.update(
                 """
                 INSERT INTO worker (
-                    worker_id, company_id, display_name, nationality, preferred_language,
-                    employment_status, stay_expiry_date, contract_start_date, contract_end_date,
+                    worker_id, company_id, display_name, nationality_code, preferred_language,
+                    work_status, stay_expiry_date, contract_start_date, contract_end_date,
                     created_at, updated_at, version
                 ) VALUES (?, ?, '근로자 A', 'VNM', 'vi', 'ACTIVE', ?, ?, ?,
                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
