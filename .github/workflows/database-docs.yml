@@ -64,6 +64,7 @@ jobs:
           DB_DOCS_DATABASE: fowoco_docs
           DB_DOCS_USER: fowoco_docs
           DB_DOCS_PASSWORD: fowoco_docs_ci_only
+          DB_DOCS_GIT_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Upload database documentation preview
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

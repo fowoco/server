@@ -129,7 +129,7 @@ docker run --rm \
 
 chmod -R a+rX "${OUTPUT_ROOT}"
 
-GIT_COMMIT="${GITHUB_SHA:-$(git -C "${REPOSITORY_ROOT}" rev-parse HEAD)}"
+GIT_COMMIT="${DB_DOCS_GIT_COMMIT:-${GITHUB_SHA:-$(git -C "${REPOSITORY_ROOT}" rev-parse HEAD)}}"
 if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
   REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
 else
