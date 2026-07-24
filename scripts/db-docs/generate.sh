@@ -84,6 +84,8 @@ FLYWAY_ARGUMENTS=(
   "-user=${DATABASE_USER}"
   "-password=${DB_DOCS_PASSWORD}"
   "-locations=filesystem:/flyway/sql"
+  "-defaultSchema=public"
+  "-schemas=public"
   "-connectRetries=20"
 )
 
