@@ -24,6 +24,7 @@ class DemoAuthSeedRunnerTest {
 
     private static final UUID COMPANY_ID = UUID.fromString("90000000-0000-0000-0000-000000000001");
     private static final UUID ADMIN_USER_ID = UUID.fromString("90000000-0000-0000-0000-000000000002");
+    private static final String ADMIN_DISPLAY_NAME = "데모 관리자";
     private static final String ADMIN_EMAIL = "demo.admin@example.com";
     private static final String ADMIN_PASSWORD = "Demo-password-1!";
     private static final Instant NOW = Instant.parse("2026-07-22T00:00:00Z");
@@ -47,6 +48,7 @@ class DemoAuthSeedRunnerTest {
         assertThat(userAccountRepository.users).hasSize(1);
         UserAccount admin = userAccountRepository.users.get(ADMIN_USER_ID);
         assertThat(admin.companyId()).isEqualTo(COMPANY_ID);
+        assertThat(admin.displayName()).isEqualTo(ADMIN_DISPLAY_NAME);
         assertThat(admin.normalizedEmail()).isEqualTo(ADMIN_EMAIL);
         assertThat(admin.passwordHash()).isNotEqualTo(ADMIN_PASSWORD);
         assertThat(passwordEncoder.matches(ADMIN_PASSWORD, admin.passwordHash())).isTrue();
@@ -122,6 +124,7 @@ class DemoAuthSeedRunnerTest {
                 COMPANY_ID,
                 "FOWOCO Demo Company",
                 ADMIN_USER_ID,
+                ADMIN_DISPLAY_NAME,
                 ADMIN_EMAIL,
                 password
         );
@@ -153,6 +156,12 @@ class DemoAuthSeedRunnerTest {
             if (users.putIfAbsent(userAccount.userId(), userAccount) != null) {
                 throw new IllegalStateException("duplicate user");
             }
+        }
+
+        @Override
+        public boolean existsByNormalizedEmail(String normalizedEmail) {
+            return users.values().stream()
+                    .anyMatch(user -> user.normalizedEmail().equals(normalizedEmail));
         }
 
         @Override

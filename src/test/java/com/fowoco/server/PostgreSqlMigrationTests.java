@@ -80,6 +80,7 @@ class PostgreSqlMigrationTests {
         assertThat(columnSpecs(connection, "user_account"))
                 .containsEntry("user_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("display_name", new ColumnSpec("varchar", false))
                 .containsEntry("normalized_email", new ColumnSpec("varchar", false))
                 .containsEntry("password_hash", new ColumnSpec("varchar", false))
                 .containsEntry("role", new ColumnSpec("varchar", false))

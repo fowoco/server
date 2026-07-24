@@ -43,7 +43,8 @@ class DemoAuthSeedIntegrationTest {
                 COMPANY_ID
         )).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM user_account WHERE user_id = ? AND role = 'ADMIN' AND status = 'ACTIVE'",
+                "SELECT COUNT(*) FROM user_account WHERE user_id = ? AND display_name = '데모 관리자' "
+                        + "AND role = 'ADMIN' AND status = 'ACTIVE'",
                 Integer.class,
                 ADMIN_USER_ID
         )).isEqualTo(1);
