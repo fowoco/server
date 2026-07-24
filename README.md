@@ -56,7 +56,29 @@ API 문서는 아래 주소에서 확인합니다.
 
 local은 기본 Profile이라 별도 데이터베이스가 필요하지 않습니다. 서버를 다시 실행하면 메모리 DB가 초기화되고 Flyway migration이 처음부터 적용됩니다. H2 Console 보호를 위해 local 서버는 기본적으로 내 PC(`127.0.0.1`)에서만 접근할 수 있습니다.
 
-### 로그인·재발급·로그아웃 흐름
+### 회원가입·로그인·재발급·로그아웃 흐름
+
+회원가입 화면은 `POST /api/v1/auth/signup`으로 사업장과 최초 `ADMIN` 계정을 함께
+생성합니다.
+
+```json
+{
+  "company_name": "한빛정밀",
+  "display_name": "김경민",
+  "email": "name@company.com",
+  "password": "8자 이상의 비밀번호"
+}
+```
+
+- Client 화면의 `workplace`는 `company_name`, `name`은 `display_name`으로 변환합니다.
+- `confirmPassword`는 Client에서 일치 여부만 확인하고 Server에 보내지 않습니다.
+- Client가 `role`이나 `company_id`를 선택할 수 없으며 최초 계정은 항상 `ADMIN`입니다.
+- Company와 UserAccount는 같은 transaction에서 생성되어 하나만 남을 수 없습니다.
+- 가입 성공은 `201 Created`이며 Token을 발급하지 않습니다. 사용자는 기존 로그인 API로
+  로그인합니다.
+- 이메일 인증·담당자 초대·MFA·비밀번호 재설정은 후속 기능입니다.
+- 외부 공개 환경에서는 회원가입 endpoint에 Gateway 또는 배포 경계 Rate Limit을
+  추가해야 합니다.
 
 1. Client가 `POST /api/v1/auth/login`에 `email`, `password`를 보냅니다.
 2. 서버는 JSON 본문에 짧게 사용하는 `access_token`을 반환합니다.
@@ -138,7 +160,7 @@ export DEMO_SEED_ADMIN_PASSWORD='로컬 또는 배포 Secret의 12자 이상 값
 
 서버는 Flyway 적용 뒤 사업장과 계정을 한 번만 만들고, 비밀번호 원문이 아니라 BCrypt hash만 저장합니다. 같은 설정으로 다시 실행해도 중복 생성하지 않습니다. 같은 이메일이 다른 사업장·사용자·역할로 이미 존재하면 덮어쓰지 않고 시작을 중단합니다.
 
-이 값은 개인 `.env`나 배포 환경의 Secret에만 보관하고 `.env.example`, GitHub, 로그에 실제 비밀번호를 넣지 않습니다. ID·이메일·사업장 이름을 바꿔야 하면 `DEMO_SEED_COMPANY_ID`, `DEMO_SEED_ADMIN_USER_ID`, `DEMO_SEED_ADMIN_EMAIL`, `DEMO_SEED_COMPANY_NAME`을 함께 설정할 수 있습니다. 최초 계정을 확인한 뒤에는 `DEMO_SEED_ENABLED=false`로 되돌려 의도하지 않은 Seed 실행을 막습니다.
+이 값은 개인 `.env`나 배포 환경의 Secret에만 보관하고 `.env.example`, GitHub, 로그에 실제 비밀번호를 넣지 않습니다. ID·이메일·표시 이름·사업장 이름을 바꿔야 하면 `DEMO_SEED_COMPANY_ID`, `DEMO_SEED_ADMIN_USER_ID`, `DEMO_SEED_ADMIN_EMAIL`, `DEMO_SEED_ADMIN_DISPLAY_NAME`, `DEMO_SEED_COMPANY_NAME`을 함께 설정할 수 있습니다. 최초 계정을 확인한 뒤에는 `DEMO_SEED_ENABLED=false`로 되돌려 의도하지 않은 Seed 실행을 막습니다.
 
 ## 개발 기반은 어떻게 동작하나요?
 
@@ -272,7 +294,8 @@ server/
     │           ├── V2__create_auth_company.sql      # Auth·Company·Refresh Token
     │           ├── V3__create_worker_document.sql   # Worker·Document metadata
     │           ├── V4__create_task_workflow_core.sql # Task·Checklist·전이 이력
-    │           └── V5__create_approval_audit.sql    # 승인·제출·증빙·감사
+    │           ├── V5__create_approval_audit.sql    # 승인·제출·증빙·감사
+    │           └── V6__add_user_display_name.sql    # 회원가입 담당자 표시 이름
     └── test/
         └── java/com/fowoco/server/
             ├── architecture/
