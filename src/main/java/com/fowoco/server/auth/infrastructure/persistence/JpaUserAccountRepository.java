@@ -25,6 +25,22 @@ public class JpaUserAccountRepository
     }
 
     @Override
+    public boolean existsByNormalizedEmail(String normalizedEmail) {
+        Objects.requireNonNull(normalizedEmail, "normalizedEmail must not be null");
+        Long count = entityManager.createQuery(
+                        """
+                        select count(userAccount)
+                        from UserAccountJpaEntity userAccount
+                        where userAccount.normalizedEmail = :normalizedEmail
+                        """,
+                        Long.class
+                )
+                .setParameter("normalizedEmail", normalizedEmail)
+                .getSingleResult();
+        return count > 0;
+    }
+
+    @Override
     public Optional<UserAccount> findByNormalizedEmail(String normalizedEmail) {
         return entityManager.createQuery(
                         """

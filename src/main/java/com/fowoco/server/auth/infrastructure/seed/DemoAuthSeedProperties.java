@@ -9,6 +9,7 @@ public record DemoAuthSeedProperties(
         UUID companyId,
         String companyName,
         UUID adminUserId,
+        String adminDisplayName,
         String adminEmail,
         String adminPassword
 ) {
@@ -19,6 +20,7 @@ public record DemoAuthSeedProperties(
                 + ", companyId=" + companyId
                 + ", companyName=" + companyName
                 + ", adminUserId=" + adminUserId
+                + ", adminDisplayName=" + adminDisplayName
                 + ", adminEmail=" + adminEmail
                 + ", adminPassword=<redacted>]";
     }

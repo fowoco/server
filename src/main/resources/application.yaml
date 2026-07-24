@@ -48,6 +48,7 @@ app:
     company-id: ${DEMO_SEED_COMPANY_ID:90000000-0000-0000-0000-000000000001}
     company-name: ${DEMO_SEED_COMPANY_NAME:FOWOCO Demo Company}
     admin-user-id: ${DEMO_SEED_ADMIN_USER_ID:90000000-0000-0000-0000-000000000002}
+    admin-display-name: ${DEMO_SEED_ADMIN_DISPLAY_NAME:데모 관리자}
     admin-email: ${DEMO_SEED_ADMIN_EMAIL:demo.admin@example.com}
     admin-password: ${DEMO_SEED_ADMIN_PASSWORD:}
   auth:
