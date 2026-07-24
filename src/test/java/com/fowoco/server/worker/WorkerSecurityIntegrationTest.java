@@ -26,6 +26,11 @@ import org.springframework.test.context.ActiveProfiles;
     3. 오래된 expected_version으로 PATCH하면 409
     4. 타 사업장 근로자 조회 시 404
     5. 계약기간 역전 시 400 VALIDATION_FAILED
+    6. 목록 조회 페이지네이션
+    7. 목록 status 필터
+    8. 목록 타 사업장 격리
+    9. size 범위 벗어나면 400
+    10. VIEWER는 쓰기 403, 조회는 가능
 */
 
 @ActiveProfiles("test")
@@ -37,8 +42,10 @@ class WorkerSecurityIntegrationTest {
     private static final UUID COMPANY_B = UUID.fromString("40000000-0000-0000-0000-000000000002");
     private static final UUID HR_A = UUID.fromString("31000000-0000-0000-0000-000000000001");
     private static final UUID HR_B = UUID.fromString("41000000-0000-0000-0000-000000000002");
+    private static final UUID VIEWER_A = UUID.fromString("32000000-0000-0000-0000-000000000001");
     private static final String HR_A_EMAIL = "hr.worker.a@example.com";
     private static final String HR_B_EMAIL = "hr.worker.b@example.com";
+    private static final String VIEWER_A_EMAIL = "viewer.worker.a@example.com";
     private static final String PASSWORD = "Test-password-1!";
 
     @LocalServerPort
@@ -70,8 +77,9 @@ class WorkerSecurityIntegrationTest {
         insertCompany(COMPANY_A, "사업장 A");
         insertCompany(COMPANY_B, "사업장 B");
         String passwordHash = passwordEncoder.encode(PASSWORD);
-        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash);
-        insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash);
+        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash, "HR");
+        insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash, "HR");
+        insertUser(VIEWER_A, COMPANY_A, VIEWER_A_EMAIL, passwordHash, "VIEWER");
     }
 
     @BeforeEach
@@ -194,6 +202,104 @@ class WorkerSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(response.body(), "$.code")).isEqualTo("VALIDATION_FAILED");
     }
 
+    @Test
+    void listWorkersReturnsPagedItemsWithinCompany() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        registerWorker(accessToken, "목록테스트1");
+        registerWorker(accessToken, "목록테스트2");
+        registerWorker(accessToken, "목록테스트3");
+
+        HttpResponse<String> firstPage = authorizedGet(
+                "/api/v1/workers?page=0&size=2",
+                accessToken
+        );
+
+        assertThat(firstPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(firstPage.body(), "$.items")).hasSize(2);
+        assertThat(JsonPath.<Number>read(firstPage.body(), "$.page").intValue()).isZero();
+        assertThat(JsonPath.<Number>read(firstPage.body(), "$.size").intValue()).isEqualTo(2);
+        assertThat(JsonPath.<Number>read(firstPage.body(), "$.total_elements").longValue()).isEqualTo(3);
+
+        HttpResponse<String> secondPage = authorizedGet(
+                "/api/v1/workers?page=1&size=2",
+                accessToken
+        );
+
+        assertThat(secondPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(secondPage.body(), "$.items")).hasSize(1);
+    }
+
+    @Test
+    void listWorkersFiltersByStatus() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String activeWorkerId = registerWorker(accessToken, "활성근로자");
+        String onLeaveWorkerId = registerWorker(accessToken, "휴직근로자");
+        patchJson(
+                "/api/v1/workers/" + onLeaveWorkerId,
+                """
+                {"work_status": "ON_LEAVE", "expected_version": 0}
+                """,
+                accessToken
+        );
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/workers?status=ACTIVE",
+                accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.items")).hasSize(1);
+        assertThat(JsonPath.<String>read(response.body(), "$.items[0].worker_id")).isEqualTo(activeWorkerId);
+    }
+
+    @Test
+    void listWorkersDoesNotIncludeOtherCompanyWorkers() throws Exception {
+        String companyAToken = accessToken(login(HR_A_EMAIL));
+        String companyBToken = accessToken(login(HR_B_EMAIL));
+        registerWorker(companyAToken, "A사업장근로자");
+        registerWorker(companyBToken, "B사업장근로자");
+
+        HttpResponse<String> companyAList = authorizedGet("/api/v1/workers", companyAToken);
+
+        assertThat(companyAList.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(companyAList.body(), "$.items")).hasSize(1);
+        assertThat(JsonPath.<String>read(companyAList.body(), "$.items[0].display_name"))
+                .isEqualTo("A사업장근로자");
+    }
+
+    @Test
+    void listWorkersRejectsOutOfRangeSizeWithValidationFailed() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> tooSmall = authorizedGet("/api/v1/workers?size=0", accessToken);
+        HttpResponse<String> tooLarge = authorizedGet("/api/v1/workers?size=200", accessToken);
+
+        assertThat(tooSmall.statusCode()).isEqualTo(400);
+        assertThat(tooLarge.statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void viewerCannotRegisterButCanListAndGet() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "VIEWER조회테스트");
+        String viewerToken = accessToken(login(VIEWER_A_EMAIL));
+
+        HttpResponse<String> registerAttempt = postJson(
+                "/api/v1/workers",
+                """
+                {"display_name": "VIEWER등록시도"}
+                """,
+                viewerToken
+        );
+        HttpResponse<String> listAttempt = authorizedGet("/api/v1/workers", viewerToken);
+        HttpResponse<String> getAttempt = authorizedGet("/api/v1/workers/" + workerId, viewerToken);
+
+        assertThat(registerAttempt.statusCode()).isEqualTo(403);
+        assertThat(JsonPath.<String>read(registerAttempt.body(), "$.code")).isEqualTo("ACCESS_DENIED");
+        assertThat(listAttempt.statusCode()).isEqualTo(200);
+        assertThat(getAttempt.statusCode()).isEqualTo(200);
+    }
+
     private String registerWorker(String accessToken, String displayName) throws Exception {
         String body = """
                 {"display_name": "%s"}
@@ -214,19 +320,20 @@ class WorkerSecurityIntegrationTest {
         );
     }
 
-    private void insertUser(UUID userId, UUID companyId, String email, String passwordHash) {
+    private void insertUser(UUID userId, UUID companyId, String email, String passwordHash, String role) {
         jdbcTemplate.update(
                 """
                 INSERT INTO user_account (
                     user_id, company_id, email, normalized_email, password_hash,
                     role, status, created_at, updated_at, version
-                ) VALUES (?, ?, ?, ?, ?, 'HR', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                ) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
                 """,
                 userId,
                 companyId,
                 email,
                 email,
-                passwordHash
+                passwordHash,
+                role
         );
     }
 

@@ -6,6 +6,7 @@ import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
 import java.time.Clock;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +49,13 @@ public class WorkerService {
     public Worker findDetail(UUID workerId, UUID companyId) {
         return workerRepository.findByWorkerIdAndCompanyId(workerId, companyId)
                 .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public WorkerPageResult findPage(UUID companyId, WorkerSearchQuery query) {
+        List<Worker> items = workerRepository.findPage(companyId, query);
+        long totalElements = workerRepository.countPage(companyId, query);
+        return new WorkerPageResult(items, query.page(), query.size(), totalElements);
     }
 
     @Transactional
