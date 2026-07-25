@@ -92,6 +92,21 @@ Event payload는 `SafeEventPayload.of(allowedFields, values)`를 통과해야 �
 lease는 정상 handler 최대 처리시간보다 길어야 합니다. 값을 줄이기 전에 느린 handler와
 외부 API timeout을 확인합니다.
 
+### lease와 handler timeout 안전 기준
+
+현재 Outbox worker에는 lease heartbeat가 없습니다. 따라서 하나의 handler 처리와
+외부 API 호출은 반드시 lease 만료 전에 끝나야 합니다.
+
+- 외부 API adapter는 연결·응답·전체 호출 timeout을 명시하고, 전체 처리 제한을
+  `OUTBOX_LEASE_DURATION`보다 짧게 둡니다.
+- 한 batch에서 여러 이벤트를 순서대로 처리하므로 staging에서 handler 최대 처리시간을
+  측정한 뒤 `OUTBOX_BATCH_SIZE`와 lease를 함께 조정합니다.
+- 30초를 넘길 수 있는 handler를 추가할 때는 timeout만 늘리지 않습니다. 현재
+  `lease_owner`가 여전히 유효한지 확인하며 lease를 연장하는 heartbeat와, 만료된
+  worker가 완료 상태를 덮어쓰지 못하게 하는 fencing 검증을 먼저 구현합니다.
+- heartbeat 도입 전에는 장시간 AI 추론이나 파일 변환을 Outbox handler 안에서 직접
+  기다리지 않고, 별도의 durable 작업을 생성하는 짧은 command로 연결합니다.
+
 ## 장애 확인
 
 Actuator가 노출되는 내부 운영 환경에서는 다음 Micrometer 지표를 확인합니다.
