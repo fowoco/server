@@ -2,6 +2,7 @@ package com.fowoco.server.worker.application;
 
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
@@ -39,7 +40,7 @@ public class WorkerService {
                 command.stayExpiryDate(),
                 command.contractStartDate(),
                 command.contractEndDate(),
-                clock.instant()
+                DatabaseTimestamp.now(clock)
         );
         workerRepository.insert(worker);
         return worker;
@@ -76,7 +77,7 @@ public class WorkerService {
                 orElseKeep(command.contractStartDate(), existing.contractStartDate()),
                 orElseKeep(command.contractEndDate(), existing.contractEndDate()),
                 existing.createdAt(),
-                clock.instant(),
+                DatabaseTimestamp.nowNotBefore(clock, existing.createdAt()),
                 existing.version()
         );
 
