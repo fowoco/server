@@ -150,13 +150,14 @@ class OutboxIntegrationTest {
                 """
                 UPDATE event_publication
                 SET status = 'RETRY_WAIT',
-                    next_attempt_at = CURRENT_TIMESTAMP,
+                    next_attempt_at = ?,
                     completed_at = NULL,
                     last_error_code = 'DUPLICATE_DELIVERY_SIMULATION',
                     updated_at = CURRENT_TIMESTAMP,
                     version = version + 1
                 WHERE event_id = ?
                 """,
+                clock.instant().minusSeconds(1),
                 event.eventId()
         );
 
@@ -301,11 +302,12 @@ class OutboxIntegrationTest {
         jdbcTemplate.update(
                 """
                 UPDATE event_publication
-                SET next_attempt_at = CURRENT_TIMESTAMP,
+                SET next_attempt_at = ?,
                     updated_at = CURRENT_TIMESTAMP,
                     version = version + 1
                 WHERE event_id = ?
                 """,
+                clock.instant().minusSeconds(1),
                 eventId
         );
     }
