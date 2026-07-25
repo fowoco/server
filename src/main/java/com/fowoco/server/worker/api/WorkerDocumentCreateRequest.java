@@ -16,6 +16,7 @@ import java.time.LocalDate;
 public final class WorkerDocumentCreateRequest {
 
     @Schema(
+            name = "document_type",
             description = "서류 유형",
             allowableValues = {"PASSPORT_COPY", "ARC", "CONTRACT", "PERMIT"},
             requiredMode = Schema.RequiredMode.REQUIRED
@@ -24,6 +25,7 @@ public final class WorkerDocumentCreateRequest {
     private final DocumentType documentType;
 
     @Schema(
+            name = "submission_status",
             description = "제출 상태",
             allowableValues = {"MISSING", "SUBMITTED", "VERIFIED"},
             requiredMode = Schema.RequiredMode.REQUIRED
@@ -31,7 +33,7 @@ public final class WorkerDocumentCreateRequest {
     @NotNull(message = "submission_status를 입력해 주세요.")
     private final SubmissionStatus submissionStatus;
 
-    @Schema(description = "서류 유효기간", example = "2027-03-01", format = "date")
+    @Schema(name = "expiry_date", description = "서류 유효기간", example = "2027-03-01", format = "date")
     private final LocalDate expiryDate;
 
     @Schema(description = "제출처", example = "출입국관리사무소", maxLength = 120)

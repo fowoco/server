@@ -7,6 +7,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Map;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,40 @@ class ServerApplicationTests {
 
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.body()).contains("Swagger UI");
+	}
+
+	@Test
+	void openApiRequestSchemasUseCanonicalSnakeCaseProperties() throws Exception {
+		HttpResponse<String> response = get("/v3/api-docs");
+		Map<String, Object> workerCreateProperties = JsonPath.read(
+				response.body(),
+				"$.components.schemas.WorkerCreateRequest.properties"
+		);
+		Map<String, Object> workerPatchProperties = JsonPath.read(
+				response.body(),
+				"$.components.schemas.WorkerPatchRequest.properties"
+		);
+		Map<String, Object> documentCreateProperties = JsonPath.read(
+				response.body(),
+				"$.components.schemas.WorkerDocumentCreateRequest.properties"
+		);
+		Map<String, Object> documentPatchProperties = JsonPath.read(
+				response.body(),
+				"$.components.schemas.WorkerDocumentPatchRequest.properties"
+		);
+
+		assertThat(workerCreateProperties.keySet())
+				.contains("display_name", "nationality_code", "preferred_language")
+				.noneMatch(property -> property.matches(".*[A-Z].*"));
+		assertThat(workerPatchProperties.keySet())
+				.contains("work_status", "stay_expiry_date", "expected_version")
+				.noneMatch(property -> property.matches(".*[A-Z].*"));
+		assertThat(documentCreateProperties.keySet())
+				.contains("document_type", "submission_status", "expiry_date")
+				.noneMatch(property -> property.matches(".*[A-Z].*"));
+		assertThat(documentPatchProperties.keySet())
+				.contains("document_type", "submission_status", "expected_version")
+				.noneMatch(property -> property.matches(".*[A-Z].*"));
 	}
 
 	@Test
