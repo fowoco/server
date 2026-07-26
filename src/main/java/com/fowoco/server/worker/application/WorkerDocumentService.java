@@ -2,6 +2,7 @@ package com.fowoco.server.worker.application;
 
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.domain.WorkerDocument;
@@ -38,7 +39,7 @@ public class WorkerDocumentService {
                 command.expiryDate(),
                 command.destination(),
                 command.note(),
-                clock.instant()
+                DatabaseTimestamp.now(clock)
         );
         workerDocumentRepository.insert(document);
         return document;
@@ -72,7 +73,7 @@ public class WorkerDocumentService {
                 orElseKeep(command.note(), existing.note()),
                 existing.fileId(),
                 existing.createdAt(),
-                clock.instant(),
+                DatabaseTimestamp.nowNotBefore(clock, existing.createdAt()),
                 existing.version()
         );
 

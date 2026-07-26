@@ -117,6 +117,22 @@ Server는 AI에 보낼 수 있는 필드를 typed DTO로 제한하고 요청 전
 
 상세 계약은 [AI Runtime 계약 문서](ai-runtime-contract.md)를 확인합니다.
 
+## 이벤트 유실 방지와 재처리
+
+Task 생성·취소처럼 후속 처리가 필요한 변경은 업무 데이터와
+`event_publication`을 같은 DB Transaction에 저장합니다. 서버가 중간에
+종료되어도 Outbox worker가 lease 만료 후 다시 처리합니다.
+
+- 일시적 실패는 지수 backoff 후 재시도합니다.
+- `(event_id, handler_name)` 완료 기록으로 같은 결과를 중복 생성하지 않습니다.
+- 재시도 한도를 넘거나 payload가 잘못되면 버리지 않고 `REVIEW_REQUIRED`로 남깁니다.
+- 이벤트 payload에는 기능별 allow-list를 통과한 최소 업무값만 저장합니다.
+- 개인정보·Token·비밀번호·전체 Prompt는 이벤트와 로그에 넣지 않습니다.
+
+handler 추가 방법, 설정값과 장애 확인 절차는
+[Transactional Outbox 운영 가이드](reliability/transactional-outbox.md)를
+확인합니다.
+
 ## PostgreSQL `dev` Profile
 
 ```bash
@@ -159,6 +175,7 @@ PostgreSQL `dev`·`prod`에서는 Demo Seed 대신 배포 Provisioning 단계에
 | --- | --- | --- |
 | Flyway | H2 공통·PostgreSQL 전용 Migration 관리 | `db/migration*` |
 | Workflow Catalog | Knowledge release의 read-only projection 검증 | `workflow/` |
+| Transactional Outbox | 업무 변경과 후속 이벤트를 함께 저장하고 실패 시 복구 | `reliability/` |
 | Security | JWT를 ActorContext와 역할로 변환 | `SecurityConfig` |
 | Swagger | Controller에서 OpenAPI·HTML 생성 | `OpenApiConfig` |
 | 공통 오류 | 실패를 같은 JSON 형태로 반환 | `common/error` |
@@ -205,5 +222,6 @@ Client가 안전한 형식의 `X-Request-Id`를 보내면 Server가 응답과 �
 - [API 문서 사용법](api-documentation.md)
 - [Database 문서 사용법](database-documentation.md)
 - [프로젝트 구조](project-structure.md)
+- [Transactional Outbox 운영 가이드](reliability/transactional-outbox.md)
 - [ADR 목록](adr/README.md)
 - [PostgreSQL RLS 적용 가이드](database/postgresql-rls-rollout.md)

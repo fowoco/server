@@ -37,6 +37,15 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  reliability:
+    outbox:
+      enabled: ${OUTBOX_ENABLED:true}
+      poll-interval: ${OUTBOX_POLL_INTERVAL:1s}
+      batch-size: ${OUTBOX_BATCH_SIZE:20}
+      lease-duration: ${OUTBOX_LEASE_DURATION:30s}
+      max-attempts: ${OUTBOX_MAX_ATTEMPTS:8}
+      initial-backoff: ${OUTBOX_INITIAL_BACKOFF:1s}
+      max-backoff: ${OUTBOX_MAX_BACKOFF:5m}
   workflow:
     catalog:
       location: ${WORKFLOW_CATALOG_LOCATION:classpath:workflow/catalog-projection.local.json}
@@ -136,6 +145,9 @@ spring:
     console:
       enabled: false
 app:
+  reliability:
+    outbox:
+      enabled: false
   auth:
     jwt:
       secret-base64: ${JWT_SECRET_BASE64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}

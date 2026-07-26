@@ -22,6 +22,7 @@ FOWOCO는 단순 번역 서비스가 아닙니다. 해야 할 일을 업무카�
 | 패키지·모듈 경계 | [프로젝트 구조](docs/project-structure.md) | 코드를 어느 패키지에 구현해야 하는지 설명 |
 | 중요한 설계 결정 | [ADR 목록](docs/adr/README.md) | 저장소 경계, API·보안, Task·AiRun, RLS 결정 원본 |
 | Server ↔ AI 계약 | [AI Runtime 계약](docs/ai-runtime-contract.md) | Server가 AI에 보내고 받을 수 있는 값과 검증 기준 |
+| 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
 | 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
 | 전체 설명·운영 가이드 | [Server Wiki](https://github.com/fowoco/server/wiki) | 초보자용 아키텍처·API·배포 설명 |
 
@@ -70,6 +71,7 @@ Provider SDK, Prompt와 모델 라우팅은 Server에 구현하지 않습니다.
 | Task·Workflow | Knowledge projection 조회, 업무카드·체크리스트·상태 전이 |
 | Approval·Audit | 승인·반려·외부 제출·증빙·완료와 감사 이벤트 |
 | AI Integration | Provider-neutral 계약, 개인정보 차단과 응답·version 검증 |
+| Reliability | PostgreSQL Transactional Outbox, lease·재시도·handler별 멱등 처리 |
 | Database | H2 local, PostgreSQL dev·prod, Flyway와 tenant 격리 기반 |
 | Documentation | Swagger/OpenAPI와 Database 문서 자동 배포 |
 

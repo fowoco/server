@@ -131,6 +131,11 @@ PostgreSQL   AI Runtime
 - 번호 예약을 위한 빈 Migration은 만들지 않습니다.
 - JPA `ddl-auto`로 운영 Schema를 자동 변경하지 않습니다.
 
+현재 `V7__create_event_outbox.sql`은 이벤트 발행·lease·재시도와 handler별
+완료 기록을 위한 Outbox Schema입니다. 실제 처리와 복구 규칙은
+[Transactional Outbox 운영 가이드](reliability/transactional-outbox.md)를
+따릅니다.
+
 현재 구조는 [Database 문서](https://fowoco.github.io/server/)에서 확인합니다.
 
 ## 테스트 구조
