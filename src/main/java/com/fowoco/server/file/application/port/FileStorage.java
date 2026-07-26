@@ -1,4 +1,4 @@
-package com.fowoco.server.document.application.port;
+package com.fowoco.server.file.application.port;
 
 import java.io.InputStream;
 

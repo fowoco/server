@@ -1,4 +1,4 @@
-package com.fowoco.server.document.domain;
+package com.fowoco.server.file.domain;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -53,7 +53,6 @@ public final class StoredFile {
 
     /**
      * 파일 업로드 등록. storageKey는 원본 파일명과 무관하게 서버가 생성한 값을 넘겨받는다
-     * (파일명으로 저장 경로를 만들지 않는다는 #13 보안 규칙).
      * scanStatus는 검사 인프라가 없는 지금은 항상 NOT_SCANNED로 고정한다.
      */
     public static StoredFile create(

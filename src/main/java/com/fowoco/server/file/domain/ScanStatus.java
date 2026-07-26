@@ -1,4 +1,4 @@
-package com.fowoco.server.document.domain;
+package com.fowoco.server.file.domain;
 
 /**
  * 악성파일 검사 상태.
