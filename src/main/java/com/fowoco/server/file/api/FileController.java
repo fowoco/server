@@ -46,7 +46,7 @@ public class FileController {
             summary = "파일 업로드",
             description = "분석·증빙·근로자 제출에 사용할 파일을 안전하게 저장하고 fileId를 발급합니다. "
                     + "악성파일 검사 인프라는 아직 없어 scan_status는 항상 NOT_SCANNED로 반환합니다. "
-                    + "허용 크기·형식은 TODO — 확정 기준 없어 상식적인 기본값(20MB, image/jpeg·png·webp, application/pdf) 사용 중."
+                    + "허용 크기·형식은 확정 기준 없어 기본값(20MB, image/jpeg·png·webp, application/pdf) 사용 중."
     )
     @ApiResponses({
             @ApiResponse(
