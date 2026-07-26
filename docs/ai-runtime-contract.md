@@ -3,9 +3,9 @@
 이 문서는 `fowoco/server`가 별도 배포되는 `fowoco/ai` Runtime을 호출할 때 지켜야 하는
 최소 계약과 방어 규칙을 설명합니다.
 
-현재 단계는 **HTTP 연결 전 계약 기반**입니다. 실제 `/internal/v1/analyses` OpenAPI와
-Structured Output JSON Schema의 원본은 `fowoco/ai`가 소유하며, 원본 계약이 release되면
-Server의 `RemoteAiRuntimeClient`와 fixture를 그 version에 맞춰 연결합니다.
+Server에는 `/internal/v1/analyses`를 호출하는 HTTP Adapter까지 구현되어 있습니다.
+다만 실제 OpenAPI와 Structured Output JSON Schema의 원본은 `fowoco/ai`가 소유하므로,
+AI 저장소에서 같은 `contractVersion`을 release하기 전까지 실제 호출은 기본적으로 꺼 둡니다.
 
 ## 초보자용 한 줄 설명
 
@@ -19,7 +19,10 @@ AiRunWorker (#24, 후속)
       2. AiRuntimeClient transport를 정확히 한 번 호출
       3. 응답 ID·version·worker·workflow·slot 재검사
   → FakeAiRuntimeClient (test)
-  → RemoteAiRuntimeClient (#8 후속)
+  → RemoteAiRuntimeClient
+      1. deadline·bulkhead·circuit breaker 적용
+      2. Bearer 인증과 추적 header 전달
+      3. 응답 크기 제한과 strict JSON parsing
       → POST /internal/v1/analyses (fowoco/ai)
 ```
 
@@ -128,16 +131,80 @@ Worker Link token을 추가하지 않습니다.
 
 - `FakeAiRuntimeClient`: `src/test`에만 있으며 응답이나 예외를 순서대로 예약합니다.
 - `ValidatingAiRuntimeClient`: transport 앞뒤에서 같은 방어 검증을 수행합니다.
-- `RemoteAiRuntimeClient`: 아직 없습니다. AI 원본 계약 release 후 추가합니다.
+- `RemoteAiRuntimeClient`: 설정이 켜진 환경에서만 AI Runtime을 HTTP로 한 번 호출합니다.
+- `DisabledAiRuntimeClient`: 기본 구현이며, 실수로 호출하면 `RUNTIME_DISABLED`로 즉시
+  실패합니다. LM Studio나 모델 Provider로 우회하지 않습니다.
 
-실제 HTTP 연결 PR에서는 다음을 추가로 검증합니다.
+WireMock 계약 테스트는 다음 동작을 검증합니다.
 
-1. `Service-Authorization`, `X-Request-Id`, `traceparent` 전달
-2. 알 수 없는 JSON field와 body size 제한
-3. connect/read/overall deadline
-4. circuit breaker와 concurrency bulkhead
-5. HTTP·parsing·contract 오류의 안정적인 분류
-6. contract fixture와 WireMock 통합 테스트
+1. `Authorization: Bearer <service-credential>`, `X-Request-Id`, `traceparent` 전달
+2. 문서와 같은 camelCase 요청 JSON 사용
+3. 알 수 없는 JSON field와 제한보다 큰 응답 거부
+4. connect timeout과 요청·응답 전체 deadline
+5. circuit breaker와 동시 호출 수 bulkhead
+6. HTTP·parsing·contract 오류의 안정적인 `AiRuntimeFailureCode` 분류
+7. 실패 응답에도 HTTP 요청이 한 번만 발생하는지 확인
 
 Remote Client는 자동 HTTP retry를 하지 않습니다. 다시 호출하려면 #24가 먼저 새로운
 AiAttempt를 DB에 기록해야 합니다.
+
+## 실행 설정
+
+평소 local 실행과 아직 AI 계약이 배포되지 않은 환경에서는 아래 기본값을 유지합니다.
+
+```dotenv
+AI_RUNTIME_ENABLED=false
+```
+
+AI Runtime 계약이 배포된 통합 환경에서는 배포 Secret과 함께 설정합니다.
+
+```dotenv
+AI_RUNTIME_ENABLED=true
+AI_RUNTIME_ENDPOINT=https://ai.example.com/internal/v1/analyses
+AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
+```
+
+`AI_RUNTIME_SERVICE_CREDENTIAL`은 Git, 로그, 오류 응답에 남기지 않습니다. Server가 표준
+`Authorization: Bearer ...` 형식으로 조립합니다. `X-Request-Id`는 분석 요청의
+`requestId`와 같고, 상위 요청의 유효한 W3C `traceparent`가 있으면 그대로 전달합니다.
+
+| 설정 | 기본값 | 의미 |
+| --- | --- | --- |
+| `AI_RUNTIME_CONNECT_TIMEOUT` | `2s` | AI 서버에 TCP 연결을 맺을 수 있는 최대 시간 |
+| `AI_RUNTIME_OVERALL_TIMEOUT` | `15s` | 연결·요청·응답 수신 전체의 Server 상한 |
+| `AI_RUNTIME_MAX_RESPONSE_BYTES` | `1048576` | 응답을 메모리에 받기 전 적용하는 최대 크기 |
+| `AI_RUNTIME_MAX_CONCURRENT_CALLS` | `8` | Server 한 인스턴스가 동시에 보내는 최대 호출 수 |
+| `AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | 연속 장애 후 호출을 잠시 막는 기준 |
+| `AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION` | `30s` | 차단 후 시험 호출까지 기다리는 시간 |
+
+요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧은 값을 사용합니다. 따라서
+상위 AiRun이 허용한 시간보다 오래 기다리지 않습니다.
+
+## 장애가 발생하면
+
+| 상황 | 안전한 실패 코드 | 처리 방향 |
+| --- | --- | --- |
+| 기능 비활성화 | `RUNTIME_DISABLED` | 설정과 AI 계약 release 확인 |
+| 동시 호출 한도 초과 | `BULKHEAD_FULL` | #24가 새 AiAttempt로 재시도 여부 결정 |
+| 회로 차단 중 | `CIRCUIT_OPEN` | Runtime 복구 대기 |
+| 전체 제한시간 초과 | `DEADLINE_EXCEEDED` | 자동 재시도하지 않음 |
+| 서비스 인증 실패 | `AUTHENTICATION_FAILED` | 배포 Secret과 audience/scope 확인 |
+| `429` | `RATE_LIMITED` | Runtime 정책 확인 후 명시적 재시도 |
+| `5xx` | `RUNTIME_UNAVAILABLE` | Runtime 상태 확인 |
+| 큰 응답 | `RESPONSE_TOO_LARGE` | 계약과 응답 크기 조사 |
+| 잘못된 JSON | `RESPONSE_PARSING_FAILED` | contract version과 schema 조사 |
+| 네트워크 오류 | `TRANSPORT_FAILURE` | DNS·TLS·네트워크 상태 확인 |
+
+오류 메시지에는 credential, endpoint query, 응답 원문을 넣지 않습니다. #24는 안전한 실패
+코드, `requestId`, version, latency만 AiAttempt 진단값으로 저장합니다.
+
+## AI 저장소와 연결하는 순서
+
+1. `fowoco/ai`가 `/internal/v1/analyses` OpenAPI와 JSON Schema를 versioned release로 냅니다.
+2. Server의 camelCase fixture와 AI 원본 계약이 같은지 consumer contract test로 확인합니다.
+3. staging에 service credential과 endpoint를 Secret으로 주입합니다.
+4. 정상·`401`·`429`·`5xx`·timeout smoke test를 통과시킵니다.
+5. 그 후에만 `AI_RUNTIME_ENABLED=true`를 적용합니다.
+
+계약이 다르면 임시 필드나 호환되지 않는 JSON을 Server에 추가하지 않고, 양쪽 저장소에서
+`contractVersion`을 합의한 다음 fixture를 함께 갱신합니다.
