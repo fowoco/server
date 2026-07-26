@@ -20,6 +20,7 @@ public final class StoredFile {
     private final UUID workerId;
     private final String storageKey;
     private final ScanStatus scanStatus;
+    private final boolean verified;
     private final Instant createdAt;
 
     public StoredFile(
@@ -33,6 +34,7 @@ public final class StoredFile {
             UUID workerId,
             String storageKey,
             ScanStatus scanStatus,
+            boolean verified,
             Instant createdAt
     ) {
         this.storedFileId = Objects.requireNonNull(storedFileId, "storedFileId must not be null");
@@ -48,12 +50,15 @@ public final class StoredFile {
         this.workerId = workerId;
         this.storageKey = Objects.requireNonNull(storageKey, "storageKey must not be null");
         this.scanStatus = Objects.requireNonNull(scanStatus, "scanStatus must not be null");
+        this.verified = verified;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
     }
 
     /**
      * 파일 업로드 등록. storageKey는 원본 파일명과 무관하게 서버가 생성한 값을 넘겨받는다
      * scanStatus는 검사 인프라가 없는 지금은 항상 NOT_SCANNED로 고정한다.
+     * verified는 #7(Worker Link)의 "격리 저장 → 검증 → 검증된 ID만 연결" 흐름을 위한
+     * 필드로, #13(HR 내부 업로드)은 검증 절차가 없어 항상 false로 시작한다.
      */
     public static StoredFile create(
             UUID storedFileId,
@@ -78,6 +83,7 @@ public final class StoredFile {
                 workerId,
                 storageKey,
                 ScanStatus.NOT_SCANNED,
+                false,
                 now
         );
     }
@@ -131,6 +137,10 @@ public final class StoredFile {
 
     public ScanStatus scanStatus() {
         return scanStatus;
+    }
+
+    public boolean verified() {
+        return verified;
     }
 
     public Instant createdAt() {

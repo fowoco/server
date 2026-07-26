@@ -1,5 +1,3 @@
--- purpose: #7(Worker Link)도 FileStorage를 재사용할 예정이라 enum 값이
--- 여러 이슈에 걸쳐 공유됨. 확정 전까지 CHECK 제약 없이 자유 문자열로 둔다.
 CREATE TABLE stored_file (
     stored_file_id UUID NOT NULL,
     company_id UUID NOT NULL,
@@ -11,6 +9,7 @@ CREATE TABLE stored_file (
     worker_id UUID,
     storage_key VARCHAR(255) NOT NULL,
     scan_status VARCHAR(20) NOT NULL,
+    verified BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_stored_file PRIMARY KEY (stored_file_id),
     CONSTRAINT uq_stored_file_storage_key UNIQUE (storage_key),

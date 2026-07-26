@@ -48,6 +48,9 @@ public class StoredFileJpaEntity {
     @Column(name = "scan_status", nullable = false, length = 20)
     private ScanStatus scanStatus;
 
+    @Column(name = "verified", nullable = false)
+    private boolean verified;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -65,6 +68,7 @@ public class StoredFileJpaEntity {
             UUID workerId,
             String storageKey,
             ScanStatus scanStatus,
+            boolean verified,
             Instant createdAt
     ) {
         this.storedFileId = storedFileId;
@@ -77,6 +81,7 @@ public class StoredFileJpaEntity {
         this.workerId = workerId;
         this.storageKey = storageKey;
         this.scanStatus = scanStatus;
+        this.verified = verified;
         this.createdAt = createdAt;
     }
 
@@ -93,6 +98,7 @@ public class StoredFileJpaEntity {
                 storedFile.workerId(),
                 storedFile.storageKey(),
                 storedFile.scanStatus(),
+                storedFile.verified(),
                 storedFile.createdAt()
         );
     }
@@ -109,6 +115,7 @@ public class StoredFileJpaEntity {
                 workerId,
                 storageKey,
                 scanStatus,
+                verified,
                 createdAt
         );
     }
