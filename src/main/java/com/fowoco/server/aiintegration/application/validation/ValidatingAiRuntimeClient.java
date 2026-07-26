@@ -2,6 +2,7 @@ package com.fowoco.server.aiintegration.application.validation;
 
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
+import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import java.util.Objects;
 
@@ -19,9 +20,9 @@ public final class ValidatingAiRuntimeClient implements AiRuntimeClient {
     }
 
     @Override
-    public AiAnalysisResponse analyze(AiAnalysisRequest request) {
+    public AiAnalysisResponse analyze(AiAnalysisRequest request, AiRuntimeCallContext context) {
         validator.validateRequest(request);
-        AiAnalysisResponse response = delegate.analyze(request);
+        AiAnalysisResponse response = delegate.analyze(request, context);
         validator.validateResponse(request, response);
         return response;
     }
