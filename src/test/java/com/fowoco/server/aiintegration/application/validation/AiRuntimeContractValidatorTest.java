@@ -155,6 +155,23 @@ class AiRuntimeContractValidatorTest {
         });
     }
 
+    @Test
+    void rejectsCandidateThatChangesServerOwnedStayExpiryDate() {
+        AiCandidate changedDate = new AiCandidate(
+                "candidate-changed-date",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of("stay_expiry_date", "2099-01-01"),
+                List.of("contract_end_date", "monthly_wage"),
+                BigDecimal.ONE
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(validRequest(), responseWithCandidate(changedDate)),
+                AiRuntimeFailureCode.CORE_VALUE_MISMATCH
+        );
+    }
+
     private AiAnalysisResponse responseWithVersions(AiRuntimeVersions versions) {
         return new AiAnalysisResponse(
                 REQUEST_ID,

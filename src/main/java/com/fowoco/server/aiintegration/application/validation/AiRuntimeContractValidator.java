@@ -72,9 +72,11 @@ public class AiRuntimeContractValidator {
         }
 
         Map<String, Set<String>> allowedSlotsByWorkflow = allowedSlotsByWorkflow(request);
-        Set<UUID> allowedWorkers = request.maskedInput().workers().stream()
-                .map(MaskedWorkerContext::workerRef)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        Map<UUID, MaskedWorkerContext> allowedWorkers = request.maskedInput().workers().stream()
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                        MaskedWorkerContext::workerRef,
+                        worker -> worker
+                ));
         Set<String> candidateRefs = new HashSet<>();
         response.candidates().forEach(candidate ->
                 validateCandidate(candidate, allowedWorkers, allowedSlotsByWorkflow, candidateRefs));
@@ -147,14 +149,15 @@ public class AiRuntimeContractValidator {
 
     private void validateCandidate(
             AiCandidate candidate,
-            Set<UUID> allowedWorkers,
+            Map<UUID, MaskedWorkerContext> allowedWorkers,
             Map<String, Set<String>> allowedSlotsByWorkflow,
             Set<String> candidateRefs
     ) {
         if (!CANDIDATE_REF.matcher(candidate.candidateRef()).matches() || !candidateRefs.add(candidate.candidateRef())) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime candidate reference is invalid.");
         }
-        if (!allowedWorkers.contains(candidate.workerRef())) {
+        MaskedWorkerContext worker = allowedWorkers.get(candidate.workerRef());
+        if (worker == null) {
             reject(AiRuntimeFailureCode.UNEXPECTED_WORKER_REFERENCE, "AI Runtime returned an unknown worker reference.");
         }
         Set<String> allowedSlots = allowedSlotsByWorkflow.get(candidate.workflowId());
@@ -169,6 +172,7 @@ public class AiRuntimeContractValidator {
             validateAllowedSlot(key, allowedSlots);
             privacyPolicy.validateText(value, 4_000, true);
         });
+        validateCoreValues(worker, candidate);
         Set<String> missingSlots = new HashSet<>();
         candidate.missingSlots().forEach(slot -> {
             validateAllowedSlot(slot, allowedSlots);
@@ -176,6 +180,18 @@ public class AiRuntimeContractValidator {
                 reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime missing slot is invalid.");
             }
         });
+    }
+
+    private void validateCoreValues(MaskedWorkerContext worker, AiCandidate candidate) {
+        String returnedStayExpiryDate = candidate.extractedSlots().get("stay_expiry_date");
+        if (returnedStayExpiryDate != null
+                && worker.stayExpiryDate() != null
+                && !worker.stayExpiryDate().toString().equals(returnedStayExpiryDate)) {
+            reject(
+                    AiRuntimeFailureCode.CORE_VALUE_MISMATCH,
+                    "AI Runtime changed a Server-owned core value."
+            );
+        }
     }
 
     private void validateAllowedSlot(String slot, Set<String> allowedSlots) {
