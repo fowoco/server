@@ -15,10 +15,10 @@ FOWOCO는 단순 번역 서비스가 아닙니다. 체류·계약·서류·신�
 | 기술 | Java 17, Spring Boot 4.1.0, Gradle |
 | 구현 API | Health, Auth 5개, Task Workflow 7개, Approval·Audit 8개. 전체 계약은 실행 중인 Swagger에서 확인 |
 | 계획 API | Wiki API 카탈로그와 관련 Issue에서 설계·추적 |
-| 로컬 DB | H2 + Flyway Auth·Company·Worker core·Task core·Approval·Audit schema |
+| 로컬 DB | H2 + Flyway Auth·Company·Worker·Task·Approval·Audit·Outbox schema |
 | 개발·배포 DB | PostgreSQL + Flyway |
 | 보안 | JWT Access Token, `ADMIN`·`HR`·`VIEWER` 역할, `company_id` 기반 ActorContext |
-| 개발 기반 | Swagger UI, 공통 오류, `request_id`, CI 구성 완료 |
+| 개발 기반 | Swagger UI, 공통 오류, `request_id`, CI와 Transactional Outbox 구성 완료 |
 | AI·Workflow | Knowledge Catalog projection, Task·Checklist·승인·감사와 AI Runtime 계약·방어 검증 구현. Remote 연동·AiRun은 후속 Issue |
 
 계획 문서는 현재 동작하는 API가 아닙니다. 구현의 원본은 코드·테스트와 실행 시 생성되는 OpenAPI이고, 장기 아키텍처 결정은 [ADR](docs/adr/README.md), 계획 범위와 예시는 [API 카탈로그](https://github.com/fowoco/server/wiki/09-API-Specification)와 Issue에서 확인합니다.
@@ -142,6 +142,33 @@ POST /api/v1/tasks/{taskId}/approval-requests
 - 상태 변경, 승인 기록, 감사 이벤트는 같은 DB transaction에 기록되므로 중간 하나가 실패하면 함께 되돌아갑니다.
 - `GET /api/v1/tasks/{taskId}/activities`는 화면용 안전 타임라인이고, `GET /api/v1/audit-events`는 ADMIN용 필터·cursor 조회입니다. 내부 snapshot 원문은 두 API에 노출하지 않습니다.
 
+### 이벤트 유실 방지와 재처리
+
+Task 생성·취소처럼 후속 처리가 필요한 변경은 업무 데이터와 `event_publication`을
+하나의 DB transaction에 저장합니다. 따라서 서버가 commit 직후 종료되어도
+이벤트가 사라지지 않습니다.
+
+```text
+업무 transaction
+→ 업무 데이터 + event_publication 함께 commit
+→ Outbox worker가 lease 획득
+→ handler 실행 + event_consumption 기록
+→ COMPLETED
+```
+
+- 일시적 실패는 지수 backoff 후 `RETRY_WAIT`에서 다시 처리합니다.
+- 처리 중 서버가 종료되면 lease 만료 후 다른 서버가 이어받습니다.
+- `(event_id, handler_name)` 완료 기록으로 이미 성공한 handler를 다시 실행하지 않습니다.
+- 재시도 한도 초과, 잘못된 payload 같은 영구 실패는 버리지 않고
+  `REVIEW_REQUIRED`로 남깁니다.
+- Event payload는 기능별 allow-list를 통과한 작은 업무값만 허용합니다. 이름·이메일,
+  전화번호, 여권번호, 토큰, 비밀번호, 전체 Prompt는 저장할 수 없습니다.
+
+현재 Task 모듈은 `TaskCreated`, `TaskCancelled`를 발행합니다. 새 handler를 추가하는
+방법, 장애 확인 SQL과 설정값은
+[Transactional Outbox 운영 가이드](docs/reliability/transactional-outbox.md)를
+확인합니다.
+
 ### AI Runtime 계약 기반
 
 Server는 AI Runtime에 보낼 수 있는 field를 typed DTO로 제한하고, 전송 전과 응답 후에
@@ -206,6 +233,7 @@ export DEMO_SEED_ADMIN_PASSWORD='로컬 또는 배포 Secret의 12자 이상 값
 | Flyway | H2는 공통 migration만, PostgreSQL은 공통 및 PostgreSQL 전용 migration을 순서대로 실행합니다. | `db/migration`, `db/migration-postgresql` |
 | Workflow Catalog | Knowledge release의 Server용 read-only projection을 시작 시 검증합니다. | `workflow/` |
 | AI Runtime 계약 | 외부 AI 요청·응답을 allow-list와 version으로 다시 검증합니다. | `aiintegration/` |
+| Transactional Outbox | 업무 변경과 후속 이벤트를 함께 저장하고 lease·재시도·멱등 기록으로 복구합니다. | `reliability/` |
 | Security | JWT에서 ActorContext와 역할을 만들고 VIEWER의 쓰기 요청을 기본 차단합니다. | `SecurityConfig` |
 | Swagger | Controller의 API 설명을 브라우저 문서로 보여줍니다. | `OpenApiConfig` |
 | 공통 오류 | 모든 실패를 같은 JSON 구조로 반환합니다. | `common/error` |
@@ -333,7 +361,8 @@ server/
     │           │   ├── V3__create_worker_document.sql    # Worker·Document metadata
     │           │   ├── V4__create_task_workflow_core.sql # Task·Checklist·전이 이력
     │           │   ├── V5__create_approval_audit.sql     # 승인·제출·증빙·감사
-    │           │   └── V6__add_user_display_name.sql     # 회원가입 담당자 표시 이름
+    │           │   ├── V6__add_user_display_name.sql     # 회원가입 담당자 표시 이름
+    │           │   └── V7__create_event_outbox.sql       # 내구성 이벤트·handler 완료 기록
     │           └── migration-postgresql/                 # RLS 등 PostgreSQL 전용 migration
     └── test/
         └── java/com/fowoco/server/
@@ -342,7 +371,8 @@ server/
             ├── worker/
             ├── task/
             ├── aiintegration/
-            └── airun/
+            ├── airun/
+            └── reliability/
 ```
 
 기능 코드가 생기면 해당 기능 안에서 다음 방향으로 확장합니다.
