@@ -5,11 +5,11 @@ import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.reliability.application.port.DomainEventHandler;
 import com.fowoco.server.reliability.application.port.EventConsumptionRepository;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
+import com.fowoco.server.reliability.application.port.OutboxTimeSource;
 import com.fowoco.server.reliability.domain.DomainEventEnvelope;
 import com.fowoco.server.reliability.domain.EventConsumption;
 import com.fowoco.server.reliability.domain.EventPublication;
 import com.fowoco.server.reliability.infrastructure.serialization.EventPayloadCodec;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -24,7 +24,7 @@ public class OutboxHandlerTransaction {
     private final TenantDatabaseContext tenantDatabaseContext;
     private final EventPayloadCodec payloadCodec;
     private final UuidGenerator uuidGenerator;
-    private final Clock clock;
+    private final OutboxTimeSource timeSource;
 
     public OutboxHandlerTransaction(
             EventPublicationRepository publicationRepository,
@@ -32,14 +32,14 @@ public class OutboxHandlerTransaction {
             TenantDatabaseContext tenantDatabaseContext,
             EventPayloadCodec payloadCodec,
             UuidGenerator uuidGenerator,
-            Clock clock
+            OutboxTimeSource timeSource
     ) {
         this.publicationRepository = publicationRepository;
         this.consumptionRepository = consumptionRepository;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.payloadCodec = payloadCodec;
         this.uuidGenerator = uuidGenerator;
-        this.clock = clock;
+        this.timeSource = timeSource;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -50,10 +50,10 @@ public class OutboxHandlerTransaction {
             DomainEventHandler handler
     ) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
-        Instant now = clock.instant();
         EventPublication publication = publicationRepository
                 .findByIdAndCompanyIdForUpdate(eventId, companyId)
                 .orElseThrow(() -> new IllegalStateException("Event publication not found."));
+        Instant now = timeSource.now();
         publication.requireActiveLease(owner, now);
         String handlerName = handler.handlerName();
         if (consumptionRepository.existsByEventIdAndHandlerName(eventId, handlerName)) {

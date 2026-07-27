@@ -1,12 +1,19 @@
 package com.fowoco.server.common.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fowoco.server.ServerApplication;
 import com.fowoco.server.reliability.application.OutboxClaimService;
+import com.fowoco.server.reliability.application.OutboxCompletionTransaction;
+import com.fowoco.server.reliability.application.OutboxFailureTransaction;
+import com.fowoco.server.reliability.application.OutboxHandlerTransaction;
 import com.fowoco.server.reliability.application.OutboxReadService;
+import com.fowoco.server.reliability.application.RetryableEventHandlingException;
+import com.fowoco.server.reliability.application.port.DomainEventHandler;
 import com.fowoco.server.reliability.application.port.OutboxBacklogReader;
+import com.fowoco.server.reliability.domain.DomainEventEnvelope;
 import com.fowoco.server.reliability.domain.EventPublication;
 import jakarta.persistence.EntityManager;
 import java.sql.Connection;
@@ -14,7 +21,10 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -28,6 +38,9 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.dao.DataAccessException;
@@ -351,7 +364,7 @@ class PostgreSqlTenantDatabaseContextTest {
     }
 
     @Test
-    void outboxClaimReturnsOnlyTenantCoordinatesAndScopedReadsRejectMismatches() {
+    void outboxLifecycleUsesDatabaseClockAndScopedReadsRejectMismatches() {
         String function = "public.bootstrap_claim_event_publications("
                 + "text,bigint,integer,integer"
                 + ")";
@@ -368,8 +381,8 @@ class PostgreSqlTenantDatabaseContextTest {
                 "GRANT EXECUTE ON FUNCTION " + oldestFunction + " TO " + quotedRole
         );
         try {
-            insertOutboxProbe(COMPANY_A, OUTBOX_EVENT_A, "tenant-a-payload");
-            insertOutboxProbe(COMPANY_B, OUTBOX_EVENT_B, "tenant-b-payload");
+            insertOutboxProbe(COMPANY_A, OUTBOX_EVENT_A, "{}");
+            insertOutboxProbe(COMPANY_B, OUTBOX_EVENT_B, "{}");
             assertInvalidOutboxClaimInputsDoNotModifyPublications();
 
             OutboxClaimService claimService =
@@ -409,11 +422,13 @@ class PostgreSqlTenantDatabaseContextTest {
 
             EventPublication publication =
                     readService.requirePublication(OUTBOX_EVENT_A, COMPANY_A);
-            assertThat(publication.payloadJson()).isEqualTo("tenant-a-payload");
+            assertThat(publication.payloadJson()).isEqualTo("{}");
+
+            assertOutboxLifecycleIgnoresSkewedApplicationClock();
 
             OutboxBacklogReader backlogReader =
                     applicationContext.getBean(OutboxBacklogReader.class);
-            assertThat(backlogReader.countOutstanding()).isEqualTo(2);
+            assertThat(backlogReader.countOutstanding()).isEqualTo(1);
             assertThat(backlogReader.findOldestOutstandingOccurredAt()).isPresent();
         } finally {
             migrationJdbc.execute("DELETE FROM event_consumption WHERE event_id IN ('"
@@ -438,15 +453,20 @@ class PostgreSqlTenantDatabaseContextTest {
         Object[][] invalidArguments = {
                 {null, 30_000L, 20, 8},
                 {" ", 30_000L, 20, 8},
+                {"\t\r\n", 30_000L, 20, 8},
+                {"a".repeat(129), 30_000L, 20, 8},
+                {"rls-outbox-test", null, 20, 8},
                 {"rls-outbox-test", 0L, 20, 8},
                 {"rls-outbox-test", 86_400_001L, 20, 8},
+                {"rls-outbox-test", 30_000L, null, 8},
                 {"rls-outbox-test", 30_000L, 501, 8},
+                {"rls-outbox-test", 30_000L, 20, null},
                 {"rls-outbox-test", 30_000L, 20, 0},
                 {"rls-outbox-test", 30_000L, 20, 101}
         };
 
         for (Object[] arguments : invalidArguments) {
-            assertThatThrownBy(() -> runtimeJdbc.queryForList(
+            Throwable thrown = catchThrowable(() -> runtimeJdbc.queryForList(
                     """
                     SELECT *
                     FROM public.bootstrap_claim_event_publications(
@@ -457,10 +477,114 @@ class PostgreSqlTenantDatabaseContextTest {
                     )
                     """,
                     arguments
-            )).isInstanceOf(DataAccessException.class);
+            ));
+            assertThat(thrown).isInstanceOf(DataAccessException.class);
+            Throwable rootCause =
+                    ((DataAccessException) thrown).getMostSpecificCause();
+            assertThat(rootCause).isInstanceOf(SQLException.class);
+            assertThat(((SQLException) rootCause).getSQLState()).isEqualTo("22023");
             assertOutboxProbeRemainsUnclaimed(OUTBOX_EVENT_A);
             assertOutboxProbeRemainsUnclaimed(OUTBOX_EVENT_B);
         }
+    }
+
+    private void assertOutboxLifecycleIgnoresSkewedApplicationClock() {
+        String owner = "rls-outbox-test";
+        OffsetDateTime beforeLifecycle = runtimeJdbc.queryForObject(
+                "SELECT pg_catalog.statement_timestamp()",
+                OffsetDateTime.class
+        );
+
+        OutboxHandlerTransaction handlerTransaction =
+                applicationContext.getBean(OutboxHandlerTransaction.class);
+        assertThat(handlerTransaction.deliver(
+                OUTBOX_EVENT_A,
+                COMPANY_A,
+                owner,
+                new NoOpProbeHandler()
+        )).isTrue();
+        applicationContext.getBean(OutboxCompletionTransaction.class)
+                .complete(OUTBOX_EVENT_A, COMPANY_A, owner);
+
+        OutboxFailureTransaction.FailureOutcome failureOutcome =
+                applicationContext.getBean(OutboxFailureTransaction.class)
+                        .recordFailure(
+                                OUTBOX_EVENT_B,
+                                COMPANY_B,
+                                owner,
+                                new RetryableEventHandlingException(
+                                        "RLS_OUTBOX_PROBE_RETRY"
+                                )
+                        );
+        assertThat(failureOutcome.retryScheduled()).isTrue();
+
+        OffsetDateTime afterLifecycle = runtimeJdbc.queryForObject(
+                "SELECT pg_catalog.statement_timestamp()",
+                OffsetDateTime.class
+        );
+        String completedStatus = migrationJdbc.queryForObject(
+                """
+                SELECT status
+                FROM event_publication
+                WHERE event_id = ?
+                """,
+                String.class,
+                OUTBOX_EVENT_A
+        );
+        OffsetDateTime completedAt = migrationJdbc.queryForObject(
+                """
+                SELECT completed_at
+                FROM event_publication
+                WHERE event_id = ?
+                """,
+                OffsetDateTime.class,
+                OUTBOX_EVENT_A
+        );
+        assertThat(completedStatus).isEqualTo("COMPLETED");
+        assertThat(completedAt.toInstant())
+                .isBetween(
+                        beforeLifecycle.toInstant(),
+                        afterLifecycle.toInstant()
+                );
+
+        String retryStatus = migrationJdbc.queryForObject(
+                """
+                SELECT status
+                FROM event_publication
+                WHERE event_id = ?
+                """,
+                String.class,
+                OUTBOX_EVENT_B
+        );
+        OffsetDateTime retryUpdatedAt = migrationJdbc.queryForObject(
+                """
+                SELECT updated_at
+                FROM event_publication
+                WHERE event_id = ?
+                """,
+                OffsetDateTime.class,
+                OUTBOX_EVENT_B
+        );
+        OffsetDateTime nextAttemptAt = migrationJdbc.queryForObject(
+                """
+                SELECT next_attempt_at
+                FROM event_publication
+                WHERE event_id = ?
+                """,
+                OffsetDateTime.class,
+                OUTBOX_EVENT_B
+        );
+        assertThat(retryStatus).isEqualTo("RETRY_WAIT");
+        assertThat(retryUpdatedAt.toInstant())
+                .isBetween(
+                        beforeLifecycle.toInstant(),
+                        afterLifecycle.toInstant()
+                );
+        assertThat(nextAttemptAt.toInstant())
+                .isBetween(
+                        beforeLifecycle.toInstant().plusSeconds(1),
+                        afterLifecycle.toInstant().plusSeconds(1)
+                );
     }
 
     private void assertOutboxProbeRemainsUnclaimed(UUID eventId) {
@@ -525,7 +649,10 @@ class PostgreSqlTenantDatabaseContextTest {
                 new MapPropertySource("postgresql-runtime-role-test", properties)
         );
 
-        SpringApplication application = new SpringApplication(ServerApplication.class);
+        SpringApplication application = new SpringApplication(
+                ServerApplication.class,
+                SkewedClockConfiguration.class
+        );
         application.setEnvironment(environment);
         application.setWebApplicationType(WebApplicationType.SERVLET);
         return application.run();
@@ -672,6 +799,37 @@ class PostgreSqlTenantDatabaseContextTest {
     }
 
     private record ContextProbe(Integer backendPid, String companyId) {
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class SkewedClockConfiguration {
+
+        @Bean
+        @Primary
+        Clock skewedApplicationClock() {
+            return Clock.fixed(
+                    Instant.parse("2099-01-01T00:00:00Z"),
+                    ZoneOffset.UTC
+            );
+        }
+    }
+
+    private static final class NoOpProbeHandler implements DomainEventHandler {
+
+        @Override
+        public String handlerName() {
+            return "rls-outbox-probe-handler";
+        }
+
+        @Override
+        public boolean supports(String eventType) {
+            return "RlsOutboxProbe".equals(eventType);
+        }
+
+        @Override
+        public void handle(DomainEventEnvelope event) {
+            // No-op: successful delivery is enough to verify lease validation.
+        }
     }
 
     private static final class ExpectedTransactionFailure extends RuntimeException {

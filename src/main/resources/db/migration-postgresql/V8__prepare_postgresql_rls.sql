@@ -49,7 +49,12 @@ DECLARE
     v_now TIMESTAMPTZ;
     v_lease_expires_at TIMESTAMPTZ;
 BEGIN
-    v_owner := BTRIM(p_owner);
+    v_owner := REGEXP_REPLACE(
+        p_owner,
+        '^[[:space:]]+|[[:space:]]+$',
+        '',
+        'g'
+    );
     IF v_owner IS NULL OR CHAR_LENGTH(v_owner) NOT BETWEEN 1 AND 128 THEN
         RAISE EXCEPTION 'Outbox claim owner must be 1 to 128 characters.'
             USING ERRCODE = '22023';

@@ -3,9 +3,9 @@ package com.fowoco.server.reliability.application;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.reliability.application.OutboxFailureClassifier.FailureClassification;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
+import com.fowoco.server.reliability.application.port.OutboxTimeSource;
 import com.fowoco.server.reliability.config.OutboxProperties;
 import com.fowoco.server.reliability.domain.EventPublication;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,7 @@ public class OutboxFailureTransaction {
     private final OutboxBackoffPolicy backoffPolicy;
     private final OutboxProperties properties;
     private final OutboxMetrics metrics;
-    private final Clock clock;
+    private final OutboxTimeSource timeSource;
 
     public OutboxFailureTransaction(
             EventPublicationRepository repository,
@@ -30,7 +30,7 @@ public class OutboxFailureTransaction {
             OutboxBackoffPolicy backoffPolicy,
             OutboxProperties properties,
             OutboxMetrics metrics,
-            Clock clock
+            OutboxTimeSource timeSource
     ) {
         this.repository = repository;
         this.tenantDatabaseContext = tenantDatabaseContext;
@@ -38,7 +38,7 @@ public class OutboxFailureTransaction {
         this.backoffPolicy = backoffPolicy;
         this.properties = properties;
         this.metrics = metrics;
-        this.clock = clock;
+        this.timeSource = timeSource;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -49,10 +49,10 @@ public class OutboxFailureTransaction {
             Throwable failure
     ) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
-        Instant now = clock.instant();
         EventPublication publication = repository
                 .findByIdAndCompanyIdForUpdate(eventId, companyId)
                 .orElseThrow(() -> new IllegalStateException("Event publication not found."));
+        Instant now = timeSource.now();
         FailureClassification classification = classifier.classify(failure);
         boolean exhausted = publication.attemptCount() >= properties.getMaxAttempts();
         if (!classification.retryable() || exhausted) {
