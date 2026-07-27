@@ -6,7 +6,7 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
-import com.fowoco.server.aiintegration.application.model.MaskedWorkerContext;
+import com.fowoco.server.aiintegration.application.model.WorkerContext;
 import com.fowoco.server.aiintegration.application.model.WorkflowConstraint;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -32,10 +32,10 @@ public class AiRuntimeContractValidator {
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final Pattern CANDIDATE_REF = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_-]{0,63}");
 
-    private final AiRuntimePrivacyPolicy privacyPolicy;
+    private final AiRuntimeBoundaryPolicy boundaryPolicy;
 
-    public AiRuntimeContractValidator(AiRuntimePrivacyPolicy privacyPolicy) {
-        this.privacyPolicy = privacyPolicy;
+    public AiRuntimeContractValidator(AiRuntimeBoundaryPolicy boundaryPolicy) {
+        this.boundaryPolicy = boundaryPolicy;
     }
 
     public void validateRequest(AiAnalysisRequest request) {
@@ -47,7 +47,7 @@ public class AiRuntimeContractValidator {
         if (request.deadlineMs() < MIN_DEADLINE_MS || request.deadlineMs() > MAX_DEADLINE_MS) {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime deadline is outside the allowed range.");
         }
-        privacyPolicy.validateText(request.maskedInput().maskedInstruction(), 10_000, true);
+        boundaryPolicy.validateText(request.analysisInput().instruction(), 10_000, true);
         validateWorkers(request);
         validateWorkflowConstraints(request);
     }
@@ -72,15 +72,15 @@ public class AiRuntimeContractValidator {
         }
 
         Map<String, Set<String>> allowedSlotsByWorkflow = allowedSlotsByWorkflow(request);
-        Set<UUID> allowedWorkers = request.maskedInput().workers().stream()
-                .map(MaskedWorkerContext::workerRef)
+        Set<UUID> allowedWorkers = request.analysisInput().workers().stream()
+                .map(WorkerContext::workerRef)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         Set<String> candidateRefs = new HashSet<>();
         response.candidates().forEach(candidate ->
                 validateCandidate(candidate, allowedWorkers, allowedSlotsByWorkflow, candidateRefs));
         response.validationErrors().forEach(error -> {
             validateIdentifier(error.code(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
-            privacyPolicy.validateKey(error.field());
+            boundaryPolicy.validateKey(error.field());
             validateIdentifier(error.field(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         });
         if (response.outcome() == com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome.REVIEW_REQUIRED
@@ -93,24 +93,39 @@ public class AiRuntimeContractValidator {
     }
 
     private void validateWorkers(AiAnalysisRequest request) {
-        var workers = request.maskedInput().workers();
+        var workers = request.analysisInput().workers();
         if (workers.isEmpty() || workers.size() > MAX_WORKERS) {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime worker context count is invalid.");
         }
         Set<UUID> workerRefs = new HashSet<>();
-        for (MaskedWorkerContext worker : workers) {
+        for (WorkerContext worker : workers) {
             if (!workerRefs.add(worker.workerRef())) {
                 reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime worker reference is duplicated.");
             }
-            privacyPolicy.validateText(worker.preferredLanguage(), 32, true);
-            privacyPolicy.validateText(worker.workStatus(), 32, true);
-            validateIdentifier(worker.preferredLanguage(), AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+            boundaryPolicy.validateText(worker.displayName(), 120, true);
+            boundaryPolicy.validateText(worker.nationalityCode(), 10, false);
+            boundaryPolicy.validateText(worker.preferredLanguage(), 32, false);
+            boundaryPolicy.validateText(worker.workStatus(), 32, true);
+            if (worker.preferredLanguage() != null) {
+                validateIdentifier(worker.preferredLanguage(), AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+            }
             validateIdentifier(worker.workStatus(), AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+            if (worker.requestedFields().size() > 100) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                        "AI Runtime requested field count is invalid."
+                );
+            }
+            worker.requestedFields().forEach((key, value) -> {
+                boundaryPolicy.validateKey(key);
+                validateIdentifier(key, AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+                boundaryPolicy.validateText(value, 4_000, true);
+            });
         }
     }
 
     private void validateWorkflowConstraints(AiAnalysisRequest request) {
-        var workflows = request.maskedInput().workflowConstraints();
+        var workflows = request.analysisInput().workflowConstraints();
         if (workflows.isEmpty() || workflows.size() > MAX_WORKFLOWS) {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime Workflow constraint count is invalid.");
         }
@@ -121,7 +136,7 @@ public class AiRuntimeContractValidator {
                 reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime Workflow constraint is invalid.");
             }
             workflow.allowedSlotKeys().forEach(slot -> {
-                privacyPolicy.validateKey(slot);
+                boundaryPolicy.validateKey(slot);
                 validateIdentifier(slot, AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
             });
         }
@@ -130,7 +145,7 @@ public class AiRuntimeContractValidator {
     private void validateResponseVersions(AiAnalysisRequest request, AiRuntimeVersions versions) {
         validateVersion(versions.agentVersion(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         validateIdentifier(versions.modelProvider(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
-        privacyPolicy.validateText(versions.modelName(), 128, true);
+        boundaryPolicy.validateText(versions.modelName(), 128, true);
         validateVersion(versions.modelVersion(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         validateVersion(versions.promptVersion(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         validateVersion(versions.contextPackVersion(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
@@ -167,7 +182,7 @@ public class AiRuntimeContractValidator {
         }
         candidate.extractedSlots().forEach((key, value) -> {
             validateAllowedSlot(key, allowedSlots);
-            privacyPolicy.validateText(value, 4_000, true);
+            boundaryPolicy.validateText(value, 4_000, true);
         });
         Set<String> missingSlots = new HashSet<>();
         candidate.missingSlots().forEach(slot -> {
@@ -179,7 +194,7 @@ public class AiRuntimeContractValidator {
     }
 
     private void validateAllowedSlot(String slot, Set<String> allowedSlots) {
-        privacyPolicy.validateKey(slot);
+        boundaryPolicy.validateKey(slot);
         validateIdentifier(slot, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         if (!allowedSlots.contains(slot)) {
             reject(AiRuntimeFailureCode.UNEXPECTED_SLOT, "AI Runtime returned an unexpected slot.");
@@ -188,7 +203,7 @@ public class AiRuntimeContractValidator {
 
     private Map<String, Set<String>> allowedSlotsByWorkflow(AiAnalysisRequest request) {
         Map<String, Set<String>> allowed = new HashMap<>();
-        request.maskedInput().workflowConstraints()
+        request.analysisInput().workflowConstraints()
                 .forEach(workflow -> allowed.put(workflow.workflowId(), workflow.allowedSlotKeys()));
         return Map.copyOf(allowed);
     }

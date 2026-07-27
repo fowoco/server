@@ -15,7 +15,7 @@ AI 서버에 무엇을 보낼 수 있는지 먼저 좁혀 놓고, AI가 돌려�
 ```text
 AiRunWorker (#24, 후속)
   → ValidatingAiRuntimeClient
-      1. 요청 개인정보·허용 범위 검사
+      1. 요청 크기·Service credential 검사
       2. AiRuntimeClient transport를 정확히 한 번 호출
       3. 응답 ID·version·worker·workflow·slot 재검사
   → FakeAiRuntimeClient (test)
@@ -35,14 +35,24 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
   "contractVersion": "1.0.0",
   "requiredKnowledgeVersion": "0.2.0",
   "deadlineMs": 10000,
-  "maskedInput": {
-    "maskedInstruction": "workerRef 30000000-0000-0000-0000-000000000001의 체류연장 준비",
+  "analysisInput": {
+    "instruction": "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비",
     "workers": [
       {
         "workerRef": "30000000-0000-0000-0000-000000000001",
+        "displayName": "응웬반안",
+        "nationalityCode": "VN",
         "preferredLanguage": "vi",
         "workStatus": "ACTIVE",
-        "stayExpiryDate": "2026-12-31"
+        "stayExpiryDate": "2026-12-31",
+        "contractStartDate": "2026-01-01",
+        "contractEndDate": "2026-12-31",
+        "requestedFields": {
+          "legal_name": "NGUYEN VAN AN",
+          "passport_number": "M12345678",
+          "phone": "010-1234-5678",
+          "email": "worker@example.com"
+        }
       }
     ],
     "workflowConstraints": [
@@ -64,17 +74,17 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
 - `contractVersion`: 양쪽이 같은 JSON 계약을 사용하는지 확인합니다.
 - `requiredKnowledgeVersion`: Server와 Runtime이 같은 Workflow release를 사용하게 합니다.
 - `deadlineMs`: 이번 시도 전체에서 남은 실행 시간입니다.
-- `maskedInstruction`: 이름과 식별번호를 `workerRef`로 바꾼 자연어입니다.
+- `instruction`: HR이 입력한 원문입니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
+- `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
 - `workflowConstraints`: Knowledge projection에서 가져온 Workflow와 slot allow-list입니다.
 
-근로자 Context에는 여권번호, 외국인등록번호, 전화번호, 계좌번호, 법적 실명, 원본 문서와
-Worker Link token을 추가하지 않습니다.
+현재 데모에서는 PII 마스킹과 차단을 적용하지 않습니다. 실명·여권번호·전화번호 등
+Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원본으로 전달합니다.
 
-`***`, `OOO` 같은 마스킹 문자열도 보내지 않습니다. 실제 값을 복원할 방법이 없고
-문서 결과에 그대로 들어갈 수 있기 때문입니다. Agent는 누락된 정보가 있으면
-`missingSlots`로 **field key만** 요청합니다. Server는 현재 계약에 이미 포함된 비식별
-업무정보만 사용하고, 실명·생년월일·이메일·주소·서명 같은 PII key는 요청과 응답 모두에서
-거부합니다. 실제 PII를 최종 HWPX에 넣는 Late Binding은 MVP 범위 밖입니다.
+단, API Key·JWT·Bearer Token·비밀번호·Worker Link token 같은 **서비스 인증정보는
+업무 데이터가 아니므로 계속 차단**합니다. 이 계약으로 실제 근로자 데이터를 외부 LLM에
+전송해서는 안 되며, 데모가 아닌 실제 개인정보를 사용하기 전에는 개인정보 처리 기준을
+다시 확정해야 합니다.
 
 ## 응답 계약
 
@@ -125,8 +135,7 @@ Worker Link token을 추가하지 않습니다.
 - Workflow가 허용하지 않은 slot
 - 0 미만 또는 1 초과 confidence
 - 중복 candidate reference와 잘못된 outcome 구조
-- 실명·생년월일·이메일·주소·서명·사진·여권번호·외국인등록번호·전화번호·계좌번호
-  또는 Bearer Token·Secret이 섞인 key와 값
+- API Key·JWT·Bearer Token·비밀번호·Worker Link token 같은 서비스 인증정보
 
 거부 예외에는 발견한 원문을 넣지 않습니다. 앞으로 #24 AiAttempt에는
 `AiRuntimeFailureCode`와 `requestId` 같은 안전한 진단값만 저장합니다.
