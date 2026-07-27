@@ -15,6 +15,7 @@ public final class WorkerDocumentPatchCommand {
     private final LocalDate expiryDate;
     private final String destination;
     private final String note;
+    private final UUID fileId;
     private final long expectedVersion;
 
     public WorkerDocumentPatchCommand(
@@ -26,6 +27,7 @@ public final class WorkerDocumentPatchCommand {
             LocalDate expiryDate,
             String destination,
             String note,
+            UUID fileId,
             long expectedVersion
     ) {
         this.workerDocumentId = workerDocumentId;
@@ -36,6 +38,7 @@ public final class WorkerDocumentPatchCommand {
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
+        this.fileId = fileId;
         this.expectedVersion = expectedVersion;
     }
 
@@ -69,6 +72,10 @@ public final class WorkerDocumentPatchCommand {
 
     public String note() {
         return note;
+    }
+
+    public UUID fileId() {
+        return fileId;
     }
 
     public long expectedVersion() {

@@ -85,8 +85,8 @@ public class WorkerDocumentController {
     @Operation(
             operationId = "patchWorkerDocument",
             summary = "서류 상태 수정",
-            description = "서류 제출·검증·만료 상태와 유효기간을 수정합니다. "
-                    + "expected_version이 현재 값과 다르면 409로 응답합니다."
+            description = "서류 제출·검증·만료 상태와 유효기간을 수정하고, 업로드된 파일을 연결합니다. "
+                    + "expected_version이 현재 값과 다르면 409, file_id가 존재하지 않으면 404로 응답합니다."
     )
     @ApiResponses({
             @ApiResponse(
@@ -132,6 +132,7 @@ public class WorkerDocumentController {
                 request.getExpiryDate(),
                 request.getDestination(),
                 request.getNote(),
+                request.getFileId(),
                 request.getExpectedVersion()
         );
         WorkerDocument document = workerDocumentService.patch(command);
