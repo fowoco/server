@@ -20,7 +20,7 @@ transaction-local tenant context와 connection pool 비누수 테스트를 준�
 JWT로 인증된 Worker·Task·Approval·Audit 업무 transaction은 요청 값이 아니라
 `ActorContext.companyId`를 transaction-local context의 신뢰 원본으로 사용합니다.
 H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 검증합니다.
-아직 bootstrap 함수나 policy를 만들거나 RLS를 활성화하지 않습니다.
+`V8`에서 bootstrap 함수와 tenant 테이블 RLS policy를 생성했으며, RLS는 아직 활성화하지 않았습니다.
 
 로그인·Refresh Token·Logout은 tenant context가 생기기 전 최소 bootstrap 조회가
 필요합니다. Issue #34 작성 뒤 추가된 사업장 회원가입도 새 tenant 행을 처음 만드는
@@ -70,8 +70,8 @@ DDL, `TRUNCATE`, `REFERENCES` 권한을 갖지 않습니다. 실제 값은 배�
 1. 대상 table과 tenant-aware FK·UNIQUE 제약이 `main`에 병합됐는지 확인합니다.
 2. 인증된 업무 transaction이 `ActorContext.companyId`를 context로 설정하는지
    검증합니다.
-3. 준비 migration에서 Login·Refresh·Signup bootstrap 함수와 policy를 만들되
-   RLS는 켜지 않습니다.
+3. 준비 migration에서 Login·Refresh·Outbox bootstrap 함수와 tenant 테이블 policy를 생성하되,
+   RLS는 활성화하지 않습니다.
 4. bootstrap 호환 코드를 배포합니다.
 5. #9에서 분리된 runtime role, 최소 GRANT와 Secret을 적용합니다.
 6. RLS 비활성 상태에서 Signup·Login·Refresh·tenant A/B·connection pool 회귀 테스트를
