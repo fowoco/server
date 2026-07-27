@@ -39,10 +39,7 @@ public class JpaEventPublicationRepository implements EventPublicationRepository
 
     @Override
     public EventPublication save(EventPublication publication) {
-        EventPublicationJpaEntity entity = repository.findByEventIdAndCompanyId(
-                        publication.eventId(),
-                        publication.companyId()
-                )
+        EventPublicationJpaEntity entity = repository.findById(publication.eventId())
                 .orElseThrow(() -> new IllegalStateException("Event publication not found."));
         entity.apply(publication);
         return repository.saveAndFlush(entity).toDomain();
@@ -62,17 +59,14 @@ public class JpaEventPublicationRepository implements EventPublicationRepository
     }
 
     @Override
-    public Optional<EventPublication> findByIdAndCompanyId(UUID eventId, UUID companyId) {
-        return repository.findByEventIdAndCompanyId(eventId, companyId)
+    public Optional<EventPublication> findById(UUID eventId) {
+        return repository.findById(eventId)
                 .map(EventPublicationJpaEntity::toDomain);
     }
 
     @Override
-    public Optional<EventPublication> findByIdAndCompanyIdForUpdate(
-            UUID eventId,
-            UUID companyId
-    ) {
-        return repository.findByIdAndCompanyIdForUpdate(eventId, companyId)
+    public Optional<EventPublication> findByIdForUpdate(UUID eventId) {
+        return repository.findByIdForUpdate(eventId)
                 .map(EventPublicationJpaEntity::toDomain);
     }
 

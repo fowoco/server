@@ -37,8 +37,6 @@ springdoc:
     path: /swagger-ui.html
 
 app:
-  database:
-    tenant-context-mode: transaction-only
   reliability:
     outbox:
       enabled: ${OUTBOX_ENABLED:true}
@@ -121,8 +119,6 @@ spring:
   jpa:
     show-sql: true
 app:
-  database:
-    tenant-context-mode: postgresql
   demo-seed:
     enabled: false
   auth:
@@ -185,8 +181,6 @@ springdoc:
   swagger-ui:
     enabled: false
 app:
-  database:
-    tenant-context-mode: postgresql
   demo-seed:
     enabled: false
   workflow:

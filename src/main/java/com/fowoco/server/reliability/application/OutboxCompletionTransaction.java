@@ -1,9 +1,8 @@
 package com.fowoco.server.reliability.application;
 
-import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
-import com.fowoco.server.reliability.application.port.OutboxTimeSource;
 import com.fowoco.server.reliability.domain.EventPublication;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -14,29 +13,24 @@ import org.springframework.transaction.annotation.Transactional;
 public class OutboxCompletionTransaction {
 
     private final EventPublicationRepository repository;
-    private final TenantDatabaseContext tenantDatabaseContext;
     private final OutboxMetrics metrics;
-    private final OutboxTimeSource timeSource;
+    private final Clock clock;
 
     public OutboxCompletionTransaction(
             EventPublicationRepository repository,
-            TenantDatabaseContext tenantDatabaseContext,
             OutboxMetrics metrics,
-            OutboxTimeSource timeSource
+            Clock clock
     ) {
         this.repository = repository;
-        this.tenantDatabaseContext = tenantDatabaseContext;
         this.metrics = metrics;
-        this.timeSource = timeSource;
+        this.clock = clock;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void complete(UUID eventId, UUID companyId, String owner) {
-        tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
-        EventPublication publication = repository
-                .findByIdAndCompanyIdForUpdate(eventId, companyId)
+    public void complete(UUID eventId, String owner) {
+        Instant now = clock.instant();
+        EventPublication publication = repository.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new IllegalStateException("Event publication not found."));
-        Instant now = timeSource.now();
         publication.complete(owner, now);
         repository.save(publication);
         metrics.recordCompleted();

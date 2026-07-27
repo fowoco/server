@@ -4,7 +4,6 @@ import com.fowoco.server.auth.application.error.AuthErrorCode;
 import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.AccessTokenIssuer;
 import com.fowoco.server.auth.application.port.AuthAuditPort;
-import com.fowoco.server.auth.application.port.AuthTenantBootstrap;
 import com.fowoco.server.auth.application.port.PasswordVerifier;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
 import com.fowoco.server.auth.application.port.RefreshTokenHashPort;
@@ -14,13 +13,11 @@ import com.fowoco.server.auth.domain.RefreshToken;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
-import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.company.application.CompanyAuthenticationReader;
 import com.fowoco.server.company.application.CompanyAuthenticationSnapshot;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserAccountRepository userAccountRepository;
-    private final AuthTenantBootstrap authTenantBootstrap;
-    private final TenantDatabaseContext tenantDatabaseContext;
     private final CompanyAuthenticationReader companyAuthenticationReader;
     private final PasswordVerifier passwordVerifier;
     private final AccessTokenIssuer accessTokenIssuer;
@@ -44,8 +39,6 @@ public class AuthService {
 
     public AuthService(
             UserAccountRepository userAccountRepository,
-            AuthTenantBootstrap authTenantBootstrap,
-            TenantDatabaseContext tenantDatabaseContext,
             CompanyAuthenticationReader companyAuthenticationReader,
             PasswordVerifier passwordVerifier,
             AccessTokenIssuer accessTokenIssuer,
@@ -59,8 +52,6 @@ public class AuthService {
             Clock clock
     ) {
         this.userAccountRepository = userAccountRepository;
-        this.authTenantBootstrap = authTenantBootstrap;
-        this.tenantDatabaseContext = tenantDatabaseContext;
         this.companyAuthenticationReader = companyAuthenticationReader;
         this.passwordVerifier = passwordVerifier;
         this.accessTokenIssuer = accessTokenIssuer;
@@ -77,18 +68,7 @@ public class AuthService {
     @Transactional
     public LoginResult login(LoginCommand command) {
         String normalizedEmail = UserAccount.normalizeEmail(command.email());
-        Optional<UUID> companyIdCandidate =
-                authTenantBootstrap.findCompanyIdByNormalizedEmail(normalizedEmail);
-        if (companyIdCandidate.isEmpty()) {
-            passwordVerifier.performDummyCheck(command.password());
-            throw invalidCredentialsWithAudit();
-        }
-
-        tenantDatabaseContext.setCompanyIdForCurrentTransaction(
-                companyIdCandidate.orElseThrow()
-        );
-        Optional<UserAccount> userAccountCandidate =
-                userAccountRepository.findByNormalizedEmail(normalizedEmail);
+        Optional<UserAccount> userAccountCandidate = userAccountRepository.findByNormalizedEmail(normalizedEmail);
 
         if (userAccountCandidate.isEmpty()) {
             passwordVerifier.performDummyCheck(command.password());

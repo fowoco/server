@@ -6,9 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.reliability.outbox")
 public class OutboxProperties {
 
-    private static final Duration MIN_LEASE_DURATION = Duration.ofMillis(1);
-    private static final Duration MAX_LEASE_DURATION = Duration.ofDays(1);
-
     private boolean enabled = true;
     private Duration pollInterval = Duration.ofSeconds(1);
     private int batchSize = 20;
@@ -49,16 +46,7 @@ public class OutboxProperties {
     }
 
     public void setLeaseDuration(Duration leaseDuration) {
-        if (leaseDuration == null
-                || leaseDuration.compareTo(MIN_LEASE_DURATION) < 0
-                || leaseDuration.compareTo(MAX_LEASE_DURATION) > 0
-                || leaseDuration.getNano() % 1_000_000 != 0) {
-            throw new IllegalArgumentException(
-                    "leaseDuration must be between 1 millisecond and 1 day "
-                            + "and aligned to whole milliseconds"
-            );
-        }
-        this.leaseDuration = leaseDuration;
+        this.leaseDuration = requirePositive(leaseDuration, "leaseDuration");
     }
 
     public int getMaxAttempts() {
