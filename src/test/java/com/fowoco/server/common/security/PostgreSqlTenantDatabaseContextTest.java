@@ -238,6 +238,20 @@ class PostgreSqlTenantDatabaseContextTest {
         assertThat(hasTablePrivilege("flyway_schema_history", "INSERT")).isFalse();
         assertThat(hasTablePrivilege("flyway_schema_history", "UPDATE")).isFalse();
         assertThat(hasTablePrivilege("flyway_schema_history", "DELETE")).isFalse();
+        assertThat(hasFunctionPrivilege(
+                "bootstrap_company_id_by_normalized_email(text)",
+                "EXECUTE"
+        )).isFalse();
+        assertThat(hasFunctionPrivilege(
+                "bootstrap_company_id_by_refresh_token_hash(text)",
+                "EXECUTE"
+        )).isFalse();
+        assertThat(hasFunctionPrivilege(
+                "bootstrap_claim_event_publications("
+                        + "text,timestamp with time zone,timestamp with time zone,integer,integer"
+                        + ")",
+                "EXECUTE"
+        )).isFalse();
     }
 
     @Test
@@ -393,6 +407,22 @@ class PostgreSqlTenantDatabaseContextTest {
                 """,
                 Boolean.class,
                 "public." + table,
+                privileges
+        );
+        return Boolean.TRUE.equals(allowed);
+    }
+
+    private boolean hasFunctionPrivilege(String function, String privileges) {
+        Boolean allowed = runtimeJdbc.queryForObject(
+                """
+                SELECT pg_catalog.has_function_privilege(
+                    CURRENT_USER,
+                    ?,
+                    ?
+                )
+                """,
+                Boolean.class,
+                "public." + function,
                 privileges
         );
         return Boolean.TRUE.equals(allowed);
