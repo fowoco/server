@@ -70,6 +70,12 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
 근로자 Context에는 여권번호, 외국인등록번호, 전화번호, 계좌번호, 법적 실명, 원본 문서와
 Worker Link token을 추가하지 않습니다.
 
+`***`, `OOO` 같은 마스킹 문자열도 보내지 않습니다. 실제 값을 복원할 방법이 없고
+문서 결과에 그대로 들어갈 수 있기 때문입니다. Agent는 누락된 정보가 있으면
+`missingSlots`로 **field key만** 요청합니다. Server는 현재 계약에 이미 포함된 비식별
+업무정보만 사용하고, 실명·생년월일·이메일·주소·서명 같은 PII key는 요청과 응답 모두에서
+거부합니다. 실제 PII를 최종 HWPX에 넣는 Late Binding은 MVP 범위 밖입니다.
+
 ## 응답 계약
 
 ```json
@@ -119,7 +125,8 @@ Worker Link token을 추가하지 않습니다.
 - Workflow가 허용하지 않은 slot
 - 0 미만 또는 1 초과 confidence
 - 중복 candidate reference와 잘못된 outcome 구조
-- 여권번호·외국인등록번호·전화번호·계좌번호·Bearer Token·Secret이 섞인 값
+- 실명·생년월일·이메일·주소·서명·사진·여권번호·외국인등록번호·전화번호·계좌번호
+  또는 Bearer Token·Secret이 섞인 key와 값
 
 거부 예외에는 발견한 원문을 넣지 않습니다. 앞으로 #24 AiAttempt에는
 `AiRuntimeFailureCode`와 `requestId` 같은 안전한 진단값만 저장합니다.

@@ -21,9 +21,21 @@ public class AiRuntimePrivacyPolicy {
             "registrationnumber",
             "residentnumber",
             "rrn",
+            "legalname",
+            "displayname",
+            "birthdate",
+            "dateofbirth",
+            "workeremail",
+            "personalemail",
+            "workeraddress",
+            "homeaddress",
+            "addressinkorea",
+            "homecountryaddress",
             "phone",
             "accountnumber",
             "bankaccount",
+            "signature",
+            "photo",
             "token",
             "password",
             "secret",
@@ -32,14 +44,21 @@ public class AiRuntimePrivacyPolicy {
             "여권번호",
             "외국인등록번호",
             "주민등록번호",
+            "법적성명",
+            "생년월일",
+            "이메일",
+            "상세주소",
             "전화",
             "계좌",
+            "서명",
             "비밀번호"
     );
     private static final Pattern REGISTRATION_NUMBER =
             Pattern.compile("(?<!\\d)\\d{6}-?[1-8]\\d{6}(?!\\d)");
     private static final Pattern PHONE_NUMBER =
             Pattern.compile("(?<!\\d)01\\d[- .]?\\d{3,4}[- .]?\\d{4}(?!\\d)");
+    private static final Pattern EMAIL_ADDRESS =
+            Pattern.compile("(?i)(?<![A-Z0-9._%+-])[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}(?![A-Z0-9.-])");
     private static final Pattern BEARER_TOKEN =
             Pattern.compile("(?i)\\bbearer\\s+[A-Za-z0-9._~+/=-]{8,}");
     private static final Pattern SECRET_ASSIGNMENT = Pattern.compile(
@@ -86,6 +105,7 @@ public class AiRuntimePrivacyPolicy {
     private boolean containsSensitiveValue(String value) {
         return REGISTRATION_NUMBER.matcher(value).find()
                 || PHONE_NUMBER.matcher(value).find()
+                || EMAIL_ADDRESS.matcher(value).find()
                 || BEARER_TOKEN.matcher(value).find()
                 || SECRET_ASSIGNMENT.matcher(value).find()
                 || LABELED_SENSITIVE_VALUE.matcher(value).find();

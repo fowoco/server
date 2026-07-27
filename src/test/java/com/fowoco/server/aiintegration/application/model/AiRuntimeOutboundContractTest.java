@@ -39,6 +39,11 @@ class AiRuntimeOutboundContractTest {
                         "phone",
                         "accountnumber",
                         "legalname",
+                        "displayname",
+                        "birthdate",
+                        "email",
+                        "address",
+                        "signature",
                         "token",
                         "authorization"
                 );

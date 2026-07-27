@@ -53,10 +53,35 @@ class AiRuntimeContractValidatorTest {
     static Stream<String> sensitiveInstructions() {
         return Stream.of(
                 "연락처는 010-1234-5678입니다",
+                "근로자 이메일은 worker@example.com입니다",
                 "외국인등록번호 990101-5123456",
                 "passport_number: M12345678",
                 "Authorization: Bearer secret-token-value",
                 "api_key=do-not-send-this"
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("forbiddenPiiKeys")
+    void rejectsPiiFieldKeysInsteadOfReturningMaskedPlaceholders(String fieldKey) {
+        assertFailure(
+                () -> new AiRuntimePrivacyPolicy().validateKey(fieldKey),
+                AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED
+        );
+    }
+
+    static Stream<String> forbiddenPiiKeys() {
+        return Stream.of(
+                "worker_legal_name",
+                "worker_display_name",
+                "worker_birthdate",
+                "worker_email",
+                "worker_home_address",
+                "employee_signature",
+                "passport_number",
+                "alien_registration_number",
+                "phone",
+                "bank_account"
         );
     }
 
