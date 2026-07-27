@@ -8,6 +8,7 @@ import java.util.UUID;
 public final class WorkerDocumentCreateCommand {
 
     private final UUID workerId;
+    private final UUID companyId;
     private final DocumentType documentType;
     private final SubmissionStatus submissionStatus;
     private final LocalDate expiryDate;
@@ -16,6 +17,7 @@ public final class WorkerDocumentCreateCommand {
 
     public WorkerDocumentCreateCommand(
             UUID workerId,
+            UUID companyId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
@@ -23,6 +25,7 @@ public final class WorkerDocumentCreateCommand {
             String note
     ) {
         this.workerId = workerId;
+        this.companyId = companyId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
         this.expiryDate = expiryDate;
@@ -32,6 +35,10 @@ public final class WorkerDocumentCreateCommand {
 
     public UUID workerId() {
         return workerId;
+    }
+
+    public UUID companyId() {
+        return companyId;
     }
 
     public DocumentType documentType() {

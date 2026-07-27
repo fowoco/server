@@ -41,17 +41,8 @@ interface SpringDataEventPublicationJpaRepository
             SELECT publication
             FROM EventPublicationJpaEntity publication
             WHERE publication.eventId = :eventId
-              AND publication.companyId = :companyId
             """)
-    Optional<EventPublicationJpaEntity> findByIdAndCompanyIdForUpdate(
-            @Param("eventId") UUID eventId,
-            @Param("companyId") UUID companyId
-    );
-
-    Optional<EventPublicationJpaEntity> findByEventIdAndCompanyId(
-            UUID eventId,
-            UUID companyId
-    );
+    Optional<EventPublicationJpaEntity> findByIdForUpdate(@Param("eventId") UUID eventId);
 
     long countByStatusIn(Collection<EventPublicationStatus> statuses);
 

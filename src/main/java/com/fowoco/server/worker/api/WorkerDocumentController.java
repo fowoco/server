@@ -1,6 +1,5 @@
 package com.fowoco.server.worker.api;
 
-import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.worker.application.WorkerDocumentCreateCommand;
 import com.fowoco.server.worker.application.WorkerDocumentPatchCommand;
@@ -69,16 +68,17 @@ public class WorkerDocumentController {
             @Parameter(description = "근로자 ID") @PathVariable UUID workerId,
             @Valid @RequestBody WorkerDocumentCreateRequest request
     ) {
-        ActorContext actor = actorContextProvider.requireCurrentActor();
+        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
         WorkerDocumentCreateCommand command = new WorkerDocumentCreateCommand(
                 workerId,
+                companyId,
                 request.getDocumentType(),
                 request.getSubmissionStatus(),
                 request.getExpiryDate(),
                 request.getDestination(),
                 request.getNote()
         );
-        WorkerDocument document = workerDocumentService.register(command, actor);
+        WorkerDocument document = workerDocumentService.register(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(WorkerDocumentResponse.from(document));
     }
 
@@ -122,10 +122,11 @@ public class WorkerDocumentController {
             @Parameter(description = "서류 ID") @PathVariable UUID documentId,
             @Valid @RequestBody WorkerDocumentPatchRequest request
     ) {
-        ActorContext actor = actorContextProvider.requireCurrentActor();
+        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
         WorkerDocumentPatchCommand command = new WorkerDocumentPatchCommand(
                 documentId,
                 workerId,
+                companyId,
                 request.getDocumentType(),
                 request.getSubmissionStatus(),
                 request.getExpiryDate(),
@@ -133,7 +134,7 @@ public class WorkerDocumentController {
                 request.getNote(),
                 request.getExpectedVersion()
         );
-        WorkerDocument document = workerDocumentService.patch(command, actor);
+        WorkerDocument document = workerDocumentService.patch(command);
         return WorkerDocumentResponse.from(document);
     }
 }

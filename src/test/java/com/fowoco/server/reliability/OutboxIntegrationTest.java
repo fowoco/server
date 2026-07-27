@@ -176,10 +176,7 @@ class OutboxIntegrationTest {
         publish(event);
 
         assertThat(claimService.claimBatch("stopped-server"))
-                .containsExactly(new OutboxClaimService.ClaimedEvent(
-                        event.eventId(),
-                        COMPANY_ID
-                ));
+                .containsExactly(event.eventId());
         assertThat(publicationStatus(event.eventId())).isEqualTo("PROCESSING");
 
         jdbcTemplate.update(

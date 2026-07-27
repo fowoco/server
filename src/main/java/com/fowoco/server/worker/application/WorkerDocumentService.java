@@ -1,9 +1,7 @@
 package com.fowoco.server.worker.application;
 
-import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
-import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
@@ -17,29 +15,25 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkerDocumentService {
 
     private final WorkerDocumentRepository workerDocumentRepository;
-    private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
     public WorkerDocumentService(
             WorkerDocumentRepository workerDocumentRepository,
-            TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
         this.workerDocumentRepository = workerDocumentRepository;
-        this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
 
     @Transactional
-    public WorkerDocument register(WorkerDocumentCreateCommand command, ActorContext actor) {
-        bindTenant(actor);
+    public WorkerDocument register(WorkerDocumentCreateCommand command) {
         WorkerDocument document = WorkerDocument.create(
                 uuidGenerator.generate(),
                 command.workerId(),
-                actor.companyId(),
+                command.companyId(),
                 command.documentType(),
                 command.submissionStatus(),
                 command.expiryDate(),
@@ -52,27 +46,17 @@ public class WorkerDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public WorkerDocument findDetail(
-            UUID workerDocumentId,
-            UUID workerId,
-            ActorContext actor
-    ) {
-        bindTenant(actor);
-        return workerDocumentRepository.findByIdAndWorkerIdAndCompanyId(
-                        workerDocumentId,
-                        workerId,
-                        actor.companyId()
-                )
+    public WorkerDocument findDetail(UUID workerDocumentId, UUID workerId, UUID companyId) {
+        return workerDocumentRepository.findByIdAndWorkerIdAndCompanyId(workerDocumentId, workerId, companyId)
                 .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_DOCUMENT_NOT_FOUND));
     }
 
     @Transactional
-    public WorkerDocument patch(WorkerDocumentPatchCommand command, ActorContext actor) {
-        bindTenant(actor);
+    public WorkerDocument patch(WorkerDocumentPatchCommand command) {
         WorkerDocument existing = findDetail(
                 command.workerDocumentId(),
                 command.workerId(),
-                actor
+                command.companyId()
         );
         if (existing.version() != command.expectedVersion()) {
             throw new ApiException(WorkerErrorCode.WORKER_DOCUMENT_VERSION_CONFLICT);
@@ -98,9 +82,5 @@ public class WorkerDocumentService {
 
     private static <T> T orElseKeep(T newValue, T existingValue) {
         return newValue != null ? newValue : existingValue;
-    }
-
-    private void bindTenant(ActorContext actor) {
-        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
     }
 }
