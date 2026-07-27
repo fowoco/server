@@ -51,9 +51,11 @@ public class OutboxProperties {
     public void setLeaseDuration(Duration leaseDuration) {
         if (leaseDuration == null
                 || leaseDuration.compareTo(MIN_LEASE_DURATION) < 0
-                || leaseDuration.compareTo(MAX_LEASE_DURATION) > 0) {
+                || leaseDuration.compareTo(MAX_LEASE_DURATION) > 0
+                || leaseDuration.getNano() % 1_000_000 != 0) {
             throw new IllegalArgumentException(
-                    "leaseDuration must be between 1 millisecond and 1 day"
+                    "leaseDuration must be between 1 millisecond and 1 day "
+                            + "and aligned to whole milliseconds"
             );
         }
         this.leaseDuration = leaseDuration;

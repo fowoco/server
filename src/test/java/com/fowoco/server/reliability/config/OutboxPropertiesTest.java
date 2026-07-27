@@ -27,4 +27,17 @@ class OutboxPropertiesTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("1 day");
     }
+
+    @Test
+    void leaseDurationMustBeAlignedToDatabaseMillisecondPrecision() {
+        OutboxProperties properties = new OutboxProperties();
+
+        assertThatThrownBy(
+                () -> properties.setLeaseDuration(
+                        Duration.ofMillis(1).plusNanos(1)
+                )
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("whole milliseconds");
+    }
 }
