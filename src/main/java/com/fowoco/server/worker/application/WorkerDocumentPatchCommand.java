@@ -9,7 +9,6 @@ public final class WorkerDocumentPatchCommand {
 
     private final UUID workerDocumentId;
     private final UUID workerId;
-    private final UUID companyId;
     private final DocumentType documentType;
     private final SubmissionStatus submissionStatus;
     private final LocalDate expiryDate;
@@ -20,7 +19,6 @@ public final class WorkerDocumentPatchCommand {
     public WorkerDocumentPatchCommand(
             UUID workerDocumentId,
             UUID workerId,
-            UUID companyId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
@@ -30,7 +28,6 @@ public final class WorkerDocumentPatchCommand {
     ) {
         this.workerDocumentId = workerDocumentId;
         this.workerId = workerId;
-        this.companyId = companyId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
         this.expiryDate = expiryDate;
@@ -45,10 +42,6 @@ public final class WorkerDocumentPatchCommand {
 
     public UUID workerId() {
         return workerId;
-    }
-
-    public UUID companyId() {
-        return companyId;
     }
 
     public DocumentType documentType() {

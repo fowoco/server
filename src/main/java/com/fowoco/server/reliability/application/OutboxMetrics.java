@@ -1,6 +1,6 @@
 package com.fowoco.server.reliability.application;
 
-import com.fowoco.server.reliability.application.port.EventPublicationRepository;
+import com.fowoco.server.reliability.application.port.OutboxBacklogReader;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -17,7 +17,7 @@ public class OutboxMetrics {
 
     public OutboxMetrics(
             MeterRegistry meterRegistry,
-            EventPublicationRepository repository,
+            OutboxBacklogReader backlogReader,
             Clock clock
     ) {
         completed = counter(meterRegistry, "completed");
@@ -25,14 +25,14 @@ public class OutboxMetrics {
         reviewRequired = counter(meterRegistry, "review_required");
         Gauge.builder(
                         "fowoco.outbox.publications.backlog",
-                        repository,
-                        EventPublicationRepository::countOutstanding
+                        backlogReader,
+                        OutboxBacklogReader::countOutstanding
                 )
                 .description("Outstanding durable event publications")
                 .register(meterRegistry);
         Gauge.builder(
                         "fowoco.outbox.publications.oldest.delay.seconds",
-                        repository,
+                        backlogReader,
                         candidate -> candidate.findOldestOutstandingOccurredAt()
                                 .map(occurredAt -> Math.max(
                                         0.0,

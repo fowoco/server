@@ -11,6 +11,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.reliability.application.port.DomainEventPublisher;
 import com.fowoco.server.task.application.TaskContentCodec.EncodedTaskContent;
@@ -45,6 +46,7 @@ public class TaskWorkflowService {
 
     private static final String AUDIT_EVENT_VERSION = "1";
     private final ActorAuthorizer actorAuthorizer;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
     private final TaskChecklistRepository checklistRepository;
     private final TaskTransitionRecorder transitionRecorder;
@@ -59,6 +61,7 @@ public class TaskWorkflowService {
 
     public TaskWorkflowService(
             ActorAuthorizer actorAuthorizer,
+            TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
             TaskChecklistRepository checklistRepository,
             TaskTransitionRecorder transitionRecorder,
@@ -72,6 +75,7 @@ public class TaskWorkflowService {
             Clock clock
     ) {
         this.actorAuthorizer = actorAuthorizer;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
         this.checklistRepository = checklistRepository;
         this.transitionRecorder = transitionRecorder;
@@ -91,6 +95,7 @@ public class TaskWorkflowService {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         WorkflowDefinition workflow = catalogService.requireWorkflow(command.workflowId());
         if (!workflow.supportedTaskTypes().contains(command.taskType())) {
@@ -180,6 +185,7 @@ public class TaskWorkflowService {
             int size,
             ActorContext actor
     ) {
+        bindTenant(actor);
         requireRead(actor);
         if (dueFrom != null && dueTo != null && dueFrom.isAfter(dueTo)) {
             throw new ApiException(TaskErrorCode.INVALID_TASK_FILTER);
@@ -206,6 +212,7 @@ public class TaskWorkflowService {
 
     @Transactional(readOnly = true)
     public TaskResult findById(UUID taskId, ActorContext actor) {
+        bindTenant(actor);
         requireRead(actor);
         Task task = requireTask(taskId, actor.companyId());
         return toResult(
@@ -223,6 +230,7 @@ public class TaskWorkflowService {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         WorkflowDefinition workflow = catalogService.requireWorkflow(task.workflowId());
@@ -315,6 +323,7 @@ public class TaskWorkflowService {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         TaskChecklistItem item = checklistRepository
@@ -390,6 +399,7 @@ public class TaskWorkflowService {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         String reason = contentCodec.safeText(command.reason(), 500);
@@ -550,6 +560,10 @@ public class TaskWorkflowService {
         return actor.roles().stream()
                 .min(Comparator.comparingInt(this::rolePriority))
                 .orElseThrow();
+    }
+
+    private void bindTenant(ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
     }
 
     private int rolePriority(UserRole role) {
