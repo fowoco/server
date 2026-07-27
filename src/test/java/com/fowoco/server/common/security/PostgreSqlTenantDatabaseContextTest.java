@@ -53,7 +53,9 @@ class PostgreSqlTenantDatabaseContextTest {
             "approval_request",
             "external_submission",
             "task_evidence",
-            "audit_event"
+            "audit_event",
+            "event_publication",
+            "event_consumption"
     };
     private static final String TENANT_TABLE_SQL =
             "public." + String.join(", public.", TENANT_TABLES);

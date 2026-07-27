@@ -16,6 +16,7 @@ import java.time.LocalDate;
 public final class WorkerPatchRequest {
 
     @Schema(
+            name = "display_name",
             description = "화면 표시용 근로자 이름. 생략 시 변경하지 않습니다.",
             example = "응우옌반A",
             maxLength = 120
@@ -24,6 +25,7 @@ public final class WorkerPatchRequest {
     private final String displayName;
 
     @Schema(
+            name = "nationality_code",
             description = "국적 코드. 생략 시 변경하지 않습니다.",
             example = "VN",
             maxLength = 10
@@ -32,6 +34,7 @@ public final class WorkerPatchRequest {
     private final String nationalityCode;
 
     @Schema(
+            name = "preferred_language",
             description = "선호 언어. 생략 시 변경하지 않습니다.",
             example = "vi",
             maxLength = 20
@@ -40,11 +43,13 @@ public final class WorkerPatchRequest {
     private final String preferredLanguage;
 
     @Schema(
+            name = "work_status",
             description = "근무 상태. 생략 시 변경하지 않습니다."
     )
     private final WorkerStatus workStatus;
 
     @Schema(
+            name = "stay_expiry_date",
             description = "체류 만료일. 생략 시 변경하지 않습니다.",
             example = "2027-03-01",
             format = "date"
@@ -52,6 +57,7 @@ public final class WorkerPatchRequest {
     private final LocalDate stayExpiryDate;
 
     @Schema(
+            name = "contract_start_date",
             description = "계약 시작일. 생략 시 변경하지 않습니다.",
             example = "2026-01-01",
             format = "date"
@@ -59,6 +65,7 @@ public final class WorkerPatchRequest {
     private final LocalDate contractStartDate;
 
     @Schema(
+            name = "contract_end_date",
             description = "계약 종료일. 생략 시 변경하지 않습니다.",
             example = "2027-12-31",
             format = "date"
@@ -66,6 +73,7 @@ public final class WorkerPatchRequest {
     private final LocalDate contractEndDate;
 
     @Schema(
+            name = "expected_version",
             description = "낙관적 잠금 버전. 마지막으로 조회한 WorkerResponse.version을 그대로 보내야 합니다.",
             example = "0",
             minimum = "0",

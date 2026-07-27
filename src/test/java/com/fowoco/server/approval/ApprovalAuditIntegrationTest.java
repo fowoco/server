@@ -67,6 +67,8 @@ class ApprovalAuditIntegrationTest {
 
     @BeforeEach
     void resetAndSeed() {
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM task_evidence");
         jdbcTemplate.update("DELETE FROM external_submission");

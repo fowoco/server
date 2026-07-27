@@ -27,7 +27,7 @@ H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 �
 별도 bootstrap 흐름으로 함께 검토해야 합니다. Worker Link는 해당 기능이 구현된 뒤
 같은 기준으로 확장합니다.
 
-현재 `main`의 V1~V6에는 아래 12개 tenant table이 존재합니다. 기반 단계의 제한
+현재 `main`의 V1~V7에는 아래 14개 tenant table이 존재합니다. 기반 단계의 제한
 role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
 `REFERENCES` 권한과 RLS 우회 권한이 없음을 확인합니다.
 
@@ -35,6 +35,15 @@ role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·
 - `worker`, `worker_document`
 - `task`, `task_checklist_item`, `task_transition_history`
 - `approval_request`, `external_submission`, `task_evidence`, `audit_event`
+- `event_publication`, `event_consumption`
+
+`event_publication`은 여러 tenant의 미완료 row를 찾는 background queue이므로 일반
+요청 table과 같은 policy를 바로 활성화하면 worker가 아무 이벤트도 claim하지 못할 수
+있습니다. RLS 활성화 전 #34에서 “처리 가능한 `event_id + company_id`만 반환하는 최소
+claim 함수” 또는 동등한 제한된 queue bootstrap 계약을 먼저 확정합니다. claim 뒤
+handler·완료·실패 transaction은 event에 저장된 `company_id`를 tenant context로
+설정하고 일반 policy를 따릅니다. Runtime role에 전체 Outbox RLS 우회 권한을 주지는
+않습니다.
 
 ## 설정 계약
 
@@ -81,6 +90,8 @@ DDL, `TRUNCATE`, `REFERENCES` 권한을 갖지 않습니다. 실제 값은 배�
 - commit, rollback, 예외, timeout 뒤 같은 physical connection을 재사용해도 이전
   context가 남지 않습니다.
 - Login·Refresh와 구현된 Worker Link 정상 흐름이 유지됩니다.
+- Outbox claim이 다른 tenant payload를 노출하지 않고, claim된 event의 handler
+  transaction이 해당 `company_id` context에서만 실행됩니다.
 - 오류 응답과 일반 로그에 SQL, JWT, token, email, 개인정보가 노출되지 않습니다.
 
 로컬 또는 CI PostgreSQL 기반 검증은 다음 환경변수를 사용합니다.

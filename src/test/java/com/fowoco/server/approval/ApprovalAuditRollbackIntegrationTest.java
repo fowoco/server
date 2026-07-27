@@ -48,6 +48,8 @@ class ApprovalAuditRollbackIntegrationTest {
 
     @BeforeEach
     void seedTask() {
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM approval_request");
         jdbcTemplate.update("DELETE FROM task");

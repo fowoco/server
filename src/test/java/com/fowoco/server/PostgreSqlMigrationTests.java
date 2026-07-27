@@ -26,6 +26,7 @@ class PostgreSqlMigrationTests {
     private static final String USER_B = "22000000-0000-0000-0000-000000000002";
     private static final String WORKER_A = "12000000-0000-0000-0000-000000000001";
     private static final String TASK_A = "13000000-0000-0000-0000-000000000001";
+    private static final String EVENT_A = "18000000-0000-0000-0000-000000000001";
     private static final String TOKEN_HASH_A = "a".repeat(64);
 
     @Test
@@ -72,7 +73,9 @@ class PostgreSqlMigrationTests {
                         "approval_request",
                         "external_submission",
                         "task_evidence",
-                        "audit_event"
+                        "audit_event",
+                        "event_publication",
+                        "event_consumption"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -133,6 +136,22 @@ class PostgreSqlMigrationTests {
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
                 .containsEntry("request_id", new ColumnSpec("varchar", false))
                 .containsEntry("trace_id", new ColumnSpec("varchar", true));
+        assertThat(columnSpecs(connection, "event_publication"))
+                .containsEntry("event_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("event_type", new ColumnSpec("varchar", false))
+                .containsEntry("payload_json", new ColumnSpec("text", false))
+                .containsEntry("status", new ColumnSpec("varchar", false))
+                .containsEntry("attempt_count", new ColumnSpec("int4", false))
+                .containsEntry("next_attempt_at", new ColumnSpec("timestamptz", true))
+                .containsEntry("lease_expires_at", new ColumnSpec("timestamptz", true))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "event_consumption"))
+                .containsEntry("consumption_id", new ColumnSpec("uuid", false))
+                .containsEntry("event_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("handler_name", new ColumnSpec("varchar", false))
+                .containsEntry("completed_at", new ColumnSpec("timestamptz", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -150,7 +169,13 @@ class PostgreSqlMigrationTests {
                         "fk_task_created_by_company",
                         "fk_approval_request_task_company",
                         "fk_approval_request_requester_company",
-                        "fk_audit_event_company"
+                        "fk_audit_event_company",
+                        "pk_event_publication",
+                        "uq_event_publication_id_company",
+                        "fk_event_publication_company",
+                        "pk_event_consumption",
+                        "uq_event_consumption_event_handler",
+                        "fk_event_consumption_publication"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -162,7 +187,10 @@ class PostgreSqlMigrationTests {
                         "idx_worker_document_company_status",
                         "idx_task_company_status_due",
                         "idx_approval_request_task_status",
-                        "idx_audit_event_company_time"
+                        "idx_audit_event_company_time",
+                        "idx_event_publication_claim",
+                        "idx_event_publication_company_time",
+                        "idx_event_consumption_company_event"
                 );
     }
 
@@ -228,6 +256,27 @@ class PostgreSqlMigrationTests {
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """.formatted(TASK_A, COMPANY_A, "f".repeat(64), USER_A));
+        execute(connection, """
+                INSERT INTO event_publication (
+                    event_id, company_id, event_type, payload_version,
+                    aggregate_type, aggregate_id, actor_type, request_id,
+                    payload_json, status, attempt_count, next_attempt_at,
+                    occurred_at, created_at, updated_at
+                ) VALUES (
+                    '%s', '%s', 'TaskCreated', '1',
+                    'Task', '%s', 'SYSTEM_RULE', 'migration-test-request',
+                    '{}', 'PENDING', 0, CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(EVENT_A, COMPANY_A, TASK_A));
+        execute(connection, """
+                INSERT INTO event_consumption (
+                    consumption_id, event_id, company_id, handler_name, completed_at
+                ) VALUES (
+                    '19000000-0000-0000-0000-000000000001',
+                    '%s', '%s', 'migration-test-handler', CURRENT_TIMESTAMP
+                )
+                """.formatted(EVENT_A, COMPANY_A));
 
         assertSqlState(connection, "23505", """
                 INSERT INTO user_account (
@@ -356,6 +405,36 @@ class PostgreSqlMigrationTests {
                     '1', 'approved', CURRENT_TIMESTAMP
                 )
                 """.formatted(COMPANY_A, USER_A, TASK_A));
+        assertSqlState(connection, "23503", """
+                INSERT INTO event_consumption (
+                    consumption_id, event_id, company_id, handler_name, completed_at
+                ) VALUES (
+                    '19000000-0000-0000-0000-000000000002',
+                    '%s', '%s', 'wrong-tenant-handler', CURRENT_TIMESTAMP
+                )
+                """.formatted(EVENT_A, COMPANY_B));
+        assertSqlState(connection, "23505", """
+                INSERT INTO event_consumption (
+                    consumption_id, event_id, company_id, handler_name, completed_at
+                ) VALUES (
+                    '19000000-0000-0000-0000-000000000003',
+                    '%s', '%s', 'migration-test-handler', CURRENT_TIMESTAMP
+                )
+                """.formatted(EVENT_A, COMPANY_A));
+        assertSqlState(connection, "23514", """
+                INSERT INTO event_publication (
+                    event_id, company_id, event_type, payload_version,
+                    aggregate_type, aggregate_id, actor_type, request_id,
+                    payload_json, status, attempt_count,
+                    occurred_at, created_at, updated_at
+                ) VALUES (
+                    '18000000-0000-0000-0000-000000000002',
+                    '%s', 'TaskCreated', '1', 'Task', '%s',
+                    'SYSTEM_RULE', 'invalid-state-request', '{}',
+                    'UNKNOWN', 0,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, TASK_A));
     }
 
     private Set<String> tableNames(Connection connection) throws SQLException {

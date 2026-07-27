@@ -48,6 +48,8 @@ class WorkerDocumentSecurityIntegrationTest {
 
     @BeforeAll
     void seedCompaniesAndUsers() {
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM task_evidence");
         jdbcTemplate.update("DELETE FROM external_submission");
         jdbcTemplate.update("DELETE FROM approval_request");

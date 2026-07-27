@@ -4,11 +4,11 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -46,7 +46,7 @@ public class WorkerService {
                 command.stayExpiryDate(),
                 command.contractStartDate(),
                 command.contractEndDate(),
-                clock.instant()
+                DatabaseTimestamp.now(clock)
         );
         workerRepository.insert(worker);
         return worker;
@@ -86,7 +86,7 @@ public class WorkerService {
                 orElseKeep(command.contractStartDate(), existing.contractStartDate()),
                 orElseKeep(command.contractEndDate(), existing.contractEndDate()),
                 existing.createdAt(),
-                updateTime(existing.createdAt()),
+                DatabaseTimestamp.nowNotBefore(clock, existing.createdAt()),
                 existing.version()
         );
 
@@ -99,10 +99,5 @@ public class WorkerService {
 
     private void bindTenant(ActorContext actor) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
-    }
-
-    private Instant updateTime(Instant createdAt) {
-        Instant now = clock.instant();
-        return now.isBefore(createdAt) ? createdAt : now;
     }
 }
