@@ -6,20 +6,25 @@ import static org.mockito.Mockito.when;
 
 import com.fowoco.server.auth.application.port.AccessTokenIssuer;
 import com.fowoco.server.auth.application.port.AuthAuditPort;
+import com.fowoco.server.auth.application.port.AuthTenantBootstrap;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
 import com.fowoco.server.auth.application.port.RefreshTokenRepository;
 import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.company.application.CompanyAuthenticationReader;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 class RefreshTokenTransactionOrderingTest {
 
     private static final String TOKEN_HASH = "a".repeat(64);
+    private static final UUID COMPANY_ID =
+            UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-07-22T00:00:00Z");
 
     @Test
@@ -28,8 +33,11 @@ class RefreshTokenTransactionOrderingTest {
         RefreshTokenRepository repository = repositoryThatCompletes(familyLookupCompleted);
         Clock clock = clockThatRequiresCompletedLookup(familyLookupCompleted);
         AuthAuditPort auditPort = event -> { };
+        AuthTenantBootstrap tenantBootstrap = tenantBootstrap();
         RefreshTokenRotationTransaction transaction = new RefreshTokenRotationTransaction(
                 repository,
+                tenantBootstrap,
+                mock(TenantDatabaseContext.class),
                 mock(UserAccountRepository.class),
                 mock(CompanyAuthenticationReader.class),
                 mock(AccessTokenIssuer.class),
@@ -50,8 +58,11 @@ class RefreshTokenTransactionOrderingTest {
         RefreshTokenRepository repository = repositoryThatCompletes(familyLookupCompleted);
         Clock clock = clockThatRequiresCompletedLookup(familyLookupCompleted);
         AuthAuditPort auditPort = event -> { };
+        AuthTenantBootstrap tenantBootstrap = tenantBootstrap();
         RefreshTokenLogoutTransaction transaction = new RefreshTokenLogoutTransaction(
                 repository,
+                tenantBootstrap,
+                mock(TenantDatabaseContext.class),
                 auditPort,
                 clock
         );
@@ -68,6 +79,13 @@ class RefreshTokenTransactionOrderingTest {
             return Optional.empty();
         });
         return repository;
+    }
+
+    private AuthTenantBootstrap tenantBootstrap() {
+        AuthTenantBootstrap bootstrap = mock(AuthTenantBootstrap.class);
+        when(bootstrap.findCompanyIdByRefreshTokenHash(TOKEN_HASH))
+                .thenReturn(Optional.of(COMPANY_ID));
+        return bootstrap;
     }
 
     private Clock clockThatRequiresCompletedLookup(AtomicBoolean familyLookupCompleted) {

@@ -2,12 +2,14 @@ package com.fowoco.server.auth.application;
 
 import com.fowoco.server.auth.application.error.AuthErrorCode;
 import com.fowoco.server.auth.application.port.AuthAuditPort;
+import com.fowoco.server.auth.application.port.AuthTenantBootstrap;
 import com.fowoco.server.auth.application.port.PasswordHasher;
 import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.domain.Company;
 import java.time.Clock;
@@ -21,6 +23,8 @@ public class SignupService {
 
     private final CompanyRepository companyRepository;
     private final UserAccountRepository userAccountRepository;
+    private final AuthTenantBootstrap authTenantBootstrap;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final PasswordHasher passwordHasher;
     private final AuthAuditPort authAuditPort;
     private final UuidGenerator uuidGenerator;
@@ -29,6 +33,8 @@ public class SignupService {
     public SignupService(
             CompanyRepository companyRepository,
             UserAccountRepository userAccountRepository,
+            AuthTenantBootstrap authTenantBootstrap,
+            TenantDatabaseContext tenantDatabaseContext,
             PasswordHasher passwordHasher,
             AuthAuditPort authAuditPort,
             UuidGenerator uuidGenerator,
@@ -36,6 +42,8 @@ public class SignupService {
     ) {
         this.companyRepository = companyRepository;
         this.userAccountRepository = userAccountRepository;
+        this.authTenantBootstrap = authTenantBootstrap;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.passwordHasher = passwordHasher;
         this.authAuditPort = authAuditPort;
         this.uuidGenerator = uuidGenerator;
@@ -45,7 +53,7 @@ public class SignupService {
     @Transactional
     public SignupResult signup(SignupCommand command) {
         String normalizedEmail = UserAccount.normalizeEmail(command.email());
-        if (userAccountRepository.existsByNormalizedEmail(normalizedEmail)) {
+        if (authTenantBootstrap.findCompanyIdByNormalizedEmail(normalizedEmail).isPresent()) {
             throw duplicateEmail();
         }
 
@@ -55,6 +63,7 @@ public class SignupService {
                 command.companyName(),
                 now
         );
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(company.companyId());
         UserAccount initialAdmin = UserAccount.create(
                 uuidGenerator.generate(),
                 company.companyId(),
