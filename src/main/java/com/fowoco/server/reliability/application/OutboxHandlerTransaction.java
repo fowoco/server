@@ -1,6 +1,7 @@
 package com.fowoco.server.reliability.application;
 
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.reliability.application.port.DomainEventHandler;
 import com.fowoco.server.reliability.application.port.EventConsumptionRepository;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
@@ -20,6 +21,7 @@ public class OutboxHandlerTransaction {
 
     private final EventPublicationRepository publicationRepository;
     private final EventConsumptionRepository consumptionRepository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final EventPayloadCodec payloadCodec;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
@@ -27,12 +29,14 @@ public class OutboxHandlerTransaction {
     public OutboxHandlerTransaction(
             EventPublicationRepository publicationRepository,
             EventConsumptionRepository consumptionRepository,
+            TenantDatabaseContext tenantDatabaseContext,
             EventPayloadCodec payloadCodec,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
         this.publicationRepository = publicationRepository;
         this.consumptionRepository = consumptionRepository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.payloadCodec = payloadCodec;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
@@ -41,11 +45,14 @@ public class OutboxHandlerTransaction {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean deliver(
             UUID eventId,
+            UUID companyId,
             String owner,
             DomainEventHandler handler
     ) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
         Instant now = clock.instant();
-        EventPublication publication = publicationRepository.findByIdForUpdate(eventId)
+        EventPublication publication = publicationRepository
+                .findByIdAndCompanyIdForUpdate(eventId, companyId)
                 .orElseThrow(() -> new IllegalStateException("Event publication not found."));
         publication.requireActiveLease(owner, now);
         String handlerName = handler.handlerName();

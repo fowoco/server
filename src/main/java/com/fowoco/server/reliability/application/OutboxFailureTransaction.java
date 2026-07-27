@@ -1,5 +1,6 @@
 package com.fowoco.server.reliability.application;
 
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.reliability.application.OutboxFailureClassifier.FailureClassification;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
 import com.fowoco.server.reliability.config.OutboxProperties;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class OutboxFailureTransaction {
 
     private final EventPublicationRepository repository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final OutboxFailureClassifier classifier;
     private final OutboxBackoffPolicy backoffPolicy;
     private final OutboxProperties properties;
@@ -23,6 +25,7 @@ public class OutboxFailureTransaction {
 
     public OutboxFailureTransaction(
             EventPublicationRepository repository,
+            TenantDatabaseContext tenantDatabaseContext,
             OutboxFailureClassifier classifier,
             OutboxBackoffPolicy backoffPolicy,
             OutboxProperties properties,
@@ -30,6 +33,7 @@ public class OutboxFailureTransaction {
             Clock clock
     ) {
         this.repository = repository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.classifier = classifier;
         this.backoffPolicy = backoffPolicy;
         this.properties = properties;
@@ -40,11 +44,14 @@ public class OutboxFailureTransaction {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FailureOutcome recordFailure(
             UUID eventId,
+            UUID companyId,
             String owner,
             Throwable failure
     ) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
         Instant now = clock.instant();
-        EventPublication publication = repository.findByIdForUpdate(eventId)
+        EventPublication publication = repository
+                .findByIdAndCompanyIdForUpdate(eventId, companyId)
                 .orElseThrow(() -> new IllegalStateException("Event publication not found."));
         FailureClassification classification = classifier.classify(failure);
         boolean exhausted = publication.attemptCount() >= properties.getMaxAttempts();

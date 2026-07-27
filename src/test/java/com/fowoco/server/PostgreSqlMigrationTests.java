@@ -214,13 +214,17 @@ class PostgreSqlMigrationTests {
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
                         "bootstrap_company_id_by_refresh_token_hash",
-                        "bootstrap_claim_event_publications"
+                        "bootstrap_claim_event_publications",
+                        "bootstrap_count_outstanding_event_publications",
+                        "bootstrap_oldest_outstanding_event_occurred_at"
                 );
         assertThat(functionsWithLockedSearchPath(connection))
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
                         "bootstrap_company_id_by_refresh_token_hash",
-                        "bootstrap_claim_event_publications"
+                        "bootstrap_claim_event_publications",
+                        "bootstrap_count_outstanding_event_publications",
+                        "bootstrap_oldest_outstanding_event_occurred_at"
                 );
     }
 

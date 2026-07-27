@@ -14,9 +14,9 @@ public interface EventPublicationRepository {
 
     List<EventPublication> lockClaimable(Instant now, int limit);
 
-    Optional<EventPublication> findById(UUID eventId);
+    Optional<EventPublication> findByIdAndCompanyId(UUID eventId, UUID companyId);
 
-    Optional<EventPublication> findByIdForUpdate(UUID eventId);
+    Optional<EventPublication> findByIdAndCompanyIdForUpdate(UUID eventId, UUID companyId);
 
     long countOutstanding();
 

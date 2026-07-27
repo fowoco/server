@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fowoco.server.ServerApplication;
+import com.fowoco.server.reliability.application.OutboxClaimService;
+import com.fowoco.server.reliability.application.OutboxReadService;
+import com.fowoco.server.reliability.application.port.OutboxBacklogReader;
+import com.fowoco.server.reliability.domain.EventPublication;
 import jakarta.persistence.EntityManager;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -41,6 +45,10 @@ class PostgreSqlTenantDatabaseContextTest {
             UUID.fromString("a0000000-0000-0000-0000-000000000001");
     private static final UUID COMPANY_B =
             UUID.fromString("b0000000-0000-0000-0000-000000000002");
+    private static final UUID OUTBOX_EVENT_A =
+            UUID.fromString("a8000000-0000-0000-0000-000000000001");
+    private static final UUID OUTBOX_EVENT_B =
+            UUID.fromString("b8000000-0000-0000-0000-000000000002");
     private static final String[] TENANT_TABLES = {
             "company",
             "user_account",
@@ -252,6 +260,14 @@ class PostgreSqlTenantDatabaseContextTest {
                         + ")",
                 "EXECUTE"
         )).isFalse();
+        assertThat(hasFunctionPrivilege(
+                "bootstrap_count_outstanding_event_publications()",
+                "EXECUTE"
+        )).isFalse();
+        assertThat(hasFunctionPrivilege(
+                "bootstrap_oldest_outstanding_event_occurred_at()",
+                "EXECUTE"
+        )).isFalse();
     }
 
     @Test
@@ -333,6 +349,76 @@ class PostgreSqlTenantDatabaseContextTest {
         assertThat(contextProbe.companyId()).isEqualTo(COMPANY_A.toString());
     }
 
+    @Test
+    void outboxClaimReturnsOnlyTenantCoordinatesAndScopedReadsRejectMismatches() {
+        String function = "public.bootstrap_claim_event_publications("
+                + "text,timestamptz,timestamptz,integer,integer"
+                + ")";
+        String countFunction =
+                "public.bootstrap_count_outstanding_event_publications()";
+        String oldestFunction =
+                "public.bootstrap_oldest_outstanding_event_occurred_at()";
+        String quotedRole = quoteIdentifier(runtimeRole);
+        migrationJdbc.execute("GRANT EXECUTE ON FUNCTION " + function + " TO " + quotedRole);
+        migrationJdbc.execute(
+                "GRANT EXECUTE ON FUNCTION " + countFunction + " TO " + quotedRole
+        );
+        migrationJdbc.execute(
+                "GRANT EXECUTE ON FUNCTION " + oldestFunction + " TO " + quotedRole
+        );
+        try {
+            insertOutboxProbe(COMPANY_A, OUTBOX_EVENT_A, "tenant-a-payload");
+            insertOutboxProbe(COMPANY_B, OUTBOX_EVENT_B, "tenant-b-payload");
+
+            OutboxClaimService claimService =
+                    applicationContext.getBean(OutboxClaimService.class);
+            assertThat(claimService.claimBatch("rls-outbox-test"))
+                    .containsExactlyInAnyOrder(
+                            new OutboxClaimService.ClaimedEvent(
+                                    OUTBOX_EVENT_A,
+                                    COMPANY_A
+                            ),
+                            new OutboxClaimService.ClaimedEvent(
+                                    OUTBOX_EVENT_B,
+                                    COMPANY_B
+                            )
+                    );
+
+            OutboxReadService readService =
+                    applicationContext.getBean(OutboxReadService.class);
+            assertThatThrownBy(
+                    () -> readService.requirePublication(OUTBOX_EVENT_A, COMPANY_B)
+            )
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("not found");
+
+            EventPublication publication =
+                    readService.requirePublication(OUTBOX_EVENT_A, COMPANY_A);
+            assertThat(publication.payloadJson()).isEqualTo("tenant-a-payload");
+
+            OutboxBacklogReader backlogReader =
+                    applicationContext.getBean(OutboxBacklogReader.class);
+            assertThat(backlogReader.countOutstanding()).isEqualTo(2);
+            assertThat(backlogReader.findOldestOutstandingOccurredAt()).isPresent();
+        } finally {
+            migrationJdbc.execute("DELETE FROM event_consumption WHERE event_id IN ('"
+                    + OUTBOX_EVENT_A + "', '" + OUTBOX_EVENT_B + "')");
+            migrationJdbc.execute("DELETE FROM event_publication WHERE event_id IN ('"
+                    + OUTBOX_EVENT_A + "', '" + OUTBOX_EVENT_B + "')");
+            migrationJdbc.execute("DELETE FROM company WHERE company_id IN ('"
+                    + COMPANY_A + "', '" + COMPANY_B + "')");
+            migrationJdbc.execute(
+                    "REVOKE EXECUTE ON FUNCTION " + function + " FROM " + quotedRole
+            );
+            migrationJdbc.execute(
+                    "REVOKE EXECUTE ON FUNCTION " + countFunction + " FROM " + quotedRole
+            );
+            migrationJdbc.execute(
+                    "REVOKE EXECUTE ON FUNCTION " + oldestFunction + " FROM " + quotedRole
+            );
+        }
+    }
+
     private ConfigurableApplicationContext startRestrictedRuntimeApplication() {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("spring.datasource.url", migrationUrl);
@@ -363,6 +449,39 @@ class PostgreSqlTenantDatabaseContextTest {
         application.setEnvironment(environment);
         application.setWebApplicationType(WebApplicationType.SERVLET);
         return application.run();
+    }
+
+    private void insertOutboxProbe(UUID companyId, UUID eventId, String payload) {
+        migrationJdbc.update(
+                """
+                INSERT INTO company (
+                    company_id, name, status, created_at, updated_at, version
+                ) VALUES (?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                ON CONFLICT (company_id) DO NOTHING
+                """,
+                companyId,
+                "Outbox probe " + companyId
+        );
+        migrationJdbc.update(
+                """
+                INSERT INTO event_publication (
+                    event_id, company_id, event_type, payload_version,
+                    aggregate_type, aggregate_id, actor_type, request_id,
+                    payload_json, status, attempt_count, next_attempt_at,
+                    occurred_at, created_at, updated_at, version
+                ) VALUES (
+                    ?, ?, 'RlsOutboxProbe', '1',
+                    'RlsProbe', ?, 'SYSTEM_RULE', ?,
+                    ?, 'PENDING', 0, CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0
+                )
+                """,
+                eventId,
+                companyId,
+                eventId,
+                "rls-outbox-" + eventId,
+                payload
+        );
     }
 
     private ContextProbe bindAndRead(UUID companyId) {

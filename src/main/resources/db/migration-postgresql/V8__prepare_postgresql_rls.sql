@@ -108,6 +108,40 @@ AS $$
     FROM claimed
 $$;
 
+CREATE FUNCTION public.bootstrap_count_outstanding_event_publications()
+RETURNS BIGINT
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT COUNT(*)
+    FROM public.event_publication AS publication
+    WHERE publication.status IN (
+        'PENDING',
+        'PROCESSING',
+        'RETRY_WAIT',
+        'REVIEW_REQUIRED'
+    )
+$$;
+
+CREATE FUNCTION public.bootstrap_oldest_outstanding_event_occurred_at()
+RETURNS TIMESTAMPTZ
+LANGUAGE SQL
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT MIN(publication.occurred_at)
+    FROM public.event_publication AS publication
+    WHERE publication.status IN (
+        'PENDING',
+        'PROCESSING',
+        'RETRY_WAIT',
+        'REVIEW_REQUIRED'
+    )
+$$;
+
 REVOKE ALL
     ON FUNCTION public.bootstrap_company_id_by_normalized_email(TEXT)
     FROM PUBLIC;
@@ -122,6 +156,12 @@ REVOKE ALL
         INTEGER,
         INTEGER
     )
+    FROM PUBLIC;
+REVOKE ALL
+    ON FUNCTION public.bootstrap_count_outstanding_event_publications()
+    FROM PUBLIC;
+REVOKE ALL
+    ON FUNCTION public.bootstrap_oldest_outstanding_event_occurred_at()
     FROM PUBLIC;
 
 CREATE POLICY pl_company_tenant_isolation
