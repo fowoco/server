@@ -4,10 +4,12 @@ import com.fowoco.server.worker.application.WorkerSearchQuery;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
@@ -63,10 +65,10 @@ public class JpaWorkerRepository implements WorkerRepository {
     public List<Worker> findPage(UUID companyId, WorkerSearchQuery query) {
         Objects.requireNonNull(companyId, "companyId must not be null");
         Objects.requireNonNull(query, "query must not be null");
-        TypedQuery<WorkerJpaEntity> jpaQuery = entityManager.createQuery(
-                buildWhereClause(query) + " order by worker.createdAt desc",
-                WorkerJpaEntity.class
-        );
+        String jpql = "select worker from WorkerJpaEntity worker"
+                + buildWhereClause(query)
+                + " order by worker.createdAt desc";
+        TypedQuery<WorkerJpaEntity> jpaQuery = entityManager.createQuery(jpql, WorkerJpaEntity.class);
         bindParameters(jpaQuery, companyId, query);
         return jpaQuery
                 .setFirstResult(query.page() * query.size())
@@ -81,33 +83,51 @@ public class JpaWorkerRepository implements WorkerRepository {
     public long countPage(UUID companyId, WorkerSearchQuery query) {
         Objects.requireNonNull(companyId, "companyId must not be null");
         Objects.requireNonNull(query, "query must not be null");
-        TypedQuery<Long> jpaQuery = entityManager.createQuery(
-                "select count(worker) " + buildWhereClause(query).replaceFirst("^select worker ", ""),
-                Long.class
-        );
+        String jpql = "select count(worker) from WorkerJpaEntity worker" + buildWhereClause(query);
+        TypedQuery<Long> jpaQuery = entityManager.createQuery(jpql, Long.class);
         bindParameters(jpaQuery, companyId, query);
         return jpaQuery.getSingleResult();
     }
 
-    private String buildWhereClause(WorkerSearchQuery query) {
-        StringBuilder jpql = new StringBuilder("select worker from WorkerJpaEntity worker where worker.companyId = :companyId");
-        if (query.status() != null) {
-            jpql.append(" and worker.workStatus = :status");
+    @Override
+    public List<Worker> findAllByWorkerIdsAndCompanyId(Set<UUID> workerIds, UUID companyId) {
+        Objects.requireNonNull(workerIds, "workerIds must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        if (workerIds.isEmpty()) {
+            return List.of();
         }
-        if (query.language() != null) {
-            jpql.append(" and worker.preferredLanguage = :language");
-        }
-        if (query.expiryBefore() != null) {
-            jpql.append(" and worker.stayExpiryDate < :expiryBefore");
-        }
-        return jpql.toString();
+        return entityManager.createQuery(
+                        """
+                        select worker
+                        from WorkerJpaEntity worker
+                        where worker.workerId in :workerIds
+                          and worker.companyId = :companyId
+                        """,
+                        WorkerJpaEntity.class
+                )
+                .setParameter("workerIds", workerIds)
+                .setParameter("companyId", companyId)
+                .getResultList()
+                .stream()
+                .map(WorkerJpaEntity::toDomain)
+                .toList();
     }
 
-    private void bindParameters(
-            jakarta.persistence.Query jpaQuery,
-            UUID companyId,
-            WorkerSearchQuery query
-    ) {
+    private String buildWhereClause(WorkerSearchQuery query) {
+        StringBuilder where = new StringBuilder(" where worker.companyId = :companyId");
+        if (query.status() != null) {
+            where.append(" and worker.workStatus = :status");
+        }
+        if (query.language() != null) {
+            where.append(" and worker.preferredLanguage = :language");
+        }
+        if (query.expiryBefore() != null) {
+            where.append(" and worker.stayExpiryDate < :expiryBefore");
+        }
+        return where.toString();
+    }
+
+    private void bindParameters(Query jpaQuery, UUID companyId, WorkerSearchQuery query) {
         jpaQuery.setParameter("companyId", companyId);
         if (query.status() != null) {
             jpaQuery.setParameter("status", query.status());
