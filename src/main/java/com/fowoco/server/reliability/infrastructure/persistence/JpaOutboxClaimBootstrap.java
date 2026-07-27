@@ -3,6 +3,7 @@ package com.fowoco.server.reliability.infrastructure.persistence;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
 import com.fowoco.server.reliability.application.port.OutboxClaimBootstrap;
 import com.fowoco.server.reliability.domain.EventPublication;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -24,19 +25,24 @@ public class JpaOutboxClaimBootstrap implements OutboxClaimBootstrap {
     private static final String ATTEMPTS_EXHAUSTED = "EVENT_ATTEMPTS_EXHAUSTED";
 
     private final EventPublicationRepository repository;
+    private final Clock clock;
 
-    public JpaOutboxClaimBootstrap(EventPublicationRepository repository) {
+    public JpaOutboxClaimBootstrap(
+            EventPublicationRepository repository,
+            Clock clock
+    ) {
         this.repository = repository;
+        this.clock = clock;
     }
 
     @Override
     public List<ClaimResult> claim(
             String owner,
-            Instant now,
             Duration leaseDuration,
             int batchSize,
             int maxAttempts
     ) {
+        Instant now = clock.instant();
         List<EventPublication> candidates = repository.lockClaimable(now, batchSize);
         List<ClaimResult> results = new ArrayList<>(candidates.size());
         for (EventPublication publication : candidates) {

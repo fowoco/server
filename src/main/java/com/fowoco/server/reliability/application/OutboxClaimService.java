@@ -3,8 +3,6 @@ package com.fowoco.server.reliability.application;
 import com.fowoco.server.reliability.application.port.OutboxClaimBootstrap;
 import com.fowoco.server.reliability.application.port.OutboxClaimBootstrap.ClaimResult;
 import com.fowoco.server.reliability.config.OutboxProperties;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -17,26 +15,21 @@ public class OutboxClaimService {
     private final OutboxClaimBootstrap claimBootstrap;
     private final OutboxProperties properties;
     private final OutboxMetrics metrics;
-    private final Clock clock;
 
     public OutboxClaimService(
             OutboxClaimBootstrap claimBootstrap,
             OutboxProperties properties,
-            OutboxMetrics metrics,
-            Clock clock
+            OutboxMetrics metrics
     ) {
         this.claimBootstrap = claimBootstrap;
         this.properties = properties;
         this.metrics = metrics;
-        this.clock = clock;
     }
 
     @Transactional
     public List<ClaimedEvent> claimBatch(String owner) {
-        Instant now = clock.instant();
         List<ClaimResult> results = claimBootstrap.claim(
                 owner,
-                now,
                 properties.getLeaseDuration(),
                 properties.getBatchSize(),
                 properties.getMaxAttempts()

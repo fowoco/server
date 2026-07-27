@@ -3,7 +3,6 @@ package com.fowoco.server.reliability.infrastructure.persistence;
 import com.fowoco.server.reliability.application.port.OutboxClaimBootstrap;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -21,7 +20,7 @@ public class PostgreSqlOutboxClaimBootstrap implements OutboxClaimBootstrap {
 
     private static final String CLAIM_SQL = """
             SELECT event_id, company_id, review_required
-            FROM public.bootstrap_claim_event_publications(?1, ?2, ?3, ?4, ?5)
+            FROM public.bootstrap_claim_event_publications(?1, ?2, ?3, ?4)
             """;
 
     private final EntityManager entityManager;
@@ -33,19 +32,16 @@ public class PostgreSqlOutboxClaimBootstrap implements OutboxClaimBootstrap {
     @Override
     public List<ClaimResult> claim(
             String owner,
-            Instant now,
             Duration leaseDuration,
             int batchSize,
             int maxAttempts
     ) {
-        Instant leaseExpiresAt = now.plus(leaseDuration);
         @SuppressWarnings("unchecked")
         List<Object[]> rows = entityManager.createNativeQuery(CLAIM_SQL)
                 .setParameter(1, owner)
-                .setParameter(2, now)
-                .setParameter(3, leaseExpiresAt)
-                .setParameter(4, batchSize)
-                .setParameter(5, maxAttempts)
+                .setParameter(2, leaseDuration.toMillis())
+                .setParameter(3, batchSize)
+                .setParameter(4, maxAttempts)
                 .getResultList();
         return rows.stream()
                 .map(row -> new ClaimResult(

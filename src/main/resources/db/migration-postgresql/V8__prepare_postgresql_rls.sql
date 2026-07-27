@@ -30,8 +30,7 @@ $$;
 
 CREATE FUNCTION public.bootstrap_claim_event_publications(
     p_owner TEXT,
-    p_now TIMESTAMPTZ,
-    p_lease_expires_at TIMESTAMPTZ,
+    p_lease_duration_millis BIGINT,
     p_batch_size INTEGER,
     p_max_attempts INTEGER
 )
@@ -40,28 +39,51 @@ RETURNS TABLE (
     company_id UUID,
     review_required BOOLEAN
 )
-LANGUAGE SQL
+LANGUAGE PLPGSQL
 VOLATILE
 SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $$
+DECLARE
+    v_owner TEXT;
+    v_now TIMESTAMPTZ;
+    v_lease_expires_at TIMESTAMPTZ;
+BEGIN
+    v_owner := BTRIM(p_owner);
+    IF v_owner IS NULL OR CHAR_LENGTH(v_owner) NOT BETWEEN 1 AND 128 THEN
+        RAISE EXCEPTION 'Outbox claim owner must be 1 to 128 characters.'
+            USING ERRCODE = '22023';
+    END IF;
+    IF p_lease_duration_millis IS NULL
+        OR p_lease_duration_millis NOT BETWEEN 1 AND 86400000 THEN
+        RAISE EXCEPTION 'Outbox claim lease duration must be between 1 millisecond and 1 day.'
+            USING ERRCODE = '22023';
+    END IF;
+    IF p_batch_size IS NULL OR p_batch_size NOT BETWEEN 1 AND 500 THEN
+        RAISE EXCEPTION 'Outbox claim batch size must be between 1 and 500.'
+            USING ERRCODE = '22023';
+    END IF;
+    IF p_max_attempts IS NULL OR p_max_attempts NOT BETWEEN 1 AND 100 THEN
+        RAISE EXCEPTION 'Outbox claim max attempts must be between 1 and 100.'
+            USING ERRCODE = '22023';
+    END IF;
+
+    v_now := statement_timestamp();
+    v_lease_expires_at :=
+        v_now + p_lease_duration_millis * INTERVAL '1 millisecond';
+
+    RETURN QUERY
     WITH candidates AS (
         SELECT publication.event_id
         FROM public.event_publication AS publication
-        WHERE p_owner IS NOT NULL
-          AND CHAR_LENGTH(BTRIM(p_owner)) > 0
-          AND p_now IS NOT NULL
-          AND p_lease_expires_at > p_now
-          AND p_batch_size > 0
-          AND p_max_attempts >= 0
-          AND (
+        WHERE (
               (
                   publication.status IN ('PENDING', 'RETRY_WAIT')
-                  AND publication.next_attempt_at <= p_now
+                  AND publication.next_attempt_at <= v_now
               )
               OR (
                   publication.status = 'PROCESSING'
-                  AND publication.lease_expires_at <= p_now
+                  AND publication.lease_expires_at <= v_now
               )
           )
         ORDER BY publication.occurred_at, publication.event_id
@@ -80,19 +102,19 @@ AS $$
             lease_owner = CASE
                 WHEN publication.attempt_count + 1 > p_max_attempts
                     THEN NULL
-                ELSE p_owner
+                ELSE v_owner
             END,
             lease_expires_at = CASE
                 WHEN publication.attempt_count + 1 > p_max_attempts
                     THEN NULL
-                ELSE p_lease_expires_at
+                ELSE v_lease_expires_at
             END,
             last_error_code = CASE
                 WHEN publication.attempt_count + 1 > p_max_attempts
                     THEN 'EVENT_ATTEMPTS_EXHAUSTED'
                 ELSE NULL
             END,
-            updated_at = GREATEST(publication.updated_at, p_now),
+            updated_at = GREATEST(publication.updated_at, v_now),
             version = publication.version + 1
         FROM candidates
         WHERE publication.event_id = candidates.event_id
@@ -106,6 +128,8 @@ AS $$
         claimed.company_id,
         claimed.review_required
     FROM claimed
+    ;
+END;
 $$;
 
 CREATE FUNCTION public.bootstrap_count_outstanding_event_publications()
@@ -151,8 +175,7 @@ REVOKE ALL
 REVOKE ALL
     ON FUNCTION public.bootstrap_claim_event_publications(
         TEXT,
-        TIMESTAMPTZ,
-        TIMESTAMPTZ,
+        BIGINT,
         INTEGER,
         INTEGER
     )

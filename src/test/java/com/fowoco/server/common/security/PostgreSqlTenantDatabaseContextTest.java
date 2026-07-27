@@ -14,6 +14,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -256,7 +257,7 @@ class PostgreSqlTenantDatabaseContextTest {
         )).isFalse();
         assertThat(hasFunctionPrivilege(
                 "bootstrap_claim_event_publications("
-                        + "text,timestamp with time zone,timestamp with time zone,integer,integer"
+                        + "text,bigint,integer,integer"
                         + ")",
                 "EXECUTE"
         )).isFalse();
@@ -352,7 +353,7 @@ class PostgreSqlTenantDatabaseContextTest {
     @Test
     void outboxClaimReturnsOnlyTenantCoordinatesAndScopedReadsRejectMismatches() {
         String function = "public.bootstrap_claim_event_publications("
-                + "text,timestamptz,timestamptz,integer,integer"
+                + "text,bigint,integer,integer"
                 + ")";
         String countFunction =
                 "public.bootstrap_count_outstanding_event_publications()";
@@ -369,9 +370,14 @@ class PostgreSqlTenantDatabaseContextTest {
         try {
             insertOutboxProbe(COMPANY_A, OUTBOX_EVENT_A, "tenant-a-payload");
             insertOutboxProbe(COMPANY_B, OUTBOX_EVENT_B, "tenant-b-payload");
+            assertInvalidOutboxClaimInputsDoNotModifyPublications();
 
             OutboxClaimService claimService =
                     applicationContext.getBean(OutboxClaimService.class);
+            OffsetDateTime databaseTimeBeforeClaim = runtimeJdbc.queryForObject(
+                    "SELECT pg_catalog.statement_timestamp()",
+                    OffsetDateTime.class
+            );
             assertThat(claimService.claimBatch("rls-outbox-test"))
                     .containsExactlyInAnyOrder(
                             new OutboxClaimService.ClaimedEvent(
@@ -383,6 +389,15 @@ class PostgreSqlTenantDatabaseContextTest {
                                     COMPANY_B
                             )
                     );
+            OffsetDateTime databaseTimeAfterClaim = runtimeJdbc.queryForObject(
+                    "SELECT pg_catalog.statement_timestamp()",
+                    OffsetDateTime.class
+            );
+            assertClaimLeaseUsesDatabaseClock(
+                    OUTBOX_EVENT_A,
+                    databaseTimeBeforeClaim,
+                    databaseTimeAfterClaim
+            );
 
             OutboxReadService readService =
                     applicationContext.getBean(OutboxReadService.class);
@@ -417,6 +432,71 @@ class PostgreSqlTenantDatabaseContextTest {
                     "REVOKE EXECUTE ON FUNCTION " + oldestFunction + " FROM " + quotedRole
             );
         }
+    }
+
+    private void assertInvalidOutboxClaimInputsDoNotModifyPublications() {
+        Object[][] invalidArguments = {
+                {null, 30_000L, 20, 8},
+                {" ", 30_000L, 20, 8},
+                {"rls-outbox-test", 0L, 20, 8},
+                {"rls-outbox-test", 86_400_001L, 20, 8},
+                {"rls-outbox-test", 30_000L, 501, 8},
+                {"rls-outbox-test", 30_000L, 20, 0},
+                {"rls-outbox-test", 30_000L, 20, 101}
+        };
+
+        for (Object[] arguments : invalidArguments) {
+            assertThatThrownBy(() -> runtimeJdbc.queryForList(
+                    """
+                    SELECT *
+                    FROM public.bootstrap_claim_event_publications(
+                        CAST(? AS TEXT),
+                        CAST(? AS BIGINT),
+                        CAST(? AS INTEGER),
+                        CAST(? AS INTEGER)
+                    )
+                    """,
+                    arguments
+            )).isInstanceOf(DataAccessException.class);
+            assertOutboxProbeRemainsUnclaimed(OUTBOX_EVENT_A);
+            assertOutboxProbeRemainsUnclaimed(OUTBOX_EVENT_B);
+        }
+    }
+
+    private void assertOutboxProbeRemainsUnclaimed(UUID eventId) {
+        Map<String, Object> state = migrationJdbc.queryForMap(
+                """
+                SELECT status, attempt_count, lease_owner, lease_expires_at
+                FROM event_publication
+                WHERE event_id = ?
+                """,
+                eventId
+        );
+        assertThat(state.get("status")).isEqualTo("PENDING");
+        assertThat(state.get("attempt_count")).isEqualTo(0);
+        assertThat(state.get("lease_owner")).isNull();
+        assertThat(state.get("lease_expires_at")).isNull();
+    }
+
+    private void assertClaimLeaseUsesDatabaseClock(
+            UUID eventId,
+            OffsetDateTime databaseTimeBeforeClaim,
+            OffsetDateTime databaseTimeAfterClaim
+    ) {
+        OffsetDateTime leaseExpiresAt = migrationJdbc.queryForObject(
+                """
+                SELECT lease_expires_at
+                FROM event_publication
+                WHERE event_id = ?
+                """,
+                OffsetDateTime.class,
+                eventId
+        );
+        assertThat(leaseExpiresAt).isNotNull();
+        assertThat(leaseExpiresAt.toInstant()).isBetween(
+                databaseTimeBeforeClaim.toInstant().plusSeconds(30),
+                databaseTimeAfterClaim.toInstant().plusSeconds(30)
+        );
     }
 
     private ConfigurableApplicationContext startRestrictedRuntimeApplication() {
