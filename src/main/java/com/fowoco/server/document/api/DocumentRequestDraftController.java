@@ -1,6 +1,8 @@
 package com.fowoco.server.document.api;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.document.application.DocumentRequestDraftCommand;
 import com.fowoco.server.document.application.DocumentRequestDraftService;
 import com.fowoco.server.document.domain.DocumentRequestDraft;
@@ -12,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -43,6 +46,7 @@ public class DocumentRequestDraftController {
             operationId = "upsertDocumentRequestDraft",
             summary = "문서 요청 초안 저장",
             description = "누락 문서를 근로자에게 요청할 안내문 초안을 만들거나 갱신합니다. "
+                    + "이 저장만으로는 Worker Link 생성이나 메시지 발송이 되지 않습니다. "
                     + "최초 생성 시 expected_version은 0이어야 합니다."
     )
     @ApiResponses({
@@ -64,9 +68,11 @@ public class DocumentRequestDraftController {
     @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
     public DocumentRequestDraftResponse upsert(
             @Parameter(description = "업무 ID") @PathVariable UUID taskId,
-            @Valid @RequestBody DocumentRequestUpsertRequest request
+            @Valid @RequestBody DocumentRequestUpsertRequest request,
+            HttpServletRequest servletRequest
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        UUID companyId = actor.companyId();
         DocumentRequestDraftCommand command = new DocumentRequestDraftCommand(
                 taskId,
                 companyId,
@@ -75,7 +81,11 @@ public class DocumentRequestDraftController {
                 request.getMessage(),
                 request.getExpectedVersion()
         );
-        DocumentRequestDraft draft = documentRequestDraftService.upsert(command);
+        DocumentRequestDraft draft = documentRequestDraftService.upsert(
+                command,
+                actor,
+                RequestMetadata.from(servletRequest)
+        );
         return DocumentRequestDraftResponse.from(draft);
     }
 }
