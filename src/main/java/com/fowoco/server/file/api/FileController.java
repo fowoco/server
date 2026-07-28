@@ -1,8 +1,10 @@
 package com.fowoco.server.file.api;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.error.ErrorCode;
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.FileCreateCommand;
 import com.fowoco.server.file.application.FileService;
 import com.fowoco.server.file.domain.StoredFile;
@@ -14,6 +16,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.UUID;
@@ -46,7 +49,7 @@ public class FileController {
             summary = "파일 업로드",
             description = "분석·증빙·근로자 제출에 사용할 파일을 안전하게 저장하고 fileId를 발급합니다. "
                     + "악성파일 검사 인프라는 아직 없어 scan_status는 항상 NOT_SCANNED로 반환합니다. "
-                    + "허용 크기·형식은 확정 기준 없어 기본값(20MB, image/jpeg·png·webp, application/pdf) 사용 중."
+                    + "허용 크기·형식은 TODO — 확정 기준 없어 상식적인 기본값(20MB, image/jpeg·png·webp, application/pdf) 사용 중."
     )
     @ApiResponses({
             @ApiResponse(
@@ -73,13 +76,15 @@ public class FileController {
             @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
             @Parameter(description = "파일 용도") @RequestParam("purpose") String purpose,
             @Parameter(description = "연결할 업무 ID") @RequestParam(value = "taskId", required = false) UUID taskId,
-            @Parameter(description = "연결할 근로자 ID") @RequestParam(value = "workerId", required = false) UUID workerId
+            @Parameter(description = "연결할 근로자 ID") @RequestParam(value = "workerId", required = false) UUID workerId,
+            HttpServletRequest servletRequest
     ) {
         if (file.isEmpty() || file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()) {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, "업로드할 파일과 파일명이 필요합니다.");
         }
 
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        UUID companyId = actor.companyId();
         try {
             FileCreateCommand command = new FileCreateCommand(
                     companyId,
@@ -91,7 +96,7 @@ public class FileController {
                     workerId,
                     file.getInputStream()
             );
-            StoredFile storedFile = fileService.upload(command);
+            StoredFile storedFile = fileService.upload(command, actor, RequestMetadata.from(servletRequest));
             return ResponseEntity.status(HttpStatus.CREATED).body(FileUploadResponse.from(storedFile));
         } catch (IOException exception) {
             throw new UncheckedIOException("failed to read uploaded file", exception);
