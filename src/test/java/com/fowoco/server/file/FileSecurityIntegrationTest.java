@@ -45,13 +45,20 @@ class FileSecurityIntegrationTest {
 
     @BeforeAll
     void seedCompanyAndUser() {
+        jdbcTemplate.update("DELETE FROM document_request_draft_type");
+        jdbcTemplate.update("DELETE FROM document_request_draft");
         jdbcTemplate.update("DELETE FROM stored_file");
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
+        jdbcTemplate.update("DELETE FROM audit_event");
+        jdbcTemplate.update("DELETE FROM task_evidence");
+        jdbcTemplate.update("DELETE FROM external_submission");
+        jdbcTemplate.update("DELETE FROM approval_request");
+        jdbcTemplate.update("DELETE FROM task_transition_history");
+        jdbcTemplate.update("DELETE FROM task_checklist_item");
+        jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
-        jdbcTemplate.update("DELETE FROM refresh_token");
-        jdbcTemplate.update("DELETE FROM user_account");
-        jdbcTemplate.update("DELETE FROM company");
-
         jdbcTemplate.update(
                 """
                 INSERT INTO company (company_id, name, status, created_at, updated_at, version)
