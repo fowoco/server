@@ -6,6 +6,7 @@ import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
+import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.WorkerDocument;
 import java.time.Clock;
 import java.util.UUID;
@@ -16,17 +17,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkerDocumentService {
 
     private final WorkerDocumentRepository workerDocumentRepository;
+    private final WorkerRepository workerRepository;
     private final StoredFileRepository storedFileRepository;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
     public WorkerDocumentService(
             WorkerDocumentRepository workerDocumentRepository,
+            WorkerRepository workerRepository,
             StoredFileRepository storedFileRepository,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
         this.workerDocumentRepository = workerDocumentRepository;
+        this.workerRepository = workerRepository;
         this.storedFileRepository = storedFileRepository;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
@@ -34,6 +38,9 @@ public class WorkerDocumentService {
 
     @Transactional
     public WorkerDocument register(WorkerDocumentCreateCommand command) {
+        workerRepository.findByWorkerIdAndCompanyId(command.workerId(), command.companyId())
+                .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_NOT_FOUND));
+
         WorkerDocument document = WorkerDocument.create(
                 uuidGenerator.generate(),
                 command.workerId(),
@@ -86,10 +93,6 @@ public class WorkerDocumentService {
         return workerDocumentRepository.update(updated);
     }
 
-    /**
-     * fileId가 요청에 포함되면, 그 파일이 같은 사업장 소속으로 실제 존재하는지 검증한 뒤에만
-     * 연결을 허용한다
-     */
     private UUID resolveFileId(UUID requestedFileId, UUID companyId, UUID existingFileId) {
         if (requestedFileId == null) {
             return existingFileId;
