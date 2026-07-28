@@ -1,6 +1,8 @@
 package com.fowoco.server.worker.api;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.worker.application.WorkerDocumentCreateCommand;
 import com.fowoco.server.worker.application.WorkerDocumentPatchCommand;
 import com.fowoco.server.worker.application.WorkerDocumentService;
@@ -13,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -120,9 +123,11 @@ public class WorkerDocumentController {
     public WorkerDocumentResponse patch(
             @Parameter(description = "근로자 ID") @PathVariable UUID workerId,
             @Parameter(description = "서류 ID") @PathVariable UUID documentId,
-            @Valid @RequestBody WorkerDocumentPatchRequest request
+            @Valid @RequestBody WorkerDocumentPatchRequest request,
+            HttpServletRequest servletRequest
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        UUID companyId = actor.companyId();
         WorkerDocumentPatchCommand command = new WorkerDocumentPatchCommand(
                 documentId,
                 workerId,
@@ -135,7 +140,11 @@ public class WorkerDocumentController {
                 request.getFileId(),
                 request.getExpectedVersion()
         );
-        WorkerDocument document = workerDocumentService.patch(command);
+        WorkerDocument document = workerDocumentService.patch(
+                command,
+                actor,
+                RequestMetadata.from(servletRequest)
+        );
         return WorkerDocumentResponse.from(document);
     }
 }
