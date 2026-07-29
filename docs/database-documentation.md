@@ -5,7 +5,8 @@ PostgreSQL에 처음부터 적용한 결과로 생성합니다.
 
 - 팀 공유 사이트: <https://fowoco.github.io/server/>
 - API Swagger 문서: <https://fowoco.github.io/server/api/>
-- 변경의 원본: `src/main/resources/db/migration`
+- 공통 변경의 원본: `src/main/resources/db/migration`
+- PostgreSQL 전용 변경의 원본: `src/main/resources/db/migration-postgresql`
 - 구조 결정의 원본: `docs/adr`
 
 문서는 구조를 쉽게 찾기 위한 보조 수단입니다. 문서 화면에서 DB를 변경할 수
@@ -29,6 +30,7 @@ PostgreSQL에 처음부터 적용한 결과로 생성합니다.
 
 ```text
 src/main/resources/db/migration/**
+src/main/resources/db/migration-postgresql/**
 scripts/db-docs/**
 .github/workflows/database-docs.yml
 ```
@@ -37,7 +39,7 @@ Workflow는 다음 순서로 동작합니다.
 
 ```text
 빈 PostgreSQL 시작
-→ Flyway migrate
+→ 공통·PostgreSQL 전용 Flyway migrate
 → Flyway validate
 → SchemaSpy HTML 생성
 → Migration 이력 페이지 생성

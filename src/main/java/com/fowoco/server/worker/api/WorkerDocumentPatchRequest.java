@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Schema(
         name = "WorkerDocumentPatchRequest",
@@ -33,6 +34,14 @@ public final class WorkerDocumentPatchRequest {
     private final String note;
 
     @Schema(
+            name = "file_id",
+            description = "연결할 파일 ID (#13 POST /files 응답의 file_id). "
+                    + "생략 시 변경하지 않습니다. 존재하지 않거나 다른 사업장 소속이면 404로 거부합니다.",
+            format = "uuid"
+    )
+    private final UUID fileId;
+
+    @Schema(
             name = "expected_version",
             description = "낙관적 잠금 버전. 마지막으로 조회한 WorkerDocumentResponse.version을 그대로 보내야 합니다.",
             requiredMode = Schema.RequiredMode.REQUIRED
@@ -47,6 +56,7 @@ public final class WorkerDocumentPatchRequest {
             @JsonProperty("expiry_date") LocalDate expiryDate,
             @JsonProperty("destination") String destination,
             @JsonProperty("note") String note,
+            @JsonProperty("file_id") UUID fileId,
             @JsonProperty("expected_version") Long expectedVersion
     ) {
         this.documentType = documentType;
@@ -54,6 +64,7 @@ public final class WorkerDocumentPatchRequest {
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
+        this.fileId = fileId;
         this.expectedVersion = expectedVersion;
     }
 
@@ -75,6 +86,10 @@ public final class WorkerDocumentPatchRequest {
 
     public String getNote() {
         return note;
+    }
+
+    public UUID getFileId() {
+        return fileId;
     }
 
     public Long getExpectedVersion() {

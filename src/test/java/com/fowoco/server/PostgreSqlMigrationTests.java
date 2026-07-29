@@ -67,6 +67,7 @@ class PostgreSqlMigrationTests {
                         "refresh_token",
                         "worker",
                         "worker_document",
+                        "stored_file",
                         "task",
                         "task_checklist_item",
                         "task_transition_history",
@@ -75,7 +76,9 @@ class PostgreSqlMigrationTests {
                         "task_evidence",
                         "audit_event",
                         "event_publication",
-                        "event_consumption"
+                        "event_consumption",
+                        "document_request_draft",
+                        "document_request_draft_type"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -116,6 +119,13 @@ class PostgreSqlMigrationTests {
                 .containsEntry("document_type", new ColumnSpec("varchar", false))
                 .containsEntry("submission_status", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "stored_file"))
+                .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", true))
+                .containsEntry("worker_id", new ColumnSpec("uuid", true))
+                .containsEntry("storage_key", new ColumnSpec("varchar", false))
+                .containsEntry("scan_status", new ColumnSpec("varchar", false));
         assertThat(columnSpecs(connection, "task"))
                 .containsEntry("task_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
@@ -152,6 +162,16 @@ class PostgreSqlMigrationTests {
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
                 .containsEntry("handler_name", new ColumnSpec("varchar", false))
                 .containsEntry("completed_at", new ColumnSpec("timestamptz", false));
+        assertThat(columnSpecs(connection, "document_request_draft"))
+                .containsEntry("draft_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("review_status", new ColumnSpec("varchar", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "document_request_draft_type"))
+                .containsEntry("draft_id", new ColumnSpec("uuid", false))
+                .containsEntry("document_type", new ColumnSpec("varchar", false))
+                .doesNotContainKey("company_id");
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -165,6 +185,8 @@ class PostgreSqlMigrationTests {
                         "fk_refresh_token_user_company",
                         "fk_worker_company",
                         "fk_worker_document_worker",
+                        "pk_stored_file",
+                        "fk_stored_file_company",
                         "fk_task_worker_company",
                         "fk_task_created_by_company",
                         "fk_approval_request_task_company",
@@ -175,7 +197,10 @@ class PostgreSqlMigrationTests {
                         "fk_event_publication_company",
                         "pk_event_consumption",
                         "uq_event_consumption_event_handler",
-                        "fk_event_consumption_publication"
+                        "fk_event_consumption_publication",
+                        "pk_document_request_draft",
+                        "fk_document_request_draft_task_company",
+                        "fk_document_request_draft_type_draft"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -185,12 +210,14 @@ class PostgreSqlMigrationTests {
                         "idx_refresh_token_expires_at",
                         "idx_worker_company",
                         "idx_worker_document_company_status",
+                        "idx_stored_file_company",
                         "idx_task_company_status_due",
                         "idx_approval_request_task_status",
                         "idx_audit_event_company_time",
                         "idx_event_publication_claim",
                         "idx_event_publication_company_time",
-                        "idx_event_consumption_company_event"
+                        "idx_event_consumption_company_event",
+                        "idx_document_request_draft_company"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -199,6 +226,7 @@ class PostgreSqlMigrationTests {
                         "pl_refresh_token_tenant_isolation",
                         "pl_worker_tenant_isolation",
                         "pl_worker_document_tenant_isolation",
+                        "pl_stored_file_tenant_isolation",
                         "pl_task_tenant_isolation",
                         "pl_task_checklist_item_tenant_isolation",
                         "pl_task_transition_history_tenant_isolation",
@@ -207,7 +235,9 @@ class PostgreSqlMigrationTests {
                         "pl_task_evidence_tenant_isolation",
                         "pl_audit_event_tenant_isolation",
                         "pl_event_publication_tenant_isolation",
-                        "pl_event_consumption_tenant_isolation"
+                        "pl_event_consumption_tenant_isolation",
+                        "pl_document_request_draft_tenant_isolation",
+                        "pl_document_request_draft_type_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))

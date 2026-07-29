@@ -20,22 +20,29 @@ transaction-local tenant context와 connection pool 비누수 테스트를 준�
 JWT로 인증된 Worker·Task·Approval·Audit 업무 transaction은 요청 값이 아니라
 `ActorContext.companyId`를 transaction-local context의 신뢰 원본으로 사용합니다.
 H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 검증합니다.
-`V8`에서 bootstrap 함수와 tenant 테이블 RLS policy를 생성했으며, RLS는 아직 활성화하지 않았습니다.
+`V10`에서 bootstrap 함수와 tenant 테이블 RLS policy를 생성했으며, RLS는 아직 활성화하지 않았습니다.
 
 로그인·Refresh Token·Logout은 tenant context가 생기기 전 최소 bootstrap 조회가
 필요합니다. Issue #34 작성 뒤 추가된 사업장 회원가입도 새 tenant 행을 처음 만드는
 별도 bootstrap 흐름으로 함께 검토해야 합니다. Worker Link는 해당 기능이 구현된 뒤
 같은 기준으로 확장합니다.
 
-현재 `main`의 V1~V7에는 아래 14개 tenant table이 존재합니다. 기반 단계의 제한
-role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
+현재 `main`의 V1~V9에는 `company_id`를 직접 보유한 아래 16개 tenant table과,
+부모 초안의 tenant를 따르는 `document_request_draft_type`이 존재합니다. 기반 단계의
+제한 role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
 `REFERENCES` 권한과 RLS 우회 권한이 없음을 확인합니다.
 
 - `company`, `user_account`, `refresh_token`
-- `worker`, `worker_document`
+- `worker`, `worker_document`, `stored_file`
 - `task`, `task_checklist_item`, `task_transition_history`
 - `approval_request`, `external_submission`, `task_evidence`, `audit_event`
 - `event_publication`, `event_consumption`
+- `document_request_draft`, `document_request_draft_type`
+
+`document_request_draft_type`에는 `company_id`가 없으므로 부모
+`document_request_draft`의 `draft_id`와 현재 tenant context를 확인하는 `EXISTS`
+policy를 사용합니다. 이 예외는 #57의 스키마와 JPA collection-table 계약을 유지하면서
+자식 테이블 직접 접근도 격리하기 위한 것입니다.
 
 `event_publication`은 여러 tenant의 미완료 row를 찾는 background queue이므로 일반
 요청 table과 같은 policy를 바로 활성화하면 worker가 아무 이벤트도 claim하지 못할 수

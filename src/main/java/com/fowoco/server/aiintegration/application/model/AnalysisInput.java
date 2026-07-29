@@ -4,16 +4,16 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Pseudonymized instruction and allow-listed context sent to the AI Runtime.
+ * Original HR instruction and Worker context sent to the AI Runtime for the current demo.
  */
-public record MaskedAnalysisInput(
-        String maskedInstruction,
-        List<MaskedWorkerContext> workers,
+public record AnalysisInput(
+        String instruction,
+        List<WorkerContext> workers,
         List<WorkflowConstraint> workflowConstraints
 ) {
 
-    public MaskedAnalysisInput {
-        Objects.requireNonNull(maskedInstruction, "maskedInstruction must not be null");
+    public AnalysisInput {
+        Objects.requireNonNull(instruction, "instruction must not be null");
         Objects.requireNonNull(workers, "workers must not be null");
         Objects.requireNonNull(workflowConstraints, "workflowConstraints must not be null");
         workers = List.copyOf(workers);

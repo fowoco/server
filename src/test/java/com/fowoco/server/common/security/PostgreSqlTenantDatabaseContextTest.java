@@ -69,6 +69,7 @@ class PostgreSqlTenantDatabaseContextTest {
             "refresh_token",
             "worker",
             "worker_document",
+            "stored_file",
             "task",
             "task_checklist_item",
             "task_transition_history",
@@ -77,7 +78,9 @@ class PostgreSqlTenantDatabaseContextTest {
             "task_evidence",
             "audit_event",
             "event_publication",
-            "event_consumption"
+            "event_consumption",
+            "document_request_draft",
+            "document_request_draft_type"
     };
     private static final String TENANT_TABLE_SQL =
             "public." + String.join(", public.", TENANT_TABLES);

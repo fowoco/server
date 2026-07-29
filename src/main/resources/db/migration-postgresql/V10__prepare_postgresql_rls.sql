@@ -257,6 +257,19 @@ CREATE POLICY pl_worker_document_tenant_isolation
         NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
     );
 
+CREATE POLICY pl_stored_file_tenant_isolation
+    ON public.stored_file
+    FOR ALL
+    TO PUBLIC
+    USING (
+        company_id =
+        NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
+    )
+    WITH CHECK (
+        company_id =
+        NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
+    );
+
 CREATE POLICY pl_task_tenant_isolation
     ON public.task
     FOR ALL
@@ -268,6 +281,42 @@ CREATE POLICY pl_task_tenant_isolation
     WITH CHECK (
         company_id =
         NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
+    );
+
+CREATE POLICY pl_document_request_draft_tenant_isolation
+    ON public.document_request_draft
+    FOR ALL
+    TO PUBLIC
+    USING (
+        company_id =
+        NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
+    )
+    WITH CHECK (
+        company_id =
+        NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
+    );
+
+CREATE POLICY pl_document_request_draft_type_tenant_isolation
+    ON public.document_request_draft_type
+    FOR ALL
+    TO PUBLIC
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM public.document_request_draft AS draft
+            WHERE draft.draft_id = document_request_draft_type.draft_id
+              AND draft.company_id =
+                  NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM public.document_request_draft AS draft
+            WHERE draft.draft_id = document_request_draft_type.draft_id
+              AND draft.company_id =
+                  NULLIF(pg_catalog.current_setting('app.company_id', true), '')::UUID
+        )
     );
 
 CREATE POLICY pl_task_checklist_item_tenant_isolation
