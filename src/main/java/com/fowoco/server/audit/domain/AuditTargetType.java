@@ -4,5 +4,8 @@ public enum AuditTargetType {
     TASK,
     APPROVAL_REQUEST,
     EXTERNAL_SUBMISSION,
-    EVIDENCE
+    EVIDENCE,
+    FILE,
+    WORKER_DOCUMENT,
+    DOCUMENT_REQUEST_DRAFT
 }

@@ -1,6 +1,8 @@
 package com.fowoco.server.worker.application.port;
 
+import com.fowoco.server.worker.application.WorkerDocumentSearchQuery;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,4 +17,8 @@ public interface WorkerDocumentRepository {
     );
 
     WorkerDocument update(WorkerDocument document);
+
+    List<WorkerDocument> findPage(UUID companyId, WorkerDocumentSearchQuery query);
+
+    long countPage(UUID companyId, WorkerDocumentSearchQuery query);
 }

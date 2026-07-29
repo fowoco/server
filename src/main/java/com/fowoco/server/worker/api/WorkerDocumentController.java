@@ -1,6 +1,8 @@
 package com.fowoco.server.worker.api;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.worker.application.WorkerDocumentCreateCommand;
 import com.fowoco.server.worker.application.WorkerDocumentPatchCommand;
 import com.fowoco.server.worker.application.WorkerDocumentService;
@@ -13,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -85,8 +88,8 @@ public class WorkerDocumentController {
     @Operation(
             operationId = "patchWorkerDocument",
             summary = "서류 상태 수정",
-            description = "서류 제출·검증·만료 상태와 유효기간을 수정합니다. "
-                    + "expected_version이 현재 값과 다르면 409로 응답합니다."
+            description = "서류 제출·검증·만료 상태와 유효기간을 수정하고, 업로드된 파일을 연결합니다. "
+                    + "expected_version이 현재 값과 다르면 409, file_id가 존재하지 않으면 404로 응답합니다."
     )
     @ApiResponses({
             @ApiResponse(
@@ -120,9 +123,11 @@ public class WorkerDocumentController {
     public WorkerDocumentResponse patch(
             @Parameter(description = "근로자 ID") @PathVariable UUID workerId,
             @Parameter(description = "서류 ID") @PathVariable UUID documentId,
-            @Valid @RequestBody WorkerDocumentPatchRequest request
+            @Valid @RequestBody WorkerDocumentPatchRequest request,
+            HttpServletRequest servletRequest
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        UUID companyId = actor.companyId();
         WorkerDocumentPatchCommand command = new WorkerDocumentPatchCommand(
                 documentId,
                 workerId,
@@ -132,9 +137,14 @@ public class WorkerDocumentController {
                 request.getExpiryDate(),
                 request.getDestination(),
                 request.getNote(),
+                request.getFileId(),
                 request.getExpectedVersion()
         );
-        WorkerDocument document = workerDocumentService.patch(command);
+        WorkerDocument document = workerDocumentService.patch(
+                command,
+                actor,
+                RequestMetadata.from(servletRequest)
+        );
         return WorkerDocumentResponse.from(document);
     }
 }
