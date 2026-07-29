@@ -11,6 +11,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.error.ErrorCode;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
 import java.time.Instant;
@@ -25,17 +26,20 @@ public class AuditQueryService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final ActorAuthorizer actorAuthorizer;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
     private final AuditEventRepository auditRepository;
     private final AuditCursorCodec cursorCodec;
 
     public AuditQueryService(
             ActorAuthorizer actorAuthorizer,
+            TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
             AuditEventRepository auditRepository,
             AuditCursorCodec cursorCodec
     ) {
         this.actorAuthorizer = actorAuthorizer;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
         this.auditRepository = auditRepository;
         this.cursorCodec = cursorCodec;
@@ -43,6 +47,7 @@ public class AuditQueryService {
 
     @Transactional(readOnly = true)
     public List<AuditEventView> getTaskActivities(UUID taskId, ActorContext actor) {
+        bindTenant(actor);
         actorAuthorizer.requireAnyRole(actor, UserRole.ADMIN, UserRole.HR, UserRole.VIEWER);
         taskRepository.findByIdAndCompanyId(taskId, actor.companyId())
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
@@ -64,6 +69,7 @@ public class AuditQueryService {
             int requestedLimit,
             ActorContext actor
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireAnyRole(actor, UserRole.ADMIN);
         if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
             throw new ApiException(ErrorCode.INVALID_REQUEST);
@@ -94,5 +100,9 @@ public class AuditQueryService {
 
     private String normalizeTraceId(String traceId) {
         return traceId == null || traceId.isBlank() ? null : traceId.trim();
+    }
+
+    private void bindTenant(ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
     }
 }

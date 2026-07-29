@@ -17,6 +17,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.TaskReadinessChecker;
@@ -40,6 +41,7 @@ public class ApprovalService implements ApprovalControlPort {
     private static final String AUDIT_EVENT_VERSION = "1";
 
     private final ActorAuthorizer actorAuthorizer;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
     private final TaskTransitionRecorder transitionRecorder;
     private final TaskReadinessChecker taskReadinessChecker;
@@ -53,6 +55,7 @@ public class ApprovalService implements ApprovalControlPort {
 
     public ApprovalService(
             ActorAuthorizer actorAuthorizer,
+            TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
             TaskTransitionRecorder transitionRecorder,
             TaskReadinessChecker taskReadinessChecker,
@@ -65,6 +68,7 @@ public class ApprovalService implements ApprovalControlPort {
             Clock clock
     ) {
         this.actorAuthorizer = actorAuthorizer;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
         this.transitionRecorder = transitionRecorder;
         this.taskReadinessChecker = taskReadinessChecker;
@@ -84,6 +88,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         approvalRepository.findPendingByTaskIdAndCompanyId(taskId, actor.companyId())
                 .ifPresent(ignored -> {
@@ -141,6 +146,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
@@ -178,6 +184,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
@@ -207,6 +214,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireValidApproval(task);
@@ -257,6 +265,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         if (task.status() != TaskStatus.APPROVED
@@ -303,6 +312,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorContext actor,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         boolean approved = hasValidApproval(
@@ -341,6 +351,7 @@ public class ApprovalService implements ApprovalControlPort {
             long contentRevision,
             String criticalFingerprint
     ) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
         return approvalRepository.findLatestApprovedByTaskIdAndCompanyId(taskId, companyId)
                 .filter(approval -> approval.isValidFor(contentRevision, criticalFingerprint))
                 .isPresent();
@@ -355,6 +366,7 @@ public class ApprovalService implements ApprovalControlPort {
             Instant occurredAt,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         List<ApprovalRequest> active = invalidateActiveApprovals(
@@ -384,6 +396,7 @@ public class ApprovalService implements ApprovalControlPort {
             Instant occurredAt,
             RequestMetadata metadata
     ) {
+        bindTenant(actor);
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         List<ApprovalRequest> invalidated = invalidateActiveApprovals(
@@ -555,6 +568,10 @@ public class ApprovalService implements ApprovalControlPort {
         return actor.roles().stream()
                 .min(Comparator.comparingInt(this::rolePriority))
                 .orElseThrow();
+    }
+
+    private void bindTenant(ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
     }
 
     private int rolePriority(UserRole role) {

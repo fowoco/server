@@ -164,7 +164,7 @@ class FileSecurityIntegrationTest {
     ) throws Exception {
         return uploadFile(token, filename, mimeType, content, "TASK_EVIDENCE", taskId);
     }
-    
+
 
     private void writePart(
             java.io.ByteArrayOutputStream out, String name, String filename, String mimeType, byte[] content

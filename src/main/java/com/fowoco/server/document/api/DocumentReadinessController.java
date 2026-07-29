@@ -1,5 +1,6 @@
 package com.fowoco.server.document.api;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.document.application.DocumentReadinessResult;
 import com.fowoco.server.document.application.DocumentReadinessService;
@@ -60,8 +61,8 @@ public class DocumentReadinessController {
     public DocumentReadinessResponse get(
             @Parameter(description = "업무 ID") @PathVariable UUID taskId
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
-        DocumentReadinessResult result = documentReadinessService.calculate(taskId, companyId);
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        DocumentReadinessResult result = documentReadinessService.calculate(taskId, actor);
         return new DocumentReadinessResponse(
                 result.required(),
                 result.available(),

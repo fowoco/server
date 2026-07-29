@@ -9,6 +9,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.error.FileErrorCode;
 import com.fowoco.server.file.application.port.FileStorage;
@@ -48,6 +49,7 @@ public class FileService {
     private final TaskRepository taskRepository;
     private final WorkerRepository workerRepository;
     private final AuditEventRepository auditRepository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -57,6 +59,7 @@ public class FileService {
             TaskRepository taskRepository,
             WorkerRepository workerRepository,
             AuditEventRepository auditRepository,
+            TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -65,12 +68,15 @@ public class FileService {
         this.taskRepository = taskRepository;
         this.workerRepository = workerRepository;
         this.auditRepository = auditRepository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
 
     @Transactional
     public StoredFile upload(FileCreateCommand command, ActorContext actor, RequestMetadata metadata) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+        UUID companyId = actor.companyId();
         if (command.size() > MAX_FILE_SIZE_BYTES) {
             throw new ApiException(FileErrorCode.FILE_TOO_LARGE);
         }
@@ -78,11 +84,11 @@ public class FileService {
             throw new ApiException(FileErrorCode.UNSUPPORTED_FILE_TYPE);
         }
         if (command.taskId() != null) {
-            taskRepository.findByIdAndCompanyId(command.taskId(), command.companyId())
+            taskRepository.findByIdAndCompanyId(command.taskId(), companyId)
                     .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
         }
         if (command.workerId() != null) {
-            workerRepository.findByWorkerIdAndCompanyId(command.workerId(), command.companyId())
+            workerRepository.findByWorkerIdAndCompanyId(command.workerId(), companyId)
                     .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_NOT_FOUND));
         }
 
@@ -92,7 +98,7 @@ public class FileService {
 
         StoredFile storedFile = StoredFile.create(
                 storedFileId,
-                command.companyId(),
+                companyId,
                 command.name(),
                 command.mimeType(),
                 command.size(),

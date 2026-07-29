@@ -3,6 +3,7 @@ package com.fowoco.server.common.security;
 import jakarta.persistence.EntityManager;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -10,6 +11,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * PostgreSQL tenant context backed by a transaction-local custom setting.
  */
 @Component
+@ConditionalOnProperty(
+        name = "app.database.tenant-context-mode",
+        havingValue = "postgresql"
+)
 public final class PostgreSqlTenantDatabaseContext implements TenantDatabaseContext {
 
     private static final String READ_COMPANY_ID_SQL = """

@@ -1,5 +1,7 @@
 package com.fowoco.server.document.application;
 
+import com.fowoco.server.auth.application.ActorContext;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.worker.application.WorkerDocumentSearchQuery;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.application.port.WorkerRepository;
@@ -19,17 +21,22 @@ public class DocumentService {
 
     private final WorkerDocumentRepository workerDocumentRepository;
     private final WorkerRepository workerRepository;
+    private final TenantDatabaseContext tenantDatabaseContext;
 
     public DocumentService(
             WorkerDocumentRepository workerDocumentRepository,
-            WorkerRepository workerRepository
+            WorkerRepository workerRepository,
+            TenantDatabaseContext tenantDatabaseContext
     ) {
         this.workerDocumentRepository = workerDocumentRepository;
         this.workerRepository = workerRepository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
     }
 
     @Transactional(readOnly = true)
-    public DocumentPageResult findPage(UUID companyId, WorkerDocumentSearchQuery query) {
+    public DocumentPageResult findPage(ActorContext actor, WorkerDocumentSearchQuery query) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+        UUID companyId = actor.companyId();
         List<WorkerDocument> items = workerDocumentRepository.findPage(companyId, query);
         long totalElements = workerDocumentRepository.countPage(companyId, query);
 

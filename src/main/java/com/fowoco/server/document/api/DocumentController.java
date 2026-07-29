@@ -1,5 +1,6 @@
 package com.fowoco.server.document.api;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.document.application.DocumentPageResult;
 import com.fowoco.server.document.application.DocumentService;
@@ -75,7 +76,7 @@ public class DocumentController {
             @Parameter(description = "페이지당 항목 수 (1~100)")
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerDocumentSearchQuery query = new WorkerDocumentSearchQuery(
                 workerId,
                 documentType,
@@ -84,7 +85,7 @@ public class DocumentController {
                 page,
                 size
         );
-        DocumentPageResult result = documentService.findPage(companyId, query);
+        DocumentPageResult result = documentService.findPage(actor, query);
         List<DocumentItemResponse> items = result.items().stream()
                 .map(document -> DocumentItemResponse.from(
                         document,

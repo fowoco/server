@@ -71,17 +71,16 @@ public class WorkerDocumentController {
             @Parameter(description = "근로자 ID") @PathVariable UUID workerId,
             @Valid @RequestBody WorkerDocumentCreateRequest request
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerDocumentCreateCommand command = new WorkerDocumentCreateCommand(
                 workerId,
-                companyId,
                 request.getDocumentType(),
                 request.getSubmissionStatus(),
                 request.getExpiryDate(),
                 request.getDestination(),
                 request.getNote()
         );
-        WorkerDocument document = workerDocumentService.register(command);
+        WorkerDocument document = workerDocumentService.register(command, actor);
         return ResponseEntity.status(HttpStatus.CREATED).body(WorkerDocumentResponse.from(document));
     }
 
@@ -127,11 +126,9 @@ public class WorkerDocumentController {
             HttpServletRequest servletRequest
     ) {
         ActorContext actor = actorContextProvider.requireCurrentActor();
-        UUID companyId = actor.companyId();
         WorkerDocumentPatchCommand command = new WorkerDocumentPatchCommand(
                 documentId,
                 workerId,
-                companyId,
                 request.getDocumentType(),
                 request.getSubmissionStatus(),
                 request.getExpiryDate(),

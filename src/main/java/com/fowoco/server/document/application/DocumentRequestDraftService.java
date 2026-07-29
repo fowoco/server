@@ -9,6 +9,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.document.application.error.DocumentErrorCode;
 import com.fowoco.server.document.application.port.DocumentRequestDraftRepository;
@@ -30,6 +31,7 @@ public class DocumentRequestDraftService {
     private final TaskRepository taskRepository;
     private final DocumentRequestDraftRepository documentRequestDraftRepository;
     private final AuditEventRepository auditRepository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -37,12 +39,14 @@ public class DocumentRequestDraftService {
             TaskRepository taskRepository,
             DocumentRequestDraftRepository documentRequestDraftRepository,
             AuditEventRepository auditRepository,
+            TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
         this.taskRepository = taskRepository;
         this.documentRequestDraftRepository = documentRequestDraftRepository;
         this.auditRepository = auditRepository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -53,11 +57,12 @@ public class DocumentRequestDraftService {
             ActorContext actor,
             RequestMetadata metadata
     ) {
-        taskRepository.findByIdAndCompanyId(command.taskId(), command.companyId())
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+        taskRepository.findByIdAndCompanyId(command.taskId(), actor.companyId())
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
 
         Optional<DocumentRequestDraft> existing = documentRequestDraftRepository
-                .findByTaskIdAndCompanyId(command.taskId(), command.companyId());
+                .findByTaskIdAndCompanyId(command.taskId(), actor.companyId());
 
         Instant now = clock.instant();
         DocumentRequestDraft saved;
@@ -66,7 +71,7 @@ public class DocumentRequestDraftService {
             DocumentRequestDraft draft = DocumentRequestDraft.create(
                     uuidGenerator.generate(),
                     command.taskId(),
-                    command.companyId(),
+                    actor.companyId(),
                     command.language(),
                     command.documentTypes(),
                     command.message(),

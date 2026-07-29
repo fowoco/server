@@ -1,6 +1,8 @@
 package com.fowoco.server.document.application;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.document.domain.ChecklistItemDocumentMapper;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskChecklistRepository;
@@ -26,22 +28,27 @@ public class DocumentReadinessService {
     private final TaskRepository taskRepository;
     private final TaskChecklistRepository taskChecklistRepository;
     private final WorkerDocumentRepository workerDocumentRepository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final Clock clock;
 
     public DocumentReadinessService(
             TaskRepository taskRepository,
             TaskChecklistRepository taskChecklistRepository,
             WorkerDocumentRepository workerDocumentRepository,
+            TenantDatabaseContext tenantDatabaseContext,
             Clock clock
     ) {
         this.taskRepository = taskRepository;
         this.taskChecklistRepository = taskChecklistRepository;
         this.workerDocumentRepository = workerDocumentRepository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.clock = clock;
     }
 
     @Transactional(readOnly = true)
-    public DocumentReadinessResult calculate(UUID taskId, UUID companyId) {
+    public DocumentReadinessResult calculate(UUID taskId, ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+        UUID companyId = actor.companyId();
         Task task = taskRepository.findByIdAndCompanyId(taskId, companyId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
 

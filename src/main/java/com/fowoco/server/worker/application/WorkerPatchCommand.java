@@ -7,7 +7,6 @@ import java.util.UUID;
 public final class WorkerPatchCommand {
 
     private final UUID workerId;
-    private final UUID companyId;
     private final String displayName;
     private final String nationalityCode;
     private final String preferredLanguage;
@@ -19,7 +18,6 @@ public final class WorkerPatchCommand {
 
     public WorkerPatchCommand(
             UUID workerId,
-            UUID companyId,
             String displayName,
             String nationalityCode,
             String preferredLanguage,
@@ -30,7 +28,6 @@ public final class WorkerPatchCommand {
             long expectedVersion
     ) {
         this.workerId = workerId;
-        this.companyId = companyId;
         this.displayName = displayName;
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
@@ -43,10 +40,6 @@ public final class WorkerPatchCommand {
 
     public UUID workerId() {
         return workerId;
-    }
-
-    public UUID companyId() {
-        return companyId;
     }
 
     public String displayName() {

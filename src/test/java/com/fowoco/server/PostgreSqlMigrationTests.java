@@ -67,6 +67,7 @@ class PostgreSqlMigrationTests {
                         "refresh_token",
                         "worker",
                         "worker_document",
+                        "stored_file",
                         "task",
                         "task_checklist_item",
                         "task_transition_history",
@@ -75,7 +76,9 @@ class PostgreSqlMigrationTests {
                         "task_evidence",
                         "audit_event",
                         "event_publication",
-                        "event_consumption"
+                        "event_consumption",
+                        "document_request_draft",
+                        "document_request_draft_type"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -116,6 +119,13 @@ class PostgreSqlMigrationTests {
                 .containsEntry("document_type", new ColumnSpec("varchar", false))
                 .containsEntry("submission_status", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "stored_file"))
+                .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", true))
+                .containsEntry("worker_id", new ColumnSpec("uuid", true))
+                .containsEntry("storage_key", new ColumnSpec("varchar", false))
+                .containsEntry("scan_status", new ColumnSpec("varchar", false));
         assertThat(columnSpecs(connection, "task"))
                 .containsEntry("task_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
@@ -152,6 +162,16 @@ class PostgreSqlMigrationTests {
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
                 .containsEntry("handler_name", new ColumnSpec("varchar", false))
                 .containsEntry("completed_at", new ColumnSpec("timestamptz", false));
+        assertThat(columnSpecs(connection, "document_request_draft"))
+                .containsEntry("draft_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("review_status", new ColumnSpec("varchar", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "document_request_draft_type"))
+                .containsEntry("draft_id", new ColumnSpec("uuid", false))
+                .containsEntry("document_type", new ColumnSpec("varchar", false))
+                .doesNotContainKey("company_id");
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -165,6 +185,8 @@ class PostgreSqlMigrationTests {
                         "fk_refresh_token_user_company",
                         "fk_worker_company",
                         "fk_worker_document_worker",
+                        "pk_stored_file",
+                        "fk_stored_file_company",
                         "fk_task_worker_company",
                         "fk_task_created_by_company",
                         "fk_approval_request_task_company",
@@ -175,7 +197,10 @@ class PostgreSqlMigrationTests {
                         "fk_event_publication_company",
                         "pk_event_consumption",
                         "uq_event_consumption_event_handler",
-                        "fk_event_consumption_publication"
+                        "fk_event_consumption_publication",
+                        "pk_document_request_draft",
+                        "fk_document_request_draft_task_company",
+                        "fk_document_request_draft_type_draft"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -185,12 +210,51 @@ class PostgreSqlMigrationTests {
                         "idx_refresh_token_expires_at",
                         "idx_worker_company",
                         "idx_worker_document_company_status",
+                        "idx_stored_file_company",
                         "idx_task_company_status_due",
                         "idx_approval_request_task_status",
                         "idx_audit_event_company_time",
                         "idx_event_publication_claim",
                         "idx_event_publication_company_time",
-                        "idx_event_consumption_company_event"
+                        "idx_event_consumption_company_event",
+                        "idx_document_request_draft_company"
+                );
+        assertThat(policyNames(connection))
+                .containsExactlyInAnyOrder(
+                        "pl_company_tenant_isolation",
+                        "pl_user_account_tenant_isolation",
+                        "pl_refresh_token_tenant_isolation",
+                        "pl_worker_tenant_isolation",
+                        "pl_worker_document_tenant_isolation",
+                        "pl_stored_file_tenant_isolation",
+                        "pl_task_tenant_isolation",
+                        "pl_task_checklist_item_tenant_isolation",
+                        "pl_task_transition_history_tenant_isolation",
+                        "pl_approval_request_tenant_isolation",
+                        "pl_external_submission_tenant_isolation",
+                        "pl_task_evidence_tenant_isolation",
+                        "pl_audit_event_tenant_isolation",
+                        "pl_event_publication_tenant_isolation",
+                        "pl_event_consumption_tenant_isolation",
+                        "pl_document_request_draft_tenant_isolation",
+                        "pl_document_request_draft_type_tenant_isolation"
+                );
+        assertThat(rlsEnabledTables(connection)).isEmpty();
+        assertThat(securityDefinerFunctionNames(connection))
+                .containsExactlyInAnyOrder(
+                        "bootstrap_company_id_by_normalized_email",
+                        "bootstrap_company_id_by_refresh_token_hash",
+                        "bootstrap_claim_event_publications",
+                        "bootstrap_count_outstanding_event_publications",
+                        "bootstrap_oldest_outstanding_event_occurred_at"
+                );
+        assertThat(functionsWithLockedSearchPath(connection))
+                .containsExactlyInAnyOrder(
+                        "bootstrap_company_id_by_normalized_email",
+                        "bootstrap_company_id_by_refresh_token_hash",
+                        "bootstrap_claim_event_publications",
+                        "bootstrap_count_outstanding_event_publications",
+                        "bootstrap_oldest_outstanding_event_occurred_at"
                 );
     }
 
@@ -277,6 +341,27 @@ class PostgreSqlMigrationTests {
                     '%s', '%s', 'migration-test-handler', CURRENT_TIMESTAMP
                 )
                 """.formatted(EVENT_A, COMPANY_A));
+
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_normalized_email(?)",
+                "admin.a@example.com"
+        )).isEqualTo(COMPANY_A);
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_normalized_email(?)",
+                "missing@example.com"
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_refresh_token_hash(?)",
+                TOKEN_HASH_A
+        )).isEqualTo(COMPANY_A);
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_refresh_token_hash(?)",
+                "0".repeat(64)
+        )).isNull();
 
         assertSqlState(connection, "23505", """
                 INSERT INTO user_account (
@@ -498,6 +583,57 @@ class PostgreSqlMigrationTests {
         );
     }
 
+    private Set<String> policyNames(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT policyname
+                FROM pg_catalog.pg_policies
+                WHERE schemaname = 'public'
+                """
+        );
+    }
+
+    private Set<String> rlsEnabledTables(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT relname
+                FROM pg_catalog.pg_class
+                WHERE relnamespace = 'public'::regnamespace
+                  AND relkind = 'r'
+                  AND relrowsecurity
+                """
+        );
+    }
+
+    private Set<String> securityDefinerFunctionNames(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT routine.routine_name
+                FROM information_schema.routines AS routine
+                WHERE routine.routine_schema = 'public'
+                  AND routine.security_type = 'DEFINER'
+                  AND routine.routine_name LIKE 'bootstrap_%'
+                """
+        );
+    }
+
+    private Set<String> functionsWithLockedSearchPath(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT procedure.proname
+                FROM pg_catalog.pg_proc AS procedure
+                WHERE procedure.pronamespace = 'public'::regnamespace
+                  AND procedure.proname LIKE 'bootstrap_%'
+                  AND 'search_path=pg_catalog, public, pg_temp' =
+                      ANY(procedure.proconfig)
+                """
+        );
+    }
+
     private void assertSqlState(Connection connection, String expectedSqlState, String sql)
             throws SQLException {
         Savepoint savepoint = connection.setSavepoint();
@@ -520,6 +656,17 @@ class PostgreSqlMigrationTests {
     private void execute(Connection connection, String sql) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute(sql);
+        }
+    }
+
+    private String queryNullableString(Connection connection, String sql, String parameter)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, parameter);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertThat(resultSet.next()).isTrue();
+                return resultSet.getString(1);
+            }
         }
     }
 

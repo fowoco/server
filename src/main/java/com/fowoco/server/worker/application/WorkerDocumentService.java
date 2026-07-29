@@ -9,6 +9,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.port.StoredFileRepository;
@@ -19,7 +20,6 @@ import com.fowoco.server.worker.domain.WorkerDocument;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +33,7 @@ public class WorkerDocumentService {
     private final WorkerRepository workerRepository;
     private final StoredFileRepository storedFileRepository;
     private final AuditEventRepository auditRepository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -41,6 +42,7 @@ public class WorkerDocumentService {
             WorkerRepository workerRepository,
             StoredFileRepository storedFileRepository,
             AuditEventRepository auditRepository,
+            TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -48,19 +50,21 @@ public class WorkerDocumentService {
         this.workerRepository = workerRepository;
         this.storedFileRepository = storedFileRepository;
         this.auditRepository = auditRepository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
 
     @Transactional
-    public WorkerDocument register(WorkerDocumentCreateCommand command) {
-        workerRepository.findByWorkerIdAndCompanyId(command.workerId(), command.companyId())
+    public WorkerDocument register(WorkerDocumentCreateCommand command, ActorContext actor) {
+        bindTenant(actor);
+        workerRepository.findByWorkerIdAndCompanyId(command.workerId(), actor.companyId())
                 .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_NOT_FOUND));
 
         WorkerDocument document = WorkerDocument.create(
                 uuidGenerator.generate(),
                 command.workerId(),
-                command.companyId(),
+                actor.companyId(),
                 command.documentType(),
                 command.submissionStatus(),
                 command.expiryDate(),
@@ -73,23 +77,37 @@ public class WorkerDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public WorkerDocument findDetail(UUID workerDocumentId, UUID workerId, UUID companyId) {
-        return workerDocumentRepository.findByIdAndWorkerIdAndCompanyId(workerDocumentId, workerId, companyId)
+    public WorkerDocument findDetail(
+            UUID workerDocumentId,
+            UUID workerId,
+            ActorContext actor
+    ) {
+        bindTenant(actor);
+        return workerDocumentRepository.findByIdAndWorkerIdAndCompanyId(
+                        workerDocumentId,
+                        workerId,
+                        actor.companyId()
+                )
                 .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_DOCUMENT_NOT_FOUND));
     }
 
     @Transactional
-    public WorkerDocument patch(WorkerDocumentPatchCommand command, ActorContext actor, RequestMetadata metadata) {
+    public WorkerDocument patch(
+            WorkerDocumentPatchCommand command,
+            ActorContext actor,
+            RequestMetadata metadata
+    ) {
+        bindTenant(actor);
         WorkerDocument existing = findDetail(
                 command.workerDocumentId(),
                 command.workerId(),
-                command.companyId()
+                actor
         );
         if (existing.version() != command.expectedVersion()) {
             throw new ApiException(WorkerErrorCode.WORKER_DOCUMENT_VERSION_CONFLICT);
         }
 
-        UUID resolvedFileId = resolveFileId(command.fileId(), command.companyId(), existing.fileId());
+        UUID resolvedFileId = resolveFileId(command.fileId(), actor.companyId(), existing.fileId());
         boolean fileNewlyLinked = command.fileId() != null && !command.fileId().equals(existing.fileId());
 
         Instant now = DatabaseTimestamp.nowNotBefore(clock, existing.createdAt());
@@ -176,5 +194,9 @@ public class WorkerDocumentService {
 
     private static <T> T orElseKeep(T newValue, T existingValue) {
         return newValue != null ? newValue : existingValue;
+    }
+
+    private void bindTenant(ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
     }
 }
