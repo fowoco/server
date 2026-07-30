@@ -48,5 +48,25 @@ class DemoAuthSeedIntegrationTest {
                 Integer.class,
                 ADMIN_USER_ID
         )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ?",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(20);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ? AND role = 'ADMIN'",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ? AND role = 'HR'",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(12);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ? AND role = 'VIEWER'",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(6);
     }
 }
