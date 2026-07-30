@@ -153,8 +153,10 @@ runtime 계정은 업무 DML, migration 계정은 Flyway 적용만 담당합니�
 
 ## 선택 사항: local Demo Seed
 
-local H2에서만 사용할 사업장과 `ADMIN` 계정이 필요할 때 명시적으로 켭니다.
-기본값과 비밀번호 기본값은 없습니다.
+local H2에서만 사용할 사업장과 `user_account` 더미 계정 20명이 필요할 때
+명시적으로 켭니다. 설정한 관리자 1명과 고정된 가상 계정 19명
+(`ADMIN` 1명, `HR` 12명, `VIEWER` 6명)을 만들며, 모든 계정은 로컬에서 설정한
+같은 비밀번호로 로그인할 수 있습니다. 기본값과 비밀번호 기본값은 없습니다.
 
 ```bash
 export DEMO_SEED_ENABLED=true
@@ -163,7 +165,9 @@ export DEMO_SEED_ADMIN_PASSWORD='로컬 Secret의 12자 이상 값'
 ```
 
 같은 설정으로 재실행해도 중복 생성하지 않습니다. 같은 이메일이 다른 사업장이나
-역할로 존재하면 덮어쓰지 않고 시작을 중단합니다. 최초 계정을 확인한 후에는
+역할로 존재하면 덮어쓰지 않고 시작을 중단합니다. 이메일은 모두
+`demo.*@example.com` 형식의 가상 주소이며 실제 개인정보를 포함하지 않습니다.
+최초 계정을 확인한 후에는
 `DEMO_SEED_ENABLED=false`로 돌려놓습니다.
 
 PostgreSQL `dev`·`prod`에서는 Demo Seed 대신 배포 Provisioning 단계에서 초기
