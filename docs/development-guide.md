@@ -173,6 +173,33 @@ export DEMO_SEED_ADMIN_PASSWORD='로컬 Secret의 12자 이상 값'
 PostgreSQL `dev`·`prod`에서는 Demo Seed 대신 배포 Provisioning 단계에서 초기
 계정을 준비합니다.
 
+### 팀 공통 PostgreSQL Demo 실행
+
+저장소의 `.env.example`을 Git에서 제외되는 `.env.local`로 복사하고 로컬
+PostgreSQL 비밀번호, JWT Secret과 Demo 비밀번호를 입력합니다. 실제 Secret은
+Git, Issue 또는 메신저로 공유하지 않습니다.
+
+```bash
+# macOS / Linux
+cp .env.example .env.local
+./scripts/run-dev.sh
+```
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env.local
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-dev.ps1
+```
+
+두 스크립트 모두 PostgreSQL `dev` profile과 Demo Seed를 활성화합니다. `DB_URL`,
+migration/runtime username이 비어 있으면 로컬 기본값
+`jdbc:postgresql://localhost:5432/fowoco_test`와 `postgres`를 사용합니다.
+대상 데이터베이스는 최초 한 번 직접 생성합니다.
+
+```bash
+createdb -h localhost -p 5432 -U postgres fowoco_test
+```
+
 ## 개발 기반
 
 | 구성 | 역할 | 구현 위치 |
