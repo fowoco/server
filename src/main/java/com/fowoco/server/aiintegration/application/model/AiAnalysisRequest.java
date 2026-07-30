@@ -12,7 +12,7 @@ public record AiAnalysisRequest(
         String contractVersion,
         String requiredKnowledgeVersion,
         long deadlineMs,
-        MaskedAnalysisInput maskedInput
+        AnalysisInput analysisInput
 ) {
 
     public AiAnalysisRequest {
@@ -20,6 +20,6 @@ public record AiAnalysisRequest(
         Objects.requireNonNull(attemptId, "attemptId must not be null");
         Objects.requireNonNull(contractVersion, "contractVersion must not be null");
         Objects.requireNonNull(requiredKnowledgeVersion, "requiredKnowledgeVersion must not be null");
-        Objects.requireNonNull(maskedInput, "maskedInput must not be null");
+        Objects.requireNonNull(analysisInput, "analysisInput must not be null");
     }
 }

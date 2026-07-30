@@ -9,46 +9,30 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /**
- * Rejects sensitive values before they cross the AI boundary or enter an AiRun candidate.
+ * Allows original demo data while preventing service credentials from crossing the AI boundary.
  */
 @Component
-public class AiRuntimePrivacyPolicy {
+public class AiRuntimeBoundaryPolicy {
 
     private static final Set<String> FORBIDDEN_KEY_PARTS = Set.of(
-            "passportnumber",
-            "passportno",
-            "alienregistrationnumber",
-            "registrationnumber",
-            "residentnumber",
-            "rrn",
-            "phone",
-            "accountnumber",
-            "bankaccount",
             "token",
             "password",
             "secret",
             "authorization",
             "prompt",
-            "여권번호",
-            "외국인등록번호",
-            "주민등록번호",
-            "전화",
-            "계좌",
+            "apikey",
+            "토큰",
+            "인증",
+            "비밀",
+            "api키",
             "비밀번호"
     );
-    private static final Pattern REGISTRATION_NUMBER =
-            Pattern.compile("(?<!\\d)\\d{6}-?[1-8]\\d{6}(?!\\d)");
-    private static final Pattern PHONE_NUMBER =
-            Pattern.compile("(?<!\\d)01\\d[- .]?\\d{3,4}[- .]?\\d{4}(?!\\d)");
     private static final Pattern BEARER_TOKEN =
             Pattern.compile("(?i)\\bbearer\\s+[A-Za-z0-9._~+/=-]{8,}");
+    private static final Pattern JWT =
+            Pattern.compile("\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\b");
     private static final Pattern SECRET_ASSIGNMENT = Pattern.compile(
             "(?i)\\b(api[_-]?key|password|secret|token)\\s*[:=]\\s*\\S+"
-    );
-    private static final Pattern LABELED_SENSITIVE_VALUE = Pattern.compile(
-            "(?i)(passport[_ -]?(number|no)|alien[_ -]?registration[_ -]?(number|no)"
-                    + "|bank[_ -]?account|여권번호|외국인등록번호|계좌번호)"
-                    + "(?:은|는)?\\s*[:=]?\\s*[A-Za-z0-9-]{6,}"
     );
 
     public void validateText(String value, int maxLength, boolean required) {
@@ -62,8 +46,11 @@ public class AiRuntimePrivacyPolicy {
         if (normalized.length() > maxLength) {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI contract text exceeds its size limit.");
         }
-        if (containsSensitiveValue(normalized)) {
-            reject(AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED, "Sensitive data was rejected at the AI boundary.");
+        if (containsCredential(normalized)) {
+            reject(
+                    AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED,
+                    "Service credential was rejected at the AI boundary."
+            );
         }
     }
 
@@ -79,16 +66,17 @@ public class AiRuntimePrivacyPolicy {
                 .map(part -> part.replace("_", "").replace("-", ""))
                 .anyMatch(normalizedKey::contains);
         if (forbidden) {
-            reject(AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED, "Sensitive key was rejected at the AI boundary.");
+            reject(
+                    AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED,
+                    "Service credential key was rejected at the AI boundary."
+            );
         }
     }
 
-    private boolean containsSensitiveValue(String value) {
-        return REGISTRATION_NUMBER.matcher(value).find()
-                || PHONE_NUMBER.matcher(value).find()
-                || BEARER_TOKEN.matcher(value).find()
-                || SECRET_ASSIGNMENT.matcher(value).find()
-                || LABELED_SENSITIVE_VALUE.matcher(value).find();
+    private boolean containsCredential(String value) {
+        return BEARER_TOKEN.matcher(value).find()
+                || JWT.matcher(value).find()
+                || SECRET_ASSIGNMENT.matcher(value).find();
     }
 
     private void reject(AiRuntimeFailureCode failureCode, String safeMessage) {

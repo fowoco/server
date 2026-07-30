@@ -15,7 +15,7 @@ test('Flyway JSON을 안전한 DB 문서 사이트로 변환한다', async () =>
     await mkdir(path.join(output, 'schema'), { recursive: true })
     await writeFile(path.join(output, 'schema', 'index.html'), '<html>SchemaSpy</html>')
     await writeFile(infoFile, JSON.stringify({
-      schemaVersion: '5',
+      schemaVersion: '10',
       schemaName: 'public',
       flywayVersion: '12.4.0',
       migrations: [
@@ -37,6 +37,15 @@ test('Flyway JSON을 안전한 DB 문서 사이트로 변환한다', async () =>
           executionTime: 0,
           filepath: '/private/path/V6__next.sql',
         },
+        {
+          version: '10',
+          description: 'prepare postgresql rls',
+          type: 'SQL',
+          state: 'Success',
+          installedOnUTC: '2026-07-29T00:00:00Z',
+          executionTime: 21,
+          filepath: '/flyway/sql/postgresql/V10__prepare_postgresql_rls.sql',
+        },
       ],
     }))
 
@@ -55,12 +64,14 @@ test('Flyway JSON을 안전한 DB 문서 사이트로 변환한다', async () =>
     const metadata = JSON.parse(await readFile(path.join(output, 'metadata.json'), 'utf8'))
 
     assert.match(index, /현재 Schema Version/)
-    assert.match(index, /성공 1개 · 대기 1개/)
+    assert.match(index, /성공 2개 · 대기 1개/)
     assert.match(migrations, /baseline &lt;safe&gt;/)
+    assert.match(migrations, /prepare postgresql rls/)
     assert.doesNotMatch(migrations, /private\/path/)
-    assert.equal(metadata.schema_version, '5')
+    assert.doesNotMatch(migrations, /flyway\/sql\/postgresql/)
+    assert.equal(metadata.schema_version, '10')
     assert.deepEqual(metadata.migration_counts, {
-      success: 1,
+      success: 2,
       pending: 1,
       attention_required: 0,
     })

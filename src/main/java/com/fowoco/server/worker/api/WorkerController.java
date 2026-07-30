@@ -1,5 +1,6 @@
 package com.fowoco.server.worker.api;
 
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.worker.application.WorkerCreateCommand;
 import com.fowoco.server.worker.application.WorkerPageResult;
@@ -83,9 +84,9 @@ public class WorkerController {
             @Parameter(description = "페이지당 항목 수 (1~100)")
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerSearchQuery query = new WorkerSearchQuery(status, language, expiryBefore, page, size);
-        WorkerPageResult result = workerService.findPage(companyId, query);
+        WorkerPageResult result = workerService.findPage(actor, query);
         List<WorkerResponse> items = result.items().stream().map(WorkerResponse::from).toList();
         return new WorkerPageResponse(items, result.page(), result.size(), result.totalElements());
     }
@@ -112,9 +113,8 @@ public class WorkerController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
     public ResponseEntity<WorkerResponse> register(@Valid @RequestBody WorkerCreateRequest request) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerCreateCommand command = new WorkerCreateCommand(
-                companyId,
                 request.getDisplayName(),
                 request.getNationalityCode(),
                 request.getPreferredLanguage(),
@@ -122,7 +122,7 @@ public class WorkerController {
                 request.getContractStartDate(),
                 request.getContractEndDate()
         );
-        Worker worker = workerService.register(command);
+        Worker worker = workerService.register(command, actor);
         return ResponseEntity.status(HttpStatus.CREATED).body(WorkerResponse.from(worker));
     }
 
@@ -150,8 +150,8 @@ public class WorkerController {
     public WorkerResponse getDetail(
             @Parameter(description = "근로자 ID") @PathVariable UUID workerId
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
-        Worker worker = workerService.findDetail(workerId, companyId);
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        Worker worker = workerService.findDetail(workerId, actor);
         return WorkerResponse.from(worker);
     }
 
@@ -194,10 +194,9 @@ public class WorkerController {
             @Parameter(description = "근로자 ID") @PathVariable UUID workerId,
             @Valid @RequestBody WorkerPatchRequest request
     ) {
-        UUID companyId = actorContextProvider.requireCurrentActor().companyId();
+        ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerPatchCommand command = new WorkerPatchCommand(
                 workerId,
-                companyId,
                 request.getDisplayName(),
                 request.getNationalityCode(),
                 request.getPreferredLanguage(),
@@ -207,7 +206,7 @@ public class WorkerController {
                 request.getContractEndDate(),
                 request.getExpectedVersion()
         );
-        Worker worker = workerService.patch(command);
+        Worker worker = workerService.patch(command, actor);
         return WorkerResponse.from(worker);
     }
 }

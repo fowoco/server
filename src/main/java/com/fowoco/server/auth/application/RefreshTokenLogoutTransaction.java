@@ -1,11 +1,14 @@
 package com.fowoco.server.auth.application;
 
 import com.fowoco.server.auth.application.port.AuthAuditPort;
+import com.fowoco.server.auth.application.port.AuthTenantBootstrap;
 import com.fowoco.server.auth.application.port.RefreshTokenRepository;
 import com.fowoco.server.auth.domain.RefreshToken;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,21 +16,40 @@ import org.springframework.transaction.annotation.Transactional;
 public class RefreshTokenLogoutTransaction {
 
     private final RefreshTokenRepository refreshTokenRepository;
+    private final AuthTenantBootstrap authTenantBootstrap;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final AuthAuditPort authAuditPort;
     private final Clock clock;
 
     public RefreshTokenLogoutTransaction(
             RefreshTokenRepository refreshTokenRepository,
+            AuthTenantBootstrap authTenantBootstrap,
+            TenantDatabaseContext tenantDatabaseContext,
             AuthAuditPort authAuditPort,
             Clock clock
     ) {
         this.refreshTokenRepository = refreshTokenRepository;
+        this.authTenantBootstrap = authTenantBootstrap;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.authAuditPort = authAuditPort;
         this.clock = clock;
     }
 
     @Transactional
     public void revokeIfKnown(String tokenHash) {
+        Optional<UUID> companyIdCandidate =
+                authTenantBootstrap.findCompanyIdByRefreshTokenHash(tokenHash);
+        if (companyIdCandidate.isEmpty()) {
+            authAuditPort.record(AuthAuditEvent.anonymous(
+                    AuthAuditEvent.Action.LOGOUT_COMPLETED,
+                    clock.instant()
+            ));
+            return;
+        }
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(
+                companyIdCandidate.orElseThrow()
+        );
+
         Optional<RefreshToken> refreshTokenCandidate =
                 refreshTokenRepository.findByTokenHashWithFamilyLock(tokenHash);
         Instant now = clock.instant();

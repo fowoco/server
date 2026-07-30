@@ -1,10 +1,8 @@
 package com.fowoco.server.reliability.application;
 
-import com.fowoco.server.reliability.application.port.EventPublicationRepository;
+import com.fowoco.server.reliability.application.port.OutboxClaimBootstrap;
+import com.fowoco.server.reliability.application.port.OutboxClaimBootstrap.ClaimResult;
 import com.fowoco.server.reliability.config.OutboxProperties;
-import com.fowoco.server.reliability.domain.EventPublication;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -14,39 +12,45 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class OutboxClaimService {
 
-    private final EventPublicationRepository repository;
+    private final OutboxClaimBootstrap claimBootstrap;
     private final OutboxProperties properties;
     private final OutboxMetrics metrics;
-    private final Clock clock;
 
     public OutboxClaimService(
-            EventPublicationRepository repository,
+            OutboxClaimBootstrap claimBootstrap,
             OutboxProperties properties,
-            OutboxMetrics metrics,
-            Clock clock
+            OutboxMetrics metrics
     ) {
-        this.repository = repository;
+        this.claimBootstrap = claimBootstrap;
         this.properties = properties;
         this.metrics = metrics;
-        this.clock = clock;
     }
 
     @Transactional
-    public List<UUID> claimBatch(String owner) {
-        Instant now = clock.instant();
-        List<EventPublication> candidates =
-                repository.lockClaimable(now, properties.getBatchSize());
-        List<UUID> claimed = new ArrayList<>(candidates.size());
-        for (EventPublication publication : candidates) {
-            publication.claim(owner, now, properties.getLeaseDuration());
-            if (publication.attemptCount() > properties.getMaxAttempts()) {
-                publication.requireReview(owner, "EVENT_ATTEMPTS_EXHAUSTED", now);
+    public List<ClaimedEvent> claimBatch(String owner) {
+        List<ClaimResult> results = claimBootstrap.claim(
+                owner,
+                properties.getLeaseDuration(),
+                properties.getBatchSize(),
+                properties.getMaxAttempts()
+        );
+        List<ClaimedEvent> claimed = new ArrayList<>(results.size());
+        for (ClaimResult result : results) {
+            if (result.reviewRequired()) {
                 metrics.recordReviewRequired();
             } else {
-                claimed.add(publication.eventId());
+                claimed.add(new ClaimedEvent(result.eventId(), result.companyId()));
             }
-            repository.save(publication);
         }
         return List.copyOf(claimed);
+    }
+
+    public record ClaimedEvent(UUID eventId, UUID companyId) {
+
+        public ClaimedEvent {
+            if (eventId == null || companyId == null) {
+                throw new IllegalArgumentException("claimed event identifiers must not be null");
+            }
+        }
     }
 }

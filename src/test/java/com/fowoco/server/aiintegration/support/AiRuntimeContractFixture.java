@@ -5,8 +5,8 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
-import com.fowoco.server.aiintegration.application.model.MaskedAnalysisInput;
-import com.fowoco.server.aiintegration.application.model.MaskedWorkerContext;
+import com.fowoco.server.aiintegration.application.model.AnalysisInput;
+import com.fowoco.server.aiintegration.application.model.WorkerContext;
 import com.fowoco.server.aiintegration.application.model.WorkflowConstraint;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -29,7 +29,7 @@ public final class AiRuntimeContractFixture {
 
     public static AiAnalysisRequest validRequest() {
         return requestWithInstruction(
-                "workerRef 30000000-0000-0000-0000-000000000001의 체류연장 준비"
+                "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비"
         );
     }
 
@@ -40,13 +40,23 @@ public final class AiRuntimeContractFixture {
                 CONTRACT_VERSION,
                 KNOWLEDGE_VERSION,
                 10_000,
-                new MaskedAnalysisInput(
+                new AnalysisInput(
                         instruction,
-                        List.of(new MaskedWorkerContext(
+                        List.of(new WorkerContext(
                                 WORKER_REF,
+                                "응웬반안",
+                                "VN",
                                 "vi",
                                 "ACTIVE",
-                                LocalDate.of(2026, 12, 31)
+                                LocalDate.of(2026, 12, 31),
+                                LocalDate.of(2026, 1, 1),
+                                LocalDate.of(2026, 12, 31),
+                                Map.of(
+                                        "legal_name", "NGUYEN VAN AN",
+                                        "passport_number", "M12345678",
+                                        "phone", "010-1234-5678",
+                                        "email", "worker@example.com"
+                                )
                         )),
                         List.of(new WorkflowConstraint(
                                 WORKFLOW_ID,

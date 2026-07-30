@@ -4,7 +4,6 @@ import com.fowoco.server.reliability.application.port.DomainEventHandler;
 import com.fowoco.server.reliability.config.OutboxWorkerIdentity;
 import com.fowoco.server.reliability.domain.EventPublication;
 import java.util.List;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -41,32 +40,46 @@ public class OutboxProcessor {
     }
 
     public int processAvailable() {
-        List<UUID> eventIds = claimService.claimBatch(workerIdentity.value());
-        eventIds.forEach(this::processOne);
-        return eventIds.size();
+        List<OutboxClaimService.ClaimedEvent> claimedEvents =
+                claimService.claimBatch(workerIdentity.value());
+        claimedEvents.forEach(this::processOne);
+        return claimedEvents.size();
     }
 
-    private void processOne(UUID eventId) {
-        EventPublication publication = readService.requirePublication(eventId);
+    private void processOne(OutboxClaimService.ClaimedEvent claimedEvent) {
+        EventPublication publication = readService.requirePublication(
+                claimedEvent.eventId(),
+                claimedEvent.companyId()
+        );
         try {
             List<DomainEventHandler> handlers =
                     handlerRegistry.handlersFor(publication.eventType());
             for (DomainEventHandler handler : handlers) {
-                handlerTransaction.deliver(eventId, workerIdentity.value(), handler);
+                handlerTransaction.deliver(
+                        claimedEvent.eventId(),
+                        claimedEvent.companyId(),
+                        workerIdentity.value(),
+                        handler
+                );
             }
-            completionTransaction.complete(eventId, workerIdentity.value());
+            completionTransaction.complete(
+                    claimedEvent.eventId(),
+                    claimedEvent.companyId(),
+                    workerIdentity.value()
+            );
         } catch (RuntimeException failure) {
             try {
                 OutboxFailureTransaction.FailureOutcome outcome =
                         failureTransaction.recordFailure(
-                                eventId,
+                                claimedEvent.eventId(),
+                                claimedEvent.companyId(),
                                 workerIdentity.value(),
                                 failure
                         );
                 log.warn(
                         "Outbox event processing failed: eventId={}, eventType={}, "
                                 + "attempt={}, errorCode={}, retryScheduled={}",
-                        eventId,
+                        claimedEvent.eventId(),
                         publication.eventType(),
                         publication.attemptCount(),
                         outcome.errorCode(),
@@ -75,7 +88,7 @@ public class OutboxProcessor {
             } catch (RuntimeException recordingFailure) {
                 log.error(
                         "Outbox failure state could not be recorded: eventId={}, eventType={}",
-                        eventId,
+                        claimedEvent.eventId(),
                         publication.eventType()
                 );
             }

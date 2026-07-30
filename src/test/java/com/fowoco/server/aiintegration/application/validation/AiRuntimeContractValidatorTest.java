@@ -33,7 +33,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 class AiRuntimeContractValidatorTest {
 
     private final AiRuntimeContractValidator validator =
-            new AiRuntimeContractValidator(new AiRuntimePrivacyPolicy());
+            new AiRuntimeContractValidator(new AiRuntimeBoundaryPolicy());
 
     @Test
     void acceptsValidRequestAndResponse() {
@@ -42,21 +42,38 @@ class AiRuntimeContractValidatorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("sensitiveInstructions")
-    void rejectsSensitiveInstructionBeforeOutboundCall(String instruction) {
+    @MethodSource("credentialInstructions")
+    void rejectsServiceCredentialsBeforeOutboundCall(String instruction) {
         assertFailure(
                 () -> validator.validateRequest(AiRuntimeContractFixture.requestWithInstruction(instruction)),
                 AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED
         );
     }
 
-    static Stream<String> sensitiveInstructions() {
+    static Stream<String> credentialInstructions() {
         return Stream.of(
-                "연락처는 010-1234-5678입니다",
-                "외국인등록번호 990101-5123456",
-                "passport_number: M12345678",
                 "Authorization: Bearer secret-token-value",
-                "api_key=do-not-send-this"
+                "api_key=do-not-send-this",
+                "JWT eyJ12345678.abcdefgh12345678.signature12345678"
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("forbiddenCredentialKeys")
+    void rejectsServiceCredentialKeys(String fieldKey) {
+        assertFailure(
+                () -> new AiRuntimeBoundaryPolicy().validateKey(fieldKey),
+                AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED
+        );
+    }
+
+    static Stream<String> forbiddenCredentialKeys() {
+        return Stream.of(
+                "access_token",
+                "authorization",
+                "password",
+                "api_key",
+                "service_secret"
         );
     }
 
@@ -131,14 +148,14 @@ class AiRuntimeContractValidatorTest {
         );
         assertFailure(
                 () -> validator.validateResponse(validRequest(), responseWithCandidate(unknownSlot)),
-                AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED
+                AiRuntimeFailureCode.UNEXPECTED_SLOT
         );
     }
 
     @Test
-    void rejectsSensitiveCandidateValueAndKeepsExceptionMessageSafe() {
-        AiCandidate sensitiveCandidate = new AiCandidate(
-                "candidate-sensitive",
+    void acceptsOriginalPiiCandidateValueWhenTheWorkflowAllowsTheSlot() {
+        AiCandidate originalValueCandidate = new AiCandidate(
+                "candidate-original-value",
                 WORKER_REF,
                 WORKFLOW_ID,
                 Map.of("contract_end_date", "담당자 전화 010-1234-5678"),
@@ -146,13 +163,10 @@ class AiRuntimeContractValidatorTest {
                 BigDecimal.ONE
         );
 
-        assertThatThrownBy(() -> validator.validateResponse(
+        assertThatCode(() -> validator.validateResponse(
                 validRequest(),
-                responseWithCandidate(sensitiveCandidate)
-        )).isInstanceOfSatisfying(AiRuntimeContractException.class, exception -> {
-            assertThat(exception.failureCode()).isEqualTo(AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED);
-            assertThat(exception.getMessage()).doesNotContain("010-1234-5678");
-        });
+                responseWithCandidate(originalValueCandidate)
+        )).doesNotThrowAnyException();
     }
 
     private AiAnalysisResponse responseWithVersions(AiRuntimeVersions versions) {

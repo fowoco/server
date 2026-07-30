@@ -2,16 +2,19 @@ package com.fowoco.server.auth.application;
 
 import com.fowoco.server.auth.application.port.AccessTokenIssuer;
 import com.fowoco.server.auth.application.port.AuthAuditPort;
+import com.fowoco.server.auth.application.port.AuthTenantBootstrap;
 import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
 import com.fowoco.server.auth.application.port.RefreshTokenRepository;
 import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.RefreshToken;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.company.application.CompanyAuthenticationReader;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class RefreshTokenRotationTransaction {
 
     private final RefreshTokenRepository refreshTokenRepository;
+    private final AuthTenantBootstrap authTenantBootstrap;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final UserAccountRepository userAccountRepository;
     private final CompanyAuthenticationReader companyAuthenticationReader;
     private final AccessTokenIssuer accessTokenIssuer;
@@ -29,6 +34,8 @@ public class RefreshTokenRotationTransaction {
 
     public RefreshTokenRotationTransaction(
             RefreshTokenRepository refreshTokenRepository,
+            AuthTenantBootstrap authTenantBootstrap,
+            TenantDatabaseContext tenantDatabaseContext,
             UserAccountRepository userAccountRepository,
             CompanyAuthenticationReader companyAuthenticationReader,
             AccessTokenIssuer accessTokenIssuer,
@@ -38,6 +45,8 @@ public class RefreshTokenRotationTransaction {
             Clock clock
     ) {
         this.refreshTokenRepository = refreshTokenRepository;
+        this.authTenantBootstrap = authTenantBootstrap;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.userAccountRepository = userAccountRepository;
         this.companyAuthenticationReader = companyAuthenticationReader;
         this.accessTokenIssuer = accessTokenIssuer;
@@ -49,6 +58,19 @@ public class RefreshTokenRotationTransaction {
 
     @Transactional
     public RefreshOutcome rotate(String tokenHash) {
+        Optional<UUID> companyIdCandidate =
+                authTenantBootstrap.findCompanyIdByRefreshTokenHash(tokenHash);
+        if (companyIdCandidate.isEmpty()) {
+            authAuditPort.record(AuthAuditEvent.anonymous(
+                    AuthAuditEvent.Action.REFRESH_REJECTED,
+                    clock.instant()
+            ));
+            return RefreshOutcome.rejected(RefreshOutcome.Status.INVALID);
+        }
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(
+                companyIdCandidate.orElseThrow()
+        );
+
         Optional<RefreshToken> presentedTokenCandidate =
                 refreshTokenRepository.findByTokenHashWithFamilyLock(tokenHash);
         Instant now = clock.instant();
