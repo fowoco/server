@@ -8,6 +8,7 @@ import com.fowoco.server.task.application.TaskWorkflowService;
 import com.fowoco.server.task.domain.TaskStatus;
 import com.fowoco.server.task.domain.TaskType;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -62,6 +63,8 @@ public class TaskController {
             @RequestParam(required = false) TaskStatus status,
             @RequestParam(required = false) TaskType taskType,
             @RequestParam(required = false) UUID workerId,
+            @Parameter(description = "Case ID 필터")
+            @RequestParam(name = "case_id", required = false) UUID caseId,
             @RequestParam(required = false) LocalDate dueFrom,
             @RequestParam(required = false) LocalDate dueTo,
             @RequestParam(required = false) String keyword,
@@ -72,6 +75,7 @@ public class TaskController {
                 status,
                 taskType,
                 workerId,
+                caseId,
                 dueFrom,
                 dueTo,
                 keyword,
