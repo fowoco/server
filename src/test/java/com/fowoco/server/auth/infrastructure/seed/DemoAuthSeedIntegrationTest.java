@@ -18,6 +18,8 @@ import org.springframework.test.context.ActiveProfiles;
 class DemoAuthSeedIntegrationTest {
 
     private static final UUID COMPANY_ID = UUID.fromString("90000000-0000-0000-0000-000000000001");
+    private static final UUID TEST_COMPANY_ID =
+            UUID.fromString("91000000-0000-0000-0000-000000000001");
     private static final UUID ADMIN_USER_ID = UUID.fromString("90000000-0000-0000-0000-000000000002");
 
     @Autowired
@@ -41,6 +43,12 @@ class DemoAuthSeedIntegrationTest {
                 "SELECT COUNT(*) FROM company WHERE company_id = ? AND status = 'ACTIVE'",
                 Integer.class,
                 COMPANY_ID
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM company WHERE company_id = ? "
+                        + "AND name = 'FOWOCO Test Company' AND status = 'ACTIVE'",
+                Integer.class,
+                TEST_COMPANY_ID
         )).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM user_account WHERE user_id = ? AND display_name = '데모 관리자' "
@@ -68,5 +76,35 @@ class DemoAuthSeedIntegrationTest {
                 Integer.class,
                 COMPANY_ID
         )).isEqualTo(6);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ?",
+                Integer.class,
+                TEST_COMPANY_ID
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ? AND role = 'ADMIN'",
+                Integer.class,
+                TEST_COMPANY_ID
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ? AND role = 'HR'",
+                Integer.class,
+                TEST_COMPANY_ID
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_account WHERE company_id = ? AND role = 'VIEWER'",
+                Integer.class,
+                TEST_COMPANY_ID
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker WHERE company_id = ?",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(5);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker WHERE company_id = ?",
+                Integer.class,
+                TEST_COMPANY_ID
+        )).isEqualTo(5);
     }
 }

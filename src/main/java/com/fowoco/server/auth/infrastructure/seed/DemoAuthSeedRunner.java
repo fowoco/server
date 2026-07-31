@@ -15,9 +15,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
+@Order(0)
 class DemoAuthSeedRunner implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DemoAuthSeedRunner.class);
@@ -42,6 +44,11 @@ class DemoAuthSeedRunner implements ApplicationRunner {
             demoUser("90000000-0000-0000-0000-000000000019", "데모 조회자 04", "demo.viewer04@example.com", UserRole.VIEWER),
             demoUser("90000000-0000-0000-0000-000000000020", "데모 조회자 05", "demo.viewer05@example.com", UserRole.VIEWER),
             demoUser("90000000-0000-0000-0000-000000000021", "데모 조회자 06", "demo.viewer06@example.com", UserRole.VIEWER)
+    );
+    private static final List<DemoUser> TEST_USERS = List.of(
+            demoUser("91000000-0000-0000-0000-000000000002", "테스트 관리자", "test.admin@example.com", UserRole.ADMIN),
+            demoUser("91000000-0000-0000-0000-000000000003", "테스트 HR", "test.hr@example.com", UserRole.HR),
+            demoUser("91000000-0000-0000-0000-000000000004", "테스트 조회자", "test.viewer@example.com", UserRole.VIEWER)
     );
 
     private final DemoAuthSeedProperties properties;
@@ -75,26 +82,30 @@ class DemoAuthSeedRunner implements ApplicationRunner {
     public void run(ApplicationArguments arguments) {
         validateConfiguration();
         Instant now = clock.instant();
-        ensureCompany(now);
+        ensureCompany(properties.companyId(), properties.companyName(), now);
+        ensureCompany(properties.testCompanyId(), properties.testCompanyName(), now);
 
-        seedUser(new DemoUser(
+        seedUser(properties.companyId(), new DemoUser(
                 properties.adminUserId(),
                 properties.adminDisplayName(),
                 properties.adminEmail(),
                 UserRole.ADMIN
         ), now);
-        DEMO_USERS.forEach(user -> seedUser(user, now));
+        DEMO_USERS.forEach(user -> seedUser(properties.companyId(), user, now));
+        TEST_USERS.forEach(user -> seedUser(properties.testCompanyId(), user, now));
         LOGGER.info(
-                "demo_auth_seed ready company_id={} user_count={}",
-                properties.companyId(),
-                DEMO_USERS.size() + 1
+                "demo_auth_seed ready company_count={} user_count={}",
+                2,
+                DEMO_USERS.size() + TEST_USERS.size() + 1
         );
     }
 
     private void validateConfiguration() {
         Objects.requireNonNull(properties.companyId(), "demo seed companyId must not be null");
+        Objects.requireNonNull(properties.testCompanyId(), "demo seed testCompanyId must not be null");
         Objects.requireNonNull(properties.adminUserId(), "demo seed adminUserId must not be null");
         requireText(properties.companyName(), "demo seed companyName");
+        requireText(properties.testCompanyName(), "demo seed testCompanyName");
         requireText(properties.adminDisplayName(), "demo seed adminDisplayName");
         requireText(properties.adminEmail(), "demo seed adminEmail");
         String password = requireText(properties.adminPassword(), "DEMO_SEED_ADMIN_PASSWORD");
@@ -105,22 +116,25 @@ class DemoAuthSeedRunner implements ApplicationRunner {
                             + " characters"
             );
         }
-        if (DEMO_USERS.stream().anyMatch(user -> user.userId().equals(properties.adminUserId()))) {
+        if (properties.companyId().equals(properties.testCompanyId())) {
+            throw new IllegalStateException("demo seed company ids must be different");
+        }
+        if (reservedUsers().stream().anyMatch(user -> user.userId().equals(properties.adminUserId()))) {
             throw new IllegalStateException("demo seed adminUserId conflicts with a reserved demo user id");
         }
         String normalizedAdminEmail = UserAccount.normalizeEmail(properties.adminEmail());
-        if (DEMO_USERS.stream().anyMatch(user ->
+        if (reservedUsers().stream().anyMatch(user ->
                 UserAccount.normalizeEmail(user.email()).equals(normalizedAdminEmail))) {
             throw new IllegalStateException("demo seed adminEmail conflicts with a reserved demo user email");
         }
     }
 
-    private void ensureCompany(Instant now) {
-        Optional<Company> existingCompany = companyRepository.findById(properties.companyId());
+    private void ensureCompany(UUID companyId, String companyName, Instant now) {
+        Optional<Company> existingCompany = companyRepository.findById(companyId);
         if (existingCompany.isEmpty()) {
             companyRepository.insert(Company.create(
-                    properties.companyId(),
-                    properties.companyName(),
+                    companyId,
+                    companyName,
                     now
             ));
             return;
@@ -130,22 +144,22 @@ class DemoAuthSeedRunner implements ApplicationRunner {
         }
     }
 
-    private void seedUser(DemoUser demoUser, Instant now) {
+    private void seedUser(UUID companyId, DemoUser demoUser, Instant now) {
         String normalizedEmail = UserAccount.normalizeEmail(demoUser.email());
         Optional<UserAccount> existingByEmail =
                 userAccountRepository.findByNormalizedEmail(normalizedEmail);
         if (existingByEmail.isPresent()) {
-            verifyExistingUser(existingByEmail.orElseThrow(), demoUser);
+            verifyExistingUser(existingByEmail.orElseThrow(), companyId, demoUser);
             return;
         }
         if (userAccountRepository
-                .findByUserIdAndCompanyId(demoUser.userId(), properties.companyId())
+                .findByUserIdAndCompanyId(demoUser.userId(), companyId)
                 .isPresent()) {
             throw new IllegalStateException("a reserved demo user id already belongs to another email");
         }
         userAccountRepository.insert(UserAccount.create(
                 demoUser.userId(),
-                properties.companyId(),
+                companyId,
                 demoUser.displayName(),
                 demoUser.email(),
                 passwordEncoder.encode(properties.adminPassword()),
@@ -154,9 +168,9 @@ class DemoAuthSeedRunner implements ApplicationRunner {
         ));
     }
 
-    private void verifyExistingUser(UserAccount userAccount, DemoUser demoUser) {
+    private void verifyExistingUser(UserAccount userAccount, UUID companyId, DemoUser demoUser) {
         if (!demoUser.userId().equals(userAccount.userId())
-                || !properties.companyId().equals(userAccount.companyId())
+                || !companyId.equals(userAccount.companyId())
                 || userAccount.role() != demoUser.role()
                 || !userAccount.canLogin()) {
             throw new IllegalStateException(
@@ -174,6 +188,10 @@ class DemoAuthSeedRunner implements ApplicationRunner {
 
     private static DemoUser demoUser(String userId, String displayName, String email, UserRole role) {
         return new DemoUser(UUID.fromString(userId), displayName, email, role);
+    }
+
+    private static List<DemoUser> reservedUsers() {
+        return java.util.stream.Stream.concat(DEMO_USERS.stream(), TEST_USERS.stream()).toList();
     }
 
     private record DemoUser(UUID userId, String displayName, String email, UserRole role) {
