@@ -141,6 +141,8 @@ export DB_RUNTIME_USERNAME='제한된 애플리케이션 계정'
 export DB_RUNTIME_PASSWORD='로컬 Secret'
 export DB_MIGRATION_USERNAME='Flyway 전용 계정'
 export DB_MIGRATION_PASSWORD='로컬 Secret'
+export DB_STATEMENT_TIMEOUT='30s'
+export DB_LOCK_TIMEOUT='3s'
 export SPRING_PROFILES_ACTIVE=dev
 ./gradlew bootRun
 ```
@@ -150,6 +152,11 @@ export SPRING_PROFILES_ACTIVE=dev
 
 runtime 계정은 업무 DML, migration 계정은 Flyway 적용만 담당합니다. 실제
 비밀번호·API Key·Token은 Git, Issue, Discussion과 로그에 올리지 않습니다.
+
+Runtime Hikari Connection에는 기본 `statement_timeout=30s`, `lock_timeout=3s`가
+적용됩니다. 값의 검증 규칙, 적용 경계, 운영 확인 및 rollback 절차는
+[PostgreSQL Runtime Timeout 운영 가이드](reliability/postgresql-runtime-timeouts.md)를
+확인합니다.
 
 ## 선택 사항: local Demo Seed
 
@@ -254,5 +261,6 @@ Client가 안전한 형식의 `X-Request-Id`를 보내면 Server가 응답과 �
 - [Database 문서 사용법](database-documentation.md)
 - [프로젝트 구조](project-structure.md)
 - [Transactional Outbox 운영 가이드](reliability/transactional-outbox.md)
+- [PostgreSQL Runtime Timeout 운영 가이드](reliability/postgresql-runtime-timeouts.md)
 - [ADR 목록](adr/README.md)
 - [PostgreSQL RLS 적용 가이드](database/postgresql-rls-rollout.md)

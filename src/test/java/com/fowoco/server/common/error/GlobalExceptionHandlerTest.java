@@ -7,6 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fowoco.server.common.web.RequestIdFilter;
+import com.fowoco.server.common.database.DatabaseTimeoutMetrics;
+import com.fowoco.server.common.database.PostgreSqlTimeoutClassifier;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Clock;
@@ -35,7 +38,11 @@ class GlobalExceptionHandlerTest {
         RequestIdFilter requestIdFilter = new RequestIdFilter(() -> UUID.fromString(REQUEST_ID));
 
         mockMvc = MockMvcBuilders.standaloneSetup(new ValidationTestController())
-                .setControllerAdvice(new GlobalExceptionHandler(fixedClock))
+                .setControllerAdvice(new GlobalExceptionHandler(
+                        fixedClock,
+                        new PostgreSqlTimeoutClassifier(),
+                        new DatabaseTimeoutMetrics(new SimpleMeterRegistry())
+                ))
                 .addFilters(requestIdFilter)
                 .build();
     }
