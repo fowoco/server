@@ -22,6 +22,7 @@ interface SpringDataTaskJpaRepository extends JpaRepository<TaskJpaEntity, UUID>
                AND (:status IS NULL OR task.status = :status)
                AND (:taskType IS NULL OR task.taskType = :taskType)
                AND (:workerId IS NULL OR task.workerId = :workerId)
+               AND (:caseId IS NULL OR task.caseId = :caseId)
                AND (:dueFrom IS NULL OR task.dueDate >= :dueFrom)
                AND (:dueTo IS NULL OR task.dueDate <= :dueTo)
                AND (
@@ -35,6 +36,7 @@ interface SpringDataTaskJpaRepository extends JpaRepository<TaskJpaEntity, UUID>
             @Param("status") TaskStatus status,
             @Param("taskType") TaskType taskType,
             @Param("workerId") UUID workerId,
+            @Param("caseId") UUID caseId,
             @Param("dueFrom") LocalDate dueFrom,
             @Param("dueTo") LocalDate dueTo,
             @Param("keyword") String keyword,

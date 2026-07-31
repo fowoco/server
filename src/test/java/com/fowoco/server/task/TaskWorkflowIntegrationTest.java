@@ -223,6 +223,44 @@ class TaskWorkflowIntegrationTest {
     }
 
     @Test
+    void caseIdFilterReturnsOnlyTheRequestedCompanyCase() throws Exception {
+        String hrToken = login(HR_A_EMAIL);
+        UUID selectedCaseId = UUID.randomUUID();
+        UUID otherCaseId = UUID.randomUUID();
+        UUID selectedTaskId = UUID.fromString(JsonPath.read(
+                post(
+                        "/api/v1/tasks",
+                        createBody(selectedCaseId, "선택 Case 업무"),
+                        hrToken
+                ).body(),
+                "$.task_id"
+        ));
+        post(
+                "/api/v1/tasks",
+                createBody(otherCaseId, "다른 Case 업무"),
+                hrToken
+        );
+
+        HttpResponse<String> filtered = get(
+                "/api/v1/tasks?case_id=" + selectedCaseId,
+                hrToken
+        );
+        HttpResponse<String> unfiltered = get("/api/v1/tasks", hrToken);
+        HttpResponse<String> otherCompany = get(
+                "/api/v1/tasks?case_id=" + selectedCaseId,
+                login(HR_B_EMAIL)
+        );
+
+        assertThat(filtered.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(filtered.body(), "$.items[*].task_id"))
+                .containsExactly(selectedTaskId.toString());
+        assertThat(JsonPath.<List<String>>read(filtered.body(), "$.items[*].case_id"))
+                .containsExactly(selectedCaseId.toString());
+        assertThat(JsonPath.<List<?>>read(unfiltered.body(), "$.items")).hasSize(2);
+        assertThat(JsonPath.<List<?>>read(otherCompany.body(), "$.items")).isEmpty();
+    }
+
+    @Test
     void resignedAndTerminatedWorkersCannotReceiveNewTasks() throws Exception {
         String token = login(HR_A_EMAIL);
 
@@ -420,6 +458,21 @@ class TaskWorkflowIntegrationTest {
                   "business_data":{"monthly_wage":2500000}
                 }
                 """.formatted(WORKER_A);
+    }
+
+    private String createBody(UUID caseId, String title) {
+        return """
+                {
+                  "worker_id":"%s",
+                  "case_id":"%s",
+                  "task_type":"RECONTRACT",
+                  "workflow_id":"WF-CON-001",
+                  "title":"%s",
+                  "description":"기존 조건 확인",
+                  "due_date":"2026-08-20",
+                  "business_data":{"monthly_wage":2500000}
+                }
+                """.formatted(WORKER_A, caseId, title);
     }
 
     private String login(String email) throws Exception {
