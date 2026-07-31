@@ -2,9 +2,17 @@ package com.fowoco.server.auth.infrastructure.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,8 +36,18 @@ class DemoAuthSeedIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private Clock clock;
+
+    @Autowired
+    @Qualifier("demoOperationalSeedRunner")
+    private ApplicationRunner demoOperationalSeedRunner;
+
     @Test
-    void enabledSeedCreatesAnActiveCompanyAndHashedAdminAfterFlyway() {
+    void enabledSeedCreatesIdempotentCompanyAccountWorkerAndOperationalDataAfterFlyway()
+            throws Exception {
+        demoOperationalSeedRunner.run(new DefaultApplicationArguments(new String[0]));
+
         String passwordHash = jdbcTemplate.queryForObject(
                 "SELECT password_hash FROM user_account WHERE user_id = ? AND company_id = ?",
                 String.class,
@@ -106,5 +124,79 @@ class DemoAuthSeedIntegrationTest {
                 Integer.class,
                 TEST_COMPANY_ID
         )).isEqualTo(5);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE company_id = ?",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(5);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT status FROM task WHERE company_id = ?",
+                String.class,
+                COMPANY_ID
+        )).containsExactlyInAnyOrder(
+                "DRAFT",
+                "READY_FOR_REVIEW",
+                "WAITING_WORKER",
+                "WAITING_EXTERNAL",
+                "COMPLETED"
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE company_id = ? AND source = 'AI_CANDIDATE' "
+                        + "AND status = 'DRAFT'",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(1);
+        List<Instant> completedUpdates = jdbcTemplate.query(
+                "SELECT updated_at FROM task WHERE company_id = ? AND status = 'COMPLETED'",
+                (resultSet, rowNumber) -> resultSet.getTimestamp("updated_at").toInstant(),
+                COMPANY_ID
+        );
+        assertThat(completedUpdates).hasSize(1).allMatch(updatedAt ->
+                LocalDate.ofInstant(updatedAt, ZoneOffset.UTC).equals(LocalDate.now(clock)));
+        List<LocalDate> dueDates = jdbcTemplate.query(
+                "SELECT due_date FROM task WHERE company_id = ?",
+                (resultSet, rowNumber) -> resultSet.getObject("due_date", LocalDate.class),
+                COMPANY_ID
+        );
+        LocalDate today = LocalDate.now(clock);
+        assertThat(dueDates).anyMatch(date -> !date.isAfter(today.plusDays(7)));
+        assertThat(dueDates).anyMatch(date ->
+                date.isAfter(today.plusDays(7)) && !date.isAfter(today.plusDays(30)));
+        assertThat(dueDates).anyMatch(date -> date.isAfter(today.plusDays(30)));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document WHERE company_id = ?",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(7);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT submission_status FROM worker_document WHERE company_id = ?",
+                String.class,
+                COMPANY_ID
+        )).contains("MISSING", "SUBMITTED", "VERIFIED");
+        List<LocalDate> expiryDates = jdbcTemplate.query(
+                "SELECT expiry_date FROM worker_document WHERE company_id = ?",
+                (resultSet, rowNumber) -> resultSet.getObject("expiry_date", LocalDate.class),
+                COMPANY_ID
+        );
+        assertThat(expiryDates).anyMatch(date ->
+                !date.isBefore(today) && !date.isAfter(today.plusDays(30)));
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT COUNT(*) FROM worker_document WHERE company_id = ? GROUP BY worker_id",
+                Integer.class,
+                COMPANY_ID
+        )).hasSize(5).allMatch(count -> count >= 1 && count <= 2);
+        UUID timelineTaskId = UUID.fromString("94000000-0000-0000-0000-000000000002");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE company_id = ? AND target_id = ?",
+                Integer.class,
+                COMPANY_ID,
+                timelineTaskId
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT action FROM audit_event WHERE company_id = ? AND target_id = ?",
+                String.class,
+                COMPANY_ID,
+                timelineTaskId
+        )).containsExactlyInAnyOrder("TASK_CREATED", "TASK_UPDATED", "APPROVAL_REQUESTED");
     }
 }

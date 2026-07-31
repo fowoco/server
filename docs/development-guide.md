@@ -162,6 +162,15 @@ local H2 또는 로컬 PostgreSQL `dev`에서만 사용할 데모 데이터가 �
 | `FOWOCO Demo Company` | 기존 20명 (`ADMIN` 2, `HR` 12, `VIEWER` 6) | 5명 |
 | `FOWOCO Test Company` | 3명 (`ADMIN` 1, `HR` 1, `VIEWER` 1) | 5명 |
 
+Demo Company에는 화면 검증용 업무 데이터도 함께 생성됩니다.
+
+- Task 5개: `DRAFT`(AI 후보), `READY_FOR_REVIEW`, `WAITING_WORKER`,
+  `WAITING_EXTERNAL`, `COMPLETED` 각 1개
+- 마감일: 7일 이내, 30일 이내, 30일 초과 구간을 모두 포함
+- 근로자 서류 7개: 근로자별 1~2개, `MISSING`, `SUBMITTED`, `VERIFIED` 포함
+- 30일 이내 만료 서류 1개 이상
+- 승인 대기 Task의 최근 AuditEvent 3개
+
 ```bash
 export DEMO_SEED_ENABLED=true
 export DEMO_SEED_ADMIN_PASSWORD='로컬 Secret의 12자 이상 값'
