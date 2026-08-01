@@ -3,6 +3,7 @@ package com.fowoco.server.workerlink.infrastructure.persistence;
 import com.fowoco.server.workerlink.application.port.WorkerResponseRepository;
 import com.fowoco.server.workerlink.domain.WorkerResponse;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,5 +43,28 @@ public class JpaWorkerResponseRepository implements WorkerResponseRepository {
                 .getResultStream()
                 .findFirst()
                 .map(WorkerResponseJpaEntity::toDomain);
+    }
+
+    @Override
+    public void linkUpload(UUID responseId, UUID storedFileId) {
+        Objects.requireNonNull(responseId, "responseId must not be null");
+        Objects.requireNonNull(storedFileId, "storedFileId must not be null");
+        Query query = entityManager.createNativeQuery(
+                "INSERT INTO worker_response_upload (response_id, stored_file_id) VALUES (?1, ?2)"
+        );
+        query.setParameter(1, responseId);
+        query.setParameter(2, storedFileId);
+        query.executeUpdate();
+    }
+
+    @Override
+    public boolean isUploadAlreadyLinked(UUID storedFileId) {
+        Objects.requireNonNull(storedFileId, "storedFileId must not be null");
+        Long count = (Long) entityManager.createNativeQuery(
+                        "SELECT COUNT(*) FROM worker_response_upload WHERE stored_file_id = ?1"
+                )
+                .setParameter(1, storedFileId)
+                .getSingleResult();
+        return count != null && count > 0;
     }
 }

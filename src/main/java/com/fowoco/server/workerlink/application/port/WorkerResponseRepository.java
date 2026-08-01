@@ -9,4 +9,8 @@ public interface WorkerResponseRepository {
     void insert(WorkerResponse workerResponse);
 
     Optional<WorkerResponse> findByWorkerLinkIdAndIdempotencyKey(UUID workerLinkId, String idempotencyKey);
+
+    void linkUpload(UUID responseId, UUID storedFileId);
+
+    boolean isUploadAlreadyLinked(UUID storedFileId);
 }
