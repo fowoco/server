@@ -72,7 +72,7 @@ public class WorkerLinkDocumentService {
     }
 
     @Transactional
-    public StoredFile upload(WorkerLinkDocumentUploadCommand command, RequestMetadata metadata) {
+    public WorkerLinkDocumentUploadResult upload(WorkerLinkDocumentUploadCommand command, RequestMetadata metadata) {
         if (command.size() > MAX_FILE_SIZE_BYTES) {
             throw new ApiException(FileErrorCode.FILE_TOO_LARGE);
         }
@@ -134,6 +134,6 @@ public class WorkerLinkDocumentService {
 
         // TODO: clientRequestId를 이용한 중복 제출 방지 로직 미구현 (스키마 변경 필요, 후속 처리)
 
-        return storedFile;
+        return new WorkerLinkDocumentUploadResult(storedFile, link.expiresAt());
     }
 }
