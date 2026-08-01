@@ -55,7 +55,7 @@ CREATE TABLE worker_response (
     CONSTRAINT fk_worker_response_link
         FOREIGN KEY (worker_link_id) REFERENCES worker_link (worker_link_id) ON DELETE RESTRICT,
     CONSTRAINT ck_worker_response_type
-        CHECK (response_type IN ('ACKNOWLEDGED', 'QUESTION', 'IN_PROGRESS', 'DOCUMENT_SUBMITTED', 'DIFFICULT'))
+        CHECK (response_type IN ('ACKNOWLEDGED', 'QUESTION', 'NOT_UNDERSTOOD', 'DOCUMENT_SUBMITTED', 'DIFFICULT'))
 );
 
 CREATE INDEX idx_worker_response_link ON worker_response (worker_link_id);
