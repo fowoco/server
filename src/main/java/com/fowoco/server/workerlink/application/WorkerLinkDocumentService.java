@@ -8,6 +8,7 @@ import com.fowoco.server.audit.domain.AuditTargetType;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.error.FileErrorCode;
 import com.fowoco.server.file.application.port.FileStorage;
 import com.fowoco.server.file.application.port.StoredFileRepository;
@@ -71,7 +72,7 @@ public class WorkerLinkDocumentService {
     }
 
     @Transactional
-    public StoredFile upload(WorkerLinkDocumentUploadCommand command) {
+    public StoredFile upload(WorkerLinkDocumentUploadCommand command, RequestMetadata metadata) {
         if (command.size() > MAX_FILE_SIZE_BYTES) {
             throw new ApiException(FileErrorCode.FILE_TOO_LARGE);
         }
@@ -124,8 +125,8 @@ public class WorkerLinkDocumentService {
                 AuditAction.FILE_UPLOADED,
                 AuditTargetType.FILE,
                 storedFileId,
-                null,
-                null,
+                metadata.requestId(),
+                metadata.traceId(),
                 AUDIT_EVENT_VERSION,
                 "근로자 링크로 파일 업로드: " + purpose,
                 now
