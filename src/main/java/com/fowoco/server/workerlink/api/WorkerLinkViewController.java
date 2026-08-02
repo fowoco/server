@@ -9,7 +9,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,10 +47,12 @@ public class WorkerLinkViewController {
             @ApiResponse(responseCode = "429", description = "요청 과다")
     })
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public WorkerLinkViewResponse view(
+    public ResponseEntity<WorkerLinkViewResponse> view(
             @Parameter(description = "근로자 링크 토큰") @PathVariable String token
     ) {
         WorkerLinkViewResult result = workerLinkViewService.view(token);
-        return WorkerLinkViewResponse.from(result);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(WorkerLinkViewResponse.from(result));
     }
 }
