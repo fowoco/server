@@ -101,6 +101,25 @@ public final class WorkerLink {
         );
     }
 
+    // 근로자가 QUESTION/NOT_UNDERSTOOD 응답을 보내면, HR 후속조치가 필요한 상태로
+    public WorkerLink markNeedsFollowup(Instant now) {
+        return new WorkerLink(
+                workerLinkId,
+                taskId,
+                companyId,
+                tokenHash,
+                expiresAt,
+                status,
+                ConversationStatus.NEEDS_FOLLOWUP,
+                assigneeId,
+                issuedBy,
+                replacesLinkId,
+                createdAt,
+                now,
+                version
+        );
+    }
+
     public boolean isUsable(Instant now) {
         return status == WorkerLinkStatus.ACTIVE && expiresAt.isAfter(now);
     }

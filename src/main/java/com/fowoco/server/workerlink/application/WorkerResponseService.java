@@ -17,6 +17,7 @@ import com.fowoco.server.workerlink.application.port.WorkerLinkTenantBootstrap;
 import com.fowoco.server.workerlink.application.port.WorkerResponseRepository;
 import com.fowoco.server.workerlink.domain.WorkerLink;
 import com.fowoco.server.workerlink.domain.WorkerResponse;
+import com.fowoco.server.workerlink.domain.WorkerResponseType;
 import com.fowoco.server.workerlink.infrastructure.security.WorkerLinkHasher;
 import java.time.Clock;
 import java.time.Instant;
@@ -78,7 +79,7 @@ public class WorkerResponseService {
 
         Instant now = clock.instant();
         if (!link.isUsable(now)) {
-            throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_EXPIRED);
+            throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND);
         }
 
         Optional<WorkerResponse> existing = workerResponseRepository
@@ -114,6 +115,12 @@ public class WorkerResponseService {
 
         for (UUID uploadId : uploadIds) {
             workerResponseRepository.linkUpload(responseId, uploadId);
+        }
+
+        if (command.responseType() == WorkerResponseType.QUESTION
+                || command.responseType() == WorkerResponseType.NOT_UNDERSTOOD) {
+            workerLinkRepository.update(link.markNeedsFollowup(now));
+            // HR 후속 업무/활동 이력
         }
 
         auditRepository.append(new AuditEvent(

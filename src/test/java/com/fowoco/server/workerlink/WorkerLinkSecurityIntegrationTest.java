@@ -164,9 +164,9 @@ class WorkerLinkSecurityIntegrationTest {
     }
 
     @Test
-    void viewReturns404ForNonExistentToken() throws Exception {
+    void viewReturns410ForNonExistentToken() throws Exception {
         HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/nonexistenttoken12345", null);
-        assertThat(viewResponse.statusCode()).isEqualTo(404);
+        assertThat(viewResponse.statusCode()).isEqualTo(410);
     }
 
     private String registerWorker(String token, String displayName) throws Exception {

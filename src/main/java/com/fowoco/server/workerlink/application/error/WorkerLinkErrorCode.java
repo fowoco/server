@@ -13,8 +13,8 @@ public enum WorkerLinkErrorCode implements ApiErrorCode {
             HttpStatus.CONFLICT,
             "이미 유효한 근로자 링크가 있습니다. rotateExisting=true로 재발급해 주세요."
     ),
-    WORKER_LINK_NOT_FOUND(HttpStatus.NOT_FOUND, "링크를 찾을 수 없습니다."),
-    WORKER_LINK_EXPIRED(HttpStatus.GONE, "만료되었거나 폐기된 링크입니다."),
+
+    WORKER_LINK_NOT_FOUND(HttpStatus.GONE, "링크를 찾을 수 없거나 더 이상 사용할 수 없습니다."),
     UPLOAD_NOT_AVAILABLE(
             HttpStatus.UNPROCESSABLE_CONTENT,
             "업로드된 파일을 찾을 수 없거나 이미 사용된 파일입니다."

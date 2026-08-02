@@ -93,7 +93,7 @@ public class WorkerLinkDocumentService {
 
         Instant now = clock.instant();
         if (!link.isUsable(now)) {
-            throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_EXPIRED);
+            throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND);
         }
 
         UUID storedFileId = uuidGenerator.generate();

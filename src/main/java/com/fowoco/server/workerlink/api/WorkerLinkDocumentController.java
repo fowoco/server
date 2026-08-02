@@ -50,8 +50,7 @@ public class WorkerLinkDocumentController {
                     )
             ),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
-            @ApiResponse(responseCode = "404", description = "존재하지 않는 링크"),
-            @ApiResponse(responseCode = "410", description = "만료·폐기된 링크"),
+            @ApiResponse(responseCode = "410", description = "링크를 찾을 수 없거나 더 이상 사용할 수 없음"),
             @ApiResponse(responseCode = "413", description = "파일 크기 초과"),
             @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType"),
             @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity"),

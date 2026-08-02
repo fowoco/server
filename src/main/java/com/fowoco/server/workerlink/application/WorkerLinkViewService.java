@@ -53,7 +53,7 @@ public class WorkerLinkViewService {
 
         Instant now = clock.instant();
         if (!link.isUsable(now)) {
-            throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_EXPIRED);
+            throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND);
         }
 
         // document-request-draft 연동해서 guidance/dueDate 실제 값 채우기.
