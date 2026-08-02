@@ -3,7 +3,7 @@ package com.fowoco.server.workerlink.domain;
 public enum WorkerResponseType {
     ACKNOWLEDGED,
     QUESTION,
-    IN_PROGRESS,
+    NOT_UNDERSTOOD,
     DOCUMENT_SUBMITTED,
     DIFFICULT
 }
