@@ -203,7 +203,7 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 | 기능 비활성화 | `RUNTIME_DISABLED` | 설정과 AI 계약 release 확인 |
 | 동시 호출 한도 초과 | `BULKHEAD_FULL` | #24가 새 AiAttempt로 재시도 여부 결정 |
 | 회로 차단 중 | `CIRCUIT_OPEN` | Runtime 복구 대기 |
-| 전체 제한시간 초과 | `DEADLINE_EXCEEDED` | 자동 재시도하지 않음 |
+| 전체 제한시간 초과 또는 Runtime `408` | `DEADLINE_EXCEEDED` | 자동 재시도하지 않음 |
 | 서비스 인증 실패 | `AUTHENTICATION_FAILED` | 배포 Secret과 audience/scope 확인 |
 | `429` | `RATE_LIMITED` | Runtime 정책 확인 후 명시적 재시도 |
 | `5xx` | `RUNTIME_UNAVAILABLE` | Runtime 상태 확인 |

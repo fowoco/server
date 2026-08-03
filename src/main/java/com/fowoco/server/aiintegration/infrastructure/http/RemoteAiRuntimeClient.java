@@ -216,6 +216,12 @@ public final class RemoteAiRuntimeClient implements AiRuntimeClient {
     }
 
     private AiRuntimeCallException classifyStatus(int status) {
+        if (status == 408) {
+            return new AiRuntimeCallException(
+                    AiRuntimeFailureCode.DEADLINE_EXCEEDED,
+                    "AI Runtime deadline was exceeded."
+            );
+        }
         if (status == 401 || status == 403) {
             return new AiRuntimeCallException(
                     AiRuntimeFailureCode.AUTHENTICATION_FAILED,

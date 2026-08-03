@@ -132,6 +132,17 @@ class RemoteAiRuntimeClientWireMockTest {
     }
 
     @Test
+    void mapsRuntimeRequestTimeoutToDeadlineExceeded() {
+        wireMock.stubFor(post(urlEqualTo(PATH)).willReturn(aResponse().withStatus(408)));
+
+        assertFailureCode(
+                client(1_048_576, 8, 5, Duration.ofSeconds(30)),
+                AiRuntimeFailureCode.DEADLINE_EXCEEDED
+        );
+        wireMock.verify(exactly(1), postRequestedFor(urlEqualTo(PATH)));
+    }
+
+    @Test
     void cancelsOversizedResponseBody() {
         wireMock.stubFor(post(urlEqualTo(PATH))
                 .willReturn(jsonResponse("\"" + "x".repeat(2_000) + "\"")));
