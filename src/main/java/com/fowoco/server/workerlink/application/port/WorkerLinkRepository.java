@@ -13,4 +13,6 @@ public interface WorkerLinkRepository {
     Optional<WorkerLink> findByTokenHash(String tokenHash);
 
     Optional<WorkerLink> findActiveByTaskIdAndCompanyId(UUID taskId, UUID companyId);
+
+    Optional<WorkerLink> findByTaskIdAndIdempotencyKey(UUID taskId, String idempotencyKey);
 }

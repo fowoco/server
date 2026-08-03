@@ -75,4 +75,24 @@ public class JpaWorkerLinkRepository implements WorkerLinkRepository {
                 .findFirst()
                 .map(WorkerLinkJpaEntity::toDomain);
     }
+
+    @Override
+    public Optional<WorkerLink> findByTaskIdAndIdempotencyKey(UUID taskId, String idempotencyKey) {
+        Objects.requireNonNull(taskId, "taskId must not be null");
+        Objects.requireNonNull(idempotencyKey, "idempotencyKey must not be null");
+        return entityManager.createQuery(
+                        """
+                        select link
+                        from WorkerLinkJpaEntity link
+                        where link.taskId = :taskId
+                          and link.idempotencyKey = :idempotencyKey
+                        """,
+                        WorkerLinkJpaEntity.class
+                )
+                .setParameter("taskId", taskId)
+                .setParameter("idempotencyKey", idempotencyKey)
+                .getResultStream()
+                .findFirst()
+                .map(WorkerLinkJpaEntity::toDomain);
+    }
 }

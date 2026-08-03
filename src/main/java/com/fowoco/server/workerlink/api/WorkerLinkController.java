@@ -79,7 +79,8 @@ public class WorkerLinkController {
                 actor.companyId(),
                 request.getExpiresInHours(),
                 request.isRotateExisting(),
-                actor.actorId()
+                actor.actorId(),
+                idempotencyKey
         );
         WorkerLinkIssueResult result = workerLinkService.issue(command);
         return ResponseEntity.status(HttpStatus.CREATED).body(WorkerLinkIssueResponse.from(result));

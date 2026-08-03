@@ -16,6 +16,7 @@ public final class WorkerLink {
     private final UUID assigneeId;
     private final UUID issuedBy;
     private final UUID replacesLinkId;
+    private final String idempotencyKey;
     private final Instant createdAt;
     private final Instant updatedAt;
     private final long version;
@@ -31,6 +32,7 @@ public final class WorkerLink {
             UUID assigneeId,
             UUID issuedBy,
             UUID replacesLinkId,
+            String idempotencyKey,
             Instant createdAt,
             Instant updatedAt,
             long version
@@ -45,6 +47,7 @@ public final class WorkerLink {
         this.assigneeId = assigneeId;
         this.issuedBy = Objects.requireNonNull(issuedBy, "issuedBy must not be null");
         this.replacesLinkId = replacesLinkId;
+        this.idempotencyKey = requireText(idempotencyKey, "idempotencyKey");
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
         if (updatedAt.isBefore(createdAt)) {
@@ -64,6 +67,7 @@ public final class WorkerLink {
             Instant expiresAt,
             UUID issuedBy,
             UUID replacesLinkId,
+            String idempotencyKey,
             Instant now
     ) {
         return new WorkerLink(
@@ -77,6 +81,7 @@ public final class WorkerLink {
                 null,
                 issuedBy,
                 replacesLinkId,
+                idempotencyKey,
                 now,
                 now,
                 0L
@@ -85,38 +90,17 @@ public final class WorkerLink {
 
     public WorkerLink revoke(Instant now) {
         return new WorkerLink(
-                workerLinkId,
-                taskId,
-                companyId,
-                tokenHash,
-                expiresAt,
-                WorkerLinkStatus.REVOKED,
-                conversationStatus,
-                assigneeId,
-                issuedBy,
-                replacesLinkId,
-                createdAt,
-                now,
-                version
+                workerLinkId, taskId, companyId, tokenHash, expiresAt,
+                WorkerLinkStatus.REVOKED, conversationStatus, assigneeId, issuedBy,
+                replacesLinkId, idempotencyKey, createdAt, now, version
         );
     }
 
-    // 근로자가 QUESTION/NOT_UNDERSTOOD 응답을 보내면, HR 후속조치가 필요한 상태로
     public WorkerLink markNeedsFollowup(Instant now) {
         return new WorkerLink(
-                workerLinkId,
-                taskId,
-                companyId,
-                tokenHash,
-                expiresAt,
-                status,
-                ConversationStatus.NEEDS_FOLLOWUP,
-                assigneeId,
-                issuedBy,
-                replacesLinkId,
-                createdAt,
-                now,
-                version
+                workerLinkId, taskId, companyId, tokenHash, expiresAt,
+                status, ConversationStatus.NEEDS_FOLLOWUP, assigneeId, issuedBy,
+                replacesLinkId, idempotencyKey, createdAt, now, version
         );
     }
 
@@ -169,6 +153,10 @@ public final class WorkerLink {
 
     public UUID replacesLinkId() {
         return replacesLinkId;
+    }
+
+    public String idempotencyKey() {
+        return idempotencyKey;
     }
 
     public Instant createdAt() {

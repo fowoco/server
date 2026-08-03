@@ -51,6 +51,9 @@ public class WorkerLinkJpaEntity {
     @Column(name = "replaces_link_id", updatable = false)
     private UUID replacesLinkId;
 
+    @Column(name = "idempotency_key", nullable = false, updatable = false, length = 100)
+    private String idempotencyKey;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -75,6 +78,7 @@ public class WorkerLinkJpaEntity {
             UUID assigneeId,
             UUID issuedBy,
             UUID replacesLinkId,
+            String idempotencyKey,
             Instant createdAt,
             Instant updatedAt,
             long version
@@ -89,6 +93,7 @@ public class WorkerLinkJpaEntity {
         this.assigneeId = assigneeId;
         this.issuedBy = issuedBy;
         this.replacesLinkId = replacesLinkId;
+        this.idempotencyKey = idempotencyKey;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
@@ -107,6 +112,7 @@ public class WorkerLinkJpaEntity {
                 workerLink.assigneeId(),
                 workerLink.issuedBy(),
                 workerLink.replacesLinkId(),
+                workerLink.idempotencyKey(),
                 workerLink.createdAt(),
                 workerLink.updatedAt(),
                 workerLink.version()
@@ -125,6 +131,7 @@ public class WorkerLinkJpaEntity {
                 assigneeId,
                 issuedBy,
                 replacesLinkId,
+                idempotencyKey,
                 createdAt,
                 updatedAt,
                 version

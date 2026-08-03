@@ -59,16 +59,23 @@ public class WorkerLinkService {
             throw new ApiException(WorkerLinkErrorCode.TASK_NOT_APPROVED);
         }
 
+        Optional<WorkerLink> existingByIdempotency = workerLinkRepository
+                .findByTaskIdAndIdempotencyKey(command.taskId(), command.idempotencyKey());
+        if (existingByIdempotency.isPresent()) {
+            WorkerLink previous = existingByIdempotency.get();
+            return new WorkerLinkIssueResult(previous.tokenHash(), previous.expiresAt());
+        }
+
         Instant now = clock.instant();
-        Optional<WorkerLink> existing = workerLinkRepository
+        Optional<WorkerLink> existingActive = workerLinkRepository
                 .findActiveByTaskIdAndCompanyId(command.taskId(), command.companyId());
 
         WorkerLink previousLink = null;
-        if (existing.isPresent()) {
+        if (existingActive.isPresent()) {
             if (!command.rotateExisting()) {
                 throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_ISSUANCE_CONFLICT);
             }
-            previousLink = existing.get();
+            previousLink = existingActive.get();
             workerLinkRepository.update(previousLink.revoke(now));
         }
 
@@ -85,6 +92,7 @@ public class WorkerLinkService {
                 expiresAt,
                 command.issuedBy(),
                 previousLink != null ? previousLink.workerLinkId() : null,
+                command.idempotencyKey(),
                 now
         );
         workerLinkRepository.insert(workerLink);

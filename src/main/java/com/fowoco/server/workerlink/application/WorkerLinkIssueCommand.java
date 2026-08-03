@@ -9,19 +9,22 @@ public final class WorkerLinkIssueCommand {
     private final Long expiresInHours;
     private final boolean rotateExisting;
     private final UUID issuedBy;
+    private final String idempotencyKey;
 
     public WorkerLinkIssueCommand(
             UUID taskId,
             UUID companyId,
             Long expiresInHours,
             boolean rotateExisting,
-            UUID issuedBy
+            UUID issuedBy,
+            String idempotencyKey
     ) {
         this.taskId = taskId;
         this.companyId = companyId;
         this.expiresInHours = expiresInHours;
         this.rotateExisting = rotateExisting;
         this.issuedBy = issuedBy;
+        this.idempotencyKey = idempotencyKey;
     }
 
     public UUID taskId() {
@@ -42,5 +45,9 @@ public final class WorkerLinkIssueCommand {
 
     public UUID issuedBy() {
         return issuedBy;
+    }
+
+    public String idempotencyKey() {
+        return idempotencyKey;
     }
 }

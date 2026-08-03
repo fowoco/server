@@ -9,11 +9,13 @@ CREATE TABLE worker_link (
     assignee_id UUID,
     issued_by UUID NOT NULL,
     replaces_link_id UUID,
+    idempotency_key VARCHAR(100) NOT NULL,
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP(6) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT pk_worker_link PRIMARY KEY (worker_link_id),
     CONSTRAINT uq_worker_link_token_hash UNIQUE (token_hash),
+    CONSTRAINT uq_worker_link_task_idempotency UNIQUE (task_id, idempotency_key),
     CONSTRAINT fk_worker_link_company
         FOREIGN KEY (company_id) REFERENCES company (company_id) ON DELETE RESTRICT,
     CONSTRAINT fk_worker_link_task_company

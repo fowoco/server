@@ -92,20 +92,17 @@ class WorkerLinkSecurityIntegrationTest {
         String workerId = registerWorker(hrToken, "전체흐름테스트근로자");
         String taskId = createApprovedTask(hrToken, workerId);
 
-        HttpResponse<String> issueResponse = postJson(
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
                 "/api/v1/tasks/" + taskId + "/worker-link",
                 """
                 {"expires_in_hours":72,"rotate_existing":false}
                 """,
-                hrToken
+                hrToken,
+                "fullflow-issue-key"
         );
-        assertThat(issueResponse.statusCode()).isEqualTo(201);
+        assertThat(issueResponse.statusCode()).as("issue response body: %s", issueResponse.body()).isEqualTo(201);
         String workerUrl = JsonPath.read(issueResponse.body(), "$.worker_url");
         assertThat(workerUrl).isNotBlank();
-
-        String rawToken = jdbcTemplate.queryForObject(
-                "SELECT token_hash FROM worker_link WHERE task_id = ?", String.class, UUID.fromString(taskId)
-        ) != null ? workerUrl : workerUrl;
 
         HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/" + workerUrl, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
@@ -134,12 +131,13 @@ class WorkerLinkSecurityIntegrationTest {
         String workerId = registerWorker(hrToken, "미승인테스트근로자");
         String taskId = createUnapprovedTask(hrToken, workerId);
 
-        HttpResponse<String> issueResponse = postJson(
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
                 "/api/v1/tasks/" + taskId + "/worker-link",
                 """
                 {"expires_in_hours":72,"rotate_existing":false}
                 """,
-                hrToken
+                hrToken,
+                "unapproved-issue-key"
         );
 
         assertThat(issueResponse.statusCode()).isEqualTo(422);
@@ -152,12 +150,13 @@ class WorkerLinkSecurityIntegrationTest {
         String workerId = registerWorker(hrTokenA, "타사업장테스트근로자");
         String taskId = createApprovedTask(hrTokenA, workerId);
 
-        HttpResponse<String> issueResponse = postJson(
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
                 "/api/v1/tasks/" + taskId + "/worker-link",
                 """
                 {"expires_in_hours":72,"rotate_existing":false}
                 """,
-                hrTokenB
+                hrTokenB,
+                "othercompany-issue-key"
         );
 
         assertThat(issueResponse.statusCode()).isEqualTo(404);
@@ -233,7 +232,6 @@ class WorkerLinkSecurityIntegrationTest {
                     .isEqualTo(200);
         }
     }
-    
 
     private String createUnapprovedTask(String token, String workerId) throws Exception {
         String body = """
@@ -333,6 +331,18 @@ class WorkerLinkSecurityIntegrationTest {
         }
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
+
+    private HttpResponse<String> postJsonWithIdempotencyKey(String path, String body, String token, String idempotencyKey) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .header("Idempotency-Key", idempotencyKey)
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (token != null) {
+            builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> patchJson(String path, String body, String token) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
