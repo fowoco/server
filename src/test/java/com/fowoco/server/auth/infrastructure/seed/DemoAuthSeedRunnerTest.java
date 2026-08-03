@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.UserAccount;
+import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.domain.Company;
 import com.fowoco.server.company.domain.CompanyStatus;
@@ -23,6 +24,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 class DemoAuthSeedRunnerTest {
 
     private static final UUID COMPANY_ID = UUID.fromString("90000000-0000-0000-0000-000000000001");
+    private static final UUID TEST_COMPANY_ID =
+            UUID.fromString("91000000-0000-0000-0000-000000000001");
     private static final UUID ADMIN_USER_ID = UUID.fromString("90000000-0000-0000-0000-000000000002");
     private static final String ADMIN_DISPLAY_NAME = "데모 관리자";
     private static final String ADMIN_EMAIL = "demo.admin@example.com";
@@ -44,8 +47,10 @@ class DemoAuthSeedRunnerTest {
         runner.run(new DefaultApplicationArguments(new String[0]));
         runner.run(new DefaultApplicationArguments(new String[0]));
 
-        assertThat(companyRepository.companies).hasSize(1);
-        assertThat(userAccountRepository.users).hasSize(1);
+        assertThat(companyRepository.companies).hasSize(2);
+        assertThat(companyRepository.companies.get(TEST_COMPANY_ID).name())
+                .isEqualTo("FOWOCO Test Company");
+        assertThat(userAccountRepository.users).hasSize(23);
         UserAccount admin = userAccountRepository.users.get(ADMIN_USER_ID);
         assertThat(admin.companyId()).isEqualTo(COMPANY_ID);
         assertThat(admin.displayName()).isEqualTo(ADMIN_DISPLAY_NAME);
@@ -54,6 +59,21 @@ class DemoAuthSeedRunnerTest {
         assertThat(passwordEncoder.matches(ADMIN_PASSWORD, admin.passwordHash())).isTrue();
         assertThat(admin.role().name()).isEqualTo("ADMIN");
         assertThat(admin.canLogin()).isTrue();
+        assertThat(userAccountRepository.users.values())
+                .filteredOn(user -> user.role() == UserRole.ADMIN)
+                .hasSize(3);
+        assertThat(userAccountRepository.users.values())
+                .filteredOn(user -> user.role() == UserRole.HR)
+                .hasSize(13);
+        assertThat(userAccountRepository.users.values())
+                .filteredOn(user -> user.role() == UserRole.VIEWER)
+                .hasSize(7);
+        assertThat(userAccountRepository.users.values())
+                .filteredOn(user -> user.companyId().equals(TEST_COMPANY_ID))
+                .extracting(UserAccount::role)
+                .containsExactlyInAnyOrder(UserRole.ADMIN, UserRole.HR, UserRole.VIEWER);
+        assertThat(userAccountRepository.users.values())
+                .allMatch(user -> passwordEncoder.matches(ADMIN_PASSWORD, user.passwordHash()));
     }
 
     @Test
@@ -123,6 +143,8 @@ class DemoAuthSeedRunnerTest {
                 true,
                 COMPANY_ID,
                 "FOWOCO Demo Company",
+                TEST_COMPANY_ID,
+                "FOWOCO Test Company",
                 ADMIN_USER_ID,
                 ADMIN_DISPLAY_NAME,
                 ADMIN_EMAIL,

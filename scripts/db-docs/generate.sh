@@ -4,7 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPOSITORY_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 OUTPUT_ROOT="${REPOSITORY_ROOT}/build/db-docs"
-MIGRATION_DIRECTORY="${REPOSITORY_ROOT}/src/main/resources/db/migration"
+COMMON_MIGRATION_DIRECTORY="${REPOSITORY_ROOT}/src/main/resources/db/migration"
+POSTGRESQL_MIGRATION_DIRECTORY="${REPOSITORY_ROOT}/src/main/resources/db/migration-postgresql"
 
 FLYWAY_IMAGE="${DB_DOCS_FLYWAY_IMAGE:-flyway/flyway:12.4.0}"
 SCHEMASPY_IMAGE="${DB_DOCS_SCHEMASPY_IMAGE:-schemaspy/schemaspy:7.0.2}"
@@ -29,6 +30,10 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 if ! command -v node >/dev/null 2>&1; then
   echo "[db-docs] Node.js를 찾지 못했습니다. Node.js 24 이상을 설치해 주세요." >&2
+  exit 1
+fi
+if [[ ! -d "${COMMON_MIGRATION_DIRECTORY}" || ! -d "${POSTGRESQL_MIGRATION_DIRECTORY}" ]]; then
+  echo "[db-docs] 공통·PostgreSQL 전용 Migration 경로가 모두 필요합니다." >&2
   exit 1
 fi
 if ! docker info >/dev/null 2>&1; then
@@ -79,11 +84,15 @@ mkdir -p "${OUTPUT_ROOT}/site/schema"
 chmod 0777 "${OUTPUT_ROOT}/site/schema"
 
 JDBC_URL="jdbc:postgresql://${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}"
+FLYWAY_MOUNT_ARGUMENTS=(
+  -v "${COMMON_MIGRATION_DIRECTORY}:/flyway/sql/common:ro"
+  -v "${POSTGRESQL_MIGRATION_DIRECTORY}:/flyway/sql/postgresql:ro"
+)
 FLYWAY_ARGUMENTS=(
   "-url=${JDBC_URL}"
   "-user=${DATABASE_USER}"
   "-password=${DB_DOCS_PASSWORD}"
-  "-locations=filesystem:/flyway/sql"
+  "-locations=filesystem:/flyway/sql/common,filesystem:/flyway/sql/postgresql"
   "-defaultSchema=public"
   "-schemas=public"
   "-connectRetries=20"
@@ -92,7 +101,7 @@ FLYWAY_ARGUMENTS=(
 echo "[db-docs] 빈 PostgreSQL에 Flyway Migration을 적용합니다."
 docker run --rm \
   "${NETWORK_ARGUMENTS[@]}" \
-  -v "${MIGRATION_DIRECTORY}:/flyway/sql:ro" \
+  "${FLYWAY_MOUNT_ARGUMENTS[@]}" \
   "${FLYWAY_IMAGE}" \
   "${FLYWAY_ARGUMENTS[@]}" \
   migrate
@@ -100,14 +109,14 @@ docker run --rm \
 echo "[db-docs] 적용된 Migration과 저장소 checksum을 검증합니다."
 docker run --rm \
   "${NETWORK_ARGUMENTS[@]}" \
-  -v "${MIGRATION_DIRECTORY}:/flyway/sql:ro" \
+  "${FLYWAY_MOUNT_ARGUMENTS[@]}" \
   "${FLYWAY_IMAGE}" \
   "${FLYWAY_ARGUMENTS[@]}" \
   validate
 
 docker run --rm \
   "${NETWORK_ARGUMENTS[@]}" \
-  -v "${MIGRATION_DIRECTORY}:/flyway/sql:ro" \
+  "${FLYWAY_MOUNT_ARGUMENTS[@]}" \
   "${FLYWAY_IMAGE}" \
   "${FLYWAY_ARGUMENTS[@]}" \
   -outputType=json \

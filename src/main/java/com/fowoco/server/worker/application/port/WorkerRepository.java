@@ -4,6 +4,7 @@ import com.fowoco.server.worker.application.WorkerSearchQuery;
 import com.fowoco.server.worker.domain.Worker;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface WorkerRepository {
@@ -17,4 +18,6 @@ public interface WorkerRepository {
     List<Worker> findPage(UUID companyId, WorkerSearchQuery query);
 
     long countPage(UUID companyId, WorkerSearchQuery query);
+
+    List<Worker> findAllByWorkerIdsAndCompanyId(Set<UUID> workerIds, UUID companyId);
 }

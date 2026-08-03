@@ -8,6 +8,8 @@ public record DemoAuthSeedProperties(
         boolean enabled,
         UUID companyId,
         String companyName,
+        UUID testCompanyId,
+        String testCompanyName,
         UUID adminUserId,
         String adminDisplayName,
         String adminEmail,
@@ -19,6 +21,8 @@ public record DemoAuthSeedProperties(
         return "DemoAuthSeedProperties[enabled=" + enabled
                 + ", companyId=" + companyId
                 + ", companyName=" + companyName
+                + ", testCompanyId=" + testCompanyId
+                + ", testCompanyName=" + testCompanyName
                 + ", adminUserId=" + adminUserId
                 + ", adminDisplayName=" + adminDisplayName
                 + ", adminEmail=" + adminEmail

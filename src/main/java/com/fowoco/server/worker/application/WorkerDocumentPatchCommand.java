@@ -9,33 +9,33 @@ public final class WorkerDocumentPatchCommand {
 
     private final UUID workerDocumentId;
     private final UUID workerId;
-    private final UUID companyId;
     private final DocumentType documentType;
     private final SubmissionStatus submissionStatus;
     private final LocalDate expiryDate;
     private final String destination;
     private final String note;
+    private final UUID fileId;
     private final long expectedVersion;
 
     public WorkerDocumentPatchCommand(
             UUID workerDocumentId,
             UUID workerId,
-            UUID companyId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
             String destination,
             String note,
+            UUID fileId,
             long expectedVersion
     ) {
         this.workerDocumentId = workerDocumentId;
         this.workerId = workerId;
-        this.companyId = companyId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
+        this.fileId = fileId;
         this.expectedVersion = expectedVersion;
     }
 
@@ -45,10 +45,6 @@ public final class WorkerDocumentPatchCommand {
 
     public UUID workerId() {
         return workerId;
-    }
-
-    public UUID companyId() {
-        return companyId;
     }
 
     public DocumentType documentType() {
@@ -69,6 +65,10 @@ public final class WorkerDocumentPatchCommand {
 
     public String note() {
         return note;
+    }
+
+    public UUID fileId() {
+        return fileId;
     }
 
     public long expectedVersion() {

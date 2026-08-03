@@ -16,18 +16,33 @@ RLS는 기존 `ActorContext`, Repository의 `company_id` 조건, tenant-aware DB
   placeholder를 만들지 않습니다.
 
 현재 기반 단계에서는 runtime/Flyway 설정 경계, PostgreSQL 전용 Flyway location,
-transaction-local tenant context와 connection pool 비누수 테스트만 준비합니다.
-아직 policy를 만들거나 RLS를 활성화하지 않습니다.
+transaction-local tenant context와 connection pool 비누수 테스트를 준비했습니다.
+JWT로 인증된 Worker·Task·Approval·Audit 업무 transaction은 요청 값이 아니라
+`ActorContext.companyId`를 transaction-local context의 신뢰 원본으로 사용합니다.
+H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 검증합니다.
+`V10`에서 bootstrap 함수와 tenant 테이블 RLS policy를 생성했으며, RLS는 아직 활성화하지 않았습니다.
 
-현재 `main`의 V1~V7에는 아래 14개 tenant table이 존재합니다. 기반 단계의 제한
-role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
+로그인·Refresh Token·Logout은 tenant context가 생기기 전 최소 bootstrap 조회가
+필요합니다. Issue #34 작성 뒤 추가된 사업장 회원가입도 새 tenant 행을 처음 만드는
+별도 bootstrap 흐름으로 함께 검토해야 합니다. Worker Link는 해당 기능이 구현된 뒤
+같은 기준으로 확장합니다.
+
+현재 `main`의 V1~V9에는 `company_id`를 직접 보유한 아래 16개 tenant table과,
+부모 초안의 tenant를 따르는 `document_request_draft_type`이 존재합니다. 기반 단계의
+제한 role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
 `REFERENCES` 권한과 RLS 우회 권한이 없음을 확인합니다.
 
 - `company`, `user_account`, `refresh_token`
-- `worker`, `worker_document`
+- `worker`, `worker_document`, `stored_file`
 - `task`, `task_checklist_item`, `task_transition_history`
 - `approval_request`, `external_submission`, `task_evidence`, `audit_event`
 - `event_publication`, `event_consumption`
+- `document_request_draft`, `document_request_draft_type`
+
+`document_request_draft_type`에는 `company_id`가 없으므로 부모
+`document_request_draft`의 `draft_id`와 현재 tenant context를 확인하는 `EXISTS`
+policy를 사용합니다. 이 예외는 #57의 스키마와 JPA collection-table 계약을 유지하면서
+자식 테이블 직접 접근도 격리하기 위한 것입니다.
 
 `event_publication`은 여러 tenant의 미완료 row를 찾는 background queue이므로 일반
 요청 table과 같은 policy를 바로 활성화하면 worker가 아무 이벤트도 claim하지 못할 수
@@ -60,13 +75,16 @@ DDL, `TRUNCATE`, `REFERENCES` 권한을 갖지 않습니다. 실제 값은 배�
 ## Staging 적용 순서
 
 1. 대상 table과 tenant-aware FK·UNIQUE 제약이 `main`에 병합됐는지 확인합니다.
-2. 준비 migration에서 bootstrap 함수와 policy를 만들되 RLS는 켜지 않습니다.
-3. tenant context와 bootstrap 호환 코드를 배포합니다.
-4. #9에서 분리된 runtime role, 최소 GRANT와 Secret을 적용합니다.
-5. RLS 비활성 상태에서 Login·Refresh·tenant A/B·connection pool 회귀 테스트를
+2. 인증된 업무 transaction이 `ActorContext.companyId`를 context로 설정하는지
+   검증합니다.
+3. 준비 migration에서 Login·Refresh·Outbox bootstrap 함수와 tenant 테이블 policy를 생성하되,
+   RLS는 활성화하지 않습니다.
+4. bootstrap 호환 코드를 배포합니다.
+5. #9에서 분리된 runtime role, 최소 GRANT와 Secret을 적용합니다.
+6. RLS 비활성 상태에서 Signup·Login·Refresh·tenant A/B·connection pool 회귀 테스트를
    실행합니다.
-6. 별도 forward migration으로 `ENABLE ROW LEVEL SECURITY`를 적용합니다.
-7. 제한된 runtime role로 Smoke Test를 실행합니다.
+7. 별도 forward migration으로 `ENABLE ROW LEVEL SECURITY`를 적용합니다.
+8. 제한된 runtime role로 Smoke Test를 실행합니다.
 
 ## Smoke Test
 

@@ -1,10 +1,11 @@
 package com.fowoco.server.reliability.application;
 
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.reliability.application.OutboxFailureClassifier.FailureClassification;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
+import com.fowoco.server.reliability.application.port.OutboxTimeSource;
 import com.fowoco.server.reliability.config.OutboxProperties;
 import com.fowoco.server.reliability.domain.EventPublication;
-import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -15,37 +16,43 @@ import org.springframework.transaction.annotation.Transactional;
 public class OutboxFailureTransaction {
 
     private final EventPublicationRepository repository;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final OutboxFailureClassifier classifier;
     private final OutboxBackoffPolicy backoffPolicy;
     private final OutboxProperties properties;
     private final OutboxMetrics metrics;
-    private final Clock clock;
+    private final OutboxTimeSource timeSource;
 
     public OutboxFailureTransaction(
             EventPublicationRepository repository,
+            TenantDatabaseContext tenantDatabaseContext,
             OutboxFailureClassifier classifier,
             OutboxBackoffPolicy backoffPolicy,
             OutboxProperties properties,
             OutboxMetrics metrics,
-            Clock clock
+            OutboxTimeSource timeSource
     ) {
         this.repository = repository;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.classifier = classifier;
         this.backoffPolicy = backoffPolicy;
         this.properties = properties;
         this.metrics = metrics;
-        this.clock = clock;
+        this.timeSource = timeSource;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FailureOutcome recordFailure(
             UUID eventId,
+            UUID companyId,
             String owner,
             Throwable failure
     ) {
-        Instant now = clock.instant();
-        EventPublication publication = repository.findByIdForUpdate(eventId)
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
+        EventPublication publication = repository
+                .findByIdAndCompanyIdForUpdate(eventId, companyId)
                 .orElseThrow(() -> new IllegalStateException("Event publication not found."));
+        Instant now = timeSource.now();
         FailureClassification classification = classifier.classify(failure);
         boolean exhausted = publication.attemptCount() >= properties.getMaxAttempts();
         if (!classification.retryable() || exhausted) {

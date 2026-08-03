@@ -151,10 +151,25 @@ export SPRING_PROFILES_ACTIVE=dev
 runtime 계정은 업무 DML, migration 계정은 Flyway 적용만 담당합니다. 실제
 비밀번호·API Key·Token은 Git, Issue, Discussion과 로그에 올리지 않습니다.
 
-## 선택 사항: local Demo Seed
+## 선택 사항: Demo Seed
 
-local H2에서만 사용할 사업장과 `ADMIN` 계정이 필요할 때 명시적으로 켭니다.
-기본값과 비밀번호 기본값은 없습니다.
+local H2 또는 로컬 PostgreSQL `dev`에서만 사용할 데모 데이터가 필요할 때
+명시적으로 켭니다. 모든 계정은 로컬에서 설정한 같은 비밀번호로 로그인할 수
+있으며, 기본 비밀번호는 없습니다.
+
+| 회사 | 계정 | 근로자 |
+| --- | --- | --- |
+| `FOWOCO Demo Company` | 기존 20명 (`ADMIN` 2, `HR` 12, `VIEWER` 6) | 5명 |
+| `FOWOCO Test Company` | 3명 (`ADMIN` 1, `HR` 1, `VIEWER` 1) | 5명 |
+
+Demo Company에는 화면 검증용 업무 데이터도 함께 생성됩니다.
+
+- Task 5개: `DRAFT`(AI 후보), `READY_FOR_REVIEW`, `WAITING_WORKER`,
+  `WAITING_EXTERNAL`, `COMPLETED` 각 1개
+- 마감일: 7일 이내, 30일 이내, 30일 초과 구간을 모두 포함
+- 근로자 서류 7개: 근로자별 1~2개, `MISSING`, `SUBMITTED`, `VERIFIED` 포함
+- 30일 이내 만료 서류 1개 이상
+- 승인 대기 Task의 최근 AuditEvent 3개
 
 ```bash
 export DEMO_SEED_ENABLED=true
@@ -162,12 +177,41 @@ export DEMO_SEED_ADMIN_PASSWORD='로컬 Secret의 12자 이상 값'
 ./gradlew bootRun
 ```
 
-같은 설정으로 재실행해도 중복 생성하지 않습니다. 같은 이메일이 다른 사업장이나
-역할로 존재하면 덮어쓰지 않고 시작을 중단합니다. 최초 계정을 확인한 후에는
+같은 설정으로 재실행해도 중복 생성하지 않습니다. 고정 ID나 이메일이 다른
+사업장·역할·근로자 정보와 충돌하면 덮어쓰지 않고 시작을 중단합니다. 이메일과
+근로자 이름은 모두 데모 전용 값이며 실제 개인정보를 포함하지 않습니다.
+최초 계정을 확인한 후에는
 `DEMO_SEED_ENABLED=false`로 돌려놓습니다.
 
-PostgreSQL `dev`·`prod`에서는 Demo Seed 대신 배포 Provisioning 단계에서 초기
-계정을 준비합니다.
+공유 `dev`와 `prod`에서는 Demo Seed 대신 배포 Provisioning 단계에서 초기 계정을
+준비합니다.
+
+### 팀 공통 PostgreSQL Demo 실행
+
+저장소의 `.env.example`을 Git에서 제외되는 `.env.local`로 복사하고 로컬
+PostgreSQL 비밀번호, JWT Secret과 Demo 비밀번호를 입력합니다. 실제 Secret은
+Git, Issue 또는 메신저로 공유하지 않습니다.
+
+```bash
+# macOS / Linux
+cp .env.example .env.local
+./scripts/run-dev.sh
+```
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env.local
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-dev.ps1
+```
+
+두 스크립트 모두 PostgreSQL `dev` profile과 Demo Seed를 활성화합니다. `DB_URL`,
+migration/runtime username이 비어 있으면 로컬 기본값
+`jdbc:postgresql://localhost:5432/fowoco_test`와 `postgres`를 사용합니다.
+대상 데이터베이스는 최초 한 번 직접 생성합니다.
+
+```bash
+createdb -h localhost -p 5432 -U postgres fowoco_test
+```
 
 ## 개발 기반
 

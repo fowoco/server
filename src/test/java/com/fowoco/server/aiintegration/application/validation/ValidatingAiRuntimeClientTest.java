@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class ValidatingAiRuntimeClientTest {
 
     private final AiRuntimeContractValidator validator =
-            new AiRuntimeContractValidator(new AiRuntimePrivacyPolicy());
+            new AiRuntimeContractValidator(new AiRuntimeBoundaryPolicy());
 
     @Test
     void validatesBothSidesAndCapturesOneAttemptWithoutTransparentRetry() {
@@ -31,7 +31,9 @@ class ValidatingAiRuntimeClientTest {
         fake.enqueueResponse(validResponse());
         ValidatingAiRuntimeClient client = new ValidatingAiRuntimeClient(fake, validator);
 
-        assertThatThrownBy(() -> client.analyze(requestWithInstruction("전화 010-1234-5678")))
+        assertThatThrownBy(() -> client.analyze(requestWithInstruction(
+                "Authorization: Bearer secret-token-value"
+        )))
                 .isInstanceOf(AiRuntimeContractException.class);
         assertThat(fake.receivedRequests()).isEmpty();
     }

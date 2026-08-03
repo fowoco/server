@@ -1,8 +1,7 @@
-# TEMP: 심사용 임시 배포 Dockerfile — 정식 CI/CD·배포 파이프라인 확정 전까지 사용
-FROM gradle:8.10-jdk17 AS build
+FROM eclipse-temurin:17-jdk-alpine AS build
 WORKDIR /app
 COPY . .
-RUN gradle bootJar --no-daemon
+RUN chmod +x gradlew && ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app

@@ -71,7 +71,11 @@ class RemoteAiRuntimeClientWireMockTest {
                         equalTo(REQUEST_ID.toString())
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
-                        "$.maskedInput.workers[0].stayExpiryDate"
+                        "$.analysisInput.workers[0].stayExpiryDate"
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.workers[0].requestedFields.legal_name",
+                        equalTo("NGUYEN VAN AN")
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.request_id",

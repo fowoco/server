@@ -260,7 +260,7 @@ public final class RemoteAiRuntimeClient implements AiRuntimeClient {
                 request.contractVersion(),
                 request.requiredKnowledgeVersion(),
                 remainingMillis,
-                request.maskedInput()
+                request.analysisInput()
         );
     }
 

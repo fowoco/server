@@ -21,6 +21,7 @@ public interface TaskRepository {
             TaskStatus status,
             TaskType taskType,
             UUID workerId,
+            UUID caseId,
             LocalDate dueFrom,
             LocalDate dueTo,
             String keyword,
