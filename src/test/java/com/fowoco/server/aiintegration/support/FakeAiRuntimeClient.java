@@ -2,6 +2,7 @@ package com.fowoco.server.aiintegration.support;
 
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
+import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ public final class FakeAiRuntimeClient implements AiRuntimeClient {
     }
 
     @Override
-    public AiAnalysisResponse analyze(AiAnalysisRequest request) {
+    public AiAnalysisResponse analyze(AiAnalysisRequest request, AiRuntimeCallContext context) {
         receivedRequests.add(request);
         Function<AiAnalysisRequest, AiAnalysisResponse> script = scripts.pollFirst();
         if (script == null) {

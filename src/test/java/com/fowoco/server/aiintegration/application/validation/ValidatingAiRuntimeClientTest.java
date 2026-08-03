@@ -1,6 +1,8 @@
 package com.fowoco.server.aiintegration.application.validation;
 
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.contextRequiredResponse;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.requestWithInstruction;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validPlanRequest;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validRequest;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validResponse;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,6 +25,18 @@ class ValidatingAiRuntimeClientTest {
 
         assertThat(client.analyze(validRequest())).isEqualTo(validResponse());
         assertThat(fake.receivedRequests()).containsExactly(validRequest());
+    }
+
+    @Test
+    void validatesPlanThenServerEnrichedAnalyzeAsTwoExplicitAttempts() {
+        FakeAiRuntimeClient fake = new FakeAiRuntimeClient();
+        fake.enqueueResponse(contextRequiredResponse());
+        fake.enqueueResponse(validResponse());
+        ValidatingAiRuntimeClient client = new ValidatingAiRuntimeClient(fake, validator);
+
+        assertThat(client.analyze(validPlanRequest())).isEqualTo(contextRequiredResponse());
+        assertThat(client.analyze(validRequest())).isEqualTo(validResponse());
+        assertThat(fake.receivedRequests()).containsExactly(validPlanRequest(), validRequest());
     }
 
     @Test
