@@ -30,6 +30,7 @@ public class JpaTaskRepository implements TaskRepository {
                 criteria.status(),
                 criteria.taskType(),
                 criteria.workerId(),
+                criteria.caseId(),
                 criteria.dueFrom(),
                 criteria.dueTo(),
                 normalizeKeyword(criteria.keyword()),

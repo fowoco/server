@@ -112,6 +112,19 @@ class TaskOpenApiContractTest {
         assertThat(workflow.has("source_ids")).isTrue();
     }
 
+    @Test
+    void taskListPublishesTheOptionalCaseIdFilter() {
+        JsonNode parameters = openApi.at("/paths/~1api~1v1~1tasks/get/parameters");
+
+        assertThat(parameters)
+                .anySatisfy(parameter -> {
+                    assertThat(parameter.path("name").asText()).isEqualTo("case_id");
+                    assertThat(parameter.path("in").asText()).isEqualTo("query");
+                    assertThat(parameter.path("required").asBoolean()).isFalse();
+                    assertThat(parameter.at("/schema/format").asText()).isEqualTo("uuid");
+                });
+    }
+
     private String operationId(String pointer) {
         return openApi.at(pointer).path("operationId").asText();
     }
