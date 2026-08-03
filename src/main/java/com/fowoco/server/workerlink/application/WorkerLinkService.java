@@ -11,6 +11,7 @@ import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
 import com.fowoco.server.workerlink.application.port.WorkerLinkGenerator;
 import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
 import com.fowoco.server.workerlink.domain.WorkerLink;
+import com.fowoco.server.workerlink.infrastructure.security.WorkerLinkHasher;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -27,6 +28,7 @@ public class WorkerLinkService {
     private final ApprovalRequestRepository approvalRequestRepository;
     private final WorkerLinkRepository workerLinkRepository;
     private final WorkerLinkGenerator workerLinkGenerator;
+    private final WorkerLinkHasher workerLinkHasher;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -35,6 +37,7 @@ public class WorkerLinkService {
             ApprovalRequestRepository approvalRequestRepository,
             WorkerLinkRepository workerLinkRepository,
             WorkerLinkGenerator workerLinkGenerator,
+            WorkerLinkHasher workerLinkHasher,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -42,6 +45,7 @@ public class WorkerLinkService {
         this.approvalRequestRepository = approvalRequestRepository;
         this.workerLinkRepository = workerLinkRepository;
         this.workerLinkGenerator = workerLinkGenerator;
+        this.workerLinkHasher = workerLinkHasher;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -59,8 +63,9 @@ public class WorkerLinkService {
             throw new ApiException(WorkerLinkErrorCode.TASK_NOT_APPROVED);
         }
 
+        String idempotencyKeyHash = workerLinkHasher.hash(command.idempotencyKey());
         Optional<WorkerLink> existingByIdempotency = workerLinkRepository
-                .findByTaskIdAndIdempotencyKey(command.taskId(), command.idempotencyKey());
+                .findByTaskIdAndIdempotencyKey(command.taskId(), idempotencyKeyHash);
         if (existingByIdempotency.isPresent()) {
             WorkerLink previous = existingByIdempotency.get();
             return new WorkerLinkIssueResult(previous.tokenHash(), previous.expiresAt());
@@ -92,7 +97,7 @@ public class WorkerLinkService {
                 expiresAt,
                 command.issuedBy(),
                 previousLink != null ? previousLink.workerLinkId() : null,
-                command.idempotencyKey(),
+                idempotencyKeyHash,
                 now
         );
         workerLinkRepository.insert(workerLink);
