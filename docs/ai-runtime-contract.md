@@ -46,14 +46,14 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
   "requiredKnowledgeVersion": "0.2.0",
   "deadlineMs": 10000,
   "analysisInput": {
-    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL",
-    "extractedSlots": {},
-    "requestedFieldKeys": [],
-    "workers": [],
-    "workflowConstraints": []
+    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL"
   }
 }
 ```
+
+PLAN에서 아직 값이 없는 `extractedSlots`, `requestedFieldKeys`, `workers`,
+`workflowConstraints`는 JSON에 보내지 않습니다. Server 내부에서는 빈 collection으로
+유지하며 ANALYZE에서 실제 값이 생겼을 때만 직렬화합니다.
 
 Runtime이 DB 정보를 더 필요로 하면 성공 응답으로 `CONTEXT_REQUIRED`를 반환합니다.
 Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field key만 요청합니다.

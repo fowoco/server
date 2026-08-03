@@ -112,7 +112,19 @@ class RemoteAiRuntimeClientWireMockTest {
                         absent()
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
-                        "$.analysisInput.workers[0]",
+                        "$.analysisInput.extractedSlots",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.requestedFieldKeys",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.workers",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.workflowConstraints",
                         absent()
                 ))
                 .willReturn(jsonResponse(objectMapper.writeValueAsString(contextRequiredResponse()))));

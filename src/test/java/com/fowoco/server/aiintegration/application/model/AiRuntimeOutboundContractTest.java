@@ -21,18 +21,12 @@ class AiRuntimeOutboundContractTest {
         assertThat(input.get("instruction").textValue())
                 .isEqualTo("응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL");
         assertThat(input.has("intentHint")).isFalse();
-        assertThat(input.get("extractedSlots").isEmpty()).isTrue();
-        assertThat(input.get("requestedFieldKeys").isEmpty()).isTrue();
-        assertThat(input.get("workers").isEmpty()).isTrue();
-        assertThat(input.get("workflowConstraints").isEmpty()).isTrue();
+        assertThat(input.has("extractedSlots")).isFalse();
+        assertThat(input.has("requestedFieldKeys")).isFalse();
+        assertThat(input.has("workers")).isFalse();
+        assertThat(input.has("workflowConstraints")).isFalse();
         assertThat(input.properties().stream().map(java.util.Map.Entry::getKey).toList())
-                .containsExactlyInAnyOrder(
-                        "instruction",
-                        "extractedSlots",
-                        "requestedFieldKeys",
-                        "workers",
-                        "workflowConstraints"
-                );
+                .containsExactly("instruction");
     }
 
     @Test

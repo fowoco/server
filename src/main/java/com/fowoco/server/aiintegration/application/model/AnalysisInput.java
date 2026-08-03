@@ -1,5 +1,6 @@
 package com.fowoco.server.aiintegration.application.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -9,6 +10,7 @@ import java.util.Objects;
  * PLAN keeps context collections empty; ANALYZE preserves extracted and requested fields and
  * contains one Server-resolved Worker.
  */
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public record AnalysisInput(
         String instruction,
         Map<String, String> extractedSlots,
