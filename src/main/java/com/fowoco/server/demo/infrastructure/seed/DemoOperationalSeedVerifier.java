@@ -7,6 +7,7 @@ import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.Tas
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
+import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.WorkerDocument;
 import java.util.HashSet;
 import java.util.List;
@@ -18,6 +19,7 @@ final class DemoOperationalSeedVerifier {
 
     private final TaskRepository taskRepository;
     private final WorkerDocumentRepository workerDocumentRepository;
+    private final WorkerRepository workerRepository;
     private final DemoTaskSeeder taskSeeder;
     private final DemoWorkerDocumentSeeder documentSeeder;
     private final DemoAuditEventSeeder auditSeeder;
@@ -25,6 +27,7 @@ final class DemoOperationalSeedVerifier {
     DemoOperationalSeedVerifier(
             TaskRepository taskRepository,
             WorkerDocumentRepository workerDocumentRepository,
+            WorkerRepository workerRepository,
             DemoTaskSeeder taskSeeder,
             DemoWorkerDocumentSeeder documentSeeder,
             DemoAuditEventSeeder auditSeeder
@@ -34,19 +37,25 @@ final class DemoOperationalSeedVerifier {
                 workerDocumentRepository,
                 "workerDocumentRepository must not be null"
         );
+        this.workerRepository = Objects.requireNonNull(workerRepository, "workerRepository must not be null");
         this.taskSeeder = Objects.requireNonNull(taskSeeder, "taskSeeder must not be null");
         this.documentSeeder = Objects.requireNonNull(documentSeeder, "documentSeeder must not be null");
         this.auditSeeder = Objects.requireNonNull(auditSeeder, "auditSeeder must not be null");
     }
 
-    void verify(DemoOperationalSeedCatalog catalog, DemoOperationalSeedContext context) {
-        verifyUniqueIds(catalog.tasks().stream().map(TaskSeed::taskId).toList(), "task");
-        verifyUniqueIds(catalog.documents().stream().map(DocumentSeed::documentId).toList(), "document");
-        verifyUniqueIds(catalog.audits().stream().map(AuditSeed::auditEventId).toList(), "audit event");
-        verifyDocumentWorkersHaveTasks(catalog);
-        catalog.tasks().forEach(seed -> verifyTask(seed, context));
-        catalog.documents().forEach(seed -> verifyDocument(seed, context));
-        catalog.audits().forEach(seed -> verifyAudit(seed, context));
+    void verify(
+            List<TaskSeed> tasks,
+            List<DocumentSeed> documents,
+            List<AuditSeed> audits,
+            DemoOperationalSeedContext context
+    ) {
+        verifyUniqueIds(tasks.stream().map(TaskSeed::taskId).toList(), "task");
+        verifyUniqueIds(documents.stream().map(DocumentSeed::documentId).toList(), "document");
+        verifyUniqueIds(audits.stream().map(AuditSeed::auditEventId).toList(), "audit event");
+        verifyWorkersExist(tasks, documents, context);
+        tasks.forEach(seed -> verifyTask(seed, context));
+        documents.forEach(seed -> verifyDocument(seed, context));
+        audits.forEach(seed -> verifyAudit(seed, context));
     }
 
     private void verifyTask(TaskSeed seed, DemoOperationalSeedContext context) {
@@ -71,15 +80,18 @@ final class DemoOperationalSeedVerifier {
         auditSeeder.verifyExisting(event, seed, context);
     }
 
-    private void verifyDocumentWorkersHaveTasks(DemoOperationalSeedCatalog catalog) {
-        Set<UUID> taskWorkerIds = catalog.tasks().stream()
-                .map(TaskSeed::workerId)
-                .collect(java.util.stream.Collectors.toSet());
-        boolean orphanedDocument = catalog.documents().stream()
-                .map(DocumentSeed::workerId)
-                .anyMatch(workerId -> !taskWorkerIds.contains(workerId));
-        if (orphanedDocument) {
-            throw new IllegalStateException("a demo document worker has no demo task");
+    private void verifyWorkersExist(
+            List<TaskSeed> tasks,
+            List<DocumentSeed> documents,
+            DemoOperationalSeedContext context
+    ) {
+        Set<UUID> workerIds = new HashSet<>();
+        tasks.stream().map(TaskSeed::workerId).forEach(workerIds::add);
+        documents.stream().map(DocumentSeed::workerId).forEach(workerIds::add);
+        boolean missingWorker = workerIds.stream().anyMatch(workerId ->
+                workerRepository.findByWorkerIdAndCompanyId(workerId, context.companyId()).isEmpty());
+        if (missingWorker) {
+            throw new IllegalStateException("a demo task or document worker does not exist in its company");
         }
     }
 

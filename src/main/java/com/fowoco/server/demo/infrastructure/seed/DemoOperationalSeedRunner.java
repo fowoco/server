@@ -1,7 +1,13 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.AuditSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,17 +50,37 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments arguments) {
-        DemoOperationalSeedContext context = DemoOperationalSeedContext.from(properties, clock);
-        catalog.tasks().forEach(seed -> taskSeeder.seed(seed, context));
-        catalog.documents().forEach(seed -> documentSeeder.seed(seed, context));
-        catalog.audits().forEach(seed -> auditSeeder.seed(seed, context));
-        verifier.verify(catalog, context);
-        LOGGER.info(
-                "demo_operational_seed ready company_id={} task_count={} document_count={} audit_count={}",
-                context.companyId(),
-                catalog.tasks().size(),
-                catalog.documents().size(),
-                catalog.audits().size()
+        Instant now = clock.instant();
+        LocalDate today = LocalDate.now(clock);
+        DemoOperationalSeedContext demoContext = DemoOperationalSeedContext.demo(properties, today, now);
+        DemoOperationalSeedContext testContext = DemoOperationalSeedContext.test(properties, today, now);
+        seedDataset(
+                catalog.demoTasks(),
+                catalog.demoDocuments(),
+                catalog.demoAudits(),
+                demoContext
         );
+        seedDataset(catalog.testTasks(), catalog.testDocuments(), List.of(), testContext);
+        LOGGER.info(
+                "demo_operational_seed ready demo_task_count={} demo_document_count={} "
+                        + "test_task_count={} test_document_count={} audit_count={}",
+                catalog.demoTasks().size(),
+                catalog.demoDocuments().size(),
+                catalog.testTasks().size(),
+                catalog.testDocuments().size(),
+                catalog.demoAudits().size()
+        );
+    }
+
+    private void seedDataset(
+            List<TaskSeed> tasks,
+            List<DocumentSeed> documents,
+            List<AuditSeed> audits,
+            DemoOperationalSeedContext context
+    ) {
+        tasks.forEach(seed -> taskSeeder.seed(seed, context));
+        documents.forEach(seed -> documentSeeder.seed(seed, context));
+        audits.forEach(seed -> auditSeeder.seed(seed, context));
+        verifier.verify(tasks, documents, audits, context);
     }
 }

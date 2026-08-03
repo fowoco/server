@@ -5,6 +5,7 @@ import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
 import com.fowoco.server.task.application.TaskContentCodec;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
+import com.fowoco.server.worker.application.port.WorkerRepository;
 import java.time.Clock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -20,6 +21,7 @@ public class DemoOperationalSeedConfiguration {
             TaskRepository taskRepository,
             TaskContentCodec taskContentCodec,
             WorkerDocumentRepository workerDocumentRepository,
+            WorkerRepository workerRepository,
             AuditEventRepository auditEventRepository,
             Clock clock
     ) {
@@ -30,6 +32,7 @@ public class DemoOperationalSeedConfiguration {
         DemoOperationalSeedVerifier verifier = new DemoOperationalSeedVerifier(
                 taskRepository,
                 workerDocumentRepository,
+                workerRepository,
                 taskSeeder,
                 documentSeeder,
                 auditSeeder

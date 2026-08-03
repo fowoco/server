@@ -19,7 +19,9 @@ final class DemoWorkerDocumentSeeder {
     }
 
     void seed(DocumentSeed seed, DemoOperationalSeedContext context) {
-        LocalDate expiryDate = context.today().plusDays(seed.expiryDays());
+        LocalDate expiryDate = seed.expiryDays() == null
+                ? null
+                : context.today().plusDays(seed.expiryDays());
         Optional<WorkerDocument> existing =
                 workerDocumentRepository.findByIdAndWorkerIdAndCompanyId(
                         seed.documentId(),

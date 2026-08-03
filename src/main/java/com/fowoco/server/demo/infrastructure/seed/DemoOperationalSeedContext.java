@@ -1,7 +1,6 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
@@ -21,14 +20,29 @@ record DemoOperationalSeedContext(
         Objects.requireNonNull(now, "now must not be null");
     }
 
-    static DemoOperationalSeedContext from(DemoAuthSeedProperties properties, Clock clock) {
+    static DemoOperationalSeedContext demo(
+            DemoAuthSeedProperties properties,
+            LocalDate today,
+            Instant now
+    ) {
         Objects.requireNonNull(properties, "properties must not be null");
-        Objects.requireNonNull(clock, "clock must not be null");
-        Instant now = clock.instant();
-        LocalDate today = LocalDate.now(clock);
         return new DemoOperationalSeedContext(
                 properties.companyId(),
                 properties.adminUserId(),
+                today,
+                now
+        );
+    }
+
+    static DemoOperationalSeedContext test(
+            DemoAuthSeedProperties properties,
+            LocalDate today,
+            Instant now
+    ) {
+        Objects.requireNonNull(properties, "properties must not be null");
+        return new DemoOperationalSeedContext(
+                properties.testCompanyId(),
+                DemoOperationalSeedCatalog.TEST_ADMIN_USER_ID,
                 today,
                 now
         );

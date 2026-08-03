@@ -128,30 +128,33 @@ class DemoAuthSeedIntegrationTest {
                 "SELECT COUNT(*) FROM task WHERE company_id = ?",
                 Integer.class,
                 COMPANY_ID
-        )).isEqualTo(5);
+        )).isEqualTo(24);
         assertThat(jdbcTemplate.queryForList(
                 "SELECT status FROM task WHERE company_id = ?",
                 String.class,
                 COMPANY_ID
-        )).containsExactlyInAnyOrder(
+        )).contains(
                 "DRAFT",
+                "NEEDS_INFO",
                 "READY_FOR_REVIEW",
+                "APPROVED",
                 "WAITING_WORKER",
                 "WAITING_EXTERNAL",
-                "COMPLETED"
+                "COMPLETED",
+                "CANCELLED"
         );
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM task WHERE company_id = ? AND source = 'AI_CANDIDATE' "
                         + "AND status = 'DRAFT'",
                 Integer.class,
                 COMPANY_ID
-        )).isEqualTo(1);
+        )).isEqualTo(3);
         List<Instant> completedUpdates = jdbcTemplate.query(
                 "SELECT updated_at FROM task WHERE company_id = ? AND status = 'COMPLETED'",
                 (resultSet, rowNumber) -> resultSet.getTimestamp("updated_at").toInstant(),
                 COMPANY_ID
         );
-        assertThat(completedUpdates).hasSize(1).allMatch(updatedAt ->
+        assertThat(completedUpdates).hasSize(5).allMatch(updatedAt ->
                 LocalDate.ofInstant(updatedAt, ZoneOffset.UTC).equals(LocalDate.now(clock)));
         List<LocalDate> dueDates = jdbcTemplate.query(
                 "SELECT due_date FROM task WHERE company_id = ?",
@@ -167,7 +170,7 @@ class DemoAuthSeedIntegrationTest {
                 "SELECT COUNT(*) FROM worker_document WHERE company_id = ?",
                 Integer.class,
                 COMPANY_ID
-        )).isEqualTo(7);
+        )).isEqualTo(84);
         assertThat(jdbcTemplate.queryForList(
                 "SELECT submission_status FROM worker_document WHERE company_id = ?",
                 String.class,
@@ -179,12 +182,22 @@ class DemoAuthSeedIntegrationTest {
                 COMPANY_ID
         );
         assertThat(expiryDates).anyMatch(date ->
-                !date.isBefore(today) && !date.isAfter(today.plusDays(30)));
+                date != null && !date.isBefore(today) && !date.isAfter(today.plusDays(30)));
         assertThat(jdbcTemplate.queryForList(
                 "SELECT COUNT(*) FROM worker_document WHERE company_id = ? GROUP BY worker_id",
                 Integer.class,
                 COMPANY_ID
-        )).hasSize(5).allMatch(count -> count >= 1 && count <= 2);
+        )).hasSize(28).allMatch(count -> count == 3);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE company_id = ?",
+                Integer.class,
+                TEST_COMPANY_ID
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document WHERE company_id = ?",
+                Integer.class,
+                TEST_COMPANY_ID
+        )).isEqualTo(8);
         UUID timelineTaskId = UUID.fromString("94000000-0000-0000-0000-000000000002");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM audit_event WHERE company_id = ? AND target_id = ?",
