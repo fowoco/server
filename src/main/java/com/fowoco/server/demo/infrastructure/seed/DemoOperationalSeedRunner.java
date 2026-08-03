@@ -108,14 +108,15 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
                 List.of(),
                 List.of(),
                 List.of(),
-                List.of(),
+                catalog.testAudits(),
                 testContext
         );
         LOGGER.info(
                 "demo_operational_seed ready demo_task_count={} demo_document_count={} "
                         + "checklist_count={} approval_count={} transition_count={} "
                         + "external_submission_count={} evidence_count={} request_draft_count={} "
-                        + "test_task_count={} test_document_count={} audit_count={}",
+                        + "test_task_count={} test_document_count={} demo_audit_count={} "
+                        + "test_audit_count={}",
                 catalog.demoTasks().size(),
                 catalog.demoDocuments().size(),
                 catalog.demoChecklists().size(),
@@ -126,7 +127,8 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
                 catalog.demoDocumentRequestDrafts().size(),
                 catalog.testTasks().size(),
                 catalog.testDocuments().size(),
-                catalog.demoAudits().size()
+                catalog.demoAudits().size(),
+                catalog.testAudits().size()
         );
     }
 

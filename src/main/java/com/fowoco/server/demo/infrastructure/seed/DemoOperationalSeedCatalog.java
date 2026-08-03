@@ -1,8 +1,11 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
-import com.fowoco.server.audit.domain.AuditAction;
 import com.fowoco.server.approval.domain.ApprovalStatus;
 import com.fowoco.server.approval.domain.EvidenceType;
+import com.fowoco.server.audit.domain.ActorType;
+import com.fowoco.server.audit.domain.AuditAction;
+import com.fowoco.server.audit.domain.AuditTargetType;
+import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
 import com.fowoco.server.task.domain.TaskType;
@@ -40,7 +43,7 @@ final class DemoOperationalSeedCatalog {
             DemoTaskArtifactSeedCatalog.demoEvidence(demoTasks);
     private final List<DocumentRequestDraftSeed> demoDocumentRequestDrafts =
             DemoTaskArtifactSeedCatalog.demoDocumentRequestDrafts(demoTasks);
-    private final List<AuditSeed> demoAudits = List.of(
+    private final List<AuditSeed> legacyDemoAudits = List.of(
             audit(
                     "96000000-0000-0000-0000-000000000001",
                     AuditAction.TASK_CREATED,
@@ -63,6 +66,17 @@ final class DemoOperationalSeedCatalog {
                     6
             )
     );
+    private final List<AuditSeed> demoAudits = Stream.concat(
+            legacyDemoAudits.stream(),
+            DemoAuditSeedCatalog.additionalDemoAudits(
+                    demoTasks,
+                    demoApprovals,
+                    demoExternalSubmissions,
+                    demoEvidence,
+                    demoDocumentRequestDrafts
+            ).stream()
+    ).toList();
+    private final List<AuditSeed> testAudits = DemoAuditSeedCatalog.testAudits(testTasks);
 
     DemoOperationalSeedCatalog() {
         verifyDefinitions();
@@ -112,6 +126,10 @@ final class DemoOperationalSeedCatalog {
         return demoAudits;
     }
 
+    List<AuditSeed> testAudits() {
+        return testAudits;
+    }
+
     private void verifyDefinitions() {
         requireSize(demoTasks, 24, "Demo Company task");
         requireSize(testTasks, 3, "Test Company task");
@@ -123,6 +141,8 @@ final class DemoOperationalSeedCatalog {
         requireSize(demoExternalSubmissions, 6, "Demo Company external submission");
         requireSize(demoEvidence, 10, "Demo Company completion evidence");
         requireSize(demoDocumentRequestDrafts, 5, "Demo Company document request draft");
+        requireSize(demoAudits, 96, "Demo Company audit event");
+        requireSize(testAudits, 8, "Test Company audit event");
         requireDistribution(
                 demoTasks.stream().map(TaskSeed::taskType).toList(),
                 Map.of(
@@ -175,6 +195,16 @@ final class DemoOperationalSeedCatalog {
                 ),
                 "Demo Company evidence type"
         );
+        requireDistribution(
+                demoAudits.stream().map(AuditSeed::actorType).toList(),
+                Map.of(
+                        ActorType.HR_USER, 83L,
+                        ActorType.AI_AGENT, 3L,
+                        ActorType.SYSTEM_RULE, 6L,
+                        ActorType.WORKER_LINK, 4L
+                ),
+                "Demo Company audit actor type"
+        );
         requireUniqueIds(
                 Stream.concat(demoTasks.stream(), testTasks.stream()).map(TaskSeed::taskId).toList(),
                 "task"
@@ -197,6 +227,8 @@ final class DemoOperationalSeedCatalog {
                 "completion evidence");
         requireUniqueIds(demoDocumentRequestDrafts.stream()
                 .map(DocumentRequestDraftSeed::draftId).toList(), "document request draft");
+        requireUniqueIds(Stream.concat(demoAudits.stream(), testAudits.stream())
+                .map(AuditSeed::auditEventId).toList(), "audit event");
         requireTaskReferences(demoChecklists.stream().map(ChecklistSeed::taskId).toList(),
                 "checklist item");
         requireTaskReferences(demoApprovals.stream().map(ApprovalSeed::taskId).toList(),
@@ -287,8 +319,13 @@ final class DemoOperationalSeedCatalog {
     ) {
         return new AuditSeed(
                 UUID.fromString(auditEventId),
+                ActorType.HR_USER,
+                UserRole.ADMIN,
                 action,
+                AuditTargetType.TASK,
+                TIMELINE_TASK_ID,
                 requestId,
+                "demo-seed-task-timeline",
                 changeSummary,
                 hoursAgo
         );
@@ -383,8 +420,13 @@ final class DemoOperationalSeedCatalog {
 
     record AuditSeed(
             UUID auditEventId,
+            ActorType actorType,
+            UserRole userRole,
             AuditAction action,
+            AuditTargetType targetType,
+            UUID targetId,
             String requestId,
+            String traceId,
             String changeSummary,
             int hoursAgo
     ) {

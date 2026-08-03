@@ -3,16 +3,14 @@ package com.fowoco.server.demo.infrastructure.seed;
 import com.fowoco.server.audit.application.port.AuditEventRepository;
 import com.fowoco.server.audit.domain.ActorType;
 import com.fowoco.server.audit.domain.AuditEvent;
-import com.fowoco.server.audit.domain.AuditTargetType;
-import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.AuditSeed;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 final class DemoAuditEventSeeder {
 
-    private static final String TRACE_ID = "demo-seed-task-timeline";
     private static final String EVENT_VERSION = "1";
 
     private final AuditEventRepository auditEventRepository;
@@ -25,7 +23,7 @@ final class DemoAuditEventSeeder {
     }
 
     void seed(AuditSeed seed, DemoOperationalSeedContext context) {
-        Optional<AuditEvent> existing = findExisting(seed, context);
+        Optional<AuditEvent> existing = findExisting(seed);
         if (existing.isPresent()) {
             verifyExisting(existing.orElseThrow(), seed, context);
             return;
@@ -33,26 +31,22 @@ final class DemoAuditEventSeeder {
         auditEventRepository.append(new AuditEvent(
                 seed.auditEventId(),
                 context.companyId(),
-                ActorType.HR_USER,
-                context.actorId(),
-                UserRole.ADMIN,
+                seed.actorType(),
+                actorId(seed, context),
+                seed.userRole(),
                 seed.action(),
-                AuditTargetType.TASK,
-                DemoOperationalSeedCatalog.TIMELINE_TASK_ID,
+                seed.targetType(),
+                seed.targetId(),
                 seed.requestId(),
-                TRACE_ID,
+                seed.traceId(),
                 EVENT_VERSION,
                 seed.changeSummary(),
                 context.now().minus(seed.hoursAgo(), ChronoUnit.HOURS)
         ));
     }
 
-    Optional<AuditEvent> findExisting(AuditSeed seed, DemoOperationalSeedContext context) {
-        return auditEventRepository
-                .findTaskActivities(context.companyId(), DemoOperationalSeedCatalog.TIMELINE_TASK_ID)
-                .stream()
-                .filter(event -> seed.auditEventId().equals(event.auditEventId()))
-                .findFirst();
+    Optional<AuditEvent> findExisting(AuditSeed seed) {
+        return auditEventRepository.findById(seed.auditEventId());
     }
 
     void verifyExisting(
@@ -61,17 +55,23 @@ final class DemoAuditEventSeeder {
             DemoOperationalSeedContext context
     ) {
         if (!context.companyId().equals(event.companyId())
-                || event.actorType() != ActorType.HR_USER
-                || !context.actorId().equals(event.actorId())
-                || event.userRole() != UserRole.ADMIN
+                || event.actorType() != seed.actorType()
+                || !Objects.equals(actorId(seed, context), event.actorId())
+                || event.userRole() != seed.userRole()
                 || event.action() != seed.action()
-                || event.targetType() != AuditTargetType.TASK
-                || !DemoOperationalSeedCatalog.TIMELINE_TASK_ID.equals(event.targetId())
+                || event.targetType() != seed.targetType()
+                || !seed.targetId().equals(event.targetId())
                 || !seed.requestId().equals(event.requestId())
+                || !seed.traceId().equals(event.traceId())
+                || !EVENT_VERSION.equals(event.eventVersion())
                 || !seed.changeSummary().equals(event.changeSummary())) {
             throw new IllegalStateException(
                     "a reserved demo audit event id already belongs to different audit data"
             );
         }
+    }
+
+    private UUID actorId(AuditSeed seed, DemoOperationalSeedContext context) {
+        return seed.actorType() == ActorType.HR_USER ? context.actorId() : null;
     }
 }

@@ -165,7 +165,7 @@ final class DemoOperationalSeedVerifier {
     }
 
     private void verifyAudit(AuditSeed seed, DemoOperationalSeedContext context) {
-        AuditEvent event = auditSeeder.findExisting(seed, context)
+        AuditEvent event = auditSeeder.findExisting(seed)
                 .orElseThrow(() -> new IllegalStateException("a reserved demo audit event was not seeded"));
         auditSeeder.verifyExisting(event, seed, context);
     }
