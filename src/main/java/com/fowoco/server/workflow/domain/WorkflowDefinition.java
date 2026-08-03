@@ -11,6 +11,8 @@ public record WorkflowDefinition(
         String sensitivity,
         Set<TaskType> supportedTaskTypes,
         Set<String> requiredSlots,
+        Set<String> allowedSlotKeys,
+        Set<String> resolvableSlotKeys,
         List<WorkflowChecklistTemplate> checklistItems,
         List<String> completionEvidence,
         List<String> sourceIds
@@ -19,6 +21,8 @@ public record WorkflowDefinition(
     public WorkflowDefinition {
         supportedTaskTypes = Set.copyOf(supportedTaskTypes);
         requiredSlots = Set.copyOf(requiredSlots);
+        allowedSlotKeys = Set.copyOf(allowedSlotKeys);
+        resolvableSlotKeys = Set.copyOf(resolvableSlotKeys);
         checklistItems = List.copyOf(checklistItems);
         completionEvidence = List.copyOf(completionEvidence);
         sourceIds = List.copyOf(sourceIds);
