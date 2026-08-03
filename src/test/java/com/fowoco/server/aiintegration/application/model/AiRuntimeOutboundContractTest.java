@@ -1,6 +1,7 @@
 package com.fowoco.server.aiintegration.application.model;
 
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validRequest;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validPlanRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,25 @@ class AiRuntimeOutboundContractTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
+    void planJsonContainsOnlyInstructionAndOptionalIntentHintAsBusinessInput() {
+        JsonNode json = objectMapper.valueToTree(validPlanRequest());
+        JsonNode input = json.get("analysisInput");
+
+        assertThat(json.get("phase").textValue()).isEqualTo("PLAN");
+        assertThat(input.get("instruction").textValue()).isEqualTo("응웬반안 체류연장 준비해줘");
+        assertThat(input.get("intentHint").textValue()).isEqualTo("EXPIRY_RENEWAL");
+        assertThat(input.get("workers").isEmpty()).isTrue();
+        assertThat(input.get("workflowConstraints").isEmpty()).isTrue();
+        assertThat(input.properties().stream().map(java.util.Map.Entry::getKey).toList())
+                .containsExactlyInAnyOrder(
+                        "instruction",
+                        "intentHint",
+                        "workers",
+                        "workflowConstraints"
+                );
+    }
+
+    @Test
     void outboundJsonContainsOriginalDemoDataWithoutServiceCredentials() throws Exception {
         JsonNode json = objectMapper.valueToTree(validRequest());
         JsonNode input = json.get("analysisInput");
@@ -21,6 +41,7 @@ class AiRuntimeOutboundContractTest {
                 .containsExactlyInAnyOrder(
                         "requestId",
                         "attemptId",
+                        "phase",
                         "contractVersion",
                         "requiredKnowledgeVersion",
                         "deadlineMs",
@@ -40,6 +61,7 @@ class AiRuntimeOutboundContractTest {
                 );
         assertThat(input.get("instruction").textValue())
                 .contains("응웬반안", "010-1234-5678");
+        assertThat(input.get("intentHint").textValue()).isEqualTo("EXPIRY_RENEWAL");
         assertThat(worker.get("requestedFields").get("legal_name").textValue())
                 .isEqualTo("NGUYEN VAN AN");
         assertThat(worker.get("requestedFields").get("passport_number").textValue())

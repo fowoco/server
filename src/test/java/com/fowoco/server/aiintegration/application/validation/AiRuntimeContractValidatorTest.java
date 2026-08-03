@@ -1,13 +1,17 @@
 package com.fowoco.server.aiintegration.application.validation;
 
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.ATTEMPT_ID;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.CONTRACT_VERSION;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.KNOWLEDGE_VERSION;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.REQUEST_ID;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.WORKER_REF;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.WORKFLOW_ID;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.contextRequiredResponse;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.needsInfoResponse;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.responseWithCandidate;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validCandidate;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validRequest;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validPlanRequest;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validResponse;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validVersions;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,9 +21,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome;
+import com.fowoco.server.aiintegration.application.model.AiAnalysisPhase;
+import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
+import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.support.AiRuntimeContractFixture;
 import java.math.BigDecimal;
 import java.util.List;
@@ -39,6 +46,39 @@ class AiRuntimeContractValidatorTest {
     void acceptsValidRequestAndResponse() {
         assertThatCode(() -> validator.validateResponse(validRequest(), validResponse()))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void acceptsInstructionOnlyPlanAndStructuredContextRequirement() {
+        assertThatCode(() -> validator.validateResponse(validPlanRequest(), contextRequiredResponse()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void acceptsQuestionsAsAValidBusinessOutcome() {
+        assertThatCode(() -> validator.validateResponse(validRequest(), needsInfoResponse()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void keepsPlanAndAnalyzeInputsSeparated() {
+        AiAnalysisRequest planWithDatabaseContext = requestWithPhase(
+                AiAnalysisPhase.PLAN,
+                validRequest().analysisInput()
+        );
+        AiAnalysisRequest analyzeWithoutDatabaseContext = requestWithPhase(
+                AiAnalysisPhase.ANALYZE,
+                validPlanRequest().analysisInput()
+        );
+
+        assertFailure(
+                () -> validator.validateRequest(planWithDatabaseContext),
+                AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
+        );
+        assertFailure(
+                () -> validator.validateRequest(analyzeWithoutDatabaseContext),
+                AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
+        );
     }
 
     @ParameterizedTest
@@ -82,6 +122,8 @@ class AiRuntimeContractValidatorTest {
         AiAnalysisResponse response = new AiAnalysisResponse(
                 UUID.randomUUID(),
                 AiAnalysisOutcome.REVIEW_REQUIRED,
+                null,
+                List.of(),
                 validResponse().candidates(),
                 List.of(),
                 validVersions(),
@@ -190,11 +232,28 @@ class AiRuntimeContractValidatorTest {
         return new AiAnalysisResponse(
                 REQUEST_ID,
                 AiAnalysisOutcome.REVIEW_REQUIRED,
+                null,
+                List.of(),
                 List.of(validCandidate()),
                 List.of(),
                 versions,
                 1,
                 100
+        );
+    }
+
+    private AiAnalysisRequest requestWithPhase(
+            AiAnalysisPhase phase,
+            AnalysisInput input
+    ) {
+        return new AiAnalysisRequest(
+                REQUEST_ID,
+                ATTEMPT_ID,
+                phase,
+                CONTRACT_VERSION,
+                KNOWLEDGE_VERSION,
+                10_000,
+                input
         );
     }
 

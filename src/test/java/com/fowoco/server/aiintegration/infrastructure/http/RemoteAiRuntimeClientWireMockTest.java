@@ -1,6 +1,8 @@
 package com.fowoco.server.aiintegration.infrastructure.http;
 
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.REQUEST_ID;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.contextRequiredResponse;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validPlanRequest;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validRequest;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.absent;
@@ -71,6 +73,10 @@ class RemoteAiRuntimeClientWireMockTest {
                         equalTo(REQUEST_ID.toString())
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.phase",
+                        equalTo("ANALYZE")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.analysisInput.workers[0].stayExpiryDate"
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
@@ -87,6 +93,34 @@ class RemoteAiRuntimeClientWireMockTest {
                 .analyze(validRequest(), new AiRuntimeCallContext(TRACEPARENT));
 
         assertThat(response).isEqualTo(validResponse());
+        wireMock.verify(exactly(1), postRequestedFor(urlEqualTo(PATH)));
+    }
+
+    @Test
+    void sendsInstructionOnlyPlanAndParsesContextRequirement() throws Exception {
+        wireMock.stubFor(post(urlEqualTo(PATH))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.phase",
+                        equalTo("PLAN")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.instruction",
+                        equalTo("응웬반안 체류연장 준비해줘")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.intentHint",
+                        equalTo("EXPIRY_RENEWAL")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.workers[0]",
+                        absent()
+                ))
+                .willReturn(jsonResponse(objectMapper.writeValueAsString(contextRequiredResponse()))));
+
+        AiAnalysisResponse response = client(1_048_576, 8, 5, Duration.ofSeconds(30))
+                .analyze(validPlanRequest(), new AiRuntimeCallContext(TRACEPARENT));
+
+        assertThat(response).isEqualTo(contextRequiredResponse());
         wireMock.verify(exactly(1), postRequestedFor(urlEqualTo(PATH)));
     }
 

@@ -29,17 +29,81 @@ AiRunWorker (#24, 후속)
 `AiRuntimeClient`는 OpenAI, Gemini, Anthropic 같은 Provider를 직접 호출하지 않습니다.
 Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입니다.
 
-## 요청 계약
+## PLAN 요청 계약
+
+첫 호출은 HR 발화문을 이해하고 Server에 필요한 DB field를 요청하는 단계입니다. 화면의
+빠른 선택 태그는 `intentHint`에 넣지만 참고 정보일 뿐이며, 최종 분류 결과는 Runtime이
+`detectedIntent`로 반환합니다. 이 단계에는 Worker UUID나 DB 조회값을 넣지 않습니다.
 
 ```json
 {
   "requestId": "10000000-0000-0000-0000-000000000001",
   "attemptId": "20000000-0000-0000-0000-000000000001",
+  "phase": "PLAN",
   "contractVersion": "1.0.0",
   "requiredKnowledgeVersion": "0.2.0",
   "deadlineMs": 10000,
   "analysisInput": {
-    "instruction": "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비",
+    "instruction": "응웬반안 체류연장 준비해줘",
+    "intentHint": "EXPIRY_RENEWAL",
+    "workers": [],
+    "workflowConstraints": []
+  }
+}
+```
+
+Runtime이 DB 정보를 더 필요로 하면 성공 응답으로 `CONTEXT_REQUIRED`를 반환합니다.
+Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field key만 요청합니다.
+
+```json
+{
+  "requestId": "10000000-0000-0000-0000-000000000001",
+  "outcome": "CONTEXT_REQUIRED",
+  "contextRequirement": {
+    "detectedIntent": "EXPIRY_RENEWAL",
+    "confidence": 0.94,
+    "targetDisplayName": "응웬반안",
+    "extractedSlots": {},
+    "requiredFieldKeys": [
+      "legal_name",
+      "stay_expiry_date"
+    ]
+  },
+  "questions": [],
+  "candidates": [],
+  "validationErrors": [],
+  "versions": {
+    "agentVersion": "agent-1.0.0",
+    "modelProvider": "openai",
+    "modelName": "gpt-5-mini",
+    "modelVersion": "2026-07-01",
+    "promptVersion": "prompt-3",
+    "contextPackVersion": "context-0.2.0",
+    "workflowCatalogVersion": "0.2.0",
+    "contractVersion": "1.0.0"
+  },
+  "providerAttemptCount": 1,
+  "latencyMs": 120
+}
+```
+
+## ANALYZE 요청 계약
+
+#74가 `targetDisplayName`을 현재 사업장 안에서 한 명의 Worker로 찾고, 허용된
+`requiredFieldKeys`만 Repository로 조회합니다. 그 결과를 넣어 새로운 `attemptId`로
+ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용합니다.
+
+```json
+{
+  "requestId": "10000000-0000-0000-0000-000000000001",
+  "attemptId": "20000000-0000-0000-0000-000000000002",
+  "phase": "ANALYZE",
+  "contractVersion": "1.0.0",
+  "requiredKnowledgeVersion": "0.2.0",
+  "deadlineMs": 10000,
+  "analysisInput": {
+    "instruction": "응웬반안 체류연장 준비해줘",
+    "intentHint": "EXPIRY_RENEWAL",
     "workers": [
       {
         "workerRef": "30000000-0000-0000-0000-000000000001",
@@ -52,9 +116,7 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
         "contractEndDate": "2026-12-31",
         "requestedFields": {
           "legal_name": "NGUYEN VAN AN",
-          "passport_number": "M12345678",
-          "phone": "010-1234-5678",
-          "email": "worker@example.com"
+          "stay_expiry_date": "2026-12-31"
         }
       }
     ],
@@ -74,10 +136,12 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
 
 - `requestId`: Server 요청과 Runtime 응답을 같은 실행으로 연결합니다.
 - `attemptId`: 한 번의 `AiRuntimeClient.analyze` 호출과 정확히 하나로 대응합니다.
+- `phase`: 발화문을 해석하는 `PLAN`과 Server 보유정보로 결과를 만드는 `ANALYZE`를 구분합니다.
 - `contractVersion`: 양쪽이 같은 JSON 계약을 사용하는지 확인합니다.
 - `requiredKnowledgeVersion`: Server와 Runtime이 같은 Workflow release를 사용하게 합니다.
 - `deadlineMs`: 이번 시도 전체에서 남은 실행 시간입니다.
 - `instruction`: HR이 입력한 원문입니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
+- `intentHint`: 화면 빠른 선택에서 온 선택값입니다. 없을 수 있으며 강제 Intent가 아닙니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
 - `workflowConstraints`: Knowledge projection에서 가져온 Workflow와 slot allow-list입니다.
 
@@ -89,12 +153,14 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
 전송해서는 안 되며, 데모가 아닌 실제 개인정보를 사용하기 전에는 개인정보 처리 기준을
 다시 확정해야 합니다.
 
-## 응답 계약
+## ANALYZE 응답 계약
 
 ```json
 {
   "requestId": "10000000-0000-0000-0000-000000000001",
   "outcome": "REVIEW_REQUIRED",
+  "contextRequirement": null,
+  "questions": [],
   "candidates": [
     {
       "candidateRef": "candidate-1",
@@ -126,9 +192,15 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
 }
 ```
 
-`NEEDS_INFO`와 `REVIEW_REQUIRED`는 정상 분석 결과입니다. 이 값은 AiRun의 기술적
-`FAILED` 상태와 섞지 않습니다. Candidate는 Task도 승인도 아니며, #24에서 HR이 채택한
-후에만 Server Task command로 전달됩니다.
+`CONTEXT_REQUIRED`, `NEEDS_INFO`, `REVIEW_REQUIRED`는 모두 정상 분석 결과이며 AiRun의
+기술적 `FAILED` 상태와 섞지 않습니다.
+
+- `CONTEXT_REQUIRED`: Server DB에서 조회할 canonical field key가 있습니다.
+- `NEEDS_INFO`: DB로 채울 수 없어 HR에게 보여 줄 `questions`가 있습니다.
+- `REVIEW_REQUIRED`: 검토 가능한 `candidates`가 있습니다.
+
+Candidate는 Task도 승인도 아니며, #24에서 HR이 채택한 후에만 Server Task command로
+전달됩니다.
 
 ## Server가 거부하는 응답
 
@@ -138,6 +210,8 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
 - Workflow가 허용하지 않은 slot
 - 0 미만 또는 1 초과 confidence
 - 중복 candidate reference와 잘못된 outcome 구조
+- PLAN에 Worker DB context가 포함되거나 ANALYZE에 Worker context가 없는 요청
+- `CONTEXT_REQUIRED`인데 field key가 없거나, `NEEDS_INFO`인데 질문이 없는 응답
 - API Key·JWT·Bearer Token·비밀번호·Worker Link token 같은 서비스 인증정보
 
 거부 예외에는 발견한 원문을 넣지 않습니다. 앞으로 #24 AiAttempt에는
@@ -154,7 +228,7 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
 WireMock 계약 테스트는 다음 동작을 검증합니다.
 
 1. `Authorization: Bearer <service-credential>`, `X-Request-Id`, `traceparent` 전달
-2. 문서와 같은 camelCase 요청 JSON 사용
+2. 문서와 같은 camelCase 요청 JSON 및 `PLAN → CONTEXT_REQUIRED → ANALYZE` 구조 사용
 3. 알 수 없는 JSON field와 제한보다 큰 응답 거부
 4. connect timeout과 요청·응답 전체 deadline
 5. circuit breaker와 동시 호출 수 bulkhead

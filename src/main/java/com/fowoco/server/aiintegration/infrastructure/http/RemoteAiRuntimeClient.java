@@ -263,6 +263,7 @@ public final class RemoteAiRuntimeClient implements AiRuntimeClient {
         return new AiAnalysisRequest(
                 request.requestId(),
                 request.attemptId(),
+                request.phase(),
                 request.contractVersion(),
                 request.requiredKnowledgeVersion(),
                 remainingMillis,

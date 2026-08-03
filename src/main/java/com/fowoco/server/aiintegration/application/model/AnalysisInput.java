@@ -4,10 +4,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Original HR instruction and Worker context sent to the AI Runtime for the current demo.
+ * HR instruction plus phase-specific context sent to the AI Runtime.
+ * PLAN keeps both collections empty; ANALYZE contains one Server-resolved Worker.
  */
 public record AnalysisInput(
         String instruction,
+        String intentHint,
         List<WorkerContext> workers,
         List<WorkflowConstraint> workflowConstraints
 ) {
