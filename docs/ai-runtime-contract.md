@@ -46,6 +46,8 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
   "analysisInput": {
     "instruction": "응웬반안 체류연장 준비해줘",
     "intentHint": "EXPIRY_RENEWAL",
+    "extractedSlots": {},
+    "requestedFieldKeys": [],
     "workers": [],
     "workflowConstraints": []
   }
@@ -104,6 +106,11 @@ ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용�
   "analysisInput": {
     "instruction": "응웬반안 체류연장 준비해줘",
     "intentHint": "EXPIRY_RENEWAL",
+    "extractedSlots": {},
+    "requestedFieldKeys": [
+      "legal_name",
+      "stay_expiry_date"
+    ],
     "workers": [
       {
         "workerRef": "30000000-0000-0000-0000-000000000001",
@@ -142,6 +149,8 @@ ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용�
 - `deadlineMs`: 이번 시도 전체에서 남은 실행 시간입니다.
 - `instruction`: HR이 입력한 원문입니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
 - `intentHint`: 화면 빠른 선택에서 온 선택값입니다. 없을 수 있으며 강제 Intent가 아닙니다.
+- `extractedSlots`: PLAN에서 Agent가 발화문으로부터 추출했던 값을 ANALYZE에도 보존합니다.
+- `requestedFieldKeys`: Agent가 PLAN에서 요청했던 전체 key입니다. DB에 값이 없어도 목록에는 남습니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
 - `workflowConstraints`: Knowledge projection에서 가져온 Workflow와 slot allow-list입니다.
 

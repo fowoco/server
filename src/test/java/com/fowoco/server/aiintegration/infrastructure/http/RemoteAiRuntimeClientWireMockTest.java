@@ -152,13 +152,13 @@ class RemoteAiRuntimeClientWireMockTest {
     @Test
     void enforcesOverallDeadline() {
         wireMock.stubFor(post(urlEqualTo(PATH))
-                .willReturn(jsonResponse("{}").withFixedDelay(500)));
+                .willReturn(jsonResponse("{}").withFixedDelay(2_000)));
 
         AiRuntimeClient client = client(
                 1_048_576,
                 8,
                 5,
-                Duration.ofMillis(200)
+                Duration.ofSeconds(1)
         );
 
         assertFailureCode(client, AiRuntimeFailureCode.DEADLINE_EXCEEDED);

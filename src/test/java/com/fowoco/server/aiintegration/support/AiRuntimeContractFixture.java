@@ -46,7 +46,7 @@ public final class AiRuntimeContractFixture {
                 CONTRACT_VERSION,
                 KNOWLEDGE_VERSION,
                 10_000,
-                new AnalysisInput(instruction, intentHint, List.of(), List.of())
+                new AnalysisInput(instruction, intentHint, Map.of(), List.of(), List.of(), List.of())
         );
     }
 
@@ -67,6 +67,13 @@ public final class AiRuntimeContractFixture {
                 new AnalysisInput(
                         instruction,
                         "EXPIRY_RENEWAL",
+                        Map.of("document_type", "STAY_EXTENSION"),
+                        List.of(
+                                "legal_name",
+                                "passport_number",
+                                "phone",
+                                "email"
+                        ),
                         List.of(new WorkerContext(
                                 WORKER_REF,
                                 "응웬반안",

@@ -20,12 +20,16 @@ class AiRuntimeOutboundContractTest {
         assertThat(json.get("phase").textValue()).isEqualTo("PLAN");
         assertThat(input.get("instruction").textValue()).isEqualTo("응웬반안 체류연장 준비해줘");
         assertThat(input.get("intentHint").textValue()).isEqualTo("EXPIRY_RENEWAL");
+        assertThat(input.get("extractedSlots").isEmpty()).isTrue();
+        assertThat(input.get("requestedFieldKeys").isEmpty()).isTrue();
         assertThat(input.get("workers").isEmpty()).isTrue();
         assertThat(input.get("workflowConstraints").isEmpty()).isTrue();
         assertThat(input.properties().stream().map(java.util.Map.Entry::getKey).toList())
                 .containsExactlyInAnyOrder(
                         "instruction",
                         "intentHint",
+                        "extractedSlots",
+                        "requestedFieldKeys",
                         "workers",
                         "workflowConstraints"
                 );
@@ -62,6 +66,9 @@ class AiRuntimeOutboundContractTest {
         assertThat(input.get("instruction").textValue())
                 .contains("응웬반안", "010-1234-5678");
         assertThat(input.get("intentHint").textValue()).isEqualTo("EXPIRY_RENEWAL");
+        assertThat(input.get("extractedSlots").get("document_type").textValue())
+                .isEqualTo("STAY_EXTENSION");
+        assertThat(input.get("requestedFieldKeys")).hasSize(4);
         assertThat(worker.get("requestedFields").get("legal_name").textValue())
                 .isEqualTo("NGUYEN VAN AN");
         assertThat(worker.get("requestedFields").get("passport_number").textValue())

@@ -59,6 +59,7 @@ public class AiRuntimeContractValidator {
                     AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
             );
         }
+        validateAnalysisContext(request);
         switch (request.phase()) {
             case PLAN -> validatePlanInput(request);
             case ANALYZE -> validateAnalyzeInput(request);
@@ -109,7 +110,9 @@ public class AiRuntimeContractValidator {
     }
 
     private void validatePlanInput(AiAnalysisRequest request) {
-        if (!request.analysisInput().workers().isEmpty()
+        if (!request.analysisInput().extractedSlots().isEmpty()
+                || !request.analysisInput().requestedFieldKeys().isEmpty()
+                || !request.analysisInput().workers().isEmpty()
                 || !request.analysisInput().workflowConstraints().isEmpty()) {
             reject(
                     AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
@@ -119,8 +122,43 @@ public class AiRuntimeContractValidator {
     }
 
     private void validateAnalyzeInput(AiAnalysisRequest request) {
+        if (request.analysisInput().requestedFieldKeys().isEmpty()) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                    "ANALYZE request must identify the context fields requested by the Runtime."
+            );
+        }
         validateWorkers(request);
         validateWorkflowConstraints(request);
+        Set<String> requestedFieldKeys = Set.copyOf(request.analysisInput().requestedFieldKeys());
+        request.analysisInput().workers().forEach(worker -> {
+            if (!requestedFieldKeys.containsAll(worker.requestedFields().keySet())) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                        "ANALYZE request contains a field that the Runtime did not request."
+                );
+            }
+        });
+    }
+
+    private void validateAnalysisContext(AiAnalysisRequest request) {
+        if (request.analysisInput().extractedSlots().size() > MAX_CONTEXT_FIELDS
+                || request.analysisInput().requestedFieldKeys().size() > MAX_CONTEXT_FIELDS) {
+            reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime context field count is invalid.");
+        }
+        request.analysisInput().extractedSlots().forEach((key, value) -> {
+            boundaryPolicy.validateKey(key);
+            validateIdentifier(key, AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+            boundaryPolicy.validateText(value, 4_000, true);
+        });
+        Set<String> requestedFieldKeys = new HashSet<>();
+        request.analysisInput().requestedFieldKeys().forEach(key -> {
+            boundaryPolicy.validateKey(key);
+            validateIdentifier(key, AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+            if (!requestedFieldKeys.add(key)) {
+                reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime field key is duplicated.");
+            }
+        });
     }
 
     private void validateWorkers(AiAnalysisRequest request) {
