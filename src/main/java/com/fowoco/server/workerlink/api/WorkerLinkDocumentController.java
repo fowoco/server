@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "Worker Link (Public)", description = "근로자 공개 안내·제출")
@@ -66,6 +67,7 @@ public class WorkerLinkDocumentController {
             @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
             @Parameter(description = "문서 유형") @RequestParam(value = "documentType", required = false) String documentType,
             @Parameter(description = "클라이언트 중복 방지 키") @RequestParam("clientRequestId") String clientRequestId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             HttpServletRequest servletRequest
     ) {
         if (file.isEmpty() || file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()) {
