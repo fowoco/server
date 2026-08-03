@@ -1,9 +1,12 @@
 package com.fowoco.server.aiintegration.support;
 
 import com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome;
+import com.fowoco.server.aiintegration.application.model.AiAnalysisPhase;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
+import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
@@ -28,8 +31,28 @@ public final class AiRuntimeContractFixture {
     }
 
     public static AiAnalysisRequest validRequest() {
+        return validAnalyzeRequest();
+    }
+
+    public static AiAnalysisRequest validPlanRequest() {
+        return planRequestWithInstruction("응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL");
+    }
+
+    public static AiAnalysisRequest planRequestWithInstruction(String instruction) {
+        return new AiAnalysisRequest(
+                REQUEST_ID,
+                ATTEMPT_ID,
+                AiAnalysisPhase.PLAN,
+                CONTRACT_VERSION,
+                KNOWLEDGE_VERSION,
+                10_000,
+                new AnalysisInput(instruction, Map.of(), List.of(), List.of(), List.of())
+        );
+    }
+
+    public static AiAnalysisRequest validAnalyzeRequest() {
         return requestWithInstruction(
-                "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비"
+                "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비, EXPIRY_RENEWAL"
         );
     }
 
@@ -37,11 +60,19 @@ public final class AiRuntimeContractFixture {
         return new AiAnalysisRequest(
                 REQUEST_ID,
                 ATTEMPT_ID,
+                AiAnalysisPhase.ANALYZE,
                 CONTRACT_VERSION,
                 KNOWLEDGE_VERSION,
                 10_000,
                 new AnalysisInput(
                         instruction,
+                        Map.of("document_type", "STAY_EXTENSION"),
+                        List.of(
+                                "legal_name",
+                                "passport_number",
+                                "phone",
+                                "email"
+                        ),
                         List.of(new WorkerContext(
                                 WORKER_REF,
                                 "응웬반안",
@@ -70,10 +101,46 @@ public final class AiRuntimeContractFixture {
         return responseWithCandidate(validCandidate());
     }
 
+    public static AiAnalysisResponse contextRequiredResponse() {
+        return new AiAnalysisResponse(
+                REQUEST_ID,
+                AiAnalysisOutcome.CONTEXT_REQUIRED,
+                new AiContextRequirement(
+                        WORKFLOW_ID,
+                        new BigDecimal("0.94"),
+                        "응웬반안",
+                        Map.of(),
+                        List.of("legal_name", "stay_expiry_date")
+                ),
+                List.of(),
+                List.of(),
+                List.of(),
+                validVersions(),
+                1,
+                120
+        );
+    }
+
+    public static AiAnalysisResponse needsInfoResponse() {
+        return new AiAnalysisResponse(
+                REQUEST_ID,
+                AiAnalysisOutcome.NEEDS_INFO,
+                null,
+                List.of(new AiQuestion("monthly_wage", "변경할 월 임금을 입력해 주세요.")),
+                List.of(),
+                List.of(),
+                validVersions(),
+                1,
+                180
+        );
+    }
+
     public static AiAnalysisResponse responseWithCandidate(AiCandidate candidate) {
         return new AiAnalysisResponse(
                 REQUEST_ID,
                 AiAnalysisOutcome.REVIEW_REQUIRED,
+                null,
+                List.of(),
                 List.of(candidate),
                 List.of(),
                 validVersions(),

@@ -10,6 +10,8 @@ import java.util.UUID;
 public record AiAnalysisResponse(
         UUID requestId,
         AiAnalysisOutcome outcome,
+        AiContextRequirement contextRequirement,
+        List<AiQuestion> questions,
         List<AiCandidate> candidates,
         List<AiValidationError> validationErrors,
         AiRuntimeVersions versions,
@@ -20,9 +22,11 @@ public record AiAnalysisResponse(
     public AiAnalysisResponse {
         Objects.requireNonNull(requestId, "requestId must not be null");
         Objects.requireNonNull(outcome, "outcome must not be null");
+        Objects.requireNonNull(questions, "questions must not be null");
         Objects.requireNonNull(candidates, "candidates must not be null");
         Objects.requireNonNull(validationErrors, "validationErrors must not be null");
         Objects.requireNonNull(versions, "versions must not be null");
+        questions = List.copyOf(questions);
         candidates = List.copyOf(candidates);
         validationErrors = List.copyOf(validationErrors);
     }

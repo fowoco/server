@@ -6,10 +6,11 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Worker data sent to the AI Runtime for the current fake-data demo.
+ * Server-managed Worker context for the current fake-data demo.
  *
- * <p>{@code requestedFields} carries the original values requested by the Agent. Service
- * credentials, JWTs, passwords, and Worker Link tokens must never be placed in this map.</p>
+ * <p>The HTTP Adapter sends only {@code workerRef} and {@code requestedFields}. The remaining
+ * fields stay inside Server for response validation. Service credentials, JWTs, passwords, and
+ * Worker Link tokens must never be placed in {@code requestedFields}.</p>
  */
 public record WorkerContext(
         UUID workerRef,
