@@ -5,6 +5,9 @@ import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.Aud
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ApprovalSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ChecklistSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentRequestDraftSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.EvidenceSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ExternalSubmissionSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TransitionSeed;
 import java.time.Clock;
@@ -32,6 +35,9 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     private final DemoTaskChecklistSeeder checklistSeeder;
     private final DemoApprovalRequestSeeder approvalSeeder;
     private final DemoTaskTransitionSeeder transitionSeeder;
+    private final DemoExternalSubmissionSeeder externalSubmissionSeeder;
+    private final DemoEvidenceSeeder evidenceSeeder;
+    private final DemoDocumentRequestDraftSeeder requestDraftSeeder;
     private final DemoAuditEventSeeder auditSeeder;
     private final DemoOperationalSeedVerifier verifier;
 
@@ -44,6 +50,9 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             DemoTaskChecklistSeeder checklistSeeder,
             DemoApprovalRequestSeeder approvalSeeder,
             DemoTaskTransitionSeeder transitionSeeder,
+            DemoExternalSubmissionSeeder externalSubmissionSeeder,
+            DemoEvidenceSeeder evidenceSeeder,
+            DemoDocumentRequestDraftSeeder requestDraftSeeder,
             DemoAuditEventSeeder auditSeeder,
             DemoOperationalSeedVerifier verifier
     ) {
@@ -57,6 +66,15 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         this.transitionSeeder = Objects.requireNonNull(
                 transitionSeeder,
                 "transitionSeeder must not be null"
+        );
+        this.externalSubmissionSeeder = Objects.requireNonNull(
+                externalSubmissionSeeder,
+                "externalSubmissionSeeder must not be null"
+        );
+        this.evidenceSeeder = Objects.requireNonNull(evidenceSeeder, "evidenceSeeder must not be null");
+        this.requestDraftSeeder = Objects.requireNonNull(
+                requestDraftSeeder,
+                "requestDraftSeeder must not be null"
         );
         this.auditSeeder = Objects.requireNonNull(auditSeeder, "auditSeeder must not be null");
         this.verifier = Objects.requireNonNull(verifier, "verifier must not be null");
@@ -75,6 +93,9 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
                 catalog.demoChecklists(),
                 catalog.demoApprovals(),
                 catalog.demoTransitions(),
+                catalog.demoExternalSubmissions(),
+                catalog.demoEvidence(),
+                catalog.demoDocumentRequestDrafts(),
                 catalog.demoAudits(),
                 demoContext
         );
@@ -85,17 +106,24 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
                 List.of(),
                 List.of(),
                 List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
                 testContext
         );
         LOGGER.info(
                 "demo_operational_seed ready demo_task_count={} demo_document_count={} "
                         + "checklist_count={} approval_count={} transition_count={} "
+                        + "external_submission_count={} evidence_count={} request_draft_count={} "
                         + "test_task_count={} test_document_count={} audit_count={}",
                 catalog.demoTasks().size(),
                 catalog.demoDocuments().size(),
                 catalog.demoChecklists().size(),
                 catalog.demoApprovals().size(),
                 catalog.demoTransitions().size(),
+                catalog.demoExternalSubmissions().size(),
+                catalog.demoEvidence().size(),
+                catalog.demoDocumentRequestDrafts().size(),
                 catalog.testTasks().size(),
                 catalog.testDocuments().size(),
                 catalog.demoAudits().size()
@@ -108,6 +136,9 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             List<ChecklistSeed> checklists,
             List<ApprovalSeed> approvals,
             List<TransitionSeed> transitions,
+            List<ExternalSubmissionSeed> externalSubmissions,
+            List<EvidenceSeed> evidence,
+            List<DocumentRequestDraftSeed> requestDrafts,
             List<AuditSeed> audits,
             DemoOperationalSeedContext context
     ) {
@@ -116,7 +147,21 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         checklists.forEach(seed -> checklistSeeder.seed(seed, context));
         approvals.forEach(seed -> approvalSeeder.seed(seed, context));
         transitions.forEach(seed -> transitionSeeder.seed(seed, context));
+        externalSubmissions.forEach(seed -> externalSubmissionSeeder.seed(seed, context));
+        evidence.forEach(seed -> evidenceSeeder.seed(seed, context));
+        requestDrafts.forEach(seed -> requestDraftSeeder.seed(seed, context));
         audits.forEach(seed -> auditSeeder.seed(seed, context));
-        verifier.verify(tasks, documents, checklists, approvals, transitions, audits, context);
+        verifier.verify(
+                tasks,
+                documents,
+                checklists,
+                approvals,
+                transitions,
+                externalSubmissions,
+                evidence,
+                requestDrafts,
+                audits,
+                context
+        );
     }
 }

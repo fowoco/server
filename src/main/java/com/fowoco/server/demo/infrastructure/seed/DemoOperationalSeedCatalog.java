@@ -2,6 +2,7 @@ package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.audit.domain.AuditAction;
 import com.fowoco.server.approval.domain.ApprovalStatus;
+import com.fowoco.server.approval.domain.EvidenceType;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
 import com.fowoco.server.task.domain.TaskType;
@@ -33,6 +34,12 @@ final class DemoOperationalSeedCatalog {
             DemoTaskWorkflowSeedCatalog.demoApprovals(demoTasks);
     private final List<TransitionSeed> demoTransitions =
             DemoTaskWorkflowSeedCatalog.demoTransitions(demoTasks);
+    private final List<ExternalSubmissionSeed> demoExternalSubmissions =
+            DemoTaskArtifactSeedCatalog.demoExternalSubmissions(demoTasks);
+    private final List<EvidenceSeed> demoEvidence =
+            DemoTaskArtifactSeedCatalog.demoEvidence(demoTasks);
+    private final List<DocumentRequestDraftSeed> demoDocumentRequestDrafts =
+            DemoTaskArtifactSeedCatalog.demoDocumentRequestDrafts(demoTasks);
     private final List<AuditSeed> demoAudits = List.of(
             audit(
                     "96000000-0000-0000-0000-000000000001",
@@ -89,6 +96,18 @@ final class DemoOperationalSeedCatalog {
         return demoTransitions;
     }
 
+    List<ExternalSubmissionSeed> demoExternalSubmissions() {
+        return demoExternalSubmissions;
+    }
+
+    List<EvidenceSeed> demoEvidence() {
+        return demoEvidence;
+    }
+
+    List<DocumentRequestDraftSeed> demoDocumentRequestDrafts() {
+        return demoDocumentRequestDrafts;
+    }
+
     List<AuditSeed> demoAudits() {
         return demoAudits;
     }
@@ -101,6 +120,9 @@ final class DemoOperationalSeedCatalog {
         requireSize(demoChecklists, 68, "Demo Company checklist item");
         requireSize(demoApprovals, 13, "Demo Company approval request");
         requireSize(demoTransitions, 52, "Demo Company task transition");
+        requireSize(demoExternalSubmissions, 6, "Demo Company external submission");
+        requireSize(demoEvidence, 10, "Demo Company completion evidence");
+        requireSize(demoDocumentRequestDrafts, 5, "Demo Company document request draft");
         requireDistribution(
                 demoTasks.stream().map(TaskSeed::taskType).toList(),
                 Map.of(
@@ -143,6 +165,16 @@ final class DemoOperationalSeedCatalog {
                 ),
                 "Demo Company approval status"
         );
+        requireDistribution(
+                demoEvidence.stream().map(EvidenceSeed::evidenceType).toList(),
+                Map.of(
+                        EvidenceType.DOCUMENT, 2L,
+                        EvidenceType.RECEIPT, 3L,
+                        EvidenceType.OFFICIAL_RESULT, 3L,
+                        EvidenceType.HR_CONFIRMATION, 2L
+                ),
+                "Demo Company evidence type"
+        );
         requireUniqueIds(
                 Stream.concat(demoTasks.stream(), testTasks.stream()).map(TaskSeed::taskId).toList(),
                 "task"
@@ -159,12 +191,25 @@ final class DemoOperationalSeedCatalog {
                 "approval request");
         requireUniqueIds(demoTransitions.stream().map(TransitionSeed::transitionId).toList(),
                 "task transition");
+        requireUniqueIds(demoExternalSubmissions.stream()
+                .map(ExternalSubmissionSeed::externalSubmissionId).toList(), "external submission");
+        requireUniqueIds(demoEvidence.stream().map(EvidenceSeed::evidenceId).toList(),
+                "completion evidence");
+        requireUniqueIds(demoDocumentRequestDrafts.stream()
+                .map(DocumentRequestDraftSeed::draftId).toList(), "document request draft");
         requireTaskReferences(demoChecklists.stream().map(ChecklistSeed::taskId).toList(),
                 "checklist item");
         requireTaskReferences(demoApprovals.stream().map(ApprovalSeed::taskId).toList(),
                 "approval request");
         requireTaskReferences(demoTransitions.stream().map(TransitionSeed::taskId).toList(),
                 "task transition");
+        requireTaskReferences(demoExternalSubmissions.stream()
+                .map(ExternalSubmissionSeed::taskId).toList(), "external submission");
+        requireTaskReferences(demoEvidence.stream().map(EvidenceSeed::taskId).toList(),
+                "completion evidence");
+        requireTaskReferences(demoDocumentRequestDrafts.stream()
+                .map(DocumentRequestDraftSeed::taskId).toList(), "document request draft");
+        verifyArtifactScenarios();
     }
 
     private static void requireSize(List<?> seeds, int expected, String name) {
@@ -195,6 +240,41 @@ final class DemoOperationalSeedCatalog {
         var reservedTaskIds = demoTasks.stream().map(TaskSeed::taskId).collect(Collectors.toSet());
         if (!reservedTaskIds.containsAll(taskIds)) {
             throw new IllegalStateException(name + " references an unknown demo task");
+        }
+    }
+
+    private void verifyArtifactScenarios() {
+        Map<UUID, TaskSeed> tasksById = demoTasks.stream()
+                .collect(Collectors.toMap(TaskSeed::taskId, Function.identity()));
+        boolean invalidSubmission = demoExternalSubmissions.stream()
+                .map(ExternalSubmissionSeed::taskId)
+                .map(tasksById::get)
+                .anyMatch(task -> task.status() != TaskStatus.WAITING_EXTERNAL
+                        && task.status() != TaskStatus.COMPLETED);
+        if (invalidSubmission) {
+            throw new IllegalStateException("external submission task status is invalid");
+        }
+        Map<UUID, Long> evidenceCounts = demoEvidence.stream()
+                .collect(Collectors.groupingBy(EvidenceSeed::taskId, Collectors.counting()));
+        boolean incompleteCompletionEvidence = demoTasks.stream()
+                .filter(task -> task.status() == TaskStatus.COMPLETED)
+                .anyMatch(task -> evidenceCounts.getOrDefault(task.taskId(), 0L) != 2L);
+        if (incompleteCompletionEvidence || evidenceCounts.size() != 5) {
+            throw new IllegalStateException("every completed demo task needs two evidence records");
+        }
+        var requestDraftTaskIds = demoDocumentRequestDrafts.stream()
+                .map(DocumentRequestDraftSeed::taskId)
+                .collect(Collectors.toSet());
+        boolean missingWaitingWorkerDraft = demoTasks.stream()
+                .filter(task -> task.status() == TaskStatus.WAITING_WORKER)
+                .anyMatch(task -> !requestDraftTaskIds.contains(task.taskId()));
+        boolean invalidDraftStatus = requestDraftTaskIds.stream()
+                .map(tasksById::get)
+                .anyMatch(task -> task.status() != TaskStatus.WAITING_WORKER
+                        && task.status() != TaskStatus.DRAFT);
+        if (missingWaitingWorkerDraft || invalidDraftStatus
+                || requestDraftTaskIds.size() != demoDocumentRequestDrafts.size()) {
+            throw new IllegalStateException("document request draft scenario is invalid");
         }
     }
 
@@ -269,6 +349,34 @@ final class DemoOperationalSeedCatalog {
             TaskStatus toStatus,
             String reason,
             String requestId,
+            int hoursAgo
+    ) {
+    }
+
+    record ExternalSubmissionSeed(
+            UUID externalSubmissionId,
+            UUID taskId,
+            String destination,
+            String safeReference,
+            int hoursAgo
+    ) {
+    }
+
+    record EvidenceSeed(
+            UUID evidenceId,
+            UUID taskId,
+            EvidenceType evidenceType,
+            String note,
+            int hoursAgo
+    ) {
+    }
+
+    record DocumentRequestDraftSeed(
+            UUID draftId,
+            UUID taskId,
+            String language,
+            List<DocumentType> documentTypes,
+            String message,
             int hoursAgo
     ) {
     }

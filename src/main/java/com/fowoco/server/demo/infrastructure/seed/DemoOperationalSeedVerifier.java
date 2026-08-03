@@ -7,6 +7,9 @@ import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.Aud
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ApprovalSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ChecklistSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentRequestDraftSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.EvidenceSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ExternalSubmissionSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TransitionSeed;
 import com.fowoco.server.task.application.port.TaskChecklistRepository;
@@ -34,6 +37,9 @@ final class DemoOperationalSeedVerifier {
     private final DemoTaskChecklistSeeder checklistSeeder;
     private final DemoApprovalRequestSeeder approvalSeeder;
     private final DemoTaskTransitionSeeder transitionSeeder;
+    private final DemoExternalSubmissionSeeder externalSubmissionSeeder;
+    private final DemoEvidenceSeeder evidenceSeeder;
+    private final DemoDocumentRequestDraftSeeder requestDraftSeeder;
     private final DemoAuditEventSeeder auditSeeder;
 
     DemoOperationalSeedVerifier(
@@ -47,6 +53,9 @@ final class DemoOperationalSeedVerifier {
             DemoTaskChecklistSeeder checklistSeeder,
             DemoApprovalRequestSeeder approvalSeeder,
             DemoTaskTransitionSeeder transitionSeeder,
+            DemoExternalSubmissionSeeder externalSubmissionSeeder,
+            DemoEvidenceSeeder evidenceSeeder,
+            DemoDocumentRequestDraftSeeder requestDraftSeeder,
             DemoAuditEventSeeder auditSeeder
     ) {
         this.taskRepository = Objects.requireNonNull(taskRepository, "taskRepository must not be null");
@@ -71,6 +80,15 @@ final class DemoOperationalSeedVerifier {
                 transitionSeeder,
                 "transitionSeeder must not be null"
         );
+        this.externalSubmissionSeeder = Objects.requireNonNull(
+                externalSubmissionSeeder,
+                "externalSubmissionSeeder must not be null"
+        );
+        this.evidenceSeeder = Objects.requireNonNull(evidenceSeeder, "evidenceSeeder must not be null");
+        this.requestDraftSeeder = Objects.requireNonNull(
+                requestDraftSeeder,
+                "requestDraftSeeder must not be null"
+        );
         this.auditSeeder = Objects.requireNonNull(auditSeeder, "auditSeeder must not be null");
     }
 
@@ -80,6 +98,9 @@ final class DemoOperationalSeedVerifier {
             List<ChecklistSeed> checklists,
             List<ApprovalSeed> approvals,
             List<TransitionSeed> transitions,
+            List<ExternalSubmissionSeed> externalSubmissions,
+            List<EvidenceSeed> evidence,
+            List<DocumentRequestDraftSeed> requestDrafts,
             List<AuditSeed> audits,
             DemoOperationalSeedContext context
     ) {
@@ -88,6 +109,11 @@ final class DemoOperationalSeedVerifier {
         verifyUniqueIds(checklists.stream().map(ChecklistSeed::checklistItemId).toList(), "checklist item");
         verifyUniqueIds(approvals.stream().map(ApprovalSeed::approvalRequestId).toList(), "approval request");
         verifyUniqueIds(transitions.stream().map(TransitionSeed::transitionId).toList(), "task transition");
+        verifyUniqueIds(externalSubmissions.stream()
+                .map(ExternalSubmissionSeed::externalSubmissionId).toList(), "external submission");
+        verifyUniqueIds(evidence.stream().map(EvidenceSeed::evidenceId).toList(), "completion evidence");
+        verifyUniqueIds(requestDrafts.stream().map(DocumentRequestDraftSeed::draftId).toList(),
+                "document request draft");
         verifyUniqueIds(audits.stream().map(AuditSeed::auditEventId).toList(), "audit event");
         verifyWorkersExist(tasks, documents, context);
         tasks.forEach(seed -> verifyTask(seed, context));
@@ -95,6 +121,9 @@ final class DemoOperationalSeedVerifier {
         checklists.forEach(seed -> verifyChecklist(seed, context));
         approvals.forEach(seed -> verifyApproval(seed, context));
         transitions.forEach(seed -> transitionSeeder.verifyExisting(seed, context));
+        externalSubmissions.forEach(seed -> externalSubmissionSeeder.verifyExisting(seed, context));
+        evidence.forEach(seed -> evidenceSeeder.verifyExisting(seed, context));
+        requestDrafts.forEach(seed -> requestDraftSeeder.verifyExisting(seed, context));
         audits.forEach(seed -> verifyAudit(seed, context));
     }
 
