@@ -151,12 +151,25 @@ export SPRING_PROFILES_ACTIVE=dev
 runtime 계정은 업무 DML, migration 계정은 Flyway 적용만 담당합니다. 실제
 비밀번호·API Key·Token은 Git, Issue, Discussion과 로그에 올리지 않습니다.
 
-## 선택 사항: local Demo Seed
+## 선택 사항: Demo Seed
 
-local H2에서만 사용할 사업장과 `user_account` 더미 계정 20명이 필요할 때
-명시적으로 켭니다. 설정한 관리자 1명과 고정된 가상 계정 19명
-(`ADMIN` 1명, `HR` 12명, `VIEWER` 6명)을 만들며, 모든 계정은 로컬에서 설정한
-같은 비밀번호로 로그인할 수 있습니다. 기본값과 비밀번호 기본값은 없습니다.
+local H2 또는 로컬 PostgreSQL `dev`에서만 사용할 데모 데이터가 필요할 때
+명시적으로 켭니다. 모든 계정은 로컬에서 설정한 같은 비밀번호로 로그인할 수
+있으며, 기본 비밀번호는 없습니다.
+
+| 회사 | 계정 | 근로자 |
+| --- | --- | --- |
+| `FOWOCO Demo Company` | 기존 20명 (`ADMIN` 2, `HR` 12, `VIEWER` 6) | 5명 |
+| `FOWOCO Test Company` | 3명 (`ADMIN` 1, `HR` 1, `VIEWER` 1) | 5명 |
+
+Demo Company에는 화면 검증용 업무 데이터도 함께 생성됩니다.
+
+- Task 5개: `DRAFT`(AI 후보), `READY_FOR_REVIEW`, `WAITING_WORKER`,
+  `WAITING_EXTERNAL`, `COMPLETED` 각 1개
+- 마감일: 7일 이내, 30일 이내, 30일 초과 구간을 모두 포함
+- 근로자 서류 7개: 근로자별 1~2개, `MISSING`, `SUBMITTED`, `VERIFIED` 포함
+- 30일 이내 만료 서류 1개 이상
+- 승인 대기 Task의 최근 AuditEvent 3개
 
 ```bash
 export DEMO_SEED_ENABLED=true
@@ -164,14 +177,14 @@ export DEMO_SEED_ADMIN_PASSWORD='로컬 Secret의 12자 이상 값'
 ./gradlew bootRun
 ```
 
-같은 설정으로 재실행해도 중복 생성하지 않습니다. 같은 이메일이 다른 사업장이나
-역할로 존재하면 덮어쓰지 않고 시작을 중단합니다. 이메일은 모두
-`demo.*@example.com` 형식의 가상 주소이며 실제 개인정보를 포함하지 않습니다.
+같은 설정으로 재실행해도 중복 생성하지 않습니다. 고정 ID나 이메일이 다른
+사업장·역할·근로자 정보와 충돌하면 덮어쓰지 않고 시작을 중단합니다. 이메일과
+근로자 이름은 모두 데모 전용 값이며 실제 개인정보를 포함하지 않습니다.
 최초 계정을 확인한 후에는
 `DEMO_SEED_ENABLED=false`로 돌려놓습니다.
 
-PostgreSQL `dev`·`prod`에서는 Demo Seed 대신 배포 Provisioning 단계에서 초기
-계정을 준비합니다.
+공유 `dev`와 `prod`에서는 Demo Seed 대신 배포 Provisioning 단계에서 초기 계정을
+준비합니다.
 
 ### 팀 공통 PostgreSQL Demo 실행
 

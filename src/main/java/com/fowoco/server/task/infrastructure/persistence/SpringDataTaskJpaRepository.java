@@ -27,8 +27,9 @@ interface SpringDataTaskJpaRepository extends JpaRepository<TaskJpaEntity, UUID>
                AND (:dueTo IS NULL OR task.dueDate <= :dueTo)
                AND (
                     :keyword IS NULL
-                    OR LOWER(task.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(COALESCE(task.description, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(task.title) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
+                    OR LOWER(COALESCE(task.description, ''))
+                        LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
                )
             """)
     Page<TaskJpaEntity> search(
