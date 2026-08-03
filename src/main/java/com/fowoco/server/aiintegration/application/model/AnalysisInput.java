@@ -6,9 +6,10 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * HR instruction plus phase-specific context sent to the AI Runtime.
- * PLAN keeps context collections empty; ANALYZE preserves extracted and requested fields and
- * contains one Server-resolved Worker.
+ * HR instruction plus Server-managed phase context.
+ *
+ * <p>PLAN keeps context collections empty. ANALYZE preserves the context needed for validation,
+ * while the HTTP Adapter transmits only requested field keys and resolved Worker values.</p>
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public record AnalysisInput(

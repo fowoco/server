@@ -40,20 +40,16 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
 ```json
 {
   "requestId": "10000000-0000-0000-0000-000000000001",
-  "attemptId": "20000000-0000-0000-0000-000000000001",
   "phase": "PLAN",
-  "contractVersion": "1.0.0",
-  "requiredKnowledgeVersion": "0.2.0",
-  "deadlineMs": 10000,
   "analysisInput": {
     "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL"
   }
 }
 ```
 
-PLAN에서 아직 값이 없는 `extractedSlots`, `requestedFieldKeys`, `workers`,
-`workflowConstraints`는 JSON에 보내지 않습니다. Server 내부에서는 빈 collection으로
-유지하며 ANALYZE에서 실제 값이 생겼을 때만 직렬화합니다.
+Runtime에는 `requestId`, `phase`, `analysisInput`만 전송합니다. PLAN에서 아직 값이 없는
+`requestedFieldKeys`와 `workers`는 JSON에 보내지 않습니다. `attemptId`, version, deadline은
+Server 내부에서만 관리합니다.
 
 Runtime이 DB 정보를 더 필요로 하면 성공 응답으로 `CONTEXT_REQUIRED`를 반환합니다.
 Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field key만 요청합니다.
@@ -93,20 +89,15 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
 ## ANALYZE 요청 계약
 
 #74가 `targetDisplayName`을 현재 사업장 안에서 한 명의 Worker로 찾고, 허용된
-`requiredFieldKeys`만 Repository로 조회합니다. 그 결과를 넣어 새로운 `attemptId`로
-ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용합니다.
+`requiredFieldKeys`만 Repository로 조회합니다. Server는 새 `attemptId`를 내부에 기록한
+뒤 같은 `requestId`로 ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용합니다.
 
 ```json
 {
   "requestId": "10000000-0000-0000-0000-000000000001",
-  "attemptId": "20000000-0000-0000-0000-000000000002",
   "phase": "ANALYZE",
-  "contractVersion": "1.0.0",
-  "requiredKnowledgeVersion": "0.2.0",
-  "deadlineMs": 10000,
   "analysisInput": {
     "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL",
-    "extractedSlots": {},
     "requestedFieldKeys": [
       "legal_name",
       "stay_expiry_date"
@@ -114,27 +105,10 @@ ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용�
     "workers": [
       {
         "workerRef": "30000000-0000-0000-0000-000000000001",
-        "displayName": "응웬반안",
-        "nationalityCode": "VN",
-        "preferredLanguage": "vi",
-        "workStatus": "ACTIVE",
-        "stayExpiryDate": "2026-12-31",
-        "contractStartDate": "2026-01-01",
-        "contractEndDate": "2026-12-31",
         "requestedFields": {
           "legal_name": "NGUYEN VAN AN",
           "stay_expiry_date": "2026-12-31"
         }
-      }
-    ],
-    "workflowConstraints": [
-      {
-        "workflowId": "EXPIRY_RENEWAL",
-        "allowedSlotKeys": [
-          "stay_expiry_date",
-          "contract_end_date",
-          "monthly_wage"
-        ]
       }
     ]
   }
@@ -142,17 +116,15 @@ ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용�
 ```
 
 - `requestId`: Server 요청과 Runtime 응답을 같은 실행으로 연결합니다.
-- `attemptId`: 한 번의 `AiRuntimeClient.analyze` 호출과 정확히 하나로 대응합니다.
 - `phase`: 발화문을 해석하는 `PLAN`과 Server 보유정보로 결과를 만드는 `ANALYZE`를 구분합니다.
-- `contractVersion`: 양쪽이 같은 JSON 계약을 사용하는지 확인합니다.
-- `requiredKnowledgeVersion`: Server와 Runtime이 같은 Workflow release를 사용하게 합니다.
-- `deadlineMs`: 이번 시도 전체에서 남은 실행 시간입니다.
 - `instruction`: HR 발화문에 선택한 태그가 있으면 `발화문, INTENT_TAG` 형식으로 붙인
   단일 문자열입니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
-- `extractedSlots`: PLAN에서 Agent가 발화문으로부터 추출했던 값을 ANALYZE에도 보존합니다.
 - `requestedFieldKeys`: Agent가 PLAN에서 요청했던 전체 key입니다. DB에 값이 없어도 목록에는 남습니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
-- `workflowConstraints`: Knowledge projection에서 가져온 Workflow와 slot allow-list입니다.
+
+`attemptId`, `contractVersion`, `requiredKnowledgeVersion`, `deadlineMs`, `extractedSlots`,
+`workflowConstraints`는 Server가 재시도·응답 검증·제한시간을 관리하기 위해 내부
+`AiAnalysisRequest`에 유지하지만 HTTP JSON에는 넣지 않습니다.
 
 현재 데모에서는 PII 마스킹과 차단을 적용하지 않습니다. 실명·여권번호·전화번호 등
 Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원본으로 전달합니다.
@@ -276,7 +248,8 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 | `AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | 연속 장애 후 호출을 잠시 막는 기준 |
 | `AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION` | `30s` | 차단 후 시험 호출까지 기다리는 시간 |
 
-요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧은 값을 사용합니다. 따라서
+Server 내부 요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧은 값을 HTTP
+timeout으로 사용합니다. `deadlineMs` 자체는 Runtime JSON에 전송하지 않습니다. 따라서
 상위 AiRun이 허용한 시간보다 오래 기다리지 않습니다.
 
 ## 장애가 발생하면

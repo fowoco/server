@@ -77,11 +77,40 @@ class RemoteAiRuntimeClientWireMockTest {
                         equalTo("ANALYZE")
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
-                        "$.analysisInput.workers[0].stayExpiryDate"
+                        "$.analysisInput.workers[0].stayExpiryDate",
+                        absent()
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.analysisInput.workers[0].requestedFields.legal_name",
                         equalTo("NGUYEN VAN AN")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.attemptId",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.contractVersion",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.requiredKnowledgeVersion",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.deadlineMs",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.extractedSlots",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.workflowConstraints",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.workers[0].displayName",
+                        absent()
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.request_id",
@@ -125,6 +154,22 @@ class RemoteAiRuntimeClientWireMockTest {
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.analysisInput.workflowConstraints",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.attemptId",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.contractVersion",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.requiredKnowledgeVersion",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.deadlineMs",
                         absent()
                 ))
                 .willReturn(jsonResponse(objectMapper.writeValueAsString(contextRequiredResponse()))));

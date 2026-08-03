@@ -93,8 +93,7 @@ public final class RemoteAiRuntimeClient implements AiRuntimeClient {
             circuitPermitAcquired = true;
 
             long remainingMillis = remainingMillis(request, startedNanos);
-            AiAnalysisRequest outboundRequest = withRemainingDeadline(request, remainingMillis);
-            byte[] requestBody = serialize(outboundRequest);
+            byte[] requestBody = serialize(AiRuntimeHttpRequest.from(request));
             remainingMillis = remainingMillis(request, startedNanos);
 
             HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(endpoint)
@@ -179,7 +178,7 @@ public final class RemoteAiRuntimeClient implements AiRuntimeClient {
         }
     }
 
-    private byte[] serialize(AiAnalysisRequest request) {
+    private byte[] serialize(AiRuntimeHttpRequest request) {
         try {
             return objectMapper.writeValueAsBytes(request);
         } catch (JacksonException exception) {
@@ -257,18 +256,6 @@ public final class RemoteAiRuntimeClient implements AiRuntimeClient {
             );
         }
         return remainingMillis;
-    }
-
-    private AiAnalysisRequest withRemainingDeadline(AiAnalysisRequest request, long remainingMillis) {
-        return new AiAnalysisRequest(
-                request.requestId(),
-                request.attemptId(),
-                request.phase(),
-                request.contractVersion(),
-                request.requiredKnowledgeVersion(),
-                remainingMillis,
-                request.analysisInput()
-        );
     }
 
     private static Throwable unwrap(Throwable throwable) {

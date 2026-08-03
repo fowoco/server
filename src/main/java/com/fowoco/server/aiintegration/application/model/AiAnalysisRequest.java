@@ -4,7 +4,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Provider-neutral body for one Server-managed PLAN or ANALYZE attempt.
+ * Server-internal command for one managed PLAN or ANALYZE attempt.
+ *
+ * <p>The HTTP Adapter selects the smaller Runtime payload from this command.</p>
  */
 public record AiAnalysisRequest(
         UUID requestId,
