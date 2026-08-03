@@ -23,13 +23,25 @@ public class DemoOperationalSeedConfiguration {
             AuditEventRepository auditEventRepository,
             Clock clock
     ) {
+        DemoOperationalSeedCatalog catalog = new DemoOperationalSeedCatalog();
+        DemoTaskSeeder taskSeeder = new DemoTaskSeeder(taskRepository, taskContentCodec);
+        DemoWorkerDocumentSeeder documentSeeder = new DemoWorkerDocumentSeeder(workerDocumentRepository);
+        DemoAuditEventSeeder auditSeeder = new DemoAuditEventSeeder(auditEventRepository);
+        DemoOperationalSeedVerifier verifier = new DemoOperationalSeedVerifier(
+                taskRepository,
+                workerDocumentRepository,
+                taskSeeder,
+                documentSeeder,
+                auditSeeder
+        );
         return new DemoOperationalSeedRunner(
                 properties,
-                taskRepository,
-                taskContentCodec,
-                workerDocumentRepository,
-                auditEventRepository,
-                clock
+                clock,
+                catalog,
+                taskSeeder,
+                documentSeeder,
+                auditSeeder,
+                verifier
         );
     }
 }
