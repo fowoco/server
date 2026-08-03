@@ -32,8 +32,10 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
 ## PLAN 요청 계약
 
 첫 호출은 HR 발화문을 이해하고 Server에 필요한 DB field를 요청하는 단계입니다. 화면의
-빠른 선택 태그는 `intentHint`에 넣지만 참고 정보일 뿐이며, 최종 분류 결과는 Runtime이
-`detectedIntent`로 반환합니다. 이 단계에는 Worker UUID나 DB 조회값을 넣지 않습니다.
+빠른 선택 태그는 별도 JSON 필드로 보내지 않고 `발화문, INTENT_TAG` 형식으로
+`instruction` 끝에 붙입니다. Runtime이 받는 업무 입력은 이 문자열 하나이며, 최종 분류
+결과는 Runtime이 `detectedIntent`로 반환합니다. 이 단계에는 Worker UUID나 DB 조회값을
+넣지 않습니다.
 
 ```json
 {
@@ -44,8 +46,7 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
   "requiredKnowledgeVersion": "0.2.0",
   "deadlineMs": 10000,
   "analysisInput": {
-    "instruction": "응웬반안 체류연장 준비해줘",
-    "intentHint": "EXPIRY_RENEWAL",
+    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL",
     "extractedSlots": {},
     "requestedFieldKeys": [],
     "workers": [],
@@ -104,8 +105,7 @@ ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용�
   "requiredKnowledgeVersion": "0.2.0",
   "deadlineMs": 10000,
   "analysisInput": {
-    "instruction": "응웬반안 체류연장 준비해줘",
-    "intentHint": "EXPIRY_RENEWAL",
+    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL",
     "extractedSlots": {},
     "requestedFieldKeys": [
       "legal_name",
@@ -147,8 +147,8 @@ ANALYZE를 호출합니다. MVP에서는 한 요청에 Worker 한 명만 허용�
 - `contractVersion`: 양쪽이 같은 JSON 계약을 사용하는지 확인합니다.
 - `requiredKnowledgeVersion`: Server와 Runtime이 같은 Workflow release를 사용하게 합니다.
 - `deadlineMs`: 이번 시도 전체에서 남은 실행 시간입니다.
-- `instruction`: HR이 입력한 원문입니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
-- `intentHint`: 화면 빠른 선택에서 온 선택값입니다. 없을 수 있으며 강제 Intent가 아닙니다.
+- `instruction`: HR 발화문에 선택한 태그가 있으면 `발화문, INTENT_TAG` 형식으로 붙인
+  단일 문자열입니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
 - `extractedSlots`: PLAN에서 Agent가 발화문으로부터 추출했던 값을 ANALYZE에도 보존합니다.
 - `requestedFieldKeys`: Agent가 PLAN에서 요청했던 전체 key입니다. DB에 값이 없어도 목록에는 남습니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.

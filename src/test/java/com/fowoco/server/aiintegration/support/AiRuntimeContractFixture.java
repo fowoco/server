@@ -35,10 +35,10 @@ public final class AiRuntimeContractFixture {
     }
 
     public static AiAnalysisRequest validPlanRequest() {
-        return planRequestWithInstruction("응웬반안 체류연장 준비해줘", "EXPIRY_RENEWAL");
+        return planRequestWithInstruction("응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL");
     }
 
-    public static AiAnalysisRequest planRequestWithInstruction(String instruction, String intentHint) {
+    public static AiAnalysisRequest planRequestWithInstruction(String instruction) {
         return new AiAnalysisRequest(
                 REQUEST_ID,
                 ATTEMPT_ID,
@@ -46,13 +46,13 @@ public final class AiRuntimeContractFixture {
                 CONTRACT_VERSION,
                 KNOWLEDGE_VERSION,
                 10_000,
-                new AnalysisInput(instruction, intentHint, Map.of(), List.of(), List.of(), List.of())
+                new AnalysisInput(instruction, Map.of(), List.of(), List.of(), List.of())
         );
     }
 
     public static AiAnalysisRequest validAnalyzeRequest() {
         return requestWithInstruction(
-                "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비"
+                "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비, EXPIRY_RENEWAL"
         );
     }
 
@@ -66,7 +66,6 @@ public final class AiRuntimeContractFixture {
                 10_000,
                 new AnalysisInput(
                         instruction,
-                        "EXPIRY_RENEWAL",
                         Map.of("document_type", "STAY_EXTENSION"),
                         List.of(
                                 "legal_name",

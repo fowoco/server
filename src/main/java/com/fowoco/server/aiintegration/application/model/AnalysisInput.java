@@ -11,7 +11,6 @@ import java.util.Objects;
  */
 public record AnalysisInput(
         String instruction,
-        String intentHint,
         Map<String, String> extractedSlots,
         List<String> requestedFieldKeys,
         List<WorkerContext> workers,

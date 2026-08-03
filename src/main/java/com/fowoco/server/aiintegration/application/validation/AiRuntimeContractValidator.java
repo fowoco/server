@@ -52,13 +52,6 @@ public class AiRuntimeContractValidator {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime deadline is outside the allowed range.");
         }
         boundaryPolicy.validateText(request.analysisInput().instruction(), 10_000, true);
-        if (request.analysisInput().intentHint() != null) {
-            boundaryPolicy.validateText(request.analysisInput().intentHint(), 128, true);
-            validateIdentifier(
-                    request.analysisInput().intentHint(),
-                    AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
-            );
-        }
         validateAnalysisContext(request);
         switch (request.phase()) {
             case PLAN -> validatePlanInput(request);
@@ -116,7 +109,7 @@ public class AiRuntimeContractValidator {
                 || !request.analysisInput().workflowConstraints().isEmpty()) {
             reject(
                     AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
-                    "PLAN request must contain only the HR instruction and optional intent hint."
+                    "PLAN request must contain only the HR instruction."
             );
         }
     }
