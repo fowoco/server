@@ -8,8 +8,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -40,8 +43,7 @@ import org.springframework.test.context.ActiveProfiles;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "app.demo-seed.enabled=true",
-                "app.demo-seed.admin-password=Demo-password-1!",
-                "app.auth.jwt.access-token-ttl=1h"
+                "app.demo-seed.admin-password=Demo-password-1!"
         }
 )
 @Import(DemoAuthSeedIntegrationTest.FixedClockConfiguration.class)
@@ -62,7 +64,7 @@ class DemoAuthSeedIntegrationTest {
     private static final String PASSWORD = "Demo-password-1!";
     private static final String DEMO_ADMIN_EMAIL = "demo.admin@example.com";
     private static final String TEST_ADMIN_EMAIL = "test.admin@example.com";
-    private static final Instant TEST_NOW = Instant.now().minusSeconds(60).truncatedTo(ChronoUnit.SECONDS);
+    private static final Instant TEST_NOW = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
     private static final Map<String, Integer> EXPECTED_DEMO_COUNTS = Map.ofEntries(
             Map.entry("user_account", 20),
@@ -98,6 +100,9 @@ class DemoAuthSeedIntegrationTest {
     private Clock clock;
 
     @Autowired
+    private MutableClock mutableClock;
+
+    @Autowired
     @Qualifier("demoAuthSeedRunner")
     private ApplicationRunner demoAuthSeedRunner;
 
@@ -116,9 +121,11 @@ class DemoAuthSeedIntegrationTest {
         assertAccountsAndPasswords();
         assertExactCountsAndDistributions();
         assertRelativeDatesAndSafeData();
+        assertTaskTimelineInvariants();
 
         Map<String, Integer> demoCountsBeforeRerun = counts(COMPANY_ID, EXPECTED_DEMO_COUNTS.keySet());
         Map<String, Integer> testCountsBeforeRerun = counts(TEST_COMPANY_ID, EXPECTED_TEST_COUNTS.keySet());
+        Map<String, List<Map<String, Object>>> initialSnapshot = seedSnapshot();
 
         DefaultApplicationArguments arguments = new DefaultApplicationArguments(new String[0]);
         demoAuthSeedRunner.run(arguments);
@@ -131,8 +138,23 @@ class DemoAuthSeedIntegrationTest {
         assertThat(counts(TEST_COMPANY_ID, EXPECTED_TEST_COUNTS.keySet()))
                 .isEqualTo(testCountsBeforeRerun)
                 .isEqualTo(EXPECTED_TEST_COUNTS);
+        assertThat(seedSnapshot()).isEqualTo(initialSnapshot);
 
         assertFrontendRelevantApiResultsAndTenantIsolation();
+
+        mutableClock.advance(Duration.ofDays(1));
+        demoAuthSeedRunner.run(arguments);
+        demoWorkerSeedRunner.run(arguments);
+        demoOperationalSeedRunner.run(arguments);
+
+        assertThat(counts(COMPANY_ID, EXPECTED_DEMO_COUNTS.keySet()))
+                .isEqualTo(demoCountsBeforeRerun)
+                .isEqualTo(EXPECTED_DEMO_COUNTS);
+        assertThat(counts(TEST_COMPANY_ID, EXPECTED_TEST_COUNTS.keySet()))
+                .isEqualTo(testCountsBeforeRerun)
+                .isEqualTo(EXPECTED_TEST_COUNTS);
+        assertThat(seedSnapshot()).isEqualTo(initialSnapshot);
+        assertTaskTimelineInvariants();
     }
 
     private void assertAccountsAndPasswords() {
@@ -287,6 +309,233 @@ class DemoAuthSeedIntegrationTest {
                 "password",
                 "access_token"
         ).stream().noneMatch(json::contains));
+    }
+
+    private void assertTaskTimelineInvariants() {
+        Map<UUID, TaskTimeline> tasks = jdbcTemplate.query(
+                "SELECT task_id, status, created_at FROM task WHERE company_id = ?",
+                resultSet -> {
+                    Map<UUID, TaskTimeline> result = new LinkedHashMap<>();
+                    while (resultSet.next()) {
+                        UUID taskId = resultSet.getObject("task_id", UUID.class);
+                        result.put(taskId, new TaskTimeline(
+                                taskId,
+                                resultSet.getString("status"),
+                                resultSet.getTimestamp("created_at").toInstant()
+                        ));
+                    }
+                    return result;
+                },
+                COMPANY_ID
+        );
+        Map<UUID, List<TransitionTimeline>> transitionsByTask = jdbcTemplate.query(
+                "SELECT task_id, from_status, to_status, created_at FROM task_transition_history "
+                        + "WHERE company_id = ? ORDER BY task_id, created_at, transition_id",
+                resultSet -> {
+                    Map<UUID, List<TransitionTimeline>> result = new LinkedHashMap<>();
+                    while (resultSet.next()) {
+                        UUID taskId = resultSet.getObject("task_id", UUID.class);
+                        result.computeIfAbsent(taskId, ignored -> new java.util.ArrayList<>()).add(
+                                new TransitionTimeline(
+                                        resultSet.getString("from_status"),
+                                        resultSet.getString("to_status"),
+                                        resultSet.getTimestamp("created_at").toInstant()
+                                )
+                        );
+                    }
+                    return result;
+                },
+                COMPANY_ID
+        );
+
+        assertThat(tasks).hasSize(24);
+        tasks.values().forEach(task -> {
+            List<TransitionTimeline> transitions = transitionsByTask.getOrDefault(task.taskId(), List.of());
+            String expectedFrom = "DRAFT";
+            Instant previousAt = task.createdAt();
+            for (int index = 0; index < transitions.size(); index++) {
+                TransitionTimeline transition = transitions.get(index);
+                assertThat(transition.fromStatus()).isEqualTo(expectedFrom);
+                assertThat(transition.createdAt()).isAfterOrEqualTo(previousAt);
+                if (isTerminal(transition.toStatus())) {
+                    assertThat(index).isEqualTo(transitions.size() - 1);
+                }
+                expectedFrom = transition.toStatus();
+                previousAt = transition.createdAt();
+            }
+            if (!transitions.isEmpty()) {
+                assertThat(expectedFrom).isEqualTo(task.status());
+            }
+        });
+
+        jdbcTemplate.query(
+                "SELECT task_id, required, completed, completed_at FROM task_checklist_item "
+                        + "WHERE company_id = ?",
+                resultSet -> {
+                    while (resultSet.next()) {
+                        if (!resultSet.getBoolean("required") || !resultSet.getBoolean("completed")) {
+                            continue;
+                        }
+                        UUID taskId = resultSet.getObject("task_id", UUID.class);
+                        Instant readyAt = transitionAt(
+                                transitionsByTask.getOrDefault(taskId, List.of()),
+                                "READY_FOR_REVIEW"
+                        );
+                        if (readyAt != null) {
+                            assertThat(resultSet.getTimestamp("completed_at").toInstant())
+                                    .isBeforeOrEqualTo(readyAt);
+                        }
+                    }
+                    return null;
+                },
+                COMPANY_ID
+        );
+
+        jdbcTemplate.query(
+                "SELECT task_id, status, requested_at, decided_at, invalidated_at "
+                        + "FROM approval_request WHERE company_id = ?",
+                resultSet -> {
+                    while (resultSet.next()) {
+                        UUID taskId = resultSet.getObject("task_id", UUID.class);
+                        String status = resultSet.getString("status");
+                        Instant requestedAt = resultSet.getTimestamp("requested_at").toInstant();
+                        var decidedTimestamp = resultSet.getTimestamp("decided_at");
+                        var invalidatedTimestamp = resultSet.getTimestamp("invalidated_at");
+                        Instant outcomeAt = "INVALIDATED".equals(status)
+                                ? invalidatedTimestamp.toInstant()
+                                : decidedTimestamp == null ? null : decidedTimestamp.toInstant();
+                        List<TransitionTimeline> transitions =
+                                transitionsByTask.getOrDefault(taskId, List.of());
+                        Instant readyAt = transitionAt(transitions, "READY_FOR_REVIEW");
+                        assertThat(readyAt).isNotNull();
+                        assertThat(requestedAt).isAfterOrEqualTo(readyAt);
+                        if (outcomeAt != null) {
+                            assertThat(outcomeAt).isAfterOrEqualTo(requestedAt);
+                        }
+                        if ("APPROVED".equals(status)) {
+                            assertThat(transitionAt(transitions, "APPROVED"))
+                                    .isAfterOrEqualTo(outcomeAt);
+                        }
+                        if ("REJECTED".equals(status) || "INVALIDATED".equals(status)) {
+                            assertThat(transitionAt(transitions, "DRAFT"))
+                                    .isAfterOrEqualTo(outcomeAt);
+                        }
+                    }
+                    return null;
+                },
+                COMPANY_ID
+        );
+
+        jdbcTemplate.query(
+                "SELECT task_id, submitted_at FROM external_submission WHERE company_id = ?",
+                resultSet -> {
+                    while (resultSet.next()) {
+                        UUID taskId = resultSet.getObject("task_id", UUID.class);
+                        Instant submittedAt = resultSet.getTimestamp("submitted_at").toInstant();
+                        TaskTimeline task = tasks.get(taskId);
+                        List<TransitionTimeline> transitions =
+                                transitionsByTask.getOrDefault(taskId, List.of());
+                        Instant approvedAt = transitionAt(transitions, "APPROVED");
+                        Instant completedAt = transitionAt(transitions, "COMPLETED");
+                        assertThat(submittedAt).isAfterOrEqualTo(task.createdAt());
+                        if (approvedAt != null) {
+                            assertThat(submittedAt).isAfterOrEqualTo(approvedAt);
+                        }
+                        if (completedAt != null) {
+                            assertThat(submittedAt).isBeforeOrEqualTo(completedAt);
+                        }
+                    }
+                    return null;
+                },
+                COMPANY_ID
+        );
+
+        jdbcTemplate.query(
+                "SELECT task_id, recorded_at FROM task_evidence WHERE company_id = ?",
+                resultSet -> {
+                    while (resultSet.next()) {
+                        UUID taskId = resultSet.getObject("task_id", UUID.class);
+                        Instant recordedAt = resultSet.getTimestamp("recorded_at").toInstant();
+                        Instant completedAt = transitionAt(
+                                transitionsByTask.getOrDefault(taskId, List.of()),
+                                "COMPLETED"
+                        );
+                        assertThat(recordedAt).isAfterOrEqualTo(tasks.get(taskId).createdAt());
+                        assertThat(completedAt).isNotNull().isAfterOrEqualTo(recordedAt);
+                    }
+                    return null;
+                },
+                COMPANY_ID
+        );
+    }
+
+    private Map<String, List<Map<String, Object>>> seedSnapshot() {
+        Map<String, List<Map<String, Object>>> snapshot = new LinkedHashMap<>();
+        snapshot.put("worker", snapshotRows(
+                "SELECT worker_id, company_id, stay_expiry_date, contract_start_date, "
+                        + "contract_end_date, created_at, updated_at, version FROM worker "
+                        + "WHERE company_id IN (?, ?) ORDER BY company_id, worker_id"
+        ));
+        snapshot.put("worker_document", snapshotRows(
+                "SELECT worker_document_id, company_id, expiry_date, created_at, updated_at, version "
+                        + "FROM worker_document WHERE company_id IN (?, ?) "
+                        + "ORDER BY company_id, worker_document_id"
+        ));
+        snapshot.put("task", snapshotRows(
+                "SELECT task_id, company_id, due_date, business_data_json, critical_fingerprint, "
+                        + "content_revision, created_at, updated_at, version FROM task "
+                        + "WHERE company_id IN (?, ?) ORDER BY company_id, task_id"
+        ));
+        snapshot.put("task_checklist_item", snapshotRows(
+                "SELECT checklist_item_id, company_id, completed_at, created_at, updated_at, version "
+                        + "FROM task_checklist_item WHERE company_id IN (?, ?) "
+                        + "ORDER BY company_id, checklist_item_id"
+        ));
+        snapshot.put("approval_request", snapshotRows(
+                "SELECT approval_request_id, company_id, target_task_version, target_content_revision, "
+                        + "approved_task_version, target_fingerprint, requested_at, decided_at, "
+                        + "invalidated_at, created_at, updated_at, version FROM approval_request "
+                        + "WHERE company_id IN (?, ?) ORDER BY company_id, approval_request_id"
+        ));
+        snapshot.put("task_transition_history", snapshotRows(
+                "SELECT transition_id, company_id, created_at FROM task_transition_history "
+                        + "WHERE company_id IN (?, ?) ORDER BY company_id, transition_id"
+        ));
+        snapshot.put("external_submission", snapshotRows(
+                "SELECT external_submission_id, company_id, submitted_at, created_at "
+                        + "FROM external_submission WHERE company_id IN (?, ?) "
+                        + "ORDER BY company_id, external_submission_id"
+        ));
+        snapshot.put("task_evidence", snapshotRows(
+                "SELECT evidence_id, company_id, recorded_at, created_at FROM task_evidence "
+                        + "WHERE company_id IN (?, ?) ORDER BY company_id, evidence_id"
+        ));
+        snapshot.put("document_request_draft", snapshotRows(
+                "SELECT draft_id, company_id, created_at, updated_at, version "
+                        + "FROM document_request_draft WHERE company_id IN (?, ?) "
+                        + "ORDER BY company_id, draft_id"
+        ));
+        snapshot.put("audit_event", snapshotRows(
+                "SELECT audit_event_id, company_id, created_at FROM audit_event "
+                        + "WHERE company_id IN (?, ?) ORDER BY company_id, audit_event_id"
+        ));
+        return snapshot;
+    }
+
+    private List<Map<String, Object>> snapshotRows(String sql) {
+        return jdbcTemplate.queryForList(sql, COMPANY_ID, TEST_COMPANY_ID);
+    }
+
+    private Instant transitionAt(List<TransitionTimeline> transitions, String toStatus) {
+        return transitions.stream()
+                .filter(transition -> toStatus.equals(transition.toStatus()))
+                .findFirst()
+                .map(TransitionTimeline::createdAt)
+                .orElse(null);
+    }
+
+    private boolean isTerminal(String status) {
+        return "COMPLETED".equals(status) || "CANCELLED".equals(status);
     }
 
     private void assertFrontendRelevantApiResultsAndTenantIsolation() throws Exception {
@@ -469,13 +718,49 @@ class DemoAuthSeedIntegrationTest {
         return result;
     }
 
+    private record TaskTimeline(UUID taskId, String status, Instant createdAt) {
+    }
+
+    private record TransitionTimeline(String fromStatus, String toStatus, Instant createdAt) {
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClockConfiguration {
 
         @Bean
         @Primary
-        Clock fixedClock() {
-            return Clock.fixed(TEST_NOW, ZoneOffset.UTC);
+        MutableClock fixedClock() {
+            return new MutableClock(TEST_NOW, ZoneOffset.UTC);
+        }
+    }
+
+    static final class MutableClock extends Clock {
+
+        private final AtomicReference<Instant> instant;
+        private final ZoneId zone;
+
+        private MutableClock(Instant instant, ZoneId zone) {
+            this.instant = new AtomicReference<>(instant);
+            this.zone = zone;
+        }
+
+        void advance(Duration duration) {
+            instant.updateAndGet(value -> value.plus(duration));
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return zone;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return new MutableClock(instant(), zone);
+        }
+
+        @Override
+        public Instant instant() {
+            return instant.get();
         }
     }
 }

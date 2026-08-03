@@ -77,9 +77,10 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
     private void seedWorker(UUID companyId, WorkerSeed workerSeed, LocalDate today, Instant now) {
         Optional<Worker> existing =
                 workerRepository.findByWorkerIdAndCompanyId(workerSeed.workerId(), companyId);
-        existing.ifPresent(worker -> verifyExistingWorker(worker, companyId, workerSeed));
-        Instant createdAt = existing.map(Worker::createdAt).orElse(now);
-        Instant updatedAt = now.isBefore(createdAt) ? createdAt : now;
+        if (existing.isPresent()) {
+            verifyExistingWorker(existing.get(), companyId, workerSeed);
+            return;
+        }
         Worker worker = new Worker(
                 workerSeed.workerId(),
                 companyId,
@@ -90,15 +91,11 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
                 relativeDate(today, workerSeed.stayExpiryDays()),
                 today.minusYears(1),
                 today.plusDays(workerSeed.contractEndDays()),
-                createdAt,
-                updatedAt,
-                existing.map(Worker::version).orElse(0L)
+                now,
+                now,
+                0L
         );
-        if (existing.isEmpty()) {
-            workerRepository.insert(worker);
-            return;
-        }
-        workerRepository.update(worker);
+        workerRepository.insert(worker);
     }
 
     private void verifyExistingWorker(Worker worker, UUID companyId, WorkerSeed workerSeed) {

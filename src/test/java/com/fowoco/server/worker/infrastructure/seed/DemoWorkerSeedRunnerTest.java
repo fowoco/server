@@ -10,8 +10,10 @@ import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
 import com.fowoco.server.worker.domain.WorkerStatus;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 
@@ -38,15 +41,21 @@ class DemoWorkerSeedRunnerTest {
         companyRepository.insert(Company.create(DEMO_COMPANY_ID, "FOWOCO Demo Company", NOW));
         companyRepository.insert(Company.create(TEST_COMPANY_ID, "FOWOCO Test Company", NOW));
         InMemoryWorkerRepository workerRepository = new InMemoryWorkerRepository();
+        MutableClock clock = new MutableClock(NOW, ZoneOffset.UTC);
         DemoWorkerSeedRunner runner = new DemoWorkerSeedRunner(
                 properties(),
                 companyRepository,
                 workerRepository,
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                clock
         );
 
         runner.run(new DefaultApplicationArguments(new String[0]));
+        Map<UUID, Worker> initialWorkers = Map.copyOf(workerRepository.workers);
         runner.run(new DefaultApplicationArguments(new String[0]));
+        clock.advance(Duration.ofDays(1));
+        runner.run(new DefaultApplicationArguments(new String[0]));
+
+        assertThat(workerRepository.workers).containsExactlyInAnyOrderEntriesOf(initialWorkers);
 
         assertThat(workerRepository.workers.values())
                 .filteredOn(worker -> worker.companyId().equals(DEMO_COMPANY_ID))
@@ -126,11 +135,7 @@ class DemoWorkerSeedRunnerTest {
 
         @Override
         public Worker update(Worker worker) {
-            if (!workers.containsKey(worker.workerId())) {
-                throw new IllegalStateException("worker to update was not found");
-            }
-            workers.put(worker.workerId(), worker);
-            return worker;
+            throw new AssertionError("immutable demo worker snapshot must not be updated");
         }
 
         @Override
@@ -146,6 +151,36 @@ class DemoWorkerSeedRunnerTest {
         @Override
         public List<Worker> findAllByWorkerIdsAndCompanyId(Set<UUID> workerIds, UUID companyId) {
             throw new UnsupportedOperationException();
+        }
+    }
+
+    private static final class MutableClock extends Clock {
+
+        private final AtomicReference<Instant> instant;
+        private final ZoneId zone;
+
+        private MutableClock(Instant instant, ZoneId zone) {
+            this.instant = new AtomicReference<>(instant);
+            this.zone = zone;
+        }
+
+        void advance(Duration duration) {
+            instant.updateAndGet(value -> value.plus(duration));
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return zone;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return new MutableClock(instant(), zone);
+        }
+
+        @Override
+        public Instant instant() {
+            return instant.get();
         }
     }
 }

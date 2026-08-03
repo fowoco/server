@@ -28,35 +28,20 @@ final class DemoWorkerDocumentSeeder {
                         seed.workerId(),
                         context.companyId()
                 );
-        existing.ifPresent(document -> verifyExisting(document, seed, context));
-        if (existing.isEmpty()) {
-            workerDocumentRepository.insert(WorkerDocument.create(
-                    seed.documentId(),
-                    seed.workerId(),
-                    context.companyId(),
-                    seed.documentType(),
-                    seed.submissionStatus(),
-                    expiryDate,
-                    seed.destination(),
-                    seed.note(),
-                    context.now()
-            ));
+        if (existing.isPresent()) {
+            verifyExisting(existing.get(), seed, context);
             return;
         }
-        WorkerDocument document = existing.orElseThrow();
-        workerDocumentRepository.update(new WorkerDocument(
-                document.workerDocumentId(),
-                document.workerId(),
-                document.companyId(),
-                document.documentType(),
-                document.submissionStatus(),
+        workerDocumentRepository.insert(WorkerDocument.create(
+                seed.documentId(),
+                seed.workerId(),
+                context.companyId(),
+                seed.documentType(),
+                seed.submissionStatus(),
                 expiryDate,
-                document.destination(),
-                document.note(),
-                null,
-                document.createdAt(),
-                context.now(),
-                document.version()
+                seed.destination(),
+                seed.note(),
+                context.now()
         ));
     }
 

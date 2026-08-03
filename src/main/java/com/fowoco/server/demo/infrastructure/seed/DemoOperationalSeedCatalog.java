@@ -242,6 +242,7 @@ final class DemoOperationalSeedCatalog {
         requireTaskReferences(demoDocumentRequestDrafts.stream()
                 .map(DocumentRequestDraftSeed::taskId).toList(), "document request draft");
         verifyArtifactScenarios();
+        verifyTemporalScenarios();
     }
 
     private static void requireSize(List<?> seeds, int expected, String name) {
@@ -307,6 +308,139 @@ final class DemoOperationalSeedCatalog {
         if (missingWaitingWorkerDraft || invalidDraftStatus
                 || requestDraftTaskIds.size() != demoDocumentRequestDrafts.size()) {
             throw new IllegalStateException("document request draft scenario is invalid");
+        }
+    }
+
+    private void verifyTemporalScenarios() {
+        Map<UUID, List<TransitionSeed>> transitionsByTask = demoTransitions.stream()
+                .collect(Collectors.groupingBy(TransitionSeed::taskId));
+        Map<UUID, List<ChecklistSeed>> checklistsByTask = demoChecklists.stream()
+                .collect(Collectors.groupingBy(ChecklistSeed::taskId));
+        Map<UUID, List<ApprovalSeed>> approvalsByTask = demoApprovals.stream()
+                .collect(Collectors.groupingBy(ApprovalSeed::taskId));
+        Map<UUID, List<ExternalSubmissionSeed>> submissionsByTask = demoExternalSubmissions.stream()
+                .collect(Collectors.groupingBy(ExternalSubmissionSeed::taskId));
+        Map<UUID, List<EvidenceSeed>> evidenceByTask = demoEvidence.stream()
+                .collect(Collectors.groupingBy(EvidenceSeed::taskId));
+        Map<UUID, List<DocumentRequestDraftSeed>> draftsByTask = demoDocumentRequestDrafts.stream()
+                .collect(Collectors.groupingBy(DocumentRequestDraftSeed::taskId));
+
+        for (TaskSeed task : demoTasks) {
+            int createdHoursAgo = task.createdDaysAgo() * 24;
+            List<TransitionSeed> transitions = transitionsByTask.getOrDefault(task.taskId(), List.of());
+            verifyTransitionChain(task, transitions, createdHoursAgo);
+            TransitionSeed ready = findTransition(transitions, TaskStatus.READY_FOR_REVIEW);
+            TransitionSeed approved = findTransition(transitions, TaskStatus.APPROVED);
+            TransitionSeed completed = findTransition(transitions, TaskStatus.COMPLETED);
+
+            for (ChecklistSeed checklist : checklistsByTask.getOrDefault(task.taskId(), List.of())) {
+                requireNotBeforeTask(checklist.createdHoursAgo(), createdHoursAgo, "checklist creation");
+                if (checklist.completed()) {
+                    requireNotBeforeTask(checklist.completedHoursAgo(), createdHoursAgo,
+                            "checklist completion");
+                    if (ready != null && checklist.required()
+                            && checklist.completedHoursAgo() < ready.hoursAgo()) {
+                        throw new IllegalStateException(
+                                "required demo checklist must complete before review transition"
+                        );
+                    }
+                }
+            }
+
+            for (ApprovalSeed approval : approvalsByTask.getOrDefault(task.taskId(), List.of())) {
+                requireNotBeforeTask(approval.requestedHoursAgo(), createdHoursAgo, "approval request");
+                if (ready == null || ready.hoursAgo() < approval.requestedHoursAgo()) {
+                    throw new IllegalStateException("demo approval must be requested after review transition");
+                }
+                if (approval.outcomeHoursAgo() != null) {
+                    if (approval.requestedHoursAgo() < approval.outcomeHoursAgo()) {
+                        throw new IllegalStateException("demo approval outcome precedes its request");
+                    }
+                    if (approval.status() == ApprovalStatus.APPROVED
+                            && (approved == null || approval.outcomeHoursAgo() < approved.hoursAgo())) {
+                        throw new IllegalStateException(
+                                "demo approved transition precedes the approval decision"
+                        );
+                    }
+                    if (approval.status() == ApprovalStatus.REJECTED
+                            || approval.status() == ApprovalStatus.INVALIDATED) {
+                        TransitionSeed rework = findTransition(transitions, TaskStatus.DRAFT);
+                        if (rework == null || approval.outcomeHoursAgo() < rework.hoursAgo()) {
+                            throw new IllegalStateException(
+                                    "demo approval outcome must precede the rework transition"
+                            );
+                        }
+                    }
+                }
+            }
+
+            for (ExternalSubmissionSeed submission
+                    : submissionsByTask.getOrDefault(task.taskId(), List.of())) {
+                requireNotBeforeTask(submission.hoursAgo(), createdHoursAgo, "external submission");
+                if (approved != null && approved.hoursAgo() < submission.hoursAgo()) {
+                    throw new IllegalStateException(
+                            "demo external submission precedes the approved transition"
+                    );
+                }
+                if (completed != null && submission.hoursAgo() < completed.hoursAgo()) {
+                    throw new IllegalStateException(
+                            "demo completed transition precedes the external submission"
+                    );
+                }
+            }
+
+            for (EvidenceSeed item : evidenceByTask.getOrDefault(task.taskId(), List.of())) {
+                requireNotBeforeTask(item.hoursAgo(), createdHoursAgo, "completion evidence");
+                if (completed != null && item.hoursAgo() < completed.hoursAgo()) {
+                    throw new IllegalStateException(
+                            "demo completed transition precedes its evidence"
+                    );
+                }
+            }
+
+            draftsByTask.getOrDefault(task.taskId(), List.of()).forEach(draft ->
+                    requireNotBeforeTask(draft.hoursAgo(), createdHoursAgo, "document request draft"));
+        }
+    }
+
+    private static void verifyTransitionChain(
+            TaskSeed task,
+            List<TransitionSeed> transitions,
+            int createdHoursAgo
+    ) {
+        TaskStatus expectedFrom = TaskStatus.DRAFT;
+        int previousHoursAgo = createdHoursAgo;
+        for (TransitionSeed transition : transitions) {
+            if (expectedFrom.isTerminal()
+                    || transition.fromStatus() != expectedFrom
+                    || transition.hoursAgo() > previousHoursAgo) {
+                throw new IllegalStateException("demo task transition chain is invalid");
+            }
+            expectedFrom = transition.toStatus();
+            previousHoursAgo = transition.hoursAgo();
+        }
+        if (!transitions.isEmpty() && expectedFrom != task.status()) {
+            throw new IllegalStateException("final demo transition status differs from task status");
+        }
+    }
+
+    private static TransitionSeed findTransition(
+            List<TransitionSeed> transitions,
+            TaskStatus toStatus
+    ) {
+        return transitions.stream()
+                .filter(transition -> transition.toStatus() == toStatus)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static void requireNotBeforeTask(
+            int eventHoursAgo,
+            int createdHoursAgo,
+            String eventName
+    ) {
+        if (eventHoursAgo > createdHoursAgo) {
+            throw new IllegalStateException("demo " + eventName + " precedes task creation");
         }
     }
 

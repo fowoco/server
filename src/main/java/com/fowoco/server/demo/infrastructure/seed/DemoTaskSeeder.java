@@ -42,13 +42,11 @@ final class DemoTaskSeeder {
             verifyExisting(existing.get(), seed, context);
             return;
         }
-        Instant createdAt = existing.map(Task::createdAt)
-                .orElseGet(() -> context.now().minus(seed.createdDaysAgo(), ChronoUnit.DAYS));
+        Instant createdAt = context.now().minus(seed.createdDaysAgo(), ChronoUnit.DAYS);
         Instant desiredUpdatedAt = seed.status() == TaskStatus.COMPLETED
                 ? context.now()
                 : context.now().minus(Math.max(seed.createdDaysAgo() - 1, 0), ChronoUnit.DAYS);
         Instant updatedAt = desiredUpdatedAt.isBefore(createdAt) ? createdAt : desiredUpdatedAt;
-        long version = existing.map(Task::version).orElse(0L);
         taskRepository.save(new Task(
                 seed.taskId(),
                 context.companyId(),
@@ -69,7 +67,7 @@ final class DemoTaskSeeder {
                 context.actorId(),
                 createdAt,
                 updatedAt,
-                version
+                0L
         ));
     }
 

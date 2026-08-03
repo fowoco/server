@@ -41,6 +41,7 @@ final class DemoTaskWorkflowSeedCatalog {
                     ? STAY_CHECKLIST
                     : CONTRACT_CHECKLIST;
             int incompleteCount = INCOMPLETE_ITEMS_BY_TASK.getOrDefault(taskIndex + 1, 0);
+            int completedHoursAgo = completedHoursAgo(taskIndex + 1, task);
             for (int itemIndex = 0; itemIndex < templates.size(); itemIndex++) {
                 ChecklistTemplate template = templates.get(itemIndex);
                 boolean completed = itemIndex < templates.size() - incompleteCount;
@@ -53,7 +54,7 @@ final class DemoTaskWorkflowSeedCatalog {
                         true,
                         completed,
                         createdHoursAgo,
-                        completed ? Math.max(createdHoursAgo / 2, 1) : null
+                        completed ? completedHoursAgo : null
                 ));
             }
         }
@@ -62,59 +63,27 @@ final class DemoTaskWorkflowSeedCatalog {
 
     static List<ApprovalSeed> demoApprovals(List<TaskSeed> tasks) {
         return List.of(
-                approval(1, tasks, 2, ApprovalStatus.PENDING, null, 72, null),
-                approval(2, tasks, 6, ApprovalStatus.PENDING, null, 48, null),
-                approval(3, tasks, 14, ApprovalStatus.PENDING, null, 36, null),
-                approval(4, tasks, 15, ApprovalStatus.PENDING, null, 24, null),
-                approval(5, tasks, 16, ApprovalStatus.APPROVED, "연장 조건과 제출 자료 확인", 120, 96),
-                approval(6, tasks, 17, ApprovalStatus.APPROVED, "체류 연장 신청 내용 승인", 144, 120),
-                approval(7, tasks, 5, ApprovalStatus.APPROVED, "서명 계약서와 갱신 조건 확인", 216, 192),
-                approval(8, tasks, 20, ApprovalStatus.APPROVED, "체류 연장 완료 건 승인", 360, 336),
-                approval(9, tasks, 21, ApprovalStatus.APPROVED, "재계약 완료 건 승인", 480, 456),
-                approval(10, tasks, 22, ApprovalStatus.APPROVED, "고용기간 연장 완료 건 승인", 600, 576),
-                approval(11, tasks, 23, ApprovalStatus.APPROVED, "신청 결과 확인 후 승인", 720, 696),
-                approval(12, tasks, 9, ApprovalStatus.REJECTED, "필수 고용 정보 보완 필요", 96, 72),
-                approval(13, tasks, 1, ApprovalStatus.INVALIDATED, "중요 신청 정보 변경으로 기존 검토 무효화", 120, 96)
+                approval(1, tasks, 2, ApprovalStatus.PENDING, null),
+                approval(2, tasks, 6, ApprovalStatus.PENDING, null),
+                approval(3, tasks, 14, ApprovalStatus.PENDING, null),
+                approval(4, tasks, 15, ApprovalStatus.PENDING, null),
+                approval(5, tasks, 16, ApprovalStatus.APPROVED, "연장 조건과 제출 자료 확인"),
+                approval(6, tasks, 17, ApprovalStatus.APPROVED, "체류 연장 신청 내용 승인"),
+                approval(7, tasks, 5, ApprovalStatus.APPROVED, "서명 계약서와 갱신 조건 확인"),
+                approval(8, tasks, 20, ApprovalStatus.APPROVED, "체류 연장 완료 건 승인"),
+                approval(9, tasks, 21, ApprovalStatus.APPROVED, "재계약 완료 건 승인"),
+                approval(10, tasks, 22, ApprovalStatus.APPROVED, "고용기간 연장 완료 건 승인"),
+                approval(11, tasks, 23, ApprovalStatus.APPROVED, "신청 결과 확인 후 승인"),
+                approval(12, tasks, 9, ApprovalStatus.REJECTED, "필수 고용 정보 보완 필요"),
+                approval(13, tasks, 1, ApprovalStatus.INVALIDATED, "검토 중인 승인 요청을 무효화")
         );
     }
 
     static List<TransitionSeed> demoTransitions(List<TaskSeed> tasks) {
         List<TransitionSeed> seeds = new ArrayList<>();
-        history(seeds, tasks.get(0), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW, TaskStatus.DRAFT);
-        history(seeds, tasks.get(1), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW);
-        history(seeds, tasks.get(2), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_WORKER);
-        history(seeds, tasks.get(3), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_EXTERNAL);
-        history(seeds, tasks.get(4), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.COMPLETED);
-        history(seeds, tasks.get(5), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW);
-        history(seeds, tasks.get(7), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_WORKER);
-        history(seeds, tasks.get(8), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.DRAFT, TaskStatus.NEEDS_INFO);
-        history(seeds, tasks.get(9), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_WORKER);
-        history(seeds, tasks.get(10), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_WORKER);
-        history(seeds, tasks.get(12), TaskStatus.DRAFT, TaskStatus.NEEDS_INFO);
-        history(seeds, tasks.get(13), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW);
-        history(seeds, tasks.get(14), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW);
-        history(seeds, tasks.get(15), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW, TaskStatus.APPROVED);
-        history(seeds, tasks.get(16), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW, TaskStatus.APPROVED);
-        history(seeds, tasks.get(17), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_EXTERNAL);
-        history(seeds, tasks.get(18), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_EXTERNAL);
-        history(seeds, tasks.get(19), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.WAITING_EXTERNAL, TaskStatus.COMPLETED);
-        history(seeds, tasks.get(20), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.COMPLETED);
-        history(seeds, tasks.get(21), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.COMPLETED);
-        history(seeds, tasks.get(22), TaskStatus.DRAFT, TaskStatus.READY_FOR_REVIEW,
-                TaskStatus.APPROVED, TaskStatus.COMPLETED);
-        history(seeds, tasks.get(23), TaskStatus.DRAFT, TaskStatus.CANCELLED);
+        for (int taskIndex = 0; taskIndex < tasks.size(); taskIndex++) {
+            history(seeds, tasks.get(taskIndex), transitionPath(taskIndex + 1));
+        }
         return List.copyOf(seeds);
     }
 
@@ -123,13 +92,27 @@ final class DemoTaskWorkflowSeedCatalog {
             List<TaskSeed> tasks,
             int taskNumber,
             ApprovalStatus status,
-            String reason,
-            int requestedHoursAgo,
-            Integer outcomeHoursAgo
+            String reason
     ) {
+        TaskSeed task = tasks.get(taskNumber - 1);
+        List<TransitionPoint> points = transitionPoints(taskNumber, task);
+        int readyHoursAgo = hoursAgo(points, TaskStatus.READY_FOR_REVIEW);
+        int requestedHoursAgo = readyHoursAgo - 1;
+        Integer outcomeHoursAgo = switch (status) {
+            case PENDING -> null;
+            case APPROVED -> hoursAgo(points, TaskStatus.APPROVED) + 1;
+            case REJECTED, INVALIDATED -> hoursAgoAfter(
+                    points,
+                    TaskStatus.DRAFT,
+                    TaskStatus.READY_FOR_REVIEW
+            ) + 1;
+        };
+        if (outcomeHoursAgo != null && requestedHoursAgo < outcomeHoursAgo) {
+            throw new IllegalStateException("demo approval timeline is invalid");
+        }
         return new ApprovalSeed(
                 demoUuid("94300000-0000-0000-0000-000000000", approvalNumber),
-                tasks.get(taskNumber - 1).taskId(),
+                task.taskId(),
                 status,
                 reason,
                 requestedHoursAgo,
@@ -140,21 +123,13 @@ final class DemoTaskWorkflowSeedCatalog {
     private static void history(
             List<TransitionSeed> seeds,
             TaskSeed task,
-            TaskStatus initialStatus,
-            TaskStatus... statuses
+            List<TaskStatus> statuses
     ) {
-        TaskStatus fromStatus = initialStatus;
-        int transitionCount = statuses.length;
-        int createdHoursAgo = Math.max(task.createdDaysAgo() * 24, transitionCount);
-        int finalHoursAgo = task.status() == TaskStatus.COMPLETED
-                ? 0
-                : Math.max(task.createdDaysAgo() - 1, 0) * 24;
-        int transitionWindow = createdHoursAgo - finalHoursAgo;
-        for (int index = 0; index < transitionCount; index++) {
-            TaskStatus toStatus = statuses[index];
+        TaskStatus fromStatus = TaskStatus.DRAFT;
+        List<TransitionPoint> points = transitionPoints(task, statuses);
+        for (TransitionPoint point : points) {
+            TaskStatus toStatus = point.status();
             int sequence = seeds.size() + 1;
-            int hoursAgo = createdHoursAgo
-                    - ((index + 1) * transitionWindow / transitionCount);
             seeds.add(new TransitionSeed(
                     demoUuid("94400000-0000-0000-0000-000000000", sequence),
                     task.taskId(),
@@ -162,10 +137,107 @@ final class DemoTaskWorkflowSeedCatalog {
                     toStatus,
                     transitionReason(toStatus),
                     "demo-seed-task-transition-%03d".formatted(sequence),
-                    hoursAgo
+                    point.hoursAgo()
             ));
             fromStatus = toStatus;
         }
+    }
+
+    private static int completedHoursAgo(int taskNumber, TaskSeed task) {
+        List<TransitionPoint> points = transitionPoints(taskNumber, task);
+        return points.stream()
+                .filter(point -> point.status() == TaskStatus.READY_FOR_REVIEW)
+                .findFirst()
+                .map(point -> Math.min(task.createdDaysAgo() * 24, point.hoursAgo() + 1))
+                .orElseGet(() -> Math.max(task.createdDaysAgo() * 12, 1));
+    }
+
+    private static List<TransitionPoint> transitionPoints(int taskNumber, TaskSeed task) {
+        return transitionPoints(task, transitionPath(taskNumber));
+    }
+
+    private static List<TransitionPoint> transitionPoints(TaskSeed task, List<TaskStatus> statuses) {
+        int transitionCount = statuses.size();
+        if (transitionCount == 0) {
+            return List.of();
+        }
+        int createdHoursAgo = Math.max(task.createdDaysAgo() * 24, transitionCount);
+        int finalHoursAgo = task.status() == TaskStatus.COMPLETED
+                ? 0
+                : Math.max(task.createdDaysAgo() - 1, 0) * 24;
+        int transitionWindow = createdHoursAgo - finalHoursAgo;
+        List<TransitionPoint> points = new ArrayList<>(transitionCount);
+        for (int index = 0; index < transitionCount; index++) {
+            points.add(new TransitionPoint(
+                    statuses.get(index),
+                    createdHoursAgo - ((index + 1) * transitionWindow / transitionCount)
+            ));
+        }
+        return List.copyOf(points);
+    }
+
+    private static int hoursAgo(List<TransitionPoint> points, TaskStatus status) {
+        return points.stream()
+                .filter(point -> point.status() == status)
+                .findFirst()
+                .map(TransitionPoint::hoursAgo)
+                .orElseThrow(() -> new IllegalStateException(
+                        "demo approval requires a " + status + " transition"
+                ));
+    }
+
+    private static int hoursAgoAfter(
+            List<TransitionPoint> points,
+            TaskStatus status,
+            TaskStatus precedingStatus
+    ) {
+        boolean precedingFound = false;
+        for (TransitionPoint point : points) {
+            if (point.status() == precedingStatus) {
+                precedingFound = true;
+            } else if (precedingFound && point.status() == status) {
+                return point.hoursAgo();
+            }
+        }
+        throw new IllegalStateException("demo approval outcome transition is missing");
+    }
+
+    private static List<TaskStatus> transitionPath(int taskNumber) {
+        return switch (taskNumber) {
+            case 1 -> List.of(TaskStatus.READY_FOR_REVIEW, TaskStatus.DRAFT);
+            case 2, 6, 14, 15 -> List.of(TaskStatus.READY_FOR_REVIEW);
+            case 3, 8, 10, 11 -> List.of(
+                    TaskStatus.NEEDS_INFO,
+                    TaskStatus.DRAFT,
+                    TaskStatus.WAITING_WORKER
+            );
+            case 4, 18, 19 -> List.of(
+                    TaskStatus.NEEDS_INFO,
+                    TaskStatus.WAITING_WORKER,
+                    TaskStatus.WAITING_EXTERNAL
+            );
+            case 5, 21, 22, 23 -> List.of(
+                    TaskStatus.READY_FOR_REVIEW,
+                    TaskStatus.APPROVED,
+                    TaskStatus.COMPLETED
+            );
+            case 7, 12 -> List.of();
+            case 9 -> List.of(
+                    TaskStatus.READY_FOR_REVIEW,
+                    TaskStatus.DRAFT,
+                    TaskStatus.NEEDS_INFO
+            );
+            case 13 -> List.of(TaskStatus.NEEDS_INFO);
+            case 16, 17 -> List.of(TaskStatus.READY_FOR_REVIEW, TaskStatus.APPROVED);
+            case 20 -> List.of(
+                    TaskStatus.READY_FOR_REVIEW,
+                    TaskStatus.APPROVED,
+                    TaskStatus.WAITING_EXTERNAL,
+                    TaskStatus.COMPLETED
+            );
+            case 24 -> List.of(TaskStatus.CANCELLED);
+            default -> throw new IllegalArgumentException("unknown demo task number: " + taskNumber);
+        };
     }
 
     private static String transitionReason(TaskStatus status) {
@@ -186,5 +258,8 @@ final class DemoTaskWorkflowSeedCatalog {
     }
 
     private record ChecklistTemplate(String itemCode, String label) {
+    }
+
+    private record TransitionPoint(TaskStatus status, int hoursAgo) {
     }
 }

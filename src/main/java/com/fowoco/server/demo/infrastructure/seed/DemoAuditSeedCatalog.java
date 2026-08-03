@@ -216,7 +216,7 @@ final class DemoAuditSeedCatalog {
         return switch (status) {
             case APPROVED -> "관리자가 현재 업무 내용을 승인함";
             case REJECTED -> "필수 정보 보완을 위해 승인 요청을 반려함";
-            case INVALIDATED -> "중요 정보 변경으로 기존 승인 요청을 무효화함";
+            case INVALIDATED -> "검토 중인 승인 요청을 무효화함";
             case PENDING -> throw new IllegalArgumentException("pending approval has no outcome summary");
         };
     }
