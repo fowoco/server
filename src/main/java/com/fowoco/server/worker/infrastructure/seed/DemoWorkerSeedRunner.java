@@ -5,6 +5,7 @@ import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.domain.Company;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
+import com.fowoco.server.worker.infrastructure.seed.DemoWorkerSeedCatalog.WorkerSeed;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,25 +24,11 @@ import org.springframework.transaction.annotation.Transactional;
 class DemoWorkerSeedRunner implements ApplicationRunner {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DemoWorkerSeedRunner.class);
-    private static final List<DemoWorker> DEMO_WORKERS = List.of(
-            demoWorker("92000000-0000-0000-0000-000000000001", "데모 근로자 01", "VN", "vi", 30, 180),
-            demoWorker("92000000-0000-0000-0000-000000000002", "데모 근로자 02", "KH", "km", 60, 210),
-            demoWorker("92000000-0000-0000-0000-000000000003", "데모 근로자 03", "NP", "ne", 90, 240),
-            demoWorker("92000000-0000-0000-0000-000000000004", "데모 근로자 04", "ID", "id", 120, 270),
-            demoWorker("92000000-0000-0000-0000-000000000005", "데모 근로자 05", "PH", "en", 180, 365)
-    );
-    private static final List<DemoWorker> TEST_WORKERS = List.of(
-            demoWorker("93000000-0000-0000-0000-000000000001", "테스트 근로자 01", "TH", "th", 45, 190),
-            demoWorker("93000000-0000-0000-0000-000000000002", "테스트 근로자 02", "MN", "mn", 75, 220),
-            demoWorker("93000000-0000-0000-0000-000000000003", "테스트 근로자 03", "BD", "bn", 105, 250),
-            demoWorker("93000000-0000-0000-0000-000000000004", "테스트 근로자 04", "UZ", "uz", 135, 280),
-            demoWorker("93000000-0000-0000-0000-000000000005", "테스트 근로자 05", "LK", "si", 195, 370)
-    );
-
     private final DemoAuthSeedProperties properties;
     private final CompanyRepository companyRepository;
     private final WorkerRepository workerRepository;
     private final Clock clock;
+    private final DemoWorkerSeedCatalog catalog;
 
     DemoWorkerSeedRunner(
             DemoAuthSeedProperties properties,
@@ -56,6 +43,7 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
         );
         this.workerRepository = Objects.requireNonNull(workerRepository, "workerRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.catalog = new DemoWorkerSeedCatalog();
     }
 
     @Override
@@ -63,14 +51,18 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
     public void run(ApplicationArguments arguments) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.now(clock);
-        seedCompanyWorkers(properties.companyId(), DEMO_WORKERS, today, now);
-        seedCompanyWorkers(properties.testCompanyId(), TEST_WORKERS, today, now);
-        LOGGER.info("demo_worker_seed ready company_count={} worker_count={}", 2, 10);
+        seedCompanyWorkers(properties.companyId(), catalog.demoWorkers(), today, now);
+        seedCompanyWorkers(properties.testCompanyId(), catalog.testWorkers(), today, now);
+        LOGGER.info(
+                "demo_worker_seed ready company_count={} worker_count={}",
+                2,
+                catalog.demoWorkers().size() + catalog.testWorkers().size()
+        );
     }
 
     private void seedCompanyWorkers(
             UUID companyId,
-            List<DemoWorker> workers,
+            List<WorkerSeed> workers,
             LocalDate today,
             Instant now
     ) {
@@ -82,64 +74,47 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
         workers.forEach(worker -> seedWorker(companyId, worker, today, now));
     }
 
-    private void seedWorker(UUID companyId, DemoWorker demoWorker, LocalDate today, Instant now) {
+    private void seedWorker(UUID companyId, WorkerSeed workerSeed, LocalDate today, Instant now) {
         Optional<Worker> existing =
-                workerRepository.findByWorkerIdAndCompanyId(demoWorker.workerId(), companyId);
-        if (existing.isPresent()) {
-            verifyExistingWorker(existing.orElseThrow(), companyId, demoWorker);
+                workerRepository.findByWorkerIdAndCompanyId(workerSeed.workerId(), companyId);
+        existing.ifPresent(worker -> verifyExistingWorker(worker, companyId, workerSeed));
+        Instant createdAt = existing.map(Worker::createdAt).orElse(now);
+        Instant updatedAt = now.isBefore(createdAt) ? createdAt : now;
+        Worker worker = new Worker(
+                workerSeed.workerId(),
+                companyId,
+                workerSeed.displayName(),
+                workerSeed.nationalityCode(),
+                workerSeed.preferredLanguage(),
+                workerSeed.workStatus(),
+                relativeDate(today, workerSeed.stayExpiryDays()),
+                today.minusYears(1),
+                today.plusDays(workerSeed.contractEndDays()),
+                createdAt,
+                updatedAt,
+                existing.map(Worker::version).orElse(0L)
+        );
+        if (existing.isEmpty()) {
+            workerRepository.insert(worker);
             return;
         }
-        workerRepository.insert(Worker.create(
-                demoWorker.workerId(),
-                companyId,
-                demoWorker.displayName(),
-                demoWorker.nationalityCode(),
-                demoWorker.preferredLanguage(),
-                today.plusDays(demoWorker.stayExpiryDays()),
-                today.minusYears(1),
-                today.plusDays(demoWorker.contractEndDays()),
-                now
-        ));
+        workerRepository.update(worker);
     }
 
-    private void verifyExistingWorker(Worker worker, UUID companyId, DemoWorker demoWorker) {
-        if (!demoWorker.workerId().equals(worker.workerId())
+    private void verifyExistingWorker(Worker worker, UUID companyId, WorkerSeed workerSeed) {
+        if (!workerSeed.workerId().equals(worker.workerId())
                 || !companyId.equals(worker.companyId())
-                || !demoWorker.displayName().equals(worker.displayName())
-                || !demoWorker.nationalityCode().equals(worker.nationalityCode())
-                || !demoWorker.preferredLanguage().equals(worker.preferredLanguage())
-                || !worker.isCurrentlyEmployed()) {
+                || !workerSeed.displayName().equals(worker.displayName())
+                || !workerSeed.nationalityCode().equals(worker.nationalityCode())
+                || !workerSeed.preferredLanguage().equals(worker.preferredLanguage())
+                || workerSeed.workStatus() != worker.workStatus()) {
             throw new IllegalStateException(
-                    "a reserved demo worker id already belongs to different or inactive worker data"
+                    "a reserved demo worker id already belongs to different worker data"
             );
         }
     }
 
-    private static DemoWorker demoWorker(
-            String workerId,
-            String displayName,
-            String nationalityCode,
-            String preferredLanguage,
-            int stayExpiryDays,
-            int contractEndDays
-    ) {
-        return new DemoWorker(
-                UUID.fromString(workerId),
-                displayName,
-                nationalityCode,
-                preferredLanguage,
-                stayExpiryDays,
-                contractEndDays
-        );
-    }
-
-    private record DemoWorker(
-            UUID workerId,
-            String displayName,
-            String nationalityCode,
-            String preferredLanguage,
-            int stayExpiryDays,
-            int contractEndDays
-    ) {
+    private LocalDate relativeDate(LocalDate today, Integer days) {
+        return days == null ? null : today.plusDays(days);
     }
 }

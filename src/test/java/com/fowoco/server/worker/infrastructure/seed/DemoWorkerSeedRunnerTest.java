@@ -8,6 +8,7 @@ import com.fowoco.server.company.domain.Company;
 import com.fowoco.server.worker.application.WorkerSearchQuery;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
+import com.fowoco.server.worker.domain.WorkerStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -32,7 +33,7 @@ class DemoWorkerSeedRunnerTest {
     private static final Instant NOW = Instant.parse("2026-07-31T00:00:00Z");
 
     @Test
-    void createsFiveIdempotentWorkersForEachDemoCompany() throws Exception {
+    void createsOperationalDemoWorkersAndKeepsTestCompanySmall() throws Exception {
         InMemoryCompanyRepository companyRepository = new InMemoryCompanyRepository();
         companyRepository.insert(Company.create(DEMO_COMPANY_ID, "FOWOCO Demo Company", NOW));
         companyRepository.insert(Company.create(TEST_COMPANY_ID, "FOWOCO Test Company", NOW));
@@ -49,7 +50,7 @@ class DemoWorkerSeedRunnerTest {
 
         assertThat(workerRepository.workers.values())
                 .filteredOn(worker -> worker.companyId().equals(DEMO_COMPANY_ID))
-                .hasSize(5);
+                .hasSize(28);
         assertThat(workerRepository.workers.values())
                 .filteredOn(worker -> worker.companyId().equals(TEST_COMPANY_ID))
                 .hasSize(5);
@@ -58,6 +59,21 @@ class DemoWorkerSeedRunnerTest {
         assertThat(workerRepository.workers.get(
                 UUID.fromString("92000000-0000-0000-0000-000000000001")
         ).stayExpiryDate()).isEqualTo(LocalDate.of(2026, 8, 30));
+        assertThat(workerRepository.workers.get(
+                UUID.fromString("92000000-0000-0000-0000-000000000006")
+        )).satisfies(worker -> {
+            assertThat(worker.displayName()).isEqualTo("응웬반A");
+            assertThat(worker.nationalityCode()).isEqualTo("VN");
+            assertThat(worker.preferredLanguage()).isEqualTo("vi");
+            assertThat(worker.stayExpiryDate()).isEqualTo(LocalDate.of(2026, 8, 12));
+        });
+        assertThat(workerRepository.workers.values())
+                .filteredOn(worker -> worker.companyId().equals(DEMO_COMPANY_ID))
+                .filteredOn(worker -> worker.workStatus() == WorkerStatus.ON_LEAVE)
+                .hasSize(3);
+        assertThat(workerRepository.workers.get(
+                UUID.fromString("92000000-0000-0000-0000-000000000025")
+        ).stayExpiryDate()).isNull();
     }
 
     private DemoAuthSeedProperties properties() {
@@ -110,7 +126,11 @@ class DemoWorkerSeedRunnerTest {
 
         @Override
         public Worker update(Worker worker) {
-            throw new UnsupportedOperationException();
+            if (!workers.containsKey(worker.workerId())) {
+                throw new IllegalStateException("worker to update was not found");
+            }
+            workers.put(worker.workerId(), worker);
+            return worker;
         }
 
         @Override

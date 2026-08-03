@@ -118,7 +118,7 @@ class DemoAuthSeedIntegrationTest {
                 "SELECT COUNT(*) FROM worker WHERE company_id = ?",
                 Integer.class,
                 COMPANY_ID
-        )).isEqualTo(5);
+        )).isEqualTo(28);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM worker WHERE company_id = ?",
                 Integer.class,
