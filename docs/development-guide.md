@@ -153,23 +153,17 @@ runtime 계정은 업무 DML, migration 계정은 Flyway 적용만 담당합니�
 
 ## 선택 사항: Demo Seed
 
-local H2 또는 로컬 PostgreSQL `dev`에서만 사용할 데모 데이터가 필요할 때
-명시적으로 켭니다. 모든 계정은 로컬에서 설정한 같은 비밀번호로 로그인할 수
-있으며, 기본 비밀번호는 없습니다.
+local H2 또는 개인 PostgreSQL `dev`에서만 사용할 데모 데이터가 필요할 때
+명시적으로 켭니다. 기본 비밀번호는 없으며, 모든 계정은 로컬에서 설정한 같은
+비밀번호를 사용합니다.
 
-| 회사 | 계정 | 근로자 |
-| --- | --- | --- |
-| `FOWOCO Demo Company` | 기존 20명 (`ADMIN` 2, `HR` 12, `VIEWER` 6) | 5명 |
-| `FOWOCO Test Company` | 3명 (`ADMIN` 1, `HR` 1, `VIEWER` 1) | 5명 |
+| 회사 | 계정 | 근로자 | 업무 | 서류 | Audit Event |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `FOWOCO Demo Company` | 20 | 28 | 24 | 84 | 96 |
+| `FOWOCO Test Company` | 3 | 5 | 3 | 8 | 8 |
 
-Demo Company에는 화면 검증용 업무 데이터도 함께 생성됩니다.
-
-- Task 5개: `DRAFT`(AI 후보), `READY_FOR_REVIEW`, `WAITING_WORKER`,
-  `WAITING_EXTERNAL`, `COMPLETED` 각 1개
-- 마감일: 7일 이내, 30일 이내, 30일 초과 구간을 모두 포함
-- 근로자 서류 7개: 근로자별 1~2개, `MISSING`, `SUBMITTED`, `VERIFIED` 포함
-- 30일 이내 만료 서류 1개 이상
-- 승인 대기 Task의 최근 AuditEvent 3개
+대표 계정, 전체 수량·상태 분포, 근로자 시나리오, 프런트엔드 필터 연결과
+Figma 근사·제외 범위는 [Demo Seed 운영 시나리오](demo-seed.md)를 기준으로 한다.
 
 ```bash
 export DEMO_SEED_ENABLED=true
@@ -178,9 +172,8 @@ export DEMO_SEED_ADMIN_PASSWORD='로컬 Secret의 12자 이상 값'
 ```
 
 같은 설정으로 재실행해도 중복 생성하지 않습니다. 고정 ID나 이메일이 다른
-사업장·역할·근로자 정보와 충돌하면 덮어쓰지 않고 시작을 중단합니다. 이메일과
-근로자 이름은 모두 데모 전용 값이며 실제 개인정보를 포함하지 않습니다.
-최초 계정을 확인한 후에는
+데이터와 충돌하면 덮어쓰지 않고 시작을 중단합니다. 실제 개인정보, Secret,
+파일 또는 가짜 저장 경로를 만들지 않습니다. 확인 후에는
 `DEMO_SEED_ENABLED=false`로 돌려놓습니다.
 
 공유 `dev`와 `prod`에서는 Demo Seed 대신 배포 Provisioning 단계에서 초기 계정을
@@ -207,7 +200,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-dev.ps1
 두 스크립트 모두 PostgreSQL `dev` profile과 Demo Seed를 활성화합니다. `DB_URL`,
 migration/runtime username이 비어 있으면 로컬 기본값
 `jdbc:postgresql://localhost:5432/fowoco_test`와 `postgres`를 사용합니다.
-대상 데이터베이스는 최초 한 번 직접 생성합니다.
+대상 데이터베이스는 최초 한 번 직접 생성합니다. 초기화와 안전한 재실행 절차는
+[Demo Seed 운영 시나리오](demo-seed.md#초기화와-재실행)를 참고합니다.
 
 ```bash
 createdb -h localhost -p 5432 -U postgres fowoco_test
@@ -263,6 +257,7 @@ Client가 안전한 형식의 `X-Request-Id`를 보내면 Server가 응답과 �
 
 ## 관련 문서
 
+- [Demo Seed 운영 시나리오](demo-seed.md)
 - [API 문서 사용법](api-documentation.md)
 - [Database 문서 사용법](database-documentation.md)
 - [프로젝트 구조](project-structure.md)

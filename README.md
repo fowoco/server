@@ -19,6 +19,7 @@ FOWOCO는 단순 번역 서비스가 아닙니다. 해야 할 일을 업무카�
 | 현재 구현된 API | [Swagger](https://fowoco.github.io/server/api/) · [OpenAPI JSON](https://fowoco.github.io/server/api/openapi.json) | `main` 코드에서 자동 생성되는 실제 API 계약 |
 | DB 테이블·ERD | [Database 문서](https://fowoco.github.io/server/) | Flyway를 빈 PostgreSQL에 적용해 자동 생성한 구조 |
 | 로컬 실행·인증·Workflow | [개발 가이드](docs/development-guide.md) | 처음 서버를 실행하고 기능 흐름을 이해하는 방법 |
+| Demo Seed 수량·시나리오 | [Demo Seed 운영 시나리오](docs/demo-seed.md) | 로컬 데모 데이터의 기준 수량, 대표 흐름과 표현 한계 |
 | 패키지·모듈 경계 | [프로젝트 구조](docs/project-structure.md) | 코드를 어느 패키지에 구현해야 하는지 설명 |
 | 중요한 설계 결정 | [ADR 목록](docs/adr/README.md) | 저장소 경계, API·보안, Task·AiRun, RLS 결정 원본 |
 | Server ↔ AI 계약 | [AI Runtime 계약](docs/ai-runtime-contract.md) | Server가 AI에 보내고 받을 수 있는 값과 검증 기준 |
@@ -108,8 +109,9 @@ curl http://localhost:8080/health
 | OpenAPI JSON | <http://localhost:8080/v3/api-docs> |
 | H2 Console | <http://localhost:8080/h2-console> |
 
-PostgreSQL 실행, 회원가입·로그인, Demo Seed, Task·승인 흐름은
-[개발 가이드](docs/development-guide.md)에서 이어서 확인합니다.
+PostgreSQL 실행과 회원가입·로그인은 [개발 가이드](docs/development-guide.md),
+Demo Seed의 수량과 대표 업무 구성은
+[Demo Seed 운영 시나리오](docs/demo-seed.md)에서 확인합니다.
 
 ## 대표 흐름
 
