@@ -85,7 +85,8 @@ class AiAnalysisContinuationServiceTest {
         assertThat(analyzeRequest.phase()).isEqualTo(AiAnalysisPhase.ANALYZE);
         assertThat(analyzeRequest.analysisInput().instruction())
                 .isEqualTo(validPlanRequest().analysisInput().instruction());
-        assertThat(analyzeRequest.analysisInput().intentHint()).isEqualTo("EXPIRY_RENEWAL");
+        assertThat(analyzeRequest.analysisInput().instruction())
+                .endsWith(", EXPIRY_RENEWAL");
         assertThat(analyzeRequest.analysisInput().extractedSlots())
                 .containsEntry("document_type", "STAY_EXTENSION");
         assertThat(analyzeRequest.analysisInput().requestedFieldKeys())

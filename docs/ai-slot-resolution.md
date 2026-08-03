@@ -66,8 +66,7 @@ ANALYZE 요청은 다음을 잃어버리면 안 됩니다.
 
 - 동일한 `requestId`
 - 새로운 `attemptId`
-- 원래 HR `instruction`
-- 선택적 `intentHint`
+- 선택한 태그까지 포함한 원래 `instruction` (`발화문, INTENT_TAG`)
 - PLAN이 추출한 `extractedSlots`
 - PLAN이 요청한 전체 `requestedFieldKeys`
 - DB에서 찾은 값만 포함한 `workers[0].requestedFields`
