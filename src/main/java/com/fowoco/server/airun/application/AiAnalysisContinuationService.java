@@ -118,7 +118,6 @@ public final class AiAnalysisContinuationService {
         );
         return new AnalysisInput(
                 previousInput.instruction(),
-                previousInput.intentHint(),
                 extractedSlots,
                 new ArrayList<>(requestedFieldKeys),
                 List.of(mergedWorker),
