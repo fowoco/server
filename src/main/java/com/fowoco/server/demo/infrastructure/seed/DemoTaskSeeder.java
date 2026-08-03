@@ -38,7 +38,10 @@ final class DemoTaskSeeder {
                 seed.taskId(),
                 context.companyId()
         );
-        existing.ifPresent(task -> verifyExisting(task, seed, context));
+        if (existing.isPresent()) {
+            verifyExisting(existing.get(), seed, context);
+            return;
+        }
         Instant createdAt = existing.map(Task::createdAt)
                 .orElseGet(() -> context.now().minus(seed.createdDaysAgo(), ChronoUnit.DAYS));
         Instant desiredUpdatedAt = seed.status() == TaskStatus.COMPLETED

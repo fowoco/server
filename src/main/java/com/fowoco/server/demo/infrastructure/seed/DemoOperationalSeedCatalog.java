@@ -1,6 +1,7 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.audit.domain.AuditAction;
+import com.fowoco.server.approval.domain.ApprovalStatus;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
 import com.fowoco.server.task.domain.TaskType;
@@ -26,6 +27,12 @@ final class DemoOperationalSeedCatalog {
     private final List<TaskSeed> testTasks = DemoTaskSeedCatalog.testTasks();
     private final List<DocumentSeed> demoDocuments = DemoDocumentSeedCatalog.demoDocuments();
     private final List<DocumentSeed> testDocuments = DemoDocumentSeedCatalog.testDocuments();
+    private final List<ChecklistSeed> demoChecklists =
+            DemoTaskWorkflowSeedCatalog.demoChecklists(demoTasks);
+    private final List<ApprovalSeed> demoApprovals =
+            DemoTaskWorkflowSeedCatalog.demoApprovals(demoTasks);
+    private final List<TransitionSeed> demoTransitions =
+            DemoTaskWorkflowSeedCatalog.demoTransitions(demoTasks);
     private final List<AuditSeed> demoAudits = List.of(
             audit(
                     "96000000-0000-0000-0000-000000000001",
@@ -70,6 +77,18 @@ final class DemoOperationalSeedCatalog {
         return testDocuments;
     }
 
+    List<ChecklistSeed> demoChecklists() {
+        return demoChecklists;
+    }
+
+    List<ApprovalSeed> demoApprovals() {
+        return demoApprovals;
+    }
+
+    List<TransitionSeed> demoTransitions() {
+        return demoTransitions;
+    }
+
     List<AuditSeed> demoAudits() {
         return demoAudits;
     }
@@ -79,6 +98,9 @@ final class DemoOperationalSeedCatalog {
         requireSize(testTasks, 3, "Test Company task");
         requireSize(demoDocuments, 84, "Demo Company document");
         requireSize(testDocuments, 8, "Test Company document");
+        requireSize(demoChecklists, 68, "Demo Company checklist item");
+        requireSize(demoApprovals, 13, "Demo Company approval request");
+        requireSize(demoTransitions, 52, "Demo Company task transition");
         requireDistribution(
                 demoTasks.stream().map(TaskSeed::taskType).toList(),
                 Map.of(
@@ -111,6 +133,16 @@ final class DemoOperationalSeedCatalog {
                 ),
                 "Demo Company document status"
         );
+        requireDistribution(
+                demoApprovals.stream().map(ApprovalSeed::status).toList(),
+                Map.of(
+                        ApprovalStatus.PENDING, 4L,
+                        ApprovalStatus.APPROVED, 7L,
+                        ApprovalStatus.REJECTED, 1L,
+                        ApprovalStatus.INVALIDATED, 1L
+                ),
+                "Demo Company approval status"
+        );
         requireUniqueIds(
                 Stream.concat(demoTasks.stream(), testTasks.stream()).map(TaskSeed::taskId).toList(),
                 "task"
@@ -121,6 +153,18 @@ final class DemoOperationalSeedCatalog {
                         .toList(),
                 "document"
         );
+        requireUniqueIds(demoChecklists.stream().map(ChecklistSeed::checklistItemId).toList(),
+                "checklist item");
+        requireUniqueIds(demoApprovals.stream().map(ApprovalSeed::approvalRequestId).toList(),
+                "approval request");
+        requireUniqueIds(demoTransitions.stream().map(TransitionSeed::transitionId).toList(),
+                "task transition");
+        requireTaskReferences(demoChecklists.stream().map(ChecklistSeed::taskId).toList(),
+                "checklist item");
+        requireTaskReferences(demoApprovals.stream().map(ApprovalSeed::taskId).toList(),
+                "approval request");
+        requireTaskReferences(demoTransitions.stream().map(TransitionSeed::taskId).toList(),
+                "task transition");
     }
 
     private static void requireSize(List<?> seeds, int expected, String name) {
@@ -144,6 +188,13 @@ final class DemoOperationalSeedCatalog {
     private static void requireUniqueIds(List<UUID> ids, String name) {
         if (new HashSet<>(ids).size() != ids.size()) {
             throw new IllegalStateException("duplicate reserved demo " + name + " id");
+        }
+    }
+
+    private void requireTaskReferences(List<UUID> taskIds, String name) {
+        var reservedTaskIds = demoTasks.stream().map(TaskSeed::taskId).collect(Collectors.toSet());
+        if (!reservedTaskIds.containsAll(taskIds)) {
+            throw new IllegalStateException(name + " references an unknown demo task");
         }
     }
 
@@ -186,6 +237,39 @@ final class DemoOperationalSeedCatalog {
             Integer expiryDays,
             String destination,
             String note
+    ) {
+    }
+
+    record ChecklistSeed(
+            UUID checklistItemId,
+            UUID taskId,
+            String itemCode,
+            String label,
+            boolean required,
+            boolean completed,
+            int createdHoursAgo,
+            Integer completedHoursAgo
+    ) {
+    }
+
+    record ApprovalSeed(
+            UUID approvalRequestId,
+            UUID taskId,
+            ApprovalStatus status,
+            String reason,
+            int requestedHoursAgo,
+            Integer outcomeHoursAgo
+    ) {
+    }
+
+    record TransitionSeed(
+            UUID transitionId,
+            UUID taskId,
+            TaskStatus fromStatus,
+            TaskStatus toStatus,
+            String reason,
+            String requestId,
+            int hoursAgo
     ) {
     }
 

@@ -2,8 +2,11 @@ package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.AuditSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ApprovalSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ChecklistSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TransitionSeed;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,6 +29,9 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     private final DemoOperationalSeedCatalog catalog;
     private final DemoTaskSeeder taskSeeder;
     private final DemoWorkerDocumentSeeder documentSeeder;
+    private final DemoTaskChecklistSeeder checklistSeeder;
+    private final DemoApprovalRequestSeeder approvalSeeder;
+    private final DemoTaskTransitionSeeder transitionSeeder;
     private final DemoAuditEventSeeder auditSeeder;
     private final DemoOperationalSeedVerifier verifier;
 
@@ -35,6 +41,9 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             DemoOperationalSeedCatalog catalog,
             DemoTaskSeeder taskSeeder,
             DemoWorkerDocumentSeeder documentSeeder,
+            DemoTaskChecklistSeeder checklistSeeder,
+            DemoApprovalRequestSeeder approvalSeeder,
+            DemoTaskTransitionSeeder transitionSeeder,
             DemoAuditEventSeeder auditSeeder,
             DemoOperationalSeedVerifier verifier
     ) {
@@ -43,6 +52,12 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         this.catalog = Objects.requireNonNull(catalog, "catalog must not be null");
         this.taskSeeder = Objects.requireNonNull(taskSeeder, "taskSeeder must not be null");
         this.documentSeeder = Objects.requireNonNull(documentSeeder, "documentSeeder must not be null");
+        this.checklistSeeder = Objects.requireNonNull(checklistSeeder, "checklistSeeder must not be null");
+        this.approvalSeeder = Objects.requireNonNull(approvalSeeder, "approvalSeeder must not be null");
+        this.transitionSeeder = Objects.requireNonNull(
+                transitionSeeder,
+                "transitionSeeder must not be null"
+        );
         this.auditSeeder = Objects.requireNonNull(auditSeeder, "auditSeeder must not be null");
         this.verifier = Objects.requireNonNull(verifier, "verifier must not be null");
     }
@@ -57,15 +72,30 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         seedDataset(
                 catalog.demoTasks(),
                 catalog.demoDocuments(),
+                catalog.demoChecklists(),
+                catalog.demoApprovals(),
+                catalog.demoTransitions(),
                 catalog.demoAudits(),
                 demoContext
         );
-        seedDataset(catalog.testTasks(), catalog.testDocuments(), List.of(), testContext);
+        seedDataset(
+                catalog.testTasks(),
+                catalog.testDocuments(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                testContext
+        );
         LOGGER.info(
                 "demo_operational_seed ready demo_task_count={} demo_document_count={} "
+                        + "checklist_count={} approval_count={} transition_count={} "
                         + "test_task_count={} test_document_count={} audit_count={}",
                 catalog.demoTasks().size(),
                 catalog.demoDocuments().size(),
+                catalog.demoChecklists().size(),
+                catalog.demoApprovals().size(),
+                catalog.demoTransitions().size(),
                 catalog.testTasks().size(),
                 catalog.testDocuments().size(),
                 catalog.demoAudits().size()
@@ -75,12 +105,18 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     private void seedDataset(
             List<TaskSeed> tasks,
             List<DocumentSeed> documents,
+            List<ChecklistSeed> checklists,
+            List<ApprovalSeed> approvals,
+            List<TransitionSeed> transitions,
             List<AuditSeed> audits,
             DemoOperationalSeedContext context
     ) {
         tasks.forEach(seed -> taskSeeder.seed(seed, context));
         documents.forEach(seed -> documentSeeder.seed(seed, context));
+        checklists.forEach(seed -> checklistSeeder.seed(seed, context));
+        approvals.forEach(seed -> approvalSeeder.seed(seed, context));
+        transitions.forEach(seed -> transitionSeeder.seed(seed, context));
         audits.forEach(seed -> auditSeeder.seed(seed, context));
-        verifier.verify(tasks, documents, audits, context);
+        verifier.verify(tasks, documents, checklists, approvals, transitions, audits, context);
     }
 }
