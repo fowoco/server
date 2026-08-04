@@ -282,13 +282,17 @@ class PostgreSqlMigrationTests {
                         "pl_ai_run_tenant_isolation",
                         "pl_ai_attempt_tenant_isolation",
                         "pl_ai_question_tenant_isolation",
-                        "pl_ai_candidate_tenant_isolation"
+                        "pl_ai_candidate_tenant_isolation",
+                        "pl_worker_link_tenant_isolation",
+                        "pl_worker_response_tenant_isolation",
+                        "pl_worker_response_upload_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
                         "bootstrap_company_id_by_refresh_token_hash",
+                        "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
                         "bootstrap_oldest_outstanding_event_occurred_at"
@@ -297,6 +301,7 @@ class PostgreSqlMigrationTests {
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
                         "bootstrap_company_id_by_refresh_token_hash",
+                        "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
                         "bootstrap_oldest_outstanding_event_occurred_at"
