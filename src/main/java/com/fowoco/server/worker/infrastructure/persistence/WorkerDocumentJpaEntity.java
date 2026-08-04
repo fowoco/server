@@ -29,6 +29,9 @@ public class WorkerDocumentJpaEntity {
     @Column(name = "company_id", nullable = false, updatable = false)
     private UUID companyId;
 
+    @Column(name = "task_id")
+    private UUID taskId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "document_type", nullable = false, length = 40)
     private DocumentType documentType;
@@ -66,6 +69,7 @@ public class WorkerDocumentJpaEntity {
             UUID workerDocumentId,
             UUID workerId,
             UUID companyId,
+            UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
@@ -79,6 +83,7 @@ public class WorkerDocumentJpaEntity {
         this.workerDocumentId = workerDocumentId;
         this.workerId = workerId;
         this.companyId = companyId;
+        this.taskId = taskId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
         this.expiryDate = expiryDate;
@@ -96,6 +101,7 @@ public class WorkerDocumentJpaEntity {
                 document.workerDocumentId(),
                 document.workerId(),
                 document.companyId(),
+                document.taskId(),
                 document.documentType(),
                 document.submissionStatus(),
                 document.expiryDate(),
@@ -113,6 +119,7 @@ public class WorkerDocumentJpaEntity {
                 workerDocumentId,
                 workerId,
                 companyId,
+                taskId,
                 documentType,
                 submissionStatus,
                 expiryDate,

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Schema(
         name = "WorkerDocumentCreateRequest",
@@ -44,19 +45,24 @@ public final class WorkerDocumentCreateRequest {
     @Size(max = 500, message = "note는 500자 이하여야 합니다.")
     private final String note;
 
+    @Schema(name = "task_id", description = "연결할 업무카드 ID (선택)", format = "uuid")
+    private final UUID taskId;
+
     @JsonCreator
     public WorkerDocumentCreateRequest(
             @JsonProperty("document_type") DocumentType documentType,
             @JsonProperty("submission_status") SubmissionStatus submissionStatus,
             @JsonProperty("expiry_date") LocalDate expiryDate,
             @JsonProperty("destination") String destination,
-            @JsonProperty("note") String note
+            @JsonProperty("note") String note,
+            @JsonProperty("task_id") UUID taskId
     ) {
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
+        this.taskId = taskId;
     }
 
     public DocumentType getDocumentType() {
@@ -77,5 +83,9 @@ public final class WorkerDocumentCreateRequest {
 
     public String getNote() {
         return note;
+    }
+
+    public UUID getTaskId() {
+        return taskId;
     }
 }
