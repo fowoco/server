@@ -1,5 +1,6 @@
 package com.fowoco.server.workerlink.api;
 
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.workerlink.application.WorkerLinkViewResult;
 import com.fowoco.server.workerlink.application.WorkerLinkViewService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -47,9 +49,10 @@ public class WorkerLinkViewController {
     })
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<WorkerLinkViewResponse> view(
-            @Parameter(description = "근로자 링크 토큰") @PathVariable String token
+            @Parameter(description = "근로자 링크 토큰") @PathVariable String token,
+            HttpServletRequest servletRequest
     ) {
-        WorkerLinkViewResult result = workerLinkViewService.view(token);
+        WorkerLinkViewResult result = workerLinkViewService.view(token, RequestMetadata.from(servletRequest));
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(WorkerLinkViewResponse.from(result));
