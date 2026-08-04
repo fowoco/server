@@ -43,6 +43,9 @@ springdoc:
 app:
   database:
     tenant-context-mode: transaction-only
+    runtime-timeout:
+      statement-timeout: ${DB_STATEMENT_TIMEOUT:30s}
+      lock-timeout: ${DB_LOCK_TIMEOUT:3s}
   ai-runtime:
     enabled: ${AI_RUNTIME_ENABLED:false}
     endpoint: ${AI_RUNTIME_ENDPOINT:http://127.0.0.1:8000/internal/v1/analyses}
