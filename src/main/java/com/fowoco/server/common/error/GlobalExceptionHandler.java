@@ -1,5 +1,9 @@
 package com.fowoco.server.common.error;
 
+import com.fowoco.server.common.database.DatabaseTimeoutMetrics;
+import com.fowoco.server.common.database.DatabaseTimeoutType;
+import com.fowoco.server.common.database.PostgreSqlTimeoutClassification;
+import com.fowoco.server.common.database.PostgreSqlTimeoutClassifier;
 import com.fowoco.server.common.web.RequestIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -31,9 +36,17 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     private final Clock clock;
+    private final PostgreSqlTimeoutClassifier timeoutClassifier;
+    private final DatabaseTimeoutMetrics timeoutMetrics;
 
-    public GlobalExceptionHandler(Clock clock) {
+    public GlobalExceptionHandler(
+            Clock clock,
+            PostgreSqlTimeoutClassifier timeoutClassifier,
+            DatabaseTimeoutMetrics timeoutMetrics
+    ) {
         this.clock = clock;
+        this.timeoutClassifier = timeoutClassifier;
+        this.timeoutMetrics = timeoutMetrics;
     }
 
     @ExceptionHandler(ApiException.class)
@@ -152,6 +165,30 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+        PostgreSqlTimeoutClassification classification =
+                timeoutClassifier.classify(exception);
+        if (isConfirmed(classification.type())) {
+            timeoutMetrics.recordConfirmed(classification.type());
+            logDatabaseFailure(request, classification, confirmedLogCode(classification.type()));
+            return response(
+                    ErrorCode.SERVICE_TEMPORARILY_UNAVAILABLE,
+                    null,
+                    List.of(),
+                    request,
+                    safeRoute(request)
+            );
+        }
+        if (isAmbiguous(classification.type())) {
+            logDatabaseFailure(request, classification, classification.type().name());
+            return response(
+                    ErrorCode.INTERNAL_SERVER_ERROR,
+                    null,
+                    List.of(),
+                    request,
+                    safeRoute(request)
+            );
+        }
+
         String requestId = requestId(request);
         log.error(
                 "Unexpected server error: requestId={}, method={}, path={}, exceptionType={}",
@@ -164,18 +201,76 @@ public class GlobalExceptionHandler {
         return response(ErrorCode.INTERNAL_SERVER_ERROR, null, List.of(), request);
     }
 
+    private void logDatabaseFailure(
+            HttpServletRequest request,
+            PostgreSqlTimeoutClassification classification,
+            String logClassification
+    ) {
+        log.warn(
+                "Database request failure: requestId={} method={} route={} "
+                        + "classification={} sqlState={} exceptionType={}",
+                requestId(request),
+                request.getMethod(),
+                safeRoute(request),
+                logClassification,
+                classification.sqlState(),
+                classification.exceptionType()
+        );
+    }
+
+    private boolean isConfirmed(DatabaseTimeoutType type) {
+        return type == DatabaseTimeoutType.CONFIRMED_STATEMENT_TIMEOUT
+                || type == DatabaseTimeoutType.CONFIRMED_LOCK_TIMEOUT;
+    }
+
+    private boolean isAmbiguous(DatabaseTimeoutType type) {
+        return type == DatabaseTimeoutType.AMBIGUOUS_QUERY_CANCELED
+                || type == DatabaseTimeoutType.AMBIGUOUS_LOCK_NOT_AVAILABLE;
+    }
+
+    private String confirmedLogCode(DatabaseTimeoutType type) {
+        return switch (type) {
+            case CONFIRMED_STATEMENT_TIMEOUT -> "DATABASE_STATEMENT_TIMEOUT";
+            case CONFIRMED_LOCK_TIMEOUT -> "DATABASE_LOCK_TIMEOUT";
+            default -> throw new IllegalArgumentException("Confirmed timeout is required");
+        };
+    }
+
+    private String safeRoute(HttpServletRequest request) {
+        Object route = request.getAttribute(
+                HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE
+        );
+        return route == null ? "unknown" : route.toString();
+    }
+
     private ResponseEntity<ApiErrorResponse> response(
             ApiErrorCode errorCode,
             String message,
             List<FieldErrorResponse> fieldErrors,
             HttpServletRequest request
     ) {
+        return response(
+                errorCode,
+                message,
+                fieldErrors,
+                request,
+                request.getRequestURI()
+        );
+    }
+
+    private ResponseEntity<ApiErrorResponse> response(
+            ApiErrorCode errorCode,
+            String message,
+            List<FieldErrorResponse> fieldErrors,
+            HttpServletRequest request,
+            String safePath
+    ) {
         ApiErrorResponse body = new ApiErrorResponse(
                 Instant.now(clock),
                 errorCode.status().value(),
                 errorCode.code(),
                 message == null || message.isBlank() ? errorCode.defaultMessage() : message,
-                request.getRequestURI(),
+                safePath,
                 requestId(request),
                 fieldErrors
         );
