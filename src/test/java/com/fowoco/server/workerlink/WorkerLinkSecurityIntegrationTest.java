@@ -112,6 +112,21 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(uploadResponse.statusCode()).isEqualTo(201);
         String uploadId = JsonPath.read(uploadResponse.body(), "$.upload_id");
 
+        HttpResponse<String> uploadFirstResponse = uploadFileWithFixedClientRequestId(
+                workerUrl, "passport.pdf", "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8), "fixed-client-request-id"
+        );
+        assertThat(uploadFirstResponse.statusCode()).isEqualTo(201);
+        String firstUploadId = JsonPath.read(uploadFirstResponse.body(), "$.upload_id");
+
+        HttpResponse<String> uploadRetryResponse = uploadFileWithFixedClientRequestId(
+                workerUrl, "passport.pdf", "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8), "fixed-client-request-id"
+        );
+        assertThat(uploadRetryResponse.statusCode()).isEqualTo(201);
+        String retryUploadId = JsonPath.read(uploadRetryResponse.body(), "$.upload_id");
+        assertThat(retryUploadId).isEqualTo(firstUploadId);
+
         jdbcTemplate.update("UPDATE stored_file SET verified = true WHERE stored_file_id = ?", UUID.fromString(uploadId));
 
         HttpResponse<String> responseSubmit = postJson(
@@ -258,6 +273,21 @@ class WorkerLinkSecurityIntegrationTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writePart(out, "file", filename, mimeType, content);
         writeFieldPart(out, "clientRequestId", UUID.randomUUID().toString());
+        out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
+                .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> uploadFileWithFixedClientRequestId(
+            String token, String filename, String mimeType, byte[] content, String clientRequestId
+    ) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writePart(out, "file", filename, mimeType, content);
+        writeFieldPart(out, "clientRequestId", clientRequestId);
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
         HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))

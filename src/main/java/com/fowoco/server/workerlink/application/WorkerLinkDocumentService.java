@@ -14,12 +14,14 @@ import com.fowoco.server.file.application.port.FileStorage;
 import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.file.domain.StoredFile;
 import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
+import com.fowoco.server.workerlink.application.port.WorkerDocumentUploadIdempotencyRepository;
 import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
 import com.fowoco.server.workerlink.application.port.WorkerLinkTenantBootstrap;
 import com.fowoco.server.workerlink.domain.WorkerLink;
 import com.fowoco.server.workerlink.infrastructure.security.WorkerLinkHasher;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -44,6 +46,7 @@ public class WorkerLinkDocumentService {
     private final WorkerLinkRepository workerLinkRepository;
     private final WorkerLinkHasher workerLinkHasher;
     private final StoredFileRepository storedFileRepository;
+    private final WorkerDocumentUploadIdempotencyRepository uploadIdempotencyRepository;
     private final FileStorage fileStorage;
     private final AuditEventRepository auditRepository;
     private final UuidGenerator uuidGenerator;
@@ -55,6 +58,7 @@ public class WorkerLinkDocumentService {
             WorkerLinkRepository workerLinkRepository,
             WorkerLinkHasher workerLinkHasher,
             StoredFileRepository storedFileRepository,
+            WorkerDocumentUploadIdempotencyRepository uploadIdempotencyRepository,
             FileStorage fileStorage,
             AuditEventRepository auditRepository,
             UuidGenerator uuidGenerator,
@@ -65,6 +69,7 @@ public class WorkerLinkDocumentService {
         this.workerLinkRepository = workerLinkRepository;
         this.workerLinkHasher = workerLinkHasher;
         this.storedFileRepository = storedFileRepository;
+        this.uploadIdempotencyRepository = uploadIdempotencyRepository;
         this.fileStorage = fileStorage;
         this.auditRepository = auditRepository;
         this.uuidGenerator = uuidGenerator;
@@ -96,6 +101,14 @@ public class WorkerLinkDocumentService {
             throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND);
         }
 
+        Optional<UUID> existingStoredFileId = uploadIdempotencyRepository
+                .findStoredFileId(link.workerLinkId(), command.clientRequestId());
+        if (existingStoredFileId.isPresent()) {
+            StoredFile existingFile = storedFileRepository.findByIdAndCompanyId(existingStoredFileId.get(), companyId)
+                    .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE));
+            return new WorkerLinkDocumentUploadResult(existingFile, link.expiresAt());
+        }
+
         UUID storedFileId = uuidGenerator.generate();
         String storageKey = storedFileId.toString();
         String purpose = command.documentType() != null ? command.documentType() : "WORKER_LINK_SUBMISSION";
@@ -115,6 +128,7 @@ public class WorkerLinkDocumentService {
 
         fileStorage.store(storageKey, command.content(), command.size(), command.mimeType());
         storedFileRepository.insert(storedFile);
+        uploadIdempotencyRepository.save(link.workerLinkId(), command.clientRequestId(), storedFileId);
 
         auditRepository.append(new AuditEvent(
                 uuidGenerator.generate(),
@@ -131,8 +145,6 @@ public class WorkerLinkDocumentService {
                 "근로자 링크로 파일 업로드: " + purpose,
                 now
         ));
-
-        // TODO: clientRequestId를 이용한 중복 제출 방지 로직 미구현 (스키마 변경 필요, 후속 처리)
 
         return new WorkerLinkDocumentUploadResult(storedFile, link.expiresAt());
     }

@@ -72,3 +72,14 @@ CREATE TABLE worker_response_upload (
     CONSTRAINT fk_worker_response_upload_file
         FOREIGN KEY (stored_file_id) REFERENCES stored_file (stored_file_id) ON DELETE RESTRICT
 );
+CREATE TABLE worker_document_upload_idempotency (
+    worker_link_id UUID NOT NULL,
+    client_request_id VARCHAR(100) NOT NULL,
+    stored_file_id UUID NOT NULL,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_worker_document_upload_idempotency PRIMARY KEY (worker_link_id, client_request_id),
+    CONSTRAINT fk_worker_document_upload_idempotency_link
+        FOREIGN KEY (worker_link_id) REFERENCES worker_link (worker_link_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_worker_document_upload_idempotency_file
+        FOREIGN KEY (stored_file_id) REFERENCES stored_file (stored_file_id) ON DELETE RESTRICT
+);
