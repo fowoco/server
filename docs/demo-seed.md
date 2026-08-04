@@ -4,6 +4,9 @@ Demo Seed는 현재 구현된 API를 로컬에서 현실적인 운영 데이터�
 개발 전용 데이터셋이다. Figma의 업무·근로자 구성을 참고하되, 서버에 존재하는
 도메인과 상태만 사용한다.
 
+Figma 화면 요구사항별 예약 ID, DB 저장 위치와 현재 API 노출 여부는
+[Figma Demo Fixture Manifest](demo-seed-fixture-manifest.md)에서 확인한다.
+
 > Demo Seed는 로컬 H2 또는 개인 PostgreSQL 개발 DB 전용이다. 공유 `dev`와
 > `prod`에서 활성화하거나 실제 개인정보·Secret을 섞어 사용하면 안 된다.
 
@@ -59,7 +62,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-dev.ps1
 | 데이터 | 수량 | 주요 분포 |
 | --- | ---: | --- |
 | 계정 | 20 | `ADMIN` 2, `HR` 12, `VIEWER` 6 |
-| 근로자 | 28 | `ACTIVE`와 `ON_LEAVE`, 다양한 체류 만료 구간 |
+| 근로자 | 28 | `ACTIVE`와 `ON_LEAVE`, AI 지원 locale 15개, 다양한 체류 만료 구간 |
 | 업무 | 24 | 세 가지 지원 업무 유형과 여덟 가지 상태 |
 | 근로자 서류 | 84 | `VERIFIED` 48, `SUBMITTED` 20, `MISSING` 16 |
 | 체크리스트 항목 | 68 | 24개 업무에 연결 |
@@ -68,8 +71,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-dev.ps1
 | 외부 제출 | 6 | 고용센터 또는 출입국·외국인청 제출 시나리오 |
 | 완료 증빙 | 10 | 문서, 접수증, 공식 결과, HR 확인 |
 | 문서 요청 초안 | 5 | 네팔어, 베트남어, 인도네시아어, 미얀마어 |
-| Audit Event | 96 | `HR_USER` 83, `AI_AGENT` 3, `SYSTEM_RULE` 6, `WORKER_LINK` 4 |
-| StoredFile | 0 | 실제 파일이나 가짜 저장 경로를 만들지 않음 |
+| Audit Event | 96 | `HR_USER` 79, `AI_AGENT` 7, `SYSTEM_RULE` 6, `WORKER_LINK` 4 |
+| StoredFile | 3 | 합성 재계약서·체류 연장 접수증·승인 결과 PDF |
 
 Demo Company 업무 유형은 `STAY_PERIOD_EXTENSION` 10개, `RECONTRACT` 8개,
 `EMPLOYMENT_PERIOD_EXTENSION` 6개다.
@@ -87,9 +90,9 @@ Demo Company 업무 유형은 `STAY_PERIOD_EXTENSION` 10개, `RECONTRACT` 8개,
 미상 8건이다. Issue #70의 초기 예시 분포와 정확히 일치시키는 fixture 재배치는
 후속 품질 개선 범위로 남긴다.
 
-`INVALIDATED` 1건은 검토 중인 승인 요청을 무효화한 예시다. 승인 완료 후 중요
-내용이 변경되어 과거 승인 snapshot이 무효화되는 전체 revision/fingerprint
-수명주기는 이번 Seed에서 표현하지 않는다.
+`INVALIDATED` 1건은 마감일 변경으로 기존 승인 snapshot을 무효화한 예시다.
+승인 fixture는 AI 원본, HR 최종본, 변경 필드와 원천 버전을 immutable snapshot으로
+저장한다.
 
 ### FOWOCO Test Company
 
@@ -113,8 +116,8 @@ Test Company에는 Demo Company의 전체 운영 데이터를 복제하지 않�
 
 | 근로자 | 대표 상황 | 연결 데이터 |
 | --- | --- | --- |
-| 응웬반A | 체류 만료 `D+12`, 재계약 검토 | 같은 `caseId`의 `READY_FOR_REVIEW`, `DRAFT`, `WAITING_WORKER` 업무, 승인 요청, 체크리스트, 문서 요청 초안, Audit Event |
-| 소팔 타망 | 고용기간 연장 `D+4`, 정보 보완 필요 | `NEEDS_INFO`, 미완료 체크리스트, 누락·제출 서류 |
+| 응웬반A | 체류 만료 `D+45`, 재계약 Task 마감 `D+12` | 같은 `caseId`의 `READY_FOR_REVIEW`, `DRAFT`, `WAITING_WORKER` 업무, 승인 요청, 체크리스트, 문서 요청 초안, Audit Event |
+| 바트 에르덴 | 고용기간 연장 `D+4`, 정보 보완 필요 | `NEEDS_INFO`, 미완료 체크리스트, 누락·제출 서류 |
 | 라니 위자야 | 체류 서류 응답 대기 | `WAITING_WORKER`, 다국어 문서 요청 초안, 요청 관련 Audit Event |
 | 파티마 누르 | 외국인등록증 사본 대기 | `WAITING_WORKER`, ARC 요청 초안과 서류 상태 |
 | 민 아웅 | 재계약·서류 준비 `D+20` | AI 후보 `DRAFT`, 계약서·허가서 요청 초안 |
@@ -174,6 +177,7 @@ Seed에는 한국어 배지 문자열이나 별도 UI 전용 필드를 저장하
 - 외부 제출, 완료 증빙과 상태 전이 이력
 - 문서 누락·제출·검증 및 만료 구간
 - 다국어 문서 요청 초안
+- 합성 PDF, StoredFile 메타데이터와 근로자 문서·완료 증빙 연결
 - HR 사용자, AI 에이전트, 시스템 규칙, 근로자 링크 맥락의 Audit Event
 
 ### 현재 모델로 근사한 항목
@@ -192,7 +196,8 @@ Seed에는 한국어 배지 문자열이나 별도 UI 전용 필드를 저장하
 - Case 엔티티, Case 진행률과 Case API
 - Dashboard 집계 API; 현재 Dashboard는 클라이언트 정적 데이터 유지
 - 급여, 근태, 일정, 수입, OCR, AI 분석 모델
-- 실제 파일 바이너리, StoredFile 또는 가짜 파일 경로
+- HWP/HWPX, 실제 여권·외국인등록증 이미지와 행정 제출 문서
+- 파일 읽기·미리보기·다운로드 API
 - 실제 여권번호, 외국인등록번호, 전화번호, 주소, 임금, 토큰, 자격 증명
 
 ## 멱등성, 충돌과 날짜 snapshot
@@ -242,12 +247,13 @@ H2 `local`은 인메모리 DB이므로 애플리케이션을 종료하고 다시
 SELECT company_id, COUNT(*) FROM worker GROUP BY company_id;
 SELECT company_id, COUNT(*) FROM task GROUP BY company_id;
 SELECT company_id, COUNT(*) FROM worker_document GROUP BY company_id;
+SELECT company_id, COUNT(*) FROM stored_file GROUP BY company_id;
 SELECT company_id, COUNT(*) FROM audit_event GROUP BY company_id;
 ```
 
 실행 로그의 운영 데이터 요약은 다음 값을 포함한다.
 
 ```text
-demo_task_count=24 demo_document_count=84 demo_audit_count=96
+demo_task_count=24 demo_stored_file_count=3 demo_document_count=84 demo_audit_count=96
 test_task_count=3 test_document_count=8 test_audit_count=8
 ```
