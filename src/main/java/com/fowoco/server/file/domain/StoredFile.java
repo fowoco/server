@@ -88,6 +88,27 @@ public final class StoredFile {
         );
     }
 
+    /**
+     * 검증을 통과한 파일임을 표시한 새 StoredFile을 반환한다.
+     * #7(Worker Link)의 "격리 저장 → 검증 → 검증된 ID만 연결" 흐름에서 사용한다.
+     */
+    public StoredFile verify() {
+        return new StoredFile(
+                storedFileId,
+                companyId,
+                name,
+                mimeType,
+                size,
+                purpose,
+                taskId,
+                workerId,
+                storageKey,
+                scanStatus,
+                true,
+                createdAt
+        );
+    }
+
     private static String requireBounded(String value, int maxLength, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");

@@ -127,8 +127,6 @@ class WorkerLinkSecurityIntegrationTest {
         String retryUploadId = JsonPath.read(uploadRetryResponse.body(), "$.upload_id");
         assertThat(retryUploadId).isEqualTo(firstUploadId);
 
-        jdbcTemplate.update("UPDATE stored_file SET verified = true WHERE stored_file_id = ?", UUID.fromString(uploadId));
-
         HttpResponse<String> responseSubmit = postJson(
                 "/public/worker-links/" + workerUrl + "/responses",
                 """

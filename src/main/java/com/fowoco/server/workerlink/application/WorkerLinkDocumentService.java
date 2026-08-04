@@ -126,8 +126,10 @@ public class WorkerLinkDocumentService {
                 now
         );
 
+        StoredFile verifiedFile = storedFile.verify();
+
         fileStorage.store(storageKey, command.content(), command.size(), command.mimeType());
-        storedFileRepository.insert(storedFile);
+        storedFileRepository.insert(verifiedFile);
         uploadIdempotencyRepository.save(link.workerLinkId(), command.clientRequestId(), storedFileId);
 
         auditRepository.append(new AuditEvent(
@@ -146,6 +148,6 @@ public class WorkerLinkDocumentService {
                 now
         ));
 
-        return new WorkerLinkDocumentUploadResult(storedFile, link.expiresAt());
+       return new WorkerLinkDocumentUploadResult(verifiedFile, link.expiresAt());
     }
 }
