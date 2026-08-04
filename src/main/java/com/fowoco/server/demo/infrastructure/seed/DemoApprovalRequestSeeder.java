@@ -1,6 +1,7 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.approval.application.port.ApprovalRequestRepository;
+import com.fowoco.server.approval.application.SafeJsonService;
 import com.fowoco.server.approval.domain.ApprovalRequest;
 import com.fowoco.server.approval.domain.ApprovalStatus;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ApprovalSeed;
@@ -13,23 +14,21 @@ import java.util.Optional;
 
 final class DemoApprovalRequestSeeder {
 
-    private static final String AI_SNAPSHOT_JSON = "{\"summary\":\"demo operational review\"}";
-    private static final String HR_SNAPSHOT_JSON = "{\"review\":\"demo operational seed\"}";
-    private static final String CHANGED_FIELDS_JSON = "[]";
-    private static final String SOURCE_VERSIONS_JSON = "{\"workflow_catalog\":\"0.2.0\"}";
-
     private final ApprovalRequestRepository approvalRepository;
     private final TaskRepository taskRepository;
+    private final SafeJsonService safeJsonService;
 
     DemoApprovalRequestSeeder(
             ApprovalRequestRepository approvalRepository,
-            TaskRepository taskRepository
+            TaskRepository taskRepository,
+            SafeJsonService safeJsonService
     ) {
         this.approvalRepository = Objects.requireNonNull(
                 approvalRepository,
                 "approvalRepository must not be null"
         );
         this.taskRepository = Objects.requireNonNull(taskRepository, "taskRepository must not be null");
+        this.safeJsonService = Objects.requireNonNull(safeJsonService, "safeJsonService must not be null");
     }
 
     void seed(ApprovalSeed seed, DemoOperationalSeedContext context) {
@@ -51,10 +50,10 @@ final class DemoApprovalRequestSeeder {
                 task.version(),
                 task.contentRevision(),
                 task.criticalFingerprint(),
-                AI_SNAPSHOT_JSON,
-                HR_SNAPSHOT_JSON,
-                CHANGED_FIELDS_JSON,
-                SOURCE_VERSIONS_JSON,
+                safeJsonService.write(seed.aiSnapshot(), true),
+                safeJsonService.write(seed.hrSnapshot(), true),
+                safeJsonService.write(seed.changedFields(), true),
+                safeJsonService.write(seed.sourceVersions(), true),
                 context.actorId(),
                 requestedAt
         );
@@ -101,6 +100,10 @@ final class DemoApprovalRequestSeeder {
                 || task.version() != approval.targetTaskVersion()
                 || task.contentRevision() != approval.targetContentRevision()
                 || !task.criticalFingerprint().equals(approval.targetFingerprint())
+                || !safeJsonService.write(seed.aiSnapshot(), true).equals(approval.aiSnapshotJson())
+                || !safeJsonService.write(seed.hrSnapshot(), true).equals(approval.hrSnapshotJson())
+                || !safeJsonService.write(seed.changedFields(), true).equals(approval.changedFieldsJson())
+                || !safeJsonService.write(seed.sourceVersions(), true).equals(approval.sourceVersionsJson())
                 || !context.actorId().equals(approval.requestedBy())
                 || !matchesOutcome(approval, seed, context)) {
             throw new IllegalStateException(

@@ -69,6 +69,12 @@ class DemoAuthSeedIntegrationTest {
             UUID.fromString("94000000-0000-0000-0000-000000000008");
     private static final UUID COMPOUND_CASE_ID =
             UUID.fromString("94100000-0000-0000-0000-000000000006");
+    private static final UUID REPRESENTATIVE_APPROVAL_ID =
+            UUID.fromString("94300000-0000-0000-0000-000000000002");
+    private static final UUID COMPLETED_STAY_TASK_ID =
+            UUID.fromString("94000000-0000-0000-0000-000000000020");
+    private static final UUID PASSPORT_REQUEST_DRAFT_ID =
+            UUID.fromString("94700000-0000-0000-0000-000000000002");
     private static final String PASSWORD = "Demo-password-1!";
     private static final String DEMO_ADMIN_EMAIL = "demo.admin@example.com";
     private static final String TEST_ADMIN_EMAIL = "test.admin@example.com";
@@ -130,6 +136,7 @@ class DemoAuthSeedIntegrationTest {
         assertExactCountsAndDistributions();
         assertRelativeDatesAndSafeData();
         assertCompoundDraftScenario();
+        assertReviewApprovalAndSubmissionFixtures();
         assertTaskTimelineInvariants();
 
         Map<String, Integer> demoCountsBeforeRerun = counts(COMPANY_ID, EXPECTED_DEMO_COUNTS.keySet());
@@ -221,7 +228,7 @@ class DemoAuthSeedIntegrationTest {
                 );
         assertThat(distribution("audit_event", "actor_type", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("HR_USER", 81, "AI_AGENT", 5, "SYSTEM_RULE", 6, "WORKER_LINK", 4)
+                        Map.of("HR_USER", 79, "AI_AGENT", 7, "SYSTEM_RULE", 6, "WORKER_LINK", 4)
                 );
 
         assertThat(jdbcTemplate.queryForObject(
@@ -384,6 +391,86 @@ class DemoAuthSeedIntegrationTest {
                 .containsEntry("submission_status", "VERIFIED");
         assertThat(documentsByType.get("CONTRACT"))
                 .containsEntry("submission_status", "VERIFIED");
+    }
+
+    private void assertReviewApprovalAndSubmissionFixtures() {
+        Map<String, Object> approval = jdbcTemplate.queryForMap(
+                "SELECT status, ai_snapshot_json, hr_snapshot_json, changed_fields_json, "
+                        + "source_versions_json FROM approval_request "
+                        + "WHERE approval_request_id = ? AND company_id = ?",
+                REPRESENTATIVE_APPROVAL_ID,
+                COMPANY_ID
+        );
+        String aiSnapshot = (String) approval.get("ai_snapshot_json");
+        String hrSnapshot = (String) approval.get("hr_snapshot_json");
+        String changedFields = (String) approval.get("changed_fields_json");
+        String sourceVersions = (String) approval.get("source_versions_json");
+        assertThat(approval.get("status")).isEqualTo("PENDING");
+        assertThat(JsonPath.<String>read(aiSnapshot, "$.summary")).isEqualTo("재계약 조건 확인");
+        assertThat(JsonPath.<Integer>read(aiSnapshot, "$.input_summary.required_count")).isEqualTo(9);
+        assertThat(JsonPath.<Integer>read(hrSnapshot, "$.validation_summary.warning_count")).isEqualTo(1);
+        assertThat(JsonPath.<String>read(hrSnapshot, "$.warning_fields[0]"))
+                .isEqualTo("passport_expiry_date");
+        assertThat(JsonPath.<String>read(changedFields, "$[0].field"))
+                .isEqualTo("continued_employment_intent");
+        assertThat(JsonPath.<String>read(sourceVersions, "$.workflow_catalog")).isEqualTo("0.2.0");
+
+        Map<String, Object> requestDraft = jdbcTemplate.queryForMap(
+                "SELECT language, message, review_status FROM document_request_draft "
+                        + "WHERE draft_id = ? AND company_id = ?",
+                PASSPORT_REQUEST_DRAFT_ID,
+                COMPANY_ID
+        );
+        assertThat(requestDraft)
+                .containsEntry("language", "vi")
+                .containsEntry("review_status", "DRAFT");
+        assertThat((String) requestDraft.get("message")).contains("7 ngày");
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT document_type FROM document_request_draft_type WHERE draft_id = ?",
+                String.class,
+                PASSPORT_REQUEST_DRAFT_ID
+        )).containsExactly("PASSPORT_COPY");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM approval_request WHERE task_id = ? "
+                        + "AND company_id = ? AND status = 'APPROVED'",
+                Integer.class,
+                COMPLETED_STAY_TASK_ID,
+                COMPANY_ID
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT safe_reference FROM external_submission WHERE task_id = ? AND company_id = ?",
+                String.class,
+                COMPLETED_STAY_TASK_ID,
+                COMPANY_ID
+        )).isEqualTo("DEMO-STAY-EXT-001");
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT evidence_type FROM task_evidence WHERE task_id = ? AND company_id = ? "
+                        + "ORDER BY evidence_type",
+                String.class,
+                COMPLETED_STAY_TASK_ID,
+                COMPANY_ID
+        )).containsExactly("OFFICIAL_RESULT", "RECEIPT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task_evidence WHERE company_id = ? AND file_reference IS NOT NULL",
+                Integer.class,
+                COMPANY_ID
+        )).isZero();
+
+        List<Map<String, Object>> aiTrace = jdbcTemplate.queryForList(
+                "SELECT actor_type, action, target_id, change_summary FROM audit_event "
+                        + "WHERE company_id = ? AND trace_id = ? ORDER BY created_at DESC",
+                COMPANY_ID,
+                "demo-compound-draft-flow"
+        );
+        assertThat(aiTrace).hasSize(5)
+                .allMatch(event -> "AI_AGENT".equals(event.get("actor_type")));
+        assertThat(aiTrace.stream().map(event -> (String) event.get("change_summary")).toList())
+                .contains(
+                        "복합 요청의 대상 근로자와 Case 맥락을 확인함",
+                        "보유 문서를 비교하고 여권 사본 누락을 확인함",
+                        "선행 재계약 결과를 기다리는 연장 후보를 준비함"
+                );
     }
 
     private void assertTaskTimelineInvariants() {
@@ -568,8 +655,10 @@ class DemoAuthSeedIntegrationTest {
         ));
         snapshot.put("approval_request", snapshotRows(
                 "SELECT approval_request_id, company_id, target_task_version, target_content_revision, "
-                        + "approved_task_version, target_fingerprint, requested_at, decided_at, "
-                        + "invalidated_at, created_at, updated_at, version FROM approval_request "
+                        + "approved_task_version, target_fingerprint, status, ai_snapshot_json, "
+                        + "hr_snapshot_json, changed_fields_json, source_versions_json, requested_at, "
+                        + "decided_at, decision_reason, invalidated_at, invalidation_reason, "
+                        + "created_at, updated_at, version FROM approval_request "
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, approval_request_id"
         ));
         snapshot.put("task_transition_history", snapshotRows(
@@ -577,21 +666,32 @@ class DemoAuthSeedIntegrationTest {
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, transition_id"
         ));
         snapshot.put("external_submission", snapshotRows(
-                "SELECT external_submission_id, company_id, submitted_at, created_at "
+                "SELECT external_submission_id, company_id, destination, safe_reference, "
+                        + "submitted_at, created_at "
                         + "FROM external_submission WHERE company_id IN (?, ?) "
                         + "ORDER BY company_id, external_submission_id"
         ));
         snapshot.put("task_evidence", snapshotRows(
-                "SELECT evidence_id, company_id, recorded_at, created_at FROM task_evidence "
+                "SELECT evidence_id, company_id, evidence_type, file_reference, note, "
+                        + "recorded_at, created_at FROM task_evidence "
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, evidence_id"
         ));
         snapshot.put("document_request_draft", snapshotRows(
-                "SELECT draft_id, company_id, created_at, updated_at, version "
+                "SELECT draft_id, company_id, language, message, review_status, "
+                        + "created_at, updated_at, version "
                         + "FROM document_request_draft WHERE company_id IN (?, ?) "
                         + "ORDER BY company_id, draft_id"
         ));
+        snapshot.put("document_request_draft_type", snapshotRows(
+                "SELECT draft_type.draft_id, draft.company_id, draft_type.document_type "
+                        + "FROM document_request_draft_type draft_type "
+                        + "JOIN document_request_draft draft ON draft.draft_id = draft_type.draft_id "
+                        + "WHERE draft.company_id IN (?, ?) "
+                        + "ORDER BY draft.company_id, draft_type.draft_id, draft_type.document_type"
+        ));
         snapshot.put("audit_event", snapshotRows(
-                "SELECT audit_event_id, company_id, created_at FROM audit_event "
+                "SELECT audit_event_id, company_id, actor_type, action, target_type, target_id, "
+                        + "trace_id, change_summary, created_at FROM audit_event "
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, audit_event_id"
         ));
         return snapshot;

@@ -20,7 +20,7 @@ import java.util.UUID;
 final class DemoAuditSeedCatalog {
 
     private static final List<Integer> CHECKLIST_EVENT_TASKS = List.of(
-            3, 4, 5, 6, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
+            3, 4, 5, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
     );
 
     private DemoAuditSeedCatalog() {
@@ -36,13 +36,14 @@ final class DemoAuditSeedCatalog {
         List<AuditSeed> seeds = new ArrayList<>();
         for (int taskIndex = 0; taskIndex < tasks.size(); taskIndex++) {
             int taskNumber = taskIndex + 1;
-            if (taskNumber != 2) {
+            if (taskNumber != 2 && taskNumber != 6 && taskNumber != 7 && taskNumber != 8) {
                 TaskSeed task = tasks.get(taskIndex);
                 add(seeds, actorType(task.source()), AuditAction.TASK_CREATED,
                         AuditTargetType.TASK, task.taskId(),
                         "업무 시나리오가 생성됨", task.createdDaysAgo() * 24);
             }
         }
+        addCompoundDraftTrace(seeds, tasks);
         CHECKLIST_EVENT_TASKS.forEach(taskNumber -> {
             TaskSeed task = tasks.get(taskNumber - 1);
             add(seeds, ActorType.HR_USER, AuditAction.CHECKLIST_ITEM_UPDATED,
@@ -111,6 +112,23 @@ final class DemoAuditSeedCatalog {
         return List.copyOf(seeds);
     }
 
+    private static void addCompoundDraftTrace(List<AuditSeed> seeds, List<TaskSeed> tasks) {
+        String traceId = "demo-compound-draft-flow";
+        TaskSeed recontract = tasks.get(5);
+        TaskSeed employmentExtension = tasks.get(6);
+        TaskSeed passportRequest = tasks.get(7);
+        addWithTrace(seeds, AuditAction.TASK_CREATED, recontract.taskId(),
+                traceId, "복합 요청의 대상 근로자와 Case 맥락을 확인함", 72);
+        addWithTrace(seeds, AuditAction.TASK_UPDATED, recontract.taskId(),
+                traceId, "재계약 Workflow와 필수 정보를 확인함", 60);
+        addWithTrace(seeds, AuditAction.TASK_UPDATED, passportRequest.taskId(),
+                traceId, "보유 문서를 비교하고 여권 사본 누락을 확인함", 48);
+        addWithTrace(seeds, AuditAction.TASK_UPDATED, passportRequest.taskId(),
+                traceId, "베트남어 문서 요청 초안을 준비함", 40);
+        addWithTrace(seeds, AuditAction.TASK_CREATED, employmentExtension.taskId(),
+                traceId, "선행 재계약 결과를 기다리는 연장 후보를 준비함", 36);
+    }
+
     static List<AuditSeed> testAudits(List<TaskSeed> tasks) {
         List<AuditSeed> seeds = new ArrayList<>();
         tasks.forEach(task -> addTest(seeds, actorType(task.source()), AuditAction.TASK_CREATED,
@@ -165,6 +183,28 @@ final class DemoAuditSeedCatalog {
                 targetId,
                 "test-seed-audit-%03d".formatted(sequence),
                 "test-task-%s".formatted(targetId.toString().substring(24)),
+                summary,
+                hoursAgo
+        ));
+    }
+
+    private static void addWithTrace(
+            List<AuditSeed> seeds,
+            AuditAction action,
+            UUID targetId,
+            String traceId,
+            String summary,
+            int hoursAgo
+    ) {
+        int sequence = seeds.size() + 4;
+        seeds.add(audit(
+                demoUuid("96000000-0000-0000-0000-000000000", sequence),
+                ActorType.AI_AGENT,
+                action,
+                AuditTargetType.TASK,
+                targetId,
+                "demo-seed-audit-%03d".formatted(sequence),
+                traceId,
                 summary,
                 hoursAgo
         ));

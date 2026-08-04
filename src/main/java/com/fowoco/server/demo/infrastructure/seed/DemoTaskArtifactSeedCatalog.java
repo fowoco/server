@@ -29,8 +29,10 @@ final class DemoTaskArtifactSeedCatalog {
         return List.of(
                 evidence(1, tasks, 5, EvidenceType.DOCUMENT, "서명된 재계약 문서 확인", 48),
                 evidence(2, tasks, 5, EvidenceType.HR_CONFIRMATION, "계약 갱신 처리 완료 확인", 24),
-                evidence(3, tasks, 20, EvidenceType.RECEIPT, "체류기간 연장 접수 확인", 48),
-                evidence(4, tasks, 20, EvidenceType.OFFICIAL_RESULT, "체류기간 연장 승인 결과 확인", 12),
+                evidence(3, tasks, 20, EvidenceType.RECEIPT,
+                        "DEMO-STAY-EXT-001 체류기간 연장 접수 확인", 48),
+                evidence(4, tasks, 20, EvidenceType.OFFICIAL_RESULT,
+                        "DEMO-STAY-EXT-001 체류기간 연장 승인 결과 확인", 12),
                 evidence(5, tasks, 21, EvidenceType.DOCUMENT, "갱신 계약서 서명 상태 확인", 72),
                 evidence(6, tasks, 21, EvidenceType.HR_CONFIRMATION, "재계약 인사 반영 완료", 24),
                 evidence(7, tasks, 22, EvidenceType.RECEIPT, "고용허가기간 연장 접수 확인", 72),
@@ -44,8 +46,8 @@ final class DemoTaskArtifactSeedCatalog {
         return List.of(
                 draft(1, tasks, 3, "ne", List.of(DocumentType.PASSPORT_COPY),
                         "कृपया राहदानीको प्रतिलिपि तयार गर्नुहोस्।", 72),
-                draft(2, tasks, 8, "vi", List.of(DocumentType.PASSPORT_COPY, DocumentType.ARC),
-                        "Vui lòng chuẩn bị bản sao hộ chiếu và thẻ đăng ký người nước ngoài.", 36),
+                draft(2, tasks, 8, "vi", List.of(DocumentType.PASSPORT_COPY),
+                        "Vui lòng nộp bản sao hộ chiếu trong vòng 7 ngày để chuẩn bị gia hạn.", 36),
                 draft(3, tasks, 10, "id", List.of(DocumentType.PASSPORT_COPY, DocumentType.ARC),
                         "Mohon siapkan salinan paspor dan kartu registrasi orang asing.", 72),
                 draft(4, tasks, 11, "id", List.of(DocumentType.ARC),

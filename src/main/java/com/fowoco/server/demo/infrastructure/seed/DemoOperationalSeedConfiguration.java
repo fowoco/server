@@ -4,6 +4,7 @@ import com.fowoco.server.audit.application.port.AuditEventRepository;
 import com.fowoco.server.approval.application.port.ApprovalRequestRepository;
 import com.fowoco.server.approval.application.port.EvidenceRepository;
 import com.fowoco.server.approval.application.port.ExternalSubmissionRepository;
+import com.fowoco.server.approval.application.SafeJsonService;
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
 import com.fowoco.server.document.application.port.DocumentRequestDraftRepository;
 import com.fowoco.server.task.application.TaskContentCodec;
@@ -29,6 +30,7 @@ public class DemoOperationalSeedConfiguration {
             TaskContentCodec taskContentCodec,
             TaskChecklistRepository checklistRepository,
             ApprovalRequestRepository approvalRepository,
+            SafeJsonService safeJsonService,
             ExternalSubmissionRepository externalSubmissionRepository,
             EvidenceRepository evidenceRepository,
             DocumentRequestDraftRepository documentRequestDraftRepository,
@@ -45,7 +47,8 @@ public class DemoOperationalSeedConfiguration {
         DemoTaskChecklistSeeder checklistSeeder = new DemoTaskChecklistSeeder(checklistRepository);
         DemoApprovalRequestSeeder approvalSeeder = new DemoApprovalRequestSeeder(
                 approvalRepository,
-                taskRepository
+                taskRepository,
+                safeJsonService
         );
         DemoTaskTransitionSeeder transitionSeeder = new DemoTaskTransitionSeeder(jdbcTemplate);
         DemoExternalSubmissionSeeder externalSubmissionSeeder = new DemoExternalSubmissionSeeder(

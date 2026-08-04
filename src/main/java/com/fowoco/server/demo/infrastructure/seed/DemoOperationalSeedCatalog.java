@@ -198,8 +198,8 @@ final class DemoOperationalSeedCatalog {
         requireDistribution(
                 demoAudits.stream().map(AuditSeed::actorType).toList(),
                 Map.of(
-                        ActorType.HR_USER, 81L,
-                        ActorType.AI_AGENT, 5L,
+                        ActorType.HR_USER, 79L,
+                        ActorType.AI_AGENT, 7L,
                         ActorType.SYSTEM_RULE, 6L,
                         ActorType.WORKER_LINK, 4L
                 ),
@@ -518,8 +518,18 @@ final class DemoOperationalSeedCatalog {
             ApprovalStatus status,
             String reason,
             int requestedHoursAgo,
-            Integer outcomeHoursAgo
+            Integer outcomeHoursAgo,
+            Map<String, Object> aiSnapshot,
+            Map<String, Object> hrSnapshot,
+            List<Map<String, Object>> changedFields,
+            Map<String, Object> sourceVersions
     ) {
+        ApprovalSeed {
+            aiSnapshot = Map.copyOf(aiSnapshot);
+            hrSnapshot = Map.copyOf(hrSnapshot);
+            changedFields = changedFields.stream().map(Map::copyOf).toList();
+            sourceVersions = Map.copyOf(sourceVersions);
+        }
     }
 
     record TransitionSeed(

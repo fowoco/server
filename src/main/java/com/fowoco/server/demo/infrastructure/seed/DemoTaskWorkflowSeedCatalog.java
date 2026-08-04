@@ -7,6 +7,7 @@ import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.Tas
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TransitionSeed;
 import com.fowoco.server.task.domain.TaskStatus;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,7 +76,8 @@ final class DemoTaskWorkflowSeedCatalog {
                 approval(10, tasks, 22, ApprovalStatus.APPROVED, "고용기간 연장 완료 건 승인"),
                 approval(11, tasks, 23, ApprovalStatus.APPROVED, "신청 결과 확인 후 승인"),
                 approval(12, tasks, 9, ApprovalStatus.REJECTED, "필수 고용 정보 보완 필요"),
-                approval(13, tasks, 1, ApprovalStatus.INVALIDATED, "검토 중인 승인 요청을 무효화")
+                approval(13, tasks, 1, ApprovalStatus.INVALIDATED,
+                        "마감일 변경으로 기존 승인 snapshot을 무효화")
         );
     }
 
@@ -110,13 +112,84 @@ final class DemoTaskWorkflowSeedCatalog {
         if (outcomeHoursAgo != null && requestedHoursAgo < outcomeHoursAgo) {
             throw new IllegalStateException("demo approval timeline is invalid");
         }
+        ApprovalSnapshot snapshot = approvalSnapshot(taskNumber, task, status, reason);
         return new ApprovalSeed(
                 demoUuid("94300000-0000-0000-0000-000000000", approvalNumber),
                 task.taskId(),
                 status,
                 reason,
                 requestedHoursAgo,
-                outcomeHoursAgo
+                outcomeHoursAgo,
+                snapshot.ai(),
+                snapshot.hr(),
+                snapshot.changedFields(),
+                snapshot.sourceVersions()
+        );
+    }
+
+    private static ApprovalSnapshot approvalSnapshot(
+            int taskNumber,
+            TaskSeed task,
+            ApprovalStatus status,
+            String reason
+    ) {
+        Map<String, Object> ai = new LinkedHashMap<>();
+        ai.put("summary", task.title());
+        ai.put("task_type", task.taskType().name());
+        ai.put("workflow_id", task.workflowId());
+        ai.put("due_offset_days", task.dueDays());
+        ai.put("proposed_status", TaskStatus.READY_FOR_REVIEW.name());
+
+        Map<String, Object> hr = new LinkedHashMap<>();
+        hr.put("summary", task.title());
+        hr.put("review_result", status.name());
+        hr.put("approval_required", true);
+        if (reason != null) {
+            hr.put("review_note", reason);
+        }
+
+        List<Map<String, Object>> changedFields = List.of();
+        if (taskNumber == 6) {
+            ai.put("case_display_name", "재계약·연장 준비");
+            ai.put("input_summary", Map.of("required_count", 9, "available_count", 7));
+            hr.put("confirmed_fields", List.of("continued_employment_intent"));
+            hr.put("warning_fields", List.of("passport_expiry_date"));
+            hr.put("validation_summary", Map.of(
+                    "key_fields_valid", 7,
+                    "key_fields_total", 7,
+                    "error_count", 0,
+                    "warning_count", 1
+            ));
+            changedFields = List.of(Map.of(
+                    "field", "continued_employment_intent",
+                    "before", "NEEDS_CONFIRMATION",
+                    "after", "CONFIRMED",
+                    "source", "HR_INPUT"
+            ));
+        } else if (taskNumber == 9) {
+            hr.put("missing_fields", List.of("employment_period", "submission_destination"));
+        } else if (taskNumber == 1) {
+            hr.put("invalidation_trigger", "DUE_DATE_CHANGED");
+            changedFields = List.of(Map.of(
+                    "field", "due_at",
+                    "before", "D+3",
+                    "after", "D+7",
+                    "source", "HR_INPUT"
+            ));
+        }
+
+        return new ApprovalSnapshot(
+                Map.copyOf(ai),
+                Map.copyOf(hr),
+                changedFields,
+                Map.of(
+                        "workflow_catalog", DemoOperationalSeedCatalog.WORKFLOW_CATALOG_VERSION,
+                        "workflow_id", task.workflowId(),
+                        "task_version", 0,
+                        "content_revision", 0,
+                        "worker_record", "demo-seed-v1",
+                        "document_records", "demo-seed-v1"
+                )
         );
     }
 
@@ -261,5 +334,13 @@ final class DemoTaskWorkflowSeedCatalog {
     }
 
     private record TransitionPoint(TaskStatus status, int hoursAgo) {
+    }
+
+    private record ApprovalSnapshot(
+            Map<String, Object> ai,
+            Map<String, Object> hr,
+            List<Map<String, Object>> changedFields,
+            Map<String, Object> sourceVersions
+    ) {
     }
 }
