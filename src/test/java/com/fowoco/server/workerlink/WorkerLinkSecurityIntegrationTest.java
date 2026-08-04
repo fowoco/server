@@ -184,6 +184,20 @@ class WorkerLinkSecurityIntegrationTest {
         HttpResponse<String> viewResponse = getJson("/public/worker-links/nonexistenttoken12345", null);
         assertThat(viewResponse.statusCode()).isEqualTo(410);
     }
+    @Test
+    void documentsEndpointAllowsIdempotencyKeyHeaderInCors() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/test-token/documents"))
+                .header("Origin", "http://localhost:3000")
+                .header("Access-Control-Request-Method", "POST")
+                .header("Access-Control-Request-Headers", "Idempotency-Key")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Access-Control-Allow-Headers"))
+                .hasValueSatisfying(headers -> assertThat(headers).contains("Idempotency-Key"));
+    }
 
     private String registerWorker(String token, String displayName) throws Exception {
         String body = """
