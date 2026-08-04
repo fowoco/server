@@ -55,10 +55,13 @@ class AiAnalysisContinuationServiceTest {
         );
         AiAnalysisContinuationService service = new AiAnalysisContinuationService(
                 resolutionTransaction(),
-                (requestId, phase, contextRound) -> {
+                (companyId, requestId, phase, contextRound, analysisInput) -> {
+                    assertThat(companyId).isEqualTo(COMPANY_ID);
                     assertThat(requestId).isEqualTo(REQUEST_ID);
                     assertThat(phase).isEqualTo(AiAnalysisPhase.ANALYZE);
                     assertThat(contextRound).isEqualTo(1);
+                    assertThat(analysisInput.requestedFieldKeys())
+                            .containsExactly("worker_id", "stay_expiry_date", "due_at");
                     callOrder.add("attempt");
                     return NEXT_ATTEMPT_ID;
                 },
@@ -104,7 +107,7 @@ class AiAnalysisContinuationServiceTest {
         AtomicReference<Boolean> attemptStarted = new AtomicReference<>(false);
         AiAnalysisContinuationService service = new AiAnalysisContinuationService(
                 resolutionTransaction(),
-                (requestId, phase, contextRound) -> {
+                (companyId, requestId, phase, contextRound, analysisInput) -> {
                     attemptStarted.set(true);
                     return NEXT_ATTEMPT_ID;
                 },
