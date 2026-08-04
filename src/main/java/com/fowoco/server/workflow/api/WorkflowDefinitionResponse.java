@@ -15,6 +15,8 @@ public record WorkflowDefinitionResponse(
         String sensitivity,
         Set<TaskType> supportedTaskTypes,
         Set<String> requiredSlots,
+        Set<String> allowedSlotKeys,
+        Set<String> resolvableSlotKeys,
         List<WorkflowChecklistResponse> checklistItems,
         List<String> completionEvidence,
         List<String> sourceIds
@@ -27,6 +29,8 @@ public record WorkflowDefinitionResponse(
                 workflow.sensitivity(),
                 workflow.supportedTaskTypes(),
                 workflow.requiredSlots(),
+                workflow.allowedSlotKeys(),
+                workflow.resolvableSlotKeys(),
                 workflow.checklistItems().stream()
                         .map(WorkflowChecklistResponse::from)
                         .toList(),

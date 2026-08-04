@@ -5,6 +5,8 @@ import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
+import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
 import com.fowoco.server.aiintegration.application.model.WorkflowConstraint;
@@ -25,9 +27,11 @@ public class AiRuntimeContractValidator {
 
     private static final long MIN_DEADLINE_MS = 100;
     private static final long MAX_DEADLINE_MS = 60_000;
-    private static final int MAX_WORKERS = 20;
+    private static final int MAX_WORKERS = 1;
     private static final int MAX_WORKFLOWS = 20;
     private static final int MAX_CANDIDATES = 50;
+    private static final int MAX_QUESTIONS = 50;
+    private static final int MAX_CONTEXT_FIELDS = 100;
     private static final Pattern VERSION = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._+-]{0,63}");
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final Pattern CANDIDATE_REF = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_-]{0,63}");
@@ -48,8 +52,11 @@ public class AiRuntimeContractValidator {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime deadline is outside the allowed range.");
         }
         boundaryPolicy.validateText(request.analysisInput().instruction(), 10_000, true);
-        validateWorkers(request);
-        validateWorkflowConstraints(request);
+        validateAnalysisContext(request);
+        switch (request.phase()) {
+            case PLAN -> validatePlanInput(request);
+            case ANALYZE -> validateAnalyzeInput(request);
+        }
     }
 
     public void validateResponse(AiAnalysisRequest request, AiAnalysisResponse response) {
@@ -70,11 +77,16 @@ public class AiRuntimeContractValidator {
         if (response.candidates().size() > MAX_CANDIDATES) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime returned too many candidates.");
         }
+        if (response.questions().size() > MAX_QUESTIONS) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime returned too many questions.");
+        }
 
         Map<String, Set<String>> allowedSlotsByWorkflow = allowedSlotsByWorkflow(request);
-        Set<UUID> allowedWorkers = request.analysisInput().workers().stream()
-                .map(WorkerContext::workerRef)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        Map<UUID, WorkerContext> allowedWorkers = request.analysisInput().workers().stream()
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                        WorkerContext::workerRef,
+                        worker -> worker
+                ));
         Set<String> candidateRefs = new HashSet<>();
         response.candidates().forEach(candidate ->
                 validateCandidate(candidate, allowedWorkers, allowedSlotsByWorkflow, candidateRefs));
@@ -83,13 +95,63 @@ public class AiRuntimeContractValidator {
             boundaryPolicy.validateKey(error.field());
             validateIdentifier(error.field(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         });
-        if (response.outcome() == com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome.REVIEW_REQUIRED
-                && response.candidates().isEmpty()) {
+        switch (response.outcome()) {
+            case CONTEXT_REQUIRED -> validateContextRequiredResponse(response);
+            case NEEDS_INFO -> validateNeedsInfoResponse(request, response);
+            case REVIEW_REQUIRED -> validateReviewRequiredResponse(response);
+        }
+    }
+
+    private void validatePlanInput(AiAnalysisRequest request) {
+        if (!request.analysisInput().extractedSlots().isEmpty()
+                || !request.analysisInput().requestedFieldKeys().isEmpty()
+                || !request.analysisInput().workers().isEmpty()
+                || !request.analysisInput().workflowConstraints().isEmpty()) {
             reject(
-                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
-                    "REVIEW_REQUIRED response must include at least one candidate."
+                    AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                    "PLAN request must contain only the HR instruction."
             );
         }
+    }
+
+    private void validateAnalyzeInput(AiAnalysisRequest request) {
+        if (request.analysisInput().requestedFieldKeys().isEmpty()) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                    "ANALYZE request must identify the context fields requested by the Runtime."
+            );
+        }
+        validateWorkers(request);
+        validateWorkflowConstraints(request);
+        Set<String> requestedFieldKeys = Set.copyOf(request.analysisInput().requestedFieldKeys());
+        request.analysisInput().workers().forEach(worker -> {
+            if (!requestedFieldKeys.containsAll(worker.requestedFields().keySet())) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                        "ANALYZE request contains a field that the Runtime did not request."
+                );
+            }
+        });
+    }
+
+    private void validateAnalysisContext(AiAnalysisRequest request) {
+        if (request.analysisInput().extractedSlots().size() > MAX_CONTEXT_FIELDS
+                || request.analysisInput().requestedFieldKeys().size() > MAX_CONTEXT_FIELDS) {
+            reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime context field count is invalid.");
+        }
+        request.analysisInput().extractedSlots().forEach((key, value) -> {
+            boundaryPolicy.validateKey(key);
+            validateIdentifier(key, AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+            boundaryPolicy.validateText(value, 4_000, true);
+        });
+        Set<String> requestedFieldKeys = new HashSet<>();
+        request.analysisInput().requestedFieldKeys().forEach(key -> {
+            boundaryPolicy.validateKey(key);
+            validateIdentifier(key, AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
+            if (!requestedFieldKeys.add(key)) {
+                reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Runtime field key is duplicated.");
+            }
+        });
     }
 
     private void validateWorkers(AiAnalysisRequest request) {
@@ -121,6 +183,77 @@ public class AiRuntimeContractValidator {
                 validateIdentifier(key, AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT);
                 boundaryPolicy.validateText(value, 4_000, true);
             });
+        }
+    }
+
+    private void validateContextRequiredResponse(AiAnalysisResponse response) {
+        if (response.contextRequirement() == null
+                || !response.candidates().isEmpty()
+                || !response.questions().isEmpty()) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "CONTEXT_REQUIRED response must include only one context requirement."
+            );
+        }
+        validateContextRequirement(response.contextRequirement());
+    }
+
+    private void validateContextRequirement(AiContextRequirement requirement) {
+        validateIdentifier(requirement.detectedIntent(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+        validateConfidence(requirement.confidence());
+        boundaryPolicy.validateText(requirement.targetDisplayName(), 120, true);
+        if (requirement.extractedSlots().size() > MAX_CONTEXT_FIELDS
+                || requirement.requiredFieldKeys().isEmpty()
+                || requirement.requiredFieldKeys().size() > MAX_CONTEXT_FIELDS) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime context field count is invalid.");
+        }
+        requirement.extractedSlots().forEach((key, value) -> {
+            boundaryPolicy.validateKey(key);
+            validateIdentifier(key, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+            boundaryPolicy.validateText(value, 4_000, true);
+        });
+        Set<String> requiredFieldKeys = new HashSet<>();
+        requirement.requiredFieldKeys().forEach(key -> {
+            boundaryPolicy.validateKey(key);
+            validateIdentifier(key, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+            if (!requiredFieldKeys.add(key)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime required field key is invalid.");
+            }
+        });
+    }
+
+    private void validateNeedsInfoResponse(AiAnalysisRequest request, AiAnalysisResponse response) {
+        if (response.contextRequirement() != null
+                || !response.candidates().isEmpty()
+                || response.questions().isEmpty()) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "NEEDS_INFO response must include HR questions only."
+            );
+        }
+        Set<String> allowedSlots = allAllowedSlots(request);
+        Set<String> questionSlots = new HashSet<>();
+        for (AiQuestion question : response.questions()) {
+            boundaryPolicy.validateKey(question.slotKey());
+            validateIdentifier(question.slotKey(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+            boundaryPolicy.validateText(question.prompt(), 500, true);
+            if (!questionSlots.add(question.slotKey())) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime question slot is duplicated.");
+            }
+            if (!allowedSlots.isEmpty() && !allowedSlots.contains(question.slotKey())) {
+                reject(AiRuntimeFailureCode.UNEXPECTED_SLOT, "AI Runtime returned an unexpected question slot.");
+            }
+        }
+    }
+
+    private void validateReviewRequiredResponse(AiAnalysisResponse response) {
+        if (response.contextRequirement() != null
+                || !response.questions().isEmpty()
+                || response.candidates().isEmpty()) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "REVIEW_REQUIRED response must include candidates only."
+            );
         }
     }
 
@@ -162,28 +295,27 @@ public class AiRuntimeContractValidator {
 
     private void validateCandidate(
             AiCandidate candidate,
-            Set<UUID> allowedWorkers,
+            Map<UUID, WorkerContext> allowedWorkers,
             Map<String, Set<String>> allowedSlotsByWorkflow,
             Set<String> candidateRefs
     ) {
         if (!CANDIDATE_REF.matcher(candidate.candidateRef()).matches() || !candidateRefs.add(candidate.candidateRef())) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime candidate reference is invalid.");
         }
-        if (!allowedWorkers.contains(candidate.workerRef())) {
+        WorkerContext worker = allowedWorkers.get(candidate.workerRef());
+        if (worker == null) {
             reject(AiRuntimeFailureCode.UNEXPECTED_WORKER_REFERENCE, "AI Runtime returned an unknown worker reference.");
         }
         Set<String> allowedSlots = allowedSlotsByWorkflow.get(candidate.workflowId());
         if (allowedSlots == null) {
             reject(AiRuntimeFailureCode.UNEXPECTED_WORKFLOW, "AI Runtime returned an unexpected Workflow.");
         }
-        if (candidate.confidence().compareTo(BigDecimal.ZERO) < 0
-                || candidate.confidence().compareTo(BigDecimal.ONE) > 0) {
-            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime confidence is invalid.");
-        }
+        validateConfidence(candidate.confidence());
         candidate.extractedSlots().forEach((key, value) -> {
             validateAllowedSlot(key, allowedSlots);
             boundaryPolicy.validateText(value, 4_000, true);
         });
+        validateCoreValues(worker, candidate);
         Set<String> missingSlots = new HashSet<>();
         candidate.missingSlots().forEach(slot -> {
             validateAllowedSlot(slot, allowedSlots);
@@ -191,6 +323,18 @@ public class AiRuntimeContractValidator {
                 reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime missing slot is invalid.");
             }
         });
+    }
+
+    private void validateCoreValues(WorkerContext worker, AiCandidate candidate) {
+        String returnedStayExpiryDate = candidate.extractedSlots().get("stay_expiry_date");
+        if (returnedStayExpiryDate != null
+                && worker.stayExpiryDate() != null
+                && !worker.stayExpiryDate().toString().equals(returnedStayExpiryDate)) {
+            reject(
+                    AiRuntimeFailureCode.CORE_VALUE_MISMATCH,
+                    "AI Runtime changed a Server-owned core value."
+            );
+        }
     }
 
     private void validateAllowedSlot(String slot, Set<String> allowedSlots) {
@@ -206,6 +350,21 @@ public class AiRuntimeContractValidator {
         request.analysisInput().workflowConstraints()
                 .forEach(workflow -> allowed.put(workflow.workflowId(), workflow.allowedSlotKeys()));
         return Map.copyOf(allowed);
+    }
+
+    private Set<String> allAllowedSlots(AiAnalysisRequest request) {
+        Set<String> allowedSlots = new HashSet<>();
+        request.analysisInput().workflowConstraints()
+                .forEach(workflow -> allowedSlots.addAll(workflow.allowedSlotKeys()));
+        return Set.copyOf(allowedSlots);
+    }
+
+    private void validateConfidence(BigDecimal confidence) {
+        if (confidence == null
+                || confidence.compareTo(BigDecimal.ZERO) < 0
+                || confidence.compareTo(BigDecimal.ONE) > 0) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime confidence is invalid.");
+        }
     }
 
     private void validateVersion(String version, AiRuntimeFailureCode failureCode) {

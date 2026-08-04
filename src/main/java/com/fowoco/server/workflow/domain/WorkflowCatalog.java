@@ -22,4 +22,10 @@ public record WorkflowCatalog(
                 .filter(workflow -> workflow.workflowId().equals(workflowId))
                 .findFirst();
     }
+
+    public List<WorkflowDefinition> findByIntent(String intent) {
+        return workflows.stream()
+                .filter(workflow -> workflow.intent().equals(intent))
+                .toList();
+    }
 }
