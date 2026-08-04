@@ -1,0 +1,10 @@
+package com.fowoco.server.common.database;
+
+public enum DatabaseTimeoutType {
+    CONFIRMED_STATEMENT_TIMEOUT,
+    CONFIRMED_LOCK_TIMEOUT,
+    AMBIGUOUS_QUERY_CANCELED,
+    AMBIGUOUS_LOCK_NOT_AVAILABLE,
+    OTHER_DATABASE_FAILURE,
+    NOT_DATABASE_FAILURE
+}
