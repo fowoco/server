@@ -89,7 +89,7 @@ class AiAnalysisContinuationServiceTest {
         assertThat(analyzeRequest.analysisInput().instruction())
                 .isEqualTo(validPlanRequest().analysisInput().instruction());
         assertThat(analyzeRequest.analysisInput().instruction())
-                .endsWith(", EXPIRY_RENEWAL");
+                .isEqualTo("응웬반안 체류연장 준비해줘");
         assertThat(analyzeRequest.analysisInput().extractedSlots())
                 .containsEntry("document_type", "STAY_EXTENSION");
         assertThat(analyzeRequest.analysisInput().requestedFieldKeys())

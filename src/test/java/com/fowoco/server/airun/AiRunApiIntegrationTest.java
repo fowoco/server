@@ -105,7 +105,7 @@ class AiRunApiIntegrationTest {
         HttpResponse<String> created = post(
                 "/api/v1/ai-runs",
                 """
-                {"instruction":"응웬반A 체류연장 준비해줘, EXPIRY_RENEWAL"}
+                {"instruction":"응웬반A 체류연장 준비해줘"}
                 """,
                 token,
                 "airun-demo-001"
@@ -117,6 +117,8 @@ class AiRunApiIntegrationTest {
                 .isEqualTo("NEEDS_INFO");
         assertThat(JsonPath.<String>read(created.body(), "$.detected_intent"))
                 .isEqualTo("EXPIRY_RENEWAL");
+        assertThat(JsonPath.<String>read(created.body(), "$.instruction"))
+                .isEqualTo("응웬반A 체류연장 준비해줘");
         assertThat(JsonPath.<List<String>>read(created.body(), "$.questions[*].slot_key"))
                 .containsExactly("due_at");
         assertThat(JsonPath.<Number>read(created.body(), "$.attempt_count").intValue())
@@ -159,7 +161,7 @@ class AiRunApiIntegrationTest {
         String tokenA = login(HR_A_EMAIL);
         String tokenB = login(HR_B_EMAIL);
         String body = """
-                {"instruction":"응웬반A 체류연장 준비해줘, EXPIRY_RENEWAL"}
+                {"instruction":"응웬반A 체류연장 준비해줘"}
                 """;
         HttpResponse<String> first = post(
                 "/api/v1/ai-runs",

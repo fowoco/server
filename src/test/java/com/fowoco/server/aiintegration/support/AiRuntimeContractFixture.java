@@ -35,7 +35,7 @@ public final class AiRuntimeContractFixture {
     }
 
     public static AiAnalysisRequest validPlanRequest() {
-        return planRequestWithInstruction("응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL");
+        return planRequestWithInstruction("응웬반안 체류연장 준비해줘");
     }
 
     public static AiAnalysisRequest planRequestWithInstruction(String instruction) {
@@ -52,7 +52,7 @@ public final class AiRuntimeContractFixture {
 
     public static AiAnalysisRequest validAnalyzeRequest() {
         return requestWithInstruction(
-                "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비, EXPIRY_RENEWAL"
+                "가상 근로자 응웬반안(010-1234-5678)의 체류연장 준비"
         );
     }
 
