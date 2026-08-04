@@ -40,7 +40,7 @@ final class DemoEvidenceSeeder {
                 seed.taskId(),
                 context.companyId(),
                 seed.evidenceType(),
-                null,
+                seed.fileReference(),
                 seed.note(),
                 context.actorId(),
                 recordedAt,
@@ -85,7 +85,7 @@ final class DemoEvidenceSeeder {
                 || !seed.taskId().equals(evidence.taskId())
                 || !context.companyId().equals(evidence.companyId())
                 || seed.evidenceType() != evidence.evidenceType()
-                || evidence.fileReference() != null
+                || !Objects.equals(seed.fileReference(), evidence.fileReference())
                 || !seed.note().equals(evidence.note())
                 || !context.actorId().equals(evidence.recordedBy())
                 || evidence.createdAt().isBefore(evidence.recordedAt())) {

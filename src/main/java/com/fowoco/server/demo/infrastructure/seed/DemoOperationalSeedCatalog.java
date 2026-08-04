@@ -14,6 +14,7 @@ import com.fowoco.server.worker.domain.SubmissionStatus;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -29,6 +30,8 @@ final class DemoOperationalSeedCatalog {
 
     private final List<TaskSeed> demoTasks = DemoTaskSeedCatalog.demoTasks();
     private final List<TaskSeed> testTasks = DemoTaskSeedCatalog.testTasks();
+    private final List<StoredFileSeed> demoStoredFiles =
+            DemoStoredFileSeedCatalog.demoStoredFiles(demoTasks);
     private final List<DocumentSeed> demoDocuments = DemoDocumentSeedCatalog.demoDocuments();
     private final List<DocumentSeed> testDocuments = DemoDocumentSeedCatalog.testDocuments();
     private final List<ChecklistSeed> demoChecklists =
@@ -90,6 +93,10 @@ final class DemoOperationalSeedCatalog {
         return testTasks;
     }
 
+    List<StoredFileSeed> demoStoredFiles() {
+        return demoStoredFiles;
+    }
+
     List<DocumentSeed> demoDocuments() {
         return demoDocuments;
     }
@@ -133,6 +140,7 @@ final class DemoOperationalSeedCatalog {
     private void verifyDefinitions() {
         requireSize(demoTasks, 24, "Demo Company task");
         requireSize(testTasks, 3, "Test Company task");
+        requireSize(demoStoredFiles, 3, "Demo Company stored file");
         requireSize(demoDocuments, 84, "Demo Company document");
         requireSize(testDocuments, 8, "Test Company document");
         requireSize(demoChecklists, 68, "Demo Company checklist item");
@@ -209,6 +217,8 @@ final class DemoOperationalSeedCatalog {
                 Stream.concat(demoTasks.stream(), testTasks.stream()).map(TaskSeed::taskId).toList(),
                 "task"
         );
+        requireUniqueIds(demoStoredFiles.stream().map(StoredFileSeed::storedFileId).toList(),
+                "stored file");
         requireUniqueIds(
                 Stream.concat(demoDocuments.stream(), testDocuments.stream())
                         .map(DocumentSeed::documentId)
@@ -279,6 +289,44 @@ final class DemoOperationalSeedCatalog {
     private void verifyArtifactScenarios() {
         Map<UUID, TaskSeed> tasksById = demoTasks.stream()
                 .collect(Collectors.toMap(TaskSeed::taskId, Function.identity()));
+        Map<UUID, StoredFileSeed> filesById = demoStoredFiles.stream()
+                .collect(Collectors.toMap(StoredFileSeed::storedFileId, Function.identity()));
+        for (StoredFileSeed file : demoStoredFiles) {
+            TaskSeed task = tasksById.get(file.taskId());
+            if (task == null || !task.workerId().equals(file.workerId())) {
+                throw new IllegalStateException("stored file task and worker relation is invalid");
+            }
+        }
+        Set<UUID> linkedFileIds = new HashSet<>();
+        for (DocumentSeed document : demoDocuments) {
+            if (document.fileId() == null) {
+                continue;
+            }
+            StoredFileSeed file = filesById.get(document.fileId());
+            if (file == null || !document.workerId().equals(file.workerId())) {
+                throw new IllegalStateException("worker document stored file relation is invalid");
+            }
+            linkedFileIds.add(document.fileId());
+        }
+        for (EvidenceSeed item : demoEvidence) {
+            if (item.fileReference() == null) {
+                continue;
+            }
+            UUID fileId;
+            try {
+                fileId = UUID.fromString(item.fileReference());
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalStateException("evidence file reference must be a stored file UUID", exception);
+            }
+            StoredFileSeed file = filesById.get(fileId);
+            if (file == null || !item.taskId().equals(file.taskId())) {
+                throw new IllegalStateException("evidence stored file relation is invalid");
+            }
+            linkedFileIds.add(fileId);
+        }
+        if (!linkedFileIds.equals(filesById.keySet())) {
+            throw new IllegalStateException("every demo stored file must be linked to a document or evidence");
+        }
         boolean invalidSubmission = demoExternalSubmissions.stream()
                 .map(ExternalSubmissionSeed::taskId)
                 .map(tasksById::get)
@@ -496,7 +544,20 @@ final class DemoOperationalSeedCatalog {
             SubmissionStatus submissionStatus,
             Integer expiryDays,
             String destination,
-            String note
+            String note,
+            UUID fileId
+    ) {
+    }
+
+    record StoredFileSeed(
+            UUID storedFileId,
+            String name,
+            String mimeType,
+            String purpose,
+            UUID taskId,
+            UUID workerId,
+            String storageKey,
+            String resourcePath
     ) {
     }
 
@@ -556,6 +617,7 @@ final class DemoOperationalSeedCatalog {
             UUID evidenceId,
             UUID taskId,
             EvidenceType evidenceType,
+            String fileReference,
             String note,
             int hoursAgo
     ) {

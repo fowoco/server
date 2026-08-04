@@ -32,7 +32,7 @@ final class DemoWorkerDocumentSeeder {
             verifyExisting(existing.get(), seed, context);
             return;
         }
-        workerDocumentRepository.insert(WorkerDocument.create(
+        workerDocumentRepository.insert(new WorkerDocument(
                 seed.documentId(),
                 seed.workerId(),
                 context.companyId(),
@@ -41,7 +41,10 @@ final class DemoWorkerDocumentSeeder {
                 expiryDate,
                 seed.destination(),
                 seed.note(),
-                context.now()
+                seed.fileId(),
+                context.now(),
+                context.now(),
+                0L
         ));
     }
 
@@ -57,7 +60,7 @@ final class DemoWorkerDocumentSeeder {
                 || seed.submissionStatus() != document.submissionStatus()
                 || !Objects.equals(seed.destination(), document.destination())
                 || !Objects.equals(seed.note(), document.note())
-                || document.fileId() != null) {
+                || !Objects.equals(seed.fileId(), document.fileId())) {
             throw new IllegalStateException(
                     "a reserved demo worker document id already belongs to different document data"
             );

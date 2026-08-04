@@ -236,7 +236,11 @@ final class DemoDocumentSeedCatalog {
                 status,
                 expiryDays,
                 destination,
-                note
+                note,
+                "95000000-0000-0000-0000-000000000".equals(documentPrefix)
+                                && documentNumber == 7
+                        ? DemoStoredFileSeedCatalog.CONTRACT_FILE_ID
+                        : null
         );
     }
 

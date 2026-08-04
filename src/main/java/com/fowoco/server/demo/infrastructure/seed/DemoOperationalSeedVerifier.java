@@ -10,6 +10,7 @@ import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.Doc
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentRequestDraftSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.EvidenceSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ExternalSubmissionSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.StoredFileSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TransitionSeed;
 import com.fowoco.server.task.application.port.TaskChecklistRepository;
@@ -36,6 +37,7 @@ final class DemoOperationalSeedVerifier {
     private final DemoWorkerDocumentSeeder documentSeeder;
     private final DemoTaskChecklistSeeder checklistSeeder;
     private final DemoApprovalRequestSeeder approvalSeeder;
+    private final DemoStoredFileSeeder storedFileSeeder;
     private final DemoTaskTransitionSeeder transitionSeeder;
     private final DemoExternalSubmissionSeeder externalSubmissionSeeder;
     private final DemoEvidenceSeeder evidenceSeeder;
@@ -52,6 +54,7 @@ final class DemoOperationalSeedVerifier {
             DemoWorkerDocumentSeeder documentSeeder,
             DemoTaskChecklistSeeder checklistSeeder,
             DemoApprovalRequestSeeder approvalSeeder,
+            DemoStoredFileSeeder storedFileSeeder,
             DemoTaskTransitionSeeder transitionSeeder,
             DemoExternalSubmissionSeeder externalSubmissionSeeder,
             DemoEvidenceSeeder evidenceSeeder,
@@ -76,6 +79,10 @@ final class DemoOperationalSeedVerifier {
         this.documentSeeder = Objects.requireNonNull(documentSeeder, "documentSeeder must not be null");
         this.checklistSeeder = Objects.requireNonNull(checklistSeeder, "checklistSeeder must not be null");
         this.approvalSeeder = Objects.requireNonNull(approvalSeeder, "approvalSeeder must not be null");
+        this.storedFileSeeder = Objects.requireNonNull(
+                storedFileSeeder,
+                "storedFileSeeder must not be null"
+        );
         this.transitionSeeder = Objects.requireNonNull(
                 transitionSeeder,
                 "transitionSeeder must not be null"
@@ -94,6 +101,7 @@ final class DemoOperationalSeedVerifier {
 
     void verify(
             List<TaskSeed> tasks,
+            List<StoredFileSeed> storedFiles,
             List<DocumentSeed> documents,
             List<ChecklistSeed> checklists,
             List<ApprovalSeed> approvals,
@@ -105,6 +113,7 @@ final class DemoOperationalSeedVerifier {
             DemoOperationalSeedContext context
     ) {
         verifyUniqueIds(tasks.stream().map(TaskSeed::taskId).toList(), "task");
+        verifyUniqueIds(storedFiles.stream().map(StoredFileSeed::storedFileId).toList(), "stored file");
         verifyUniqueIds(documents.stream().map(DocumentSeed::documentId).toList(), "document");
         verifyUniqueIds(checklists.stream().map(ChecklistSeed::checklistItemId).toList(), "checklist item");
         verifyUniqueIds(approvals.stream().map(ApprovalSeed::approvalRequestId).toList(), "approval request");
@@ -117,6 +126,7 @@ final class DemoOperationalSeedVerifier {
         verifyUniqueIds(audits.stream().map(AuditSeed::auditEventId).toList(), "audit event");
         verifyWorkersExist(tasks, documents, context);
         tasks.forEach(seed -> verifyTask(seed, context));
+        storedFiles.forEach(seed -> storedFileSeeder.verifyExisting(seed, context));
         documents.forEach(seed -> verifyDocument(seed, context));
         checklists.forEach(seed -> verifyChecklist(seed, context));
         approvals.forEach(seed -> verifyApproval(seed, context));

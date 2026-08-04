@@ -8,6 +8,7 @@ import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.Doc
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentRequestDraftSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.EvidenceSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ExternalSubmissionSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.StoredFileSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TransitionSeed;
 import java.time.Clock;
@@ -34,6 +35,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     private final DemoWorkerDocumentSeeder documentSeeder;
     private final DemoTaskChecklistSeeder checklistSeeder;
     private final DemoApprovalRequestSeeder approvalSeeder;
+    private final DemoStoredFileSeeder storedFileSeeder;
     private final DemoTaskTransitionSeeder transitionSeeder;
     private final DemoExternalSubmissionSeeder externalSubmissionSeeder;
     private final DemoEvidenceSeeder evidenceSeeder;
@@ -49,6 +51,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             DemoWorkerDocumentSeeder documentSeeder,
             DemoTaskChecklistSeeder checklistSeeder,
             DemoApprovalRequestSeeder approvalSeeder,
+            DemoStoredFileSeeder storedFileSeeder,
             DemoTaskTransitionSeeder transitionSeeder,
             DemoExternalSubmissionSeeder externalSubmissionSeeder,
             DemoEvidenceSeeder evidenceSeeder,
@@ -63,6 +66,10 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         this.documentSeeder = Objects.requireNonNull(documentSeeder, "documentSeeder must not be null");
         this.checklistSeeder = Objects.requireNonNull(checklistSeeder, "checklistSeeder must not be null");
         this.approvalSeeder = Objects.requireNonNull(approvalSeeder, "approvalSeeder must not be null");
+        this.storedFileSeeder = Objects.requireNonNull(
+                storedFileSeeder,
+                "storedFileSeeder must not be null"
+        );
         this.transitionSeeder = Objects.requireNonNull(
                 transitionSeeder,
                 "transitionSeeder must not be null"
@@ -89,6 +96,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         DemoOperationalSeedContext testContext = DemoOperationalSeedContext.test(properties, today, now);
         seedDataset(
                 catalog.demoTasks(),
+                catalog.demoStoredFiles(),
                 catalog.demoDocuments(),
                 catalog.demoChecklists(),
                 catalog.demoApprovals(),
@@ -101,6 +109,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         );
         seedDataset(
                 catalog.testTasks(),
+                List.of(),
                 catalog.testDocuments(),
                 List.of(),
                 List.of(),
@@ -112,12 +121,14 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
                 testContext
         );
         LOGGER.info(
-                "demo_operational_seed ready demo_task_count={} demo_document_count={} "
+                "demo_operational_seed ready demo_task_count={} demo_stored_file_count={} "
+                        + "demo_document_count={} "
                         + "checklist_count={} approval_count={} transition_count={} "
                         + "external_submission_count={} evidence_count={} request_draft_count={} "
                         + "test_task_count={} test_document_count={} demo_audit_count={} "
                         + "test_audit_count={}",
                 catalog.demoTasks().size(),
+                catalog.demoStoredFiles().size(),
                 catalog.demoDocuments().size(),
                 catalog.demoChecklists().size(),
                 catalog.demoApprovals().size(),
@@ -134,6 +145,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
 
     private void seedDataset(
             List<TaskSeed> tasks,
+            List<StoredFileSeed> storedFiles,
             List<DocumentSeed> documents,
             List<ChecklistSeed> checklists,
             List<ApprovalSeed> approvals,
@@ -145,6 +157,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             DemoOperationalSeedContext context
     ) {
         tasks.forEach(seed -> taskSeeder.seed(seed, context));
+        storedFiles.forEach(seed -> storedFileSeeder.seed(seed, context));
         documents.forEach(seed -> documentSeeder.seed(seed, context));
         checklists.forEach(seed -> checklistSeeder.seed(seed, context));
         approvals.forEach(seed -> approvalSeeder.seed(seed, context));
@@ -155,6 +168,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         audits.forEach(seed -> auditSeeder.seed(seed, context));
         verifier.verify(
                 tasks,
+                storedFiles,
                 documents,
                 checklists,
                 approvals,

@@ -27,18 +27,28 @@ final class DemoTaskArtifactSeedCatalog {
 
     static List<EvidenceSeed> demoEvidence(List<TaskSeed> tasks) {
         return List.of(
-                evidence(1, tasks, 5, EvidenceType.DOCUMENT, "서명된 재계약 문서 확인", 48),
-                evidence(2, tasks, 5, EvidenceType.HR_CONFIRMATION, "계약 갱신 처리 완료 확인", 24),
+                evidence(1, tasks, 5, EvidenceType.DOCUMENT, null,
+                        "서명된 재계약 문서 확인", 48),
+                evidence(2, tasks, 5, EvidenceType.HR_CONFIRMATION, null,
+                        "계약 갱신 처리 완료 확인", 24),
                 evidence(3, tasks, 20, EvidenceType.RECEIPT,
+                        DemoStoredFileSeedCatalog.STAY_RECEIPT_FILE_ID.toString(),
                         "DEMO-STAY-EXT-001 체류기간 연장 접수 확인", 48),
                 evidence(4, tasks, 20, EvidenceType.OFFICIAL_RESULT,
+                        DemoStoredFileSeedCatalog.STAY_RESULT_FILE_ID.toString(),
                         "DEMO-STAY-EXT-001 체류기간 연장 승인 결과 확인", 12),
-                evidence(5, tasks, 21, EvidenceType.DOCUMENT, "갱신 계약서 서명 상태 확인", 72),
-                evidence(6, tasks, 21, EvidenceType.HR_CONFIRMATION, "재계약 인사 반영 완료", 24),
-                evidence(7, tasks, 22, EvidenceType.RECEIPT, "고용허가기간 연장 접수 확인", 72),
-                evidence(8, tasks, 22, EvidenceType.OFFICIAL_RESULT, "고용허가기간 연장 결과 확인", 24),
-                evidence(9, tasks, 23, EvidenceType.RECEIPT, "체류 연장 신청 접수 확인", 96),
-                evidence(10, tasks, 23, EvidenceType.OFFICIAL_RESULT, "체류 연장 최종 결과 확인", 24)
+                evidence(5, tasks, 21, EvidenceType.DOCUMENT, null,
+                        "갱신 계약서 서명 상태 확인", 72),
+                evidence(6, tasks, 21, EvidenceType.HR_CONFIRMATION, null,
+                        "재계약 인사 반영 완료", 24),
+                evidence(7, tasks, 22, EvidenceType.RECEIPT, null,
+                        "고용허가기간 연장 접수 확인", 72),
+                evidence(8, tasks, 22, EvidenceType.OFFICIAL_RESULT, null,
+                        "고용허가기간 연장 결과 확인", 24),
+                evidence(9, tasks, 23, EvidenceType.RECEIPT, null,
+                        "체류 연장 신청 접수 확인", 96),
+                evidence(10, tasks, 23, EvidenceType.OFFICIAL_RESULT, null,
+                        "체류 연장 최종 결과 확인", 24)
         );
     }
 
@@ -79,6 +89,7 @@ final class DemoTaskArtifactSeedCatalog {
             List<TaskSeed> tasks,
             int taskNumber,
             EvidenceType evidenceType,
+            String fileReference,
             String note,
             int hoursAgo
     ) {
@@ -86,6 +97,7 @@ final class DemoTaskArtifactSeedCatalog {
                 demoUuid("94600000-0000-0000-0000-000000000", number),
                 tasks.get(taskNumber - 1).taskId(),
                 evidenceType,
+                fileReference,
                 note,
                 hoursAgo
         );

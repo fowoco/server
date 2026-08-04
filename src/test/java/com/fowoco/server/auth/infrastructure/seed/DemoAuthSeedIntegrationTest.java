@@ -7,6 +7,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,10 +35,13 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 @ActiveProfiles("test")
 @SpringBootTest(
@@ -75,6 +80,16 @@ class DemoAuthSeedIntegrationTest {
             UUID.fromString("94000000-0000-0000-0000-000000000020");
     private static final UUID PASSPORT_REQUEST_DRAFT_ID =
             UUID.fromString("94700000-0000-0000-0000-000000000002");
+    private static final UUID CONTRACT_FILE_ID =
+            UUID.fromString("94800000-0000-0000-0000-000000000001");
+    private static final UUID STAY_RECEIPT_FILE_ID =
+            UUID.fromString("94800000-0000-0000-0000-000000000002");
+    private static final UUID STAY_RESULT_FILE_ID =
+            UUID.fromString("94800000-0000-0000-0000-000000000003");
+    private static final Path DEMO_FILE_STORAGE_PATH = Path.of(
+            System.getProperty("java.io.tmpdir"),
+            "fowoco-demo-seed-" + UUID.randomUUID()
+    );
     private static final String PASSWORD = "Demo-password-1!";
     private static final String DEMO_ADMIN_EMAIL = "demo.admin@example.com";
     private static final String TEST_ADMIN_EMAIL = "test.admin@example.com";
@@ -85,6 +100,7 @@ class DemoAuthSeedIntegrationTest {
             Map.entry("worker", 28),
             Map.entry("task", 24),
             Map.entry("worker_document", 84),
+            Map.entry("stored_file", 3),
             Map.entry("task_checklist_item", 68),
             Map.entry("approval_request", 13),
             Map.entry("task_transition_history", 52),
@@ -130,6 +146,11 @@ class DemoAuthSeedIntegrationTest {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    @DynamicPropertySource
+    static void demoFileStorageProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.file-storage.local-path", () -> DEMO_FILE_STORAGE_PATH.toString());
+    }
+
     @Test
     void enabledSeedIsCompleteIdempotentTenantIsolatedAndReadableThroughApis() throws Exception {
         assertAccountsAndPasswords();
@@ -137,7 +158,9 @@ class DemoAuthSeedIntegrationTest {
         assertRelativeDatesAndSafeData();
         assertCompoundDraftScenario();
         assertReviewApprovalAndSubmissionFixtures();
+        assertStoredFileFixtures();
         assertTaskTimelineInvariants();
+        assertRepairsPartialStoredFileState();
 
         Map<String, Integer> demoCountsBeforeRerun = counts(COMPANY_ID, EXPECTED_DEMO_COUNTS.keySet());
         Map<String, Integer> testCountsBeforeRerun = counts(TEST_COMPANY_ID, EXPECTED_TEST_COUNTS.keySet());
@@ -311,7 +334,11 @@ class DemoAuthSeedIntegrationTest {
         )).isPositive();
         assertThat(countWhere("worker_document", "expiry_date IS NULL", COMPANY_ID)).isPositive();
 
-        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM stored_file", Integer.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE company_id = ? AND size > 0",
+                Integer.class,
+                COMPANY_ID
+        )).isEqualTo(3);
         List<String> businessData = jdbcTemplate.query(
                 "SELECT business_data_json FROM task WHERE company_id = ?",
                 (resultSet, rowNumber) -> resultSet.getString(1).toLowerCase(),
@@ -455,7 +482,14 @@ class DemoAuthSeedIntegrationTest {
                 "SELECT COUNT(*) FROM task_evidence WHERE company_id = ? AND file_reference IS NOT NULL",
                 Integer.class,
                 COMPANY_ID
-        )).isZero();
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT file_reference FROM task_evidence WHERE task_id = ? "
+                        + "AND company_id = ? AND file_reference IS NOT NULL ORDER BY evidence_type",
+                String.class,
+                COMPLETED_STAY_TASK_ID,
+                COMPANY_ID
+        )).containsExactly(STAY_RESULT_FILE_ID.toString(), STAY_RECEIPT_FILE_ID.toString());
 
         List<Map<String, Object>> aiTrace = jdbcTemplate.queryForList(
                 "SELECT actor_type, action, target_id, change_summary FROM audit_event "
@@ -471,6 +505,67 @@ class DemoAuthSeedIntegrationTest {
                         "보유 문서를 비교하고 여권 사본 누락을 확인함",
                         "선행 재계약 결과를 기다리는 연장 후보를 준비함"
                 );
+    }
+
+    private void assertStoredFileFixtures() throws Exception {
+        List<Map<String, Object>> files = jdbcTemplate.queryForList(
+                "SELECT stored_file_id, name, mime_type, size, purpose, task_id, worker_id, "
+                        + "storage_key, scan_status, verified FROM stored_file "
+                        + "WHERE company_id = ? ORDER BY stored_file_id",
+                COMPANY_ID
+        );
+        assertThat(files).hasSize(3)
+                .allMatch(file -> "application/pdf".equals(file.get("mime_type")))
+                .allMatch(file -> "NOT_SCANNED".equals(file.get("scan_status")))
+                .allMatch(file -> Boolean.FALSE.equals(file.get("verified")));
+
+        Map<UUID, String> resources = Map.of(
+                CONTRACT_FILE_ID, "demo/files/demo-contract-renewal.pdf",
+                STAY_RECEIPT_FILE_ID, "demo/files/demo-stay-extension-receipt.pdf",
+                STAY_RESULT_FILE_ID, "demo/files/demo-stay-extension-result.pdf"
+        );
+        for (Map<String, Object> file : files) {
+            UUID fileId = (UUID) file.get("stored_file_id");
+            byte[] expected;
+            try (var input = new ClassPathResource(resources.get(fileId)).getInputStream()) {
+                expected = input.readAllBytes();
+            }
+            Path actualPath = DEMO_FILE_STORAGE_PATH.resolve((String) file.get("storage_key"));
+            assertThat(Files.readAllBytes(actualPath)).isEqualTo(expected);
+            assertThat(((Number) file.get("size")).longValue()).isEqualTo(expected.length);
+        }
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT file_id FROM worker_document WHERE worker_document_id = ? AND company_id = ?",
+                UUID.class,
+                UUID.fromString("95000000-0000-0000-0000-000000000007"),
+                COMPANY_ID
+        )).isEqualTo(CONTRACT_FILE_ID);
+    }
+
+    private void assertRepairsPartialStoredFileState() throws Exception {
+        DefaultApplicationArguments arguments = new DefaultApplicationArguments(new String[0]);
+
+        Files.delete(DEMO_FILE_STORAGE_PATH.resolve(STAY_RESULT_FILE_ID.toString()));
+        demoOperationalSeedRunner.run(arguments);
+        assertThat(Files.isRegularFile(
+                DEMO_FILE_STORAGE_PATH.resolve(STAY_RESULT_FILE_ID.toString())
+        )).isTrue();
+
+        jdbcTemplate.update(
+                "DELETE FROM stored_file WHERE stored_file_id = ? AND company_id = ?",
+                STAY_RECEIPT_FILE_ID,
+                COMPANY_ID
+        );
+        demoOperationalSeedRunner.run(arguments);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE stored_file_id = ? AND company_id = ?",
+                Integer.class,
+                STAY_RECEIPT_FILE_ID,
+                COMPANY_ID
+        )).isEqualTo(1);
+
+        assertStoredFileFixtures();
     }
 
     private void assertTaskTimelineInvariants() {
@@ -639,9 +734,16 @@ class DemoAuthSeedIntegrationTest {
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, worker_id"
         ));
         snapshot.put("worker_document", snapshotRows(
-                "SELECT worker_document_id, company_id, expiry_date, created_at, updated_at, version "
+                "SELECT worker_document_id, company_id, expiry_date, file_id, "
+                        + "created_at, updated_at, version "
                         + "FROM worker_document WHERE company_id IN (?, ?) "
                         + "ORDER BY company_id, worker_document_id"
+        ));
+        snapshot.put("stored_file", snapshotRows(
+                "SELECT stored_file_id, company_id, name, mime_type, size, purpose, task_id, "
+                        + "worker_id, storage_key, scan_status, verified, created_at "
+                        + "FROM stored_file WHERE company_id IN (?, ?) "
+                        + "ORDER BY company_id, stored_file_id"
         ));
         snapshot.put("task", snapshotRows(
                 "SELECT task_id, company_id, due_date, business_data_json, critical_fingerprint, "
