@@ -4,7 +4,9 @@ import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.Tas
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
 import com.fowoco.server.task.domain.TaskType;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 final class DemoTaskSeedCatalog {
@@ -29,15 +31,46 @@ final class DemoTaskSeedCatalog {
                 task(5, 5, TaskType.RECONTRACT, "근로계약 갱신 완료",
                         "서명된 근로계약서 확인과 갱신 처리를 완료했습니다.",
                         TaskSource.SYSTEM_DDAY, TaskStatus.COMPLETED, 30, 10),
-                task(6, 6, TaskType.RECONTRACT, "응웬반A 재계약 검토",
-                        "재계약 조건과 체류기간 연장 일정을 함께 검토합니다.",
-                        TaskSource.MANUAL, TaskStatus.READY_FOR_REVIEW, 12, 3),
-                taskWithCase(7, 6, 6, TaskType.STAY_PERIOD_EXTENSION, "체류연장 업무 초안",
-                        "체류기간 연장 신청을 위한 AI 초안을 확인합니다.",
-                        TaskSource.AI_CANDIDATE, TaskStatus.DRAFT, 0, 2),
-                taskWithCase(8, 6, 6, TaskType.STAY_PERIOD_EXTENSION, "여권 만료일 확인 대기",
-                        "최신 여권 사본과 만료일 확인을 기다립니다.",
-                        TaskSource.MANUAL, TaskStatus.WAITING_WORKER, 7, 2),
+                taskWithCase(6, 6, 6, TaskType.RECONTRACT, "재계약 조건 확인",
+                        "응웬반A의 재계약 조건과 계속 고용 의사를 검토합니다.",
+                        TaskSource.AI_CANDIDATE, TaskStatus.READY_FOR_REVIEW, 12, 3,
+                        compoundCaseBusinessData(
+                                "RECONTRACT_CONDITIONS",
+                                1,
+                                "READY_FOR_REVIEW",
+                                Map.of("approval_required", true)
+                        )),
+                taskWithCase(7, 6, 6, TaskType.EMPLOYMENT_PERIOD_EXTENSION,
+                        "취업활동기간 연장 준비",
+                        "서명된 재계약 결과를 기다리는 취업활동기간 연장 초안입니다.",
+                        TaskSource.AI_CANDIDATE, TaskStatus.DRAFT, 20, 2,
+                        compoundCaseBusinessData(
+                                "EMPLOYMENT_PERIOD_EXTENSION",
+                                3,
+                                "BLOCKED_BY_PREDECESSOR",
+                                Map.of(
+                                        "depends_on_task_id",
+                                        demoUuid("94000000-0000-0000-0000-000000000", 6).toString(),
+                                        "dependency_reason", "SIGNED_CONTRACT_REQUIRED"
+                                )
+                        )),
+                taskWithCase(8, 6, 6, TaskType.STAY_PERIOD_EXTENSION, "여권 사본 요청",
+                        "응웬반A에게 베트남어로 여권 사본 제출을 요청하고 응답을 기다립니다.",
+                        TaskSource.AI_CANDIDATE, TaskStatus.WAITING_WORKER, 7, 2,
+                        compoundCaseBusinessData(
+                                "PASSPORT_COPY_REQUEST",
+                                2,
+                                "WAITING_WORKER",
+                                Map.of(
+                                        "requested_document_types", List.of("PASSPORT_COPY"),
+                                        "submission_due_offset_days", 7,
+                                        "missing_information", List.of(Map.of(
+                                                "field", "passport_copy",
+                                                "source", "WORKER_CONFIRMATION",
+                                                "blocking", true
+                                        ))
+                                )
+                        )),
                 task(9, 8, TaskType.EMPLOYMENT_PERIOD_EXTENSION, "고용기간 연장 정보 보완",
                         "연장 신청에 필요한 고용 정보와 제출 서류를 보완합니다.",
                         TaskSource.SYSTEM_DDAY, TaskStatus.NEEDS_INFO, 4, 5),
@@ -50,8 +83,8 @@ final class DemoTaskSeedCatalog {
                 task(12, 10, TaskType.RECONTRACT, "재계약 서류 준비",
                         "계약 만료 전에 재계약 서류와 조건을 준비합니다.",
                         TaskSource.AI_CANDIDATE, TaskStatus.DRAFT, 20, 7),
-                task(13, 7, TaskType.EMPLOYMENT_PERIOD_EXTENSION, "고용기간 연장 자료 보완",
-                        "지원 가능한 고용기간 연장 업무의 누락 정보를 확인합니다.",
+                task(13, 7, TaskType.STAY_PERIOD_EXTENSION, "체류기간 연장 자료 보완",
+                        "체류기간 연장 업무의 누락 정보와 보유 문서를 확인합니다.",
                         TaskSource.MANUAL, TaskStatus.NEEDS_INFO, 21, 8),
                 task(14, 12, TaskType.STAY_PERIOD_EXTENSION, "체류기간 연장 검토",
                         "제출 준비가 완료된 체류기간 연장 내용을 검토합니다.",
@@ -121,7 +154,37 @@ final class DemoTaskSeedCatalog {
                 source,
                 status,
                 dueDays,
-                createdDaysAgo
+                createdDaysAgo,
+                Map.of()
+        );
+    }
+
+    private static TaskSeed taskWithCase(
+            int taskNumber,
+            int caseNumber,
+            int workerNumber,
+            TaskType taskType,
+            String title,
+            String description,
+            TaskSource source,
+            TaskStatus status,
+            int dueDays,
+            int createdDaysAgo,
+            Map<String, Object> businessData
+    ) {
+        return new TaskSeed(
+                demoUuid("94000000-0000-0000-0000-000000000", taskNumber),
+                demoUuid("94100000-0000-0000-0000-000000000", caseNumber),
+                demoUuid("92000000-0000-0000-0000-000000000", workerNumber),
+                taskType,
+                workflowId(taskType),
+                title,
+                description,
+                source,
+                status,
+                dueDays,
+                createdDaysAgo,
+                businessData
         );
     }
 
@@ -137,19 +200,43 @@ final class DemoTaskSeedCatalog {
             int dueDays,
             int createdDaysAgo
     ) {
-        return new TaskSeed(
-                demoUuid("94000000-0000-0000-0000-000000000", taskNumber),
-                demoUuid("94100000-0000-0000-0000-000000000", caseNumber),
-                demoUuid("92000000-0000-0000-0000-000000000", workerNumber),
+        return taskWithCase(
+                taskNumber,
+                caseNumber,
+                workerNumber,
                 taskType,
-                workflowId(taskType),
                 title,
                 description,
                 source,
                 status,
                 dueDays,
-                createdDaysAgo
+                createdDaysAgo,
+                Map.of()
         );
+    }
+
+    private static Map<String, Object> compoundCaseBusinessData(
+            String candidateKey,
+            int candidateOrder,
+            String displayState,
+            Map<String, Object> details
+    ) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("demo_scenario", "compound-draft-flow-v1");
+        data.put("case_display_name", "재계약·연장 준비");
+        data.put(
+                "request_text",
+                "응웬반A의 재계약과 연장 준비를 진행해 주세요. "
+                        + "여권 사본이 없으면 7일 안에 제출하도록 안내해 주세요."
+        );
+        data.put("stay_qualification", "E-9");
+        data.put("contract_key", "EXPIRY_RENEWAL+DOCUMENT_REQUEST");
+        data.put("candidate_key", candidateKey);
+        data.put("candidate_order", candidateOrder);
+        data.put("display_state", displayState);
+        data.put("input_summary", Map.of("required_count", 9, "available_count", 7));
+        data.putAll(details);
+        return Map.copyOf(data);
     }
 
     private static TaskSeed testTask(
@@ -173,7 +260,8 @@ final class DemoTaskSeedCatalog {
                 source,
                 status,
                 dueDays,
-                createdDaysAgo
+                createdDaysAgo,
+                Map.of()
         );
     }
 

@@ -198,8 +198,8 @@ final class DemoOperationalSeedCatalog {
         requireDistribution(
                 demoAudits.stream().map(AuditSeed::actorType).toList(),
                 Map.of(
-                        ActorType.HR_USER, 83L,
-                        ActorType.AI_AGENT, 3L,
+                        ActorType.HR_USER, 81L,
+                        ActorType.AI_AGENT, 5L,
                         ActorType.SYSTEM_RULE, 6L,
                         ActorType.WORKER_LINK, 4L
                 ),
@@ -476,8 +476,17 @@ final class DemoOperationalSeedCatalog {
             TaskSource source,
             TaskStatus status,
             int dueDays,
-            int createdDaysAgo
+            int createdDaysAgo,
+            Map<String, Object> businessData
     ) {
+        TaskSeed {
+            if (businessData.containsKey("worker_id") || businessData.containsKey("due_at")) {
+                throw new IllegalArgumentException(
+                        "task seed business data must not override worker_id or due_at"
+                );
+            }
+            businessData = Map.copyOf(businessData);
+        }
     }
 
     record DocumentSeed(

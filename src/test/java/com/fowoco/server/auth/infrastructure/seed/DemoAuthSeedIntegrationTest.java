@@ -61,6 +61,14 @@ class DemoAuthSeedIntegrationTest {
             UUID.fromString("97000000-0000-0000-0000-000000000001");
     private static final UUID REPRESENTATIVE_WORKER_ID =
             UUID.fromString("92000000-0000-0000-0000-000000000006");
+    private static final UUID RECONTRACT_CANDIDATE_TASK_ID =
+            UUID.fromString("94000000-0000-0000-0000-000000000006");
+    private static final UUID EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID =
+            UUID.fromString("94000000-0000-0000-0000-000000000007");
+    private static final UUID PASSPORT_REQUEST_TASK_ID =
+            UUID.fromString("94000000-0000-0000-0000-000000000008");
+    private static final UUID COMPOUND_CASE_ID =
+            UUID.fromString("94100000-0000-0000-0000-000000000006");
     private static final String PASSWORD = "Demo-password-1!";
     private static final String DEMO_ADMIN_EMAIL = "demo.admin@example.com";
     private static final String TEST_ADMIN_EMAIL = "test.admin@example.com";
@@ -121,6 +129,7 @@ class DemoAuthSeedIntegrationTest {
         assertAccountsAndPasswords();
         assertExactCountsAndDistributions();
         assertRelativeDatesAndSafeData();
+        assertCompoundDraftScenario();
         assertTaskTimelineInvariants();
 
         Map<String, Integer> demoCountsBeforeRerun = counts(COMPANY_ID, EXPECTED_DEMO_COUNTS.keySet());
@@ -212,7 +221,7 @@ class DemoAuthSeedIntegrationTest {
                 );
         assertThat(distribution("audit_event", "actor_type", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("HR_USER", 83, "AI_AGENT", 3, "SYSTEM_RULE", 6, "WORKER_LINK", 4)
+                        Map.of("HR_USER", 81, "AI_AGENT", 5, "SYSTEM_RULE", 6, "WORKER_LINK", 4)
                 );
 
         assertThat(jdbcTemplate.queryForObject(
@@ -256,7 +265,7 @@ class DemoAuthSeedIntegrationTest {
                 LocalDate.class,
                 REPRESENTATIVE_WORKER_ID,
                 COMPANY_ID
-        )).isEqualTo(today.plusDays(12));
+        )).isEqualTo(today.plusDays(45));
 
         assertThat(countWhere(
                 "audit_event",
@@ -309,6 +318,72 @@ class DemoAuthSeedIntegrationTest {
                 "password",
                 "access_token"
         ).stream().noneMatch(json::contains));
+    }
+
+    private void assertCompoundDraftScenario() {
+        List<Map<String, Object>> tasks = jdbcTemplate.queryForList(
+                "SELECT task_id, case_id, task_type, workflow_id, source, status, business_data_json "
+                        + "FROM task WHERE task_id IN (?, ?, ?) ORDER BY task_id",
+                RECONTRACT_CANDIDATE_TASK_ID,
+                EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID,
+                PASSPORT_REQUEST_TASK_ID
+        );
+        assertThat(tasks).hasSize(3).allSatisfy(task -> {
+            assertThat(task.get("case_id")).isEqualTo(COMPOUND_CASE_ID);
+            String businessData = (String) task.get("business_data_json");
+            assertThat(JsonPath.<String>read(businessData, "$.demo_scenario"))
+                    .isEqualTo("compound-draft-flow-v1");
+            assertThat(JsonPath.<String>read(businessData, "$.stay_qualification"))
+                    .isEqualTo("E-9");
+            assertThat(JsonPath.<Integer>read(businessData, "$.input_summary.required_count"))
+                    .isEqualTo(9);
+            assertThat(JsonPath.<Integer>read(businessData, "$.input_summary.available_count"))
+                    .isEqualTo(7);
+        });
+
+        assertThat(tasks.get(0))
+                .containsEntry("task_type", "RECONTRACT")
+                .containsEntry("workflow_id", "WF-CON-001")
+                .containsEntry("source", "AI_CANDIDATE")
+                .containsEntry("status", "READY_FOR_REVIEW");
+        assertThat(tasks.get(1))
+                .containsEntry("task_type", "EMPLOYMENT_PERIOD_EXTENSION")
+                .containsEntry("workflow_id", "WF-CON-001")
+                .containsEntry("source", "AI_CANDIDATE")
+                .containsEntry("status", "DRAFT");
+        assertThat(tasks.get(2))
+                .containsEntry("task_type", "STAY_PERIOD_EXTENSION")
+                .containsEntry("workflow_id", "WF-STY-001")
+                .containsEntry("source", "AI_CANDIDATE")
+                .containsEntry("status", "WAITING_WORKER");
+
+        Map<String, Map<String, Object>> documentsByType = jdbcTemplate.query(
+                "SELECT document_type, submission_status, expiry_date, destination, note "
+                        + "FROM worker_document WHERE worker_id = ? AND company_id = ?",
+                resultSet -> {
+                    Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+                    while (resultSet.next()) {
+                        Map<String, Object> document = new LinkedHashMap<>();
+                        document.put("submission_status", resultSet.getString("submission_status"));
+                        document.put("expiry_date", resultSet.getObject("expiry_date", LocalDate.class));
+                        document.put("destination", resultSet.getString("destination"));
+                        document.put("note", resultSet.getString("note"));
+                        result.put(resultSet.getString("document_type"), document);
+                    }
+                    return result;
+                },
+                REPRESENTATIVE_WORKER_ID,
+                COMPANY_ID
+        );
+        assertThat(documentsByType).containsOnlyKeys("PASSPORT_COPY", "ARC", "CONTRACT");
+        assertThat(documentsByType.get("PASSPORT_COPY"))
+                .containsEntry("submission_status", "MISSING")
+                .containsEntry("destination", "근로자 문서 요청");
+        assertThat(documentsByType.get("PASSPORT_COPY").get("expiry_date")).isNull();
+        assertThat(documentsByType.get("ARC"))
+                .containsEntry("submission_status", "VERIFIED");
+        assertThat(documentsByType.get("CONTRACT"))
+                .containsEntry("submission_status", "VERIFIED");
     }
 
     private void assertTaskTimelineInvariants() {

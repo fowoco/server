@@ -13,7 +13,7 @@ final class DemoDocumentSeedCatalog {
     private static final Set<Integer> MISSING_ADDITION_INDICES =
             Set.of(0, 8, 14, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72, 76);
     private static final Set<Integer> SUBMITTED_ADDITION_INDICES =
-            Set.of(1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 69, 73);
+            Set.of(1, 5, 11, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 69, 73);
     private static final Integer[] EXPIRY_DAY_OFFSETS = {-20, 0, 7, 25, 45, 75, 120, 240, null};
 
     private DemoDocumentSeedCatalog() {
@@ -26,7 +26,7 @@ final class DemoDocumentSeedCatalog {
         int additionIndex = 0;
         for (int workerNumber = 1; workerNumber <= 28; workerNumber++) {
             for (DocumentType documentType : additionalTypes(workerNumber)) {
-                SubmissionStatus status = additionStatus(additionIndex);
+                SubmissionStatus status = scenarioStatus(workerNumber, documentType, additionIndex);
                 documents.add(document(
                         "95000000-0000-0000-0000-000000000",
                         documentNumber,
@@ -34,9 +34,9 @@ final class DemoDocumentSeedCatalog {
                         workerNumber,
                         documentType,
                         status,
-                        EXPIRY_DAY_OFFSETS[additionIndex % EXPIRY_DAY_OFFSETS.length],
-                        destination(documentType),
-                        note(documentType, status)
+                        scenarioExpiryDays(workerNumber, documentType, additionIndex),
+                        scenarioDestination(workerNumber, documentType),
+                        scenarioNote(workerNumber, documentType, status)
                 ));
                 documentNumber++;
                 additionIndex++;
@@ -98,6 +98,60 @@ final class DemoDocumentSeedCatalog {
             return SubmissionStatus.SUBMITTED;
         }
         return SubmissionStatus.VERIFIED;
+    }
+
+    private static SubmissionStatus scenarioStatus(
+            int workerNumber,
+            DocumentType documentType,
+            int additionIndex
+    ) {
+        if (workerNumber == 6) {
+            return documentType == DocumentType.PASSPORT_COPY
+                    ? SubmissionStatus.MISSING
+                    : SubmissionStatus.VERIFIED;
+        }
+        return additionStatus(additionIndex);
+    }
+
+    private static Integer scenarioExpiryDays(
+            int workerNumber,
+            DocumentType documentType,
+            int additionIndex
+    ) {
+        if (workerNumber == 6) {
+            return switch (documentType) {
+                case PASSPORT_COPY -> null;
+                case ARC -> 365;
+                case CONTRACT -> 180;
+                case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
+            };
+        }
+        return EXPIRY_DAY_OFFSETS[additionIndex % EXPIRY_DAY_OFFSETS.length];
+    }
+
+    private static String scenarioDestination(int workerNumber, DocumentType documentType) {
+        if (workerNumber == 6) {
+            return documentType == DocumentType.PASSPORT_COPY
+                    ? "근로자 문서 요청"
+                    : "재계약·연장 준비";
+        }
+        return destination(documentType);
+    }
+
+    private static String scenarioNote(
+            int workerNumber,
+            DocumentType documentType,
+            SubmissionStatus status
+    ) {
+        if (workerNumber == 6) {
+            return switch (documentType) {
+                case PASSPORT_COPY -> "여권 사본 미보유 · 베트남어 요청 필요";
+                case ARC -> "외국인등록증 확인 완료";
+                case CONTRACT -> "현재 근로계약서 확인 완료";
+                case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
+            };
+        }
+        return note(documentType, status);
     }
 
     private static String destination(DocumentType documentType) {

@@ -74,7 +74,7 @@ class DemoWorkerSeedRunnerTest {
             assertThat(worker.displayName()).isEqualTo("응웬반A");
             assertThat(worker.nationalityCode()).isEqualTo("VN");
             assertThat(worker.preferredLanguage()).isEqualTo("vi");
-            assertThat(worker.stayExpiryDate()).isEqualTo(LocalDate.of(2026, 8, 12));
+            assertThat(worker.stayExpiryDate()).isEqualTo(LocalDate.of(2026, 9, 14));
         });
         assertThat(workerRepository.workers.values())
                 .filteredOn(worker -> worker.companyId().equals(DEMO_COMPANY_ID))
