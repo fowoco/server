@@ -1,4 +1,4 @@
 /**
- * Durable AI runs, candidate snapshots, idempotency, and server-owned retries.
+ * Durable AI execution orchestration, candidate state and explicit retry ownership.
  */
 package com.fowoco.server.airun;
