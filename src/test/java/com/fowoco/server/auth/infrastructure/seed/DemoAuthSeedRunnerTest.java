@@ -123,6 +123,58 @@ class DemoAuthSeedRunnerTest {
                 .hasMessageContaining("not active");
     }
 
+    @Test
+    void refusesToStartWhenAReservedUserIdBelongsToAnotherEmail() {
+        InMemoryCompanyRepository companyRepository = new InMemoryCompanyRepository();
+        InMemoryUserAccountRepository userAccountRepository = new InMemoryUserAccountRepository();
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        userAccountRepository.insert(UserAccount.create(
+                ADMIN_USER_ID,
+                COMPANY_ID,
+                "ID collision",
+                "different@example.com",
+                passwordEncoder.encode(ADMIN_PASSWORD),
+                UserRole.ADMIN,
+                NOW
+        ));
+        DemoAuthSeedRunner runner = runner(
+                properties(ADMIN_PASSWORD),
+                companyRepository,
+                userAccountRepository,
+                passwordEncoder
+        );
+
+        assertThatThrownBy(() -> runner.run(new DefaultApplicationArguments(new String[0])))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reserved demo user id");
+    }
+
+    @Test
+    void refusesToStartWhenAReservedEmailBelongsToAnotherAccount() {
+        InMemoryCompanyRepository companyRepository = new InMemoryCompanyRepository();
+        InMemoryUserAccountRepository userAccountRepository = new InMemoryUserAccountRepository();
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        userAccountRepository.insert(UserAccount.create(
+                UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001"),
+                TEST_COMPANY_ID,
+                "Email collision",
+                ADMIN_EMAIL,
+                passwordEncoder.encode(ADMIN_PASSWORD),
+                UserRole.HR,
+                NOW
+        ));
+        DemoAuthSeedRunner runner = runner(
+                properties(ADMIN_PASSWORD),
+                companyRepository,
+                userAccountRepository,
+                passwordEncoder
+        );
+
+        assertThatThrownBy(() -> runner.run(new DefaultApplicationArguments(new String[0])))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("configured demo email");
+    }
+
     private DemoAuthSeedRunner runner(
             DemoAuthSeedProperties properties,
             CompanyRepository companyRepository,
