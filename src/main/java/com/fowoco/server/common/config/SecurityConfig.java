@@ -91,6 +91,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/logout"
                         ).permitAll()
                         .requestMatchers("/error").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/public/worker-links/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/public/worker-links/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/**")
                         .hasAnyRole("ADMIN", "HR", "VIEWER")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/**")
