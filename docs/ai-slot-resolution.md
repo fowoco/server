@@ -60,20 +60,44 @@ MVP는 한 요청에서 Worker 한 명만 처리합니다.
 
 오류 메시지에는 실제 이름이나 조회값을 넣지 않습니다.
 
-## 두 번째 요청에서 보존하는 값
+## 두 번째 호출에서 보존하는 값
 
-ANALYZE 요청은 다음을 잃어버리면 안 됩니다.
+#74는 먼저 Server 내부 `AiAnalysisRequest`를 만들고, #56의 HTTP Adapter가 이를 최소
+Runtime JSON으로 변환합니다. Server 내부 요청은 다음 값을 잃어버리면 안 됩니다.
 
 - 동일한 `requestId`
-- 새로운 `attemptId`
+- 새로운 `attemptId`와 남은 deadline
 - 선택한 태그까지 포함한 원래 `instruction` (`발화문, INTENT_TAG`)
 - PLAN이 추출한 `extractedSlots`
 - PLAN이 요청한 전체 `requestedFieldKeys`
-- DB에서 찾은 값만 포함한 `workers[0].requestedFields`
+- 응답 검증에 필요한 Worker snapshot
+- DB에서 찾은 값만 포함한 `requestedFields`
 - 활성 Knowledge의 `workflowConstraints`
 
-`requestedFieldKeys`에는 DB에 값이 없던 key도 남습니다. Runtime은 전체 요청 key와 실제로
-채워진 값의 차이를 보고 `NEEDS_INFO + questions`를 반환할 수 있습니다.
+실제 Runtime HTTP JSON에는 아래 값만 전송합니다.
+
+```json
+{
+  "requestId": "10000000-0000-0000-0000-000000000001",
+  "phase": "ANALYZE",
+  "analysisInput": {
+    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL",
+    "requestedFieldKeys": ["worker_id", "stay_expiry_date", "due_at"],
+    "workers": [{
+      "workerRef": "worker-uuid",
+      "requestedFields": {
+        "worker_id": "worker-uuid",
+        "stay_expiry_date": "2026-09-30"
+      }
+    }]
+  }
+}
+```
+
+`attemptId`, version, deadline, `extractedSlots`, `workflowConstraints`는 Server 내부 관리값이라
+Runtime JSON에는 넣지 않습니다. `requestedFieldKeys`에는 DB에 값이 없던 key도 남깁니다.
+Runtime은 전체 요청 key와 실제로 채워진 값의 차이를 보고 `NEEDS_INFO + questions`를
+반환할 수 있습니다.
 
 ## Attempt와 반복 제한
 
@@ -81,7 +105,7 @@ ANALYZE 요청은 다음을 잃어버리면 안 됩니다.
 #24가 V12 AiAttempt table과 transaction으로 구현합니다.
 
 - 같은 분석: `requestId` 유지
-- 매 Runtime 호출: 새 `attemptId`
+- 매 Runtime 호출: 새 `attemptId`를 Server 내부에 기록
 - 자동 DB 보충: 최대 2회
 - Remote HTTP client의 투명 retry: 금지
 - Agent 결과만으로 Task 생성·승인·발송: 금지
