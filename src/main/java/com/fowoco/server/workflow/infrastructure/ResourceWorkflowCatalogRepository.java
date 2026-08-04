@@ -83,12 +83,20 @@ public class ResourceWorkflowCatalogRepository implements WorkflowCatalogReposit
                 throw new IllegalStateException("중복 workflow_id: " + workflow.workflowId());
             }
             if (workflow.requiredSlots() == null
+                    || workflow.allowedSlotKeys() == null
+                    || workflow.resolvableSlotKeys() == null
                     || workflow.supportedTaskTypes() == null
                     || workflow.supportedTaskTypes().isEmpty()
                     || workflow.checklistItems() == null
                     || workflow.completionEvidence() == null
                     || workflow.sourceIds() == null) {
                 throw new IllegalStateException("Workflow projection collection은 null일 수 없습니다.");
+            }
+            if (!workflow.allowedSlotKeys().containsAll(workflow.requiredSlots())
+                    || !workflow.allowedSlotKeys().containsAll(workflow.resolvableSlotKeys())) {
+                throw new IllegalStateException(
+                        "required_slots와 resolvable_slot_keys는 allowed_slot_keys에 포함되어야 합니다."
+                );
             }
             Set<String> itemCodes = new HashSet<>();
             workflow.checklistItems().forEach(item -> {
@@ -137,6 +145,8 @@ public class ResourceWorkflowCatalogRepository implements WorkflowCatalogReposit
             String sensitivity,
             Set<TaskType> supportedTaskTypes,
             Set<String> requiredSlots,
+            Set<String> allowedSlotKeys,
+            Set<String> resolvableSlotKeys,
             List<ChecklistProjection> checklistItems,
             List<String> completionEvidence,
             List<String> sourceIds
@@ -150,6 +160,8 @@ public class ResourceWorkflowCatalogRepository implements WorkflowCatalogReposit
                     sensitivity,
                     supportedTaskTypes,
                     requiredSlots,
+                    allowedSlotKeys,
+                    resolvableSlotKeys,
                     checklistItems.stream().map(ChecklistProjection::toDomain).toList(),
                     completionEvidence,
                     sourceIds
