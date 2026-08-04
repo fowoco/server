@@ -104,7 +104,7 @@ class WorkerLinkSecurityIntegrationTest {
         String workerUrl = JsonPath.read(issueResponse.body(), "$.worker_url");
         assertThat(workerUrl).isNotBlank();
 
-        HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/" + workerUrl, null);
+        HttpResponse<String> viewResponse = getJson("/public/worker-links/" + workerUrl, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
         assertThat(viewResponse.headers().firstValue("Cache-Control")).contains("no-store");
 
@@ -115,7 +115,7 @@ class WorkerLinkSecurityIntegrationTest {
         jdbcTemplate.update("UPDATE stored_file SET verified = true WHERE stored_file_id = ?", UUID.fromString(uploadId));
 
         HttpResponse<String> responseSubmit = postJson(
-                "/api/v1/public/worker-links/" + workerUrl + "/responses",
+                "/public/worker-links/" + workerUrl + "/responses",
                 """
                 {"response_type":"DOCUMENT_SUBMITTED","upload_ids":["%s"],"idempotency_key":"key-1"}
                 """.formatted(uploadId),
@@ -123,6 +123,10 @@ class WorkerLinkSecurityIntegrationTest {
         );
         assertThat(responseSubmit.statusCode()).isEqualTo(201);
         assertThat(JsonPath.<String>read(responseSubmit.body(), "$.response_id")).isNotBlank();
+
+        HttpResponse<String> activitiesResponse = getJson("/api/v1/tasks/" + taskId + "/activities", hrToken);
+        assertThat(activitiesResponse.statusCode()).isEqualTo(200);
+        assertThat(activitiesResponse.body()).contains("WORKER_LINK_RESPONSE_SUBMITTED");
     }
 
     @Test
@@ -164,7 +168,7 @@ class WorkerLinkSecurityIntegrationTest {
 
     @Test
     void viewReturns410ForNonExistentToken() throws Exception {
-        HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/nonexistenttoken12345", null);
+        HttpResponse<String> viewResponse = getJson("/public/worker-links/nonexistenttoken12345", null);
         assertThat(viewResponse.statusCode()).isEqualTo(410);
     }
 
@@ -256,7 +260,7 @@ class WorkerLinkSecurityIntegrationTest {
         writeFieldPart(out, "clientRequestId", UUID.randomUUID().toString());
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();

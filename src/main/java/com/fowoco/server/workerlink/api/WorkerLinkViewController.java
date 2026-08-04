@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Worker Link (Public)", description = "근로자 공개 안내·제출")
 @RestController
-@RequestMapping("/api/v1/public/worker-links/{token}")
+@RequestMapping("/public/worker-links/{token}")
 public class WorkerLinkViewController {
 
     private final WorkerLinkViewService workerLinkViewService;

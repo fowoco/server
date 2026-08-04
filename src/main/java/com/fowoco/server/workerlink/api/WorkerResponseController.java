@@ -53,7 +53,7 @@ public class WorkerResponseController {
             @ApiResponse(responseCode = "429", description = "요청 과다")
     })
     @PostMapping(
-            path = "/api/v1/public/worker-links/{token}/responses",
+            path = "/public/worker-links/{token}/responses",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
