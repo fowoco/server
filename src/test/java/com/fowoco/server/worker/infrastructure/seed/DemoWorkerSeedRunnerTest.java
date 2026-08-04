@@ -27,6 +27,28 @@ import org.springframework.boot.DefaultApplicationArguments;
 
 class DemoWorkerSeedRunnerTest {
 
+    private static final Set<String> AI_SUPPORTED_LANGUAGES = Set.of(
+            "en", "zh-Hans", "vi", "th", "fil", "id", "mn", "si",
+            "ru", "uz", "ky", "bn", "ur", "km", "tet"
+    );
+    private static final Map<String, Set<String>> NATURAL_NATIONALITIES_BY_LANGUAGE = Map.ofEntries(
+            Map.entry("en", Set.of("MM", "NP", "PH")),
+            Map.entry("zh-Hans", Set.of("CN")),
+            Map.entry("vi", Set.of("VN")),
+            Map.entry("th", Set.of("TH")),
+            Map.entry("fil", Set.of("PH")),
+            Map.entry("id", Set.of("ID")),
+            Map.entry("mn", Set.of("MN")),
+            Map.entry("si", Set.of("LK")),
+            Map.entry("ru", Set.of("RU")),
+            Map.entry("uz", Set.of("UZ")),
+            Map.entry("ky", Set.of("KG")),
+            Map.entry("bn", Set.of("BD")),
+            Map.entry("ur", Set.of("PK")),
+            Map.entry("km", Set.of("KH")),
+            Map.entry("tet", Set.of("TL"))
+    );
+
     private static final UUID DEMO_COMPANY_ID =
             UUID.fromString("90000000-0000-0000-0000-000000000001");
     private static final UUID TEST_COMPANY_ID =
@@ -60,6 +82,14 @@ class DemoWorkerSeedRunnerTest {
         assertThat(workerRepository.workers.values())
                 .filteredOn(worker -> worker.companyId().equals(DEMO_COMPANY_ID))
                 .hasSize(28);
+        List<Worker> demoWorkers = workerRepository.workers.values().stream()
+                .filter(worker -> worker.companyId().equals(DEMO_COMPANY_ID))
+                .toList();
+        assertThat(demoWorkers.stream().map(Worker::preferredLanguage).collect(java.util.stream.Collectors.toSet()))
+                .containsExactlyInAnyOrderElementsOf(AI_SUPPORTED_LANGUAGES);
+        assertThat(demoWorkers).allMatch(worker -> NATURAL_NATIONALITIES_BY_LANGUAGE
+                .getOrDefault(worker.preferredLanguage(), Set.of())
+                .contains(worker.nationalityCode()));
         assertThat(workerRepository.workers.values())
                 .filteredOn(worker -> worker.companyId().equals(TEST_COMPANY_ID))
                 .hasSize(5);

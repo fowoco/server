@@ -78,6 +78,12 @@ class DemoAuthSeedIntegrationTest {
             UUID.fromString("94300000-0000-0000-0000-000000000002");
     private static final UUID COMPLETED_STAY_TASK_ID =
             UUID.fromString("94000000-0000-0000-0000-000000000020");
+    private static final UUID CONTRACT_TASK_ID =
+            UUID.fromString("94000000-0000-0000-0000-000000000005");
+    private static final UUID CONTRACT_WORKER_ID =
+            UUID.fromString("92000000-0000-0000-0000-000000000005");
+    private static final UUID COMPLETED_STAY_WORKER_ID =
+            UUID.fromString("92000000-0000-0000-0000-000000000018");
     private static final UUID PASSPORT_REQUEST_DRAFT_ID =
             UUID.fromString("94700000-0000-0000-0000-000000000002");
     private static final UUID CONTRACT_FILE_ID =
@@ -194,6 +200,7 @@ class DemoAuthSeedIntegrationTest {
                 .isEqualTo(EXPECTED_TEST_COUNTS);
         assertThat(seedSnapshot()).isEqualTo(initialSnapshot);
         assertTaskTimelineInvariants();
+        assertStoredFileFixtures();
     }
 
     private void assertAccountsAndPasswords() {
@@ -356,7 +363,8 @@ class DemoAuthSeedIntegrationTest {
 
     private void assertCompoundDraftScenario() {
         List<Map<String, Object>> tasks = jdbcTemplate.queryForList(
-                "SELECT task_id, case_id, task_type, workflow_id, source, status, business_data_json "
+                "SELECT task_id, case_id, worker_id, task_type, workflow_id, source, status, "
+                        + "business_data_json "
                         + "FROM task WHERE task_id IN (?, ?, ?) ORDER BY task_id",
                 RECONTRACT_CANDIDATE_TASK_ID,
                 EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID,
@@ -364,6 +372,7 @@ class DemoAuthSeedIntegrationTest {
         );
         assertThat(tasks).hasSize(3).allSatisfy(task -> {
             assertThat(task.get("case_id")).isEqualTo(COMPOUND_CASE_ID);
+            assertThat(task.get("worker_id")).isEqualTo(REPRESENTATIVE_WORKER_ID);
             String businessData = (String) task.get("business_data_json");
             assertThat(JsonPath.<String>read(businessData, "$.demo_scenario"))
                     .isEqualTo("compound-draft-flow-v1");
@@ -390,6 +399,17 @@ class DemoAuthSeedIntegrationTest {
                 .containsEntry("workflow_id", "WF-STY-001")
                 .containsEntry("source", "AI_CANDIDATE")
                 .containsEntry("status", "WAITING_WORKER");
+        assertThat(tasks.stream()
+                .map(task -> JsonPath.<Integer>read((String) task.get("business_data_json"), "$.candidate_order"))
+                .toList()).containsExactly(1, 3, 2);
+        assertThat(JsonPath.<String>read(
+                (String) tasks.get(1).get("business_data_json"),
+                "$.depends_on_task_id"
+        )).isEqualTo(RECONTRACT_CANDIDATE_TASK_ID.toString());
+        assertThat(JsonPath.<Integer>read(
+                (String) tasks.get(2).get("business_data_json"),
+                "$.submission_due_offset_days"
+        )).isEqualTo(7);
 
         Map<String, Map<String, Object>> documentsByType = jdbcTemplate.query(
                 "SELECT document_type, submission_status, expiry_date, destination, note "
@@ -518,6 +538,29 @@ class DemoAuthSeedIntegrationTest {
                 .allMatch(file -> "application/pdf".equals(file.get("mime_type")))
                 .allMatch(file -> "NOT_SCANNED".equals(file.get("scan_status")))
                 .allMatch(file -> Boolean.FALSE.equals(file.get("verified")));
+
+        Map<UUID, Map<String, Object>> filesById = files.stream().collect(Collectors.toMap(
+                file -> (UUID) file.get("stored_file_id"),
+                file -> file
+        ));
+        assertThat(filesById.get(CONTRACT_FILE_ID))
+                .containsEntry("name", "demo-contract-renewal.pdf")
+                .containsEntry("purpose", "DEMO_CONTRACT_RENEWAL")
+                .containsEntry("task_id", CONTRACT_TASK_ID)
+                .containsEntry("worker_id", CONTRACT_WORKER_ID)
+                .containsEntry("storage_key", CONTRACT_FILE_ID.toString());
+        assertThat(filesById.get(STAY_RECEIPT_FILE_ID))
+                .containsEntry("name", "demo-stay-extension-receipt.pdf")
+                .containsEntry("purpose", "DEMO_STAY_EXTENSION_RECEIPT")
+                .containsEntry("task_id", COMPLETED_STAY_TASK_ID)
+                .containsEntry("worker_id", COMPLETED_STAY_WORKER_ID)
+                .containsEntry("storage_key", STAY_RECEIPT_FILE_ID.toString());
+        assertThat(filesById.get(STAY_RESULT_FILE_ID))
+                .containsEntry("name", "demo-stay-extension-result.pdf")
+                .containsEntry("purpose", "DEMO_STAY_EXTENSION_RESULT")
+                .containsEntry("task_id", COMPLETED_STAY_TASK_ID)
+                .containsEntry("worker_id", COMPLETED_STAY_WORKER_ID)
+                .containsEntry("storage_key", STAY_RESULT_FILE_ID.toString());
 
         Map<UUID, String> resources = Map.of(
                 CONTRACT_FILE_ID, "demo/files/demo-contract-renewal.pdf",
@@ -729,8 +772,9 @@ class DemoAuthSeedIntegrationTest {
     private Map<String, List<Map<String, Object>>> seedSnapshot() {
         Map<String, List<Map<String, Object>>> snapshot = new LinkedHashMap<>();
         snapshot.put("worker", snapshotRows(
-                "SELECT worker_id, company_id, stay_expiry_date, contract_start_date, "
-                        + "contract_end_date, created_at, updated_at, version FROM worker "
+                "SELECT worker_id, company_id, display_name, nationality_code, preferred_language, "
+                        + "work_status, stay_expiry_date, contract_start_date, contract_end_date, "
+                        + "created_at, updated_at, version FROM worker "
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, worker_id"
         ));
         snapshot.put("worker_document", snapshotRows(

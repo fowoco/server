@@ -41,7 +41,10 @@ class DemoFileFixtureInstallerTest {
         Path installed = storageRoot.resolve(seed.storageKey());
         assertThat(Files.readAllBytes(installed)).isEqualTo(expected);
 
-        Files.writeString(installed, "conflicting fixture");
+        byte[] conflicting = expected.clone();
+        conflicting[conflicting.length - 1] ^= 1;
+        Files.write(installed, conflicting);
+        assertThat(Files.size(installed)).isEqualTo(expected.length);
         assertThatThrownBy(() -> installer.install(seed))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(seed.storageKey());
