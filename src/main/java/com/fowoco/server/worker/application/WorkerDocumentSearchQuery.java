@@ -11,6 +11,7 @@ public final class WorkerDocumentSearchQuery {
     private static final int MAX_SIZE = 100;
 
     private final UUID workerId;
+    private final UUID taskId;
     private final DocumentType documentType;
     private final SubmissionStatus status;
     private final LocalDate expiryBefore;
@@ -19,6 +20,7 @@ public final class WorkerDocumentSearchQuery {
 
     public WorkerDocumentSearchQuery(
             UUID workerId,
+            UUID taskId,
             DocumentType documentType,
             SubmissionStatus status,
             LocalDate expiryBefore,
@@ -26,6 +28,7 @@ public final class WorkerDocumentSearchQuery {
             Integer size
     ) {
         this.workerId = workerId;
+        this.taskId = taskId;
         this.documentType = documentType;
         this.status = status;
         this.expiryBefore = expiryBefore;
@@ -41,6 +44,10 @@ public final class WorkerDocumentSearchQuery {
 
     public UUID workerId() {
         return workerId;
+    }
+
+    public UUID taskId() {
+        return taskId;
     }
 
     public DocumentType documentType() {

@@ -56,7 +56,7 @@ public class DocumentReadinessService {
 
         LocalDate today = LocalDate.now(clock);
         WorkerDocumentSearchQuery allDocumentsQuery = new WorkerDocumentSearchQuery(
-                task.workerId(), null, null, null, 0, 100
+                task.workerId(), null, null, null, null, 0, 100
         );
         List<WorkerDocument> workerDocuments = workerDocumentRepository.findPage(companyId, allDocumentsQuery);
 

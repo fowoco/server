@@ -13,6 +13,7 @@ public final class WorkerDocument {
     private final UUID workerDocumentId;
     private final UUID workerId;
     private final UUID companyId;
+    private final UUID taskId;
     private final DocumentType documentType;
     private final SubmissionStatus submissionStatus;
     private final LocalDate expiryDate;
@@ -27,6 +28,7 @@ public final class WorkerDocument {
             UUID workerDocumentId,
             UUID workerId,
             UUID companyId,
+            UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
@@ -40,6 +42,7 @@ public final class WorkerDocument {
         this.workerDocumentId = Objects.requireNonNull(workerDocumentId, "workerDocumentId must not be null");
         this.workerId = Objects.requireNonNull(workerId, "workerId must not be null");
         this.companyId = Objects.requireNonNull(companyId, "companyId must not be null");
+        this.taskId = taskId;
         this.documentType = Objects.requireNonNull(documentType, "documentType must not be null");
         this.submissionStatus = Objects.requireNonNull(submissionStatus, "submissionStatus must not be null");
         this.expiryDate = expiryDate;
@@ -61,6 +64,7 @@ public final class WorkerDocument {
             UUID workerDocumentId,
             UUID workerId,
             UUID companyId,
+            UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
@@ -73,6 +77,7 @@ public final class WorkerDocument {
                 workerDocumentId,
                 workerId,
                 companyId,
+                taskId,
                 documentType,
                 submissionStatus,
                 expiryDate,
@@ -95,6 +100,10 @@ public final class WorkerDocument {
 
     public UUID companyId() {
         return companyId;
+    }
+
+    public UUID taskId() {
+        return taskId;
     }
 
     public DocumentType documentType() {

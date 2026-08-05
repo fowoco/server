@@ -68,6 +68,7 @@ public class DocumentController {
     @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
     public DocumentPageResponse list(
             @Parameter(description = "근로자 ID 필터") @RequestParam(required = false) UUID workerId,
+            @Parameter(description = "업무 ID 필터") @RequestParam(required = false) UUID taskId,
             @Parameter(description = "서류 유형 필터") @RequestParam(required = false) DocumentType documentType,
             @Parameter(description = "제출 상태 필터") @RequestParam(required = false) SubmissionStatus status,
             @Parameter(description = "이 날짜 이전 만료 필터") @RequestParam(required = false) LocalDate expiryBefore,
@@ -79,6 +80,7 @@ public class DocumentController {
         ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerDocumentSearchQuery query = new WorkerDocumentSearchQuery(
                 workerId,
+                taskId,
                 documentType,
                 status,
                 expiryBefore,

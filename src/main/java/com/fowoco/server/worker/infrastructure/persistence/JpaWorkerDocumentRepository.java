@@ -103,6 +103,9 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository {
         if (query.workerId() != null) {
             where.append(" and document.workerId = :workerId");
         }
+        if (query.taskId() != null) {
+            where.append(" and document.taskId = :taskId");
+        }
         if (query.documentType() != null) {
             where.append(" and document.documentType = :documentType");
         }
@@ -119,6 +122,9 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository {
         jpaQuery.setParameter("companyId", companyId);
         if (query.workerId() != null) {
             jpaQuery.setParameter("workerId", query.workerId());
+        }
+        if (query.taskId() != null) {
+            jpaQuery.setParameter("taskId", query.taskId());
         }
         if (query.documentType() != null) {
             jpaQuery.setParameter("documentType", query.documentType());

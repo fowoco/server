@@ -74,6 +74,7 @@ public class WorkerDocumentController {
         ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerDocumentCreateCommand command = new WorkerDocumentCreateCommand(
                 workerId,
+                request.getTaskId(),
                 request.getDocumentType(),
                 request.getSubmissionStatus(),
                 request.getExpiryDate(),
