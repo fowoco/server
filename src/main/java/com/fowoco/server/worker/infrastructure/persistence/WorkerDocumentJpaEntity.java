@@ -143,6 +143,7 @@ public class WorkerDocumentJpaEntity {
         if (version != document.version()) {
             throw new IllegalArgumentException("worker document version does not match");
         }
+        this.taskId = document.taskId();
         this.documentType = document.documentType();
         this.submissionStatus = document.submissionStatus();
         this.expiryDate = document.expiryDate();
