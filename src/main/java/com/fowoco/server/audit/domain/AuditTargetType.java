@@ -7,5 +7,6 @@ public enum AuditTargetType {
     EVIDENCE,
     FILE,
     WORKER_DOCUMENT,
-    DOCUMENT_REQUEST_DRAFT
+    DOCUMENT_REQUEST_DRAFT,
+    AI_RUN
 }

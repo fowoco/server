@@ -134,7 +134,7 @@ class RemoteAiRuntimeClientWireMockTest {
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.analysisInput.instruction",
-                        equalTo("응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL")
+                        equalTo("응웬반안 체류연장 준비해줘")
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.analysisInput.intentHint",

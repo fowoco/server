@@ -78,7 +78,11 @@ class PostgreSqlMigrationTests {
                         "event_publication",
                         "event_consumption",
                         "document_request_draft",
-                        "document_request_draft_type"
+                        "document_request_draft_type",
+                        "ai_run",
+                        "ai_attempt",
+                        "ai_question",
+                        "ai_candidate"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -172,6 +176,30 @@ class PostgreSqlMigrationTests {
                 .containsEntry("draft_id", new ColumnSpec("uuid", false))
                 .containsEntry("document_type", new ColumnSpec("varchar", false))
                 .doesNotContainKey("company_id");
+        assertThat(columnSpecs(connection, "ai_run"))
+                .containsEntry("ai_run_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("instruction_hash", new ColumnSpec("varchar", false))
+                .containsEntry("idempotency_key_hash", new ColumnSpec("varchar", false))
+                .containsEntry("status", new ColumnSpec("varchar", false))
+                .containsEntry("analysis_outcome", new ColumnSpec("varchar", true))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "ai_attempt"))
+                .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
+                .containsEntry("ai_run_id", new ColumnSpec("uuid", false))
+                .containsEntry("phase", new ColumnSpec("varchar", false))
+                .containsEntry("analysis_input_json", new ColumnSpec("text", false))
+                .containsEntry("latency_ms", new ColumnSpec("int8", true));
+        assertThat(columnSpecs(connection, "ai_question"))
+                .containsEntry("ai_question_id", new ColumnSpec("uuid", false))
+                .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
+                .containsEntry("slot_key", new ColumnSpec("varchar", false))
+                .containsEntry("answer_value", new ColumnSpec("varchar", true));
+        assertThat(columnSpecs(connection, "ai_candidate"))
+                .containsEntry("ai_candidate_id", new ColumnSpec("uuid", false))
+                .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
+                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("confidence", new ColumnSpec("numeric", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -200,7 +228,16 @@ class PostgreSqlMigrationTests {
                         "fk_event_consumption_publication",
                         "pk_document_request_draft",
                         "fk_document_request_draft_task_company",
-                        "fk_document_request_draft_type_draft"
+                        "fk_document_request_draft_type_draft",
+                        "pk_ai_run",
+                        "uq_ai_run_company_idempotency",
+                        "fk_ai_run_requester_company",
+                        "pk_ai_attempt",
+                        "fk_ai_attempt_run_company",
+                        "pk_ai_question",
+                        "fk_ai_question_attempt_company",
+                        "pk_ai_candidate",
+                        "fk_ai_candidate_worker_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -217,7 +254,11 @@ class PostgreSqlMigrationTests {
                         "idx_event_publication_claim",
                         "idx_event_publication_company_time",
                         "idx_event_consumption_company_event",
-                        "idx_document_request_draft_company"
+                        "idx_document_request_draft_company",
+                        "idx_ai_run_company_created",
+                        "idx_ai_attempt_run",
+                        "idx_ai_question_run",
+                        "idx_ai_candidate_run"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -238,6 +279,10 @@ class PostgreSqlMigrationTests {
                         "pl_event_consumption_tenant_isolation",
                         "pl_document_request_draft_tenant_isolation",
                         "pl_document_request_draft_type_tenant_isolation",
+                        "pl_ai_run_tenant_isolation",
+                        "pl_ai_attempt_tenant_isolation",
+                        "pl_ai_question_tenant_isolation",
+                        "pl_ai_candidate_tenant_isolation",
                         "pl_worker_link_tenant_isolation",
                         "pl_worker_response_tenant_isolation",
                         "pl_worker_response_upload_tenant_isolation"

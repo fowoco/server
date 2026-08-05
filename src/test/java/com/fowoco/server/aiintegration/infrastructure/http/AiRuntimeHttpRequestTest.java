@@ -23,7 +23,7 @@ class AiRuntimeHttpRequestTest {
         assertThat(json.get("phase").textValue()).isEqualTo("PLAN");
         assertThat(fieldNames(input)).containsExactly("instruction");
         assertThat(input.get("instruction").textValue())
-                .isEqualTo("응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL");
+                .isEqualTo("응웬반안 체류연장 준비해줘");
     }
 
     @Test

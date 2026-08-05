@@ -67,7 +67,7 @@ Runtime JSON으로 변환합니다. Server 내부 요청은 다음 값을 잃어
 
 - 동일한 `requestId`
 - 새로운 `attemptId`와 남은 deadline
-- 선택한 태그까지 포함한 원래 `instruction` (`발화문, INTENT_TAG`)
+- 사용자가 최종 작성한 원래 `instruction` (Intent 태그를 덧붙이지 않은 발화문)
 - PLAN이 추출한 `extractedSlots`
 - PLAN이 요청한 전체 `requestedFieldKeys`
 - 응답 검증에 필요한 Worker snapshot
@@ -81,7 +81,7 @@ Runtime JSON으로 변환합니다. Server 내부 요청은 다음 값을 잃어
   "requestId": "10000000-0000-0000-0000-000000000001",
   "phase": "ANALYZE",
   "analysisInput": {
-    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL",
+    "instruction": "응웬반안 체류연장 준비해줘",
     "requestedFieldKeys": ["worker_id", "stay_expiry_date", "due_at"],
     "workers": [{
       "workerRef": "worker-uuid",
