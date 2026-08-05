@@ -1,4 +1,4 @@
-package com.fowoco.server.workerlink.application.port;
+package com.fowoco.server.workerlink.application.error;
 
 public class WorkerResponseUploadAlreadyLinkedException extends RuntimeException {
 

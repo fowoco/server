@@ -1,7 +1,7 @@
 package com.fowoco.server.workerlink.infrastructure.persistence;
 
+import com.fowoco.server.workerlink.application.error.WorkerResponseUploadAlreadyLinkedException;
 import com.fowoco.server.workerlink.application.port.WorkerResponseRepository;
-import com.fowoco.server.workerlink.application.port.WorkerResponseUploadAlreadyLinkedException;
 import com.fowoco.server.workerlink.domain.WorkerResponse;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
