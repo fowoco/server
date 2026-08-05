@@ -267,6 +267,7 @@ class PostgreSqlMigrationTests {
                         "uq_worker_response_id_company",
                         "fk_worker_response_link_company",
                         "uq_stored_file_id_company",
+                        "uq_worker_response_upload_file_company",
                         "fk_worker_response_upload_response_company",
                         "fk_worker_response_upload_file_company",
                         "fk_worker_document_upload_idempotency_link_company",
@@ -293,7 +294,8 @@ class PostgreSqlMigrationTests {
                         "idx_ai_question_run",
                         "idx_ai_candidate_run",
                         "idx_worker_response_upload_company",
-                        "idx_worker_document_upload_idempotency_company"
+                        "idx_worker_document_upload_idempotency_company",
+                        "idx_worker_document_upload_idempotency_file_company"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(

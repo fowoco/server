@@ -15,6 +15,7 @@ import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
 import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
 import com.fowoco.server.workerlink.application.port.WorkerLinkTenantBootstrap;
 import com.fowoco.server.workerlink.application.port.WorkerResponseRepository;
+import com.fowoco.server.workerlink.application.port.WorkerResponseUploadAlreadyLinkedException;
 import com.fowoco.server.workerlink.domain.WorkerLink;
 import com.fowoco.server.workerlink.domain.WorkerResponse;
 import com.fowoco.server.workerlink.domain.WorkerResponseType;
@@ -114,7 +115,11 @@ public class WorkerResponseService {
         workerResponseRepository.insert(response);
 
         for (UUID uploadId : uploadIds) {
-            workerResponseRepository.linkUpload(responseId, uploadId, companyId);
+            try {
+                workerResponseRepository.linkUpload(responseId, uploadId, companyId);
+            } catch (WorkerResponseUploadAlreadyLinkedException exception) {
+                throw new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE);
+            }
         }
 
         if (command.responseType() == WorkerResponseType.QUESTION

@@ -34,6 +34,10 @@ ALTER TABLE stored_file
     ADD CONSTRAINT uq_stored_file_id_company
         UNIQUE (stored_file_id, company_id);
 
+ALTER TABLE worker_response_upload
+    ADD CONSTRAINT uq_worker_response_upload_file_company
+        UNIQUE (stored_file_id, company_id);
+
 ALTER TABLE worker_document
     ADD CONSTRAINT fk_worker_document_task_worker_company
         FOREIGN KEY (task_id, worker_id, company_id)
@@ -101,3 +105,6 @@ CREATE INDEX idx_worker_response_upload_company
 
 CREATE INDEX idx_worker_document_upload_idempotency_company
     ON worker_document_upload_idempotency (company_id);
+
+CREATE INDEX idx_worker_document_upload_idempotency_file_company
+    ON worker_document_upload_idempotency (stored_file_id, company_id);

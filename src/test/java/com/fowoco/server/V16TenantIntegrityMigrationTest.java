@@ -86,6 +86,34 @@ class V16TenantIntegrityMigrationTest {
         }
     }
 
+    @Test
+    void preventsStoredFileFromBeingLinkedToMultipleResponses() throws SQLException {
+        try (Connection connection = dataSource().getConnection()) {
+            createPreV16Schema(connection);
+            insertBaseFixture(connection, FILE_A, COMPANY_A);
+            applyV16(connection);
+
+            String secondResponseId = "15000000-0000-0000-0000-000000000002";
+            execute(connection, """
+                    INSERT INTO worker_response (
+                        response_id, worker_link_id, company_id
+                    ) VALUES ('%s', '%s', '%s')
+                    """.formatted(secondResponseId, LINK_A, COMPANY_A));
+            execute(connection, """
+                    INSERT INTO worker_response_upload (
+                        response_id, stored_file_id, company_id
+                    ) VALUES ('%s', '%s', '%s')
+                    """.formatted(RESPONSE_A, FILE_A, COMPANY_A));
+
+            assertThatThrownBy(() -> execute(connection, """
+                    INSERT INTO worker_response_upload (
+                        response_id, stored_file_id, company_id
+                    ) VALUES ('%s', '%s', '%s')
+                    """.formatted(secondResponseId, FILE_A, COMPANY_A)))
+                    .isInstanceOf(SQLException.class);
+        }
+    }
+
     private void createPreV16Schema(Connection connection) {
         String sql = """
                 CREATE TABLE task (
