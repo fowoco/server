@@ -28,6 +28,9 @@ class PostgreSqlMigrationTests {
     private static final String TASK_A = "13000000-0000-0000-0000-000000000001";
     private static final String EVENT_A = "18000000-0000-0000-0000-000000000001";
     private static final String TOKEN_HASH_A = "a".repeat(64);
+    private static final String ACTIVE_WORKER_LINK_TOKEN_HASH = "b".repeat(64);
+    private static final String REVOKED_WORKER_LINK_TOKEN_HASH = "c".repeat(64);
+    private static final String EXPIRED_WORKER_LINK_TOKEN_HASH = "d".repeat(64);
 
     @Test
     void migrationsApplyCanonicalServerSchemaOnPostgreSql() throws SQLException {
@@ -396,6 +399,36 @@ class PostgreSqlMigrationTests {
                 )
                 """.formatted(TASK_A, COMPANY_A, WORKER_A, "f".repeat(64), USER_A, USER_A));
         execute(connection, """
+                INSERT INTO worker_link (
+                    worker_link_id, task_id, company_id, token_hash, expires_at,
+                    status, conversation_status, issued_by, idempotency_key,
+                    created_at, updated_at
+                ) VALUES
+                    (
+                        '21000000-0000-0000-0000-000000000001', '%s', '%s', '%s',
+                        CURRENT_TIMESTAMP + INTERVAL '1 day', 'ACTIVE',
+                        'WAITING_WORKER', '%s', 'active-link',
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    ),
+                    (
+                        '21000000-0000-0000-0000-000000000002', '%s', '%s', '%s',
+                        CURRENT_TIMESTAMP + INTERVAL '1 day', 'REVOKED',
+                        'WAITING_WORKER', '%s', 'revoked-link',
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    ),
+                    (
+                        '21000000-0000-0000-0000-000000000003', '%s', '%s', '%s',
+                        CURRENT_TIMESTAMP - INTERVAL '1 day', 'ACTIVE',
+                        'WAITING_WORKER', '%s', 'expired-link',
+                        CURRENT_TIMESTAMP - INTERVAL '2 days',
+                        CURRENT_TIMESTAMP - INTERVAL '2 days'
+                    )
+                """.formatted(
+                TASK_A, COMPANY_A, ACTIVE_WORKER_LINK_TOKEN_HASH, USER_A,
+                TASK_A, COMPANY_A, REVOKED_WORKER_LINK_TOKEN_HASH, USER_A,
+                TASK_A, COMPANY_A, EXPIRED_WORKER_LINK_TOKEN_HASH, USER_A
+        ));
+        execute(connection, """
                 INSERT INTO approval_request (
                     approval_request_id, task_id, company_id,
                     target_task_version, target_content_revision, target_fingerprint,
@@ -448,6 +481,26 @@ class PostgreSqlMigrationTests {
         assertThat(queryNullableString(
                 connection,
                 "SELECT public.bootstrap_company_id_by_refresh_token_hash(?)",
+                "0".repeat(64)
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
+                ACTIVE_WORKER_LINK_TOKEN_HASH
+        )).isEqualTo(COMPANY_A);
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
+                REVOKED_WORKER_LINK_TOKEN_HASH
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
+                EXPIRED_WORKER_LINK_TOKEN_HASH
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
                 "0".repeat(64)
         )).isNull();
 

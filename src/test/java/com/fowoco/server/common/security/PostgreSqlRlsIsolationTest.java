@@ -41,6 +41,8 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("a5000000-0000-0000-0000-000000000001");
     private static final UUID STORED_FILE_B =
             UUID.fromString("b5000000-0000-0000-0000-000000000002");
+    private static final UUID STORED_FILE_B_UNLINKED =
+            UUID.fromString("b5000000-0000-0000-0000-000000000003");
     private static final UUID DRAFT_A =
             UUID.fromString("a6000000-0000-0000-0000-000000000001");
     private static final UUID DRAFT_B =
@@ -179,8 +181,14 @@ class PostgreSqlRlsIsolationTest {
                         ('%s', '%s', 'tenant-a.pdf', 'application/pdf', 1,
                          'RLS_TEST', 'rls-tenant-a', 'NOT_SCANNED'),
                         ('%s', '%s', 'tenant-b.pdf', 'application/pdf', 1,
-                         'RLS_TEST', 'rls-tenant-b', 'NOT_SCANNED')
-                    """.formatted(STORED_FILE_A, COMPANY_A, STORED_FILE_B, COMPANY_B));
+                         'RLS_TEST', 'rls-tenant-b', 'NOT_SCANNED'),
+                        ('%s', '%s', 'tenant-b-unlinked.pdf', 'application/pdf', 1,
+                         'RLS_TEST', 'rls-tenant-b-unlinked', 'NOT_SCANNED')
+                    """.formatted(
+                    STORED_FILE_A, COMPANY_A,
+                    STORED_FILE_B, COMPANY_B,
+                    STORED_FILE_B_UNLINKED, COMPANY_B
+            ));
             statement.execute("""
                     INSERT INTO document_request_draft (
                         draft_id, task_id, company_id, language, message, review_status
@@ -390,6 +398,20 @@ class PostgreSqlRlsIsolationTest {
                     )
                     """.formatted(WORKER_LINK_B, COMPANY_B, STORED_FILE_B)
             );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO worker_response_upload (
+                        response_id, stored_file_id, company_id
+                    ) VALUES (
+                        '%s', '%s', '%s'
+                    )
+                    """.formatted(
+                    WORKER_RESPONSE_B,
+                    STORED_FILE_B_UNLINKED,
+                    COMPANY_B
+            ));
 
             assertThat(executeUpdate(
                     connection,
@@ -477,9 +499,9 @@ class PostgreSqlRlsIsolationTest {
                 """.formatted(DRAFT_A, DRAFT_B));
         statement.execute("""
                 DELETE FROM stored_file
-                WHERE stored_file_id IN ('%s', '%s')
+                WHERE stored_file_id IN ('%s', '%s', '%s')
                    OR storage_key = 'rls-forbidden-b'
-                """.formatted(STORED_FILE_A, STORED_FILE_B));
+                """.formatted(STORED_FILE_A, STORED_FILE_B, STORED_FILE_B_UNLINKED));
         statement.execute("""
                 DELETE FROM task
                 WHERE task_id IN ('%s', '%s')
