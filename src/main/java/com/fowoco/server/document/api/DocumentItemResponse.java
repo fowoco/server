@@ -19,6 +19,10 @@ public final class DocumentItemResponse {
     @Schema(name = "worker_id", format = "uuid", requiredMode = Schema.RequiredMode.REQUIRED)
     private final UUID workerId;
 
+    @JsonProperty("task_id")
+    @Schema(name = "task_id", format = "uuid", description = "연결된 업무카드 ID (없으면 null)")
+    private final UUID taskId;
+
     @JsonProperty("display_name")
     @Schema(
             name = "display_name",
@@ -43,33 +47,43 @@ public final class DocumentItemResponse {
     @Schema(name = "file_id", format = "uuid")
     private final UUID fileId;
 
+    @JsonProperty("version")
+    @Schema(name = "version", description = "PATCH 요청의 expected_version 기준값", requiredMode = Schema.RequiredMode.REQUIRED)
+    private final long version;
+
     private DocumentItemResponse(
             UUID workerDocumentId,
             UUID workerId,
+            UUID taskId,
             String displayName,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
-            UUID fileId
+            UUID fileId,
+            long version
     ) {
         this.workerDocumentId = workerDocumentId;
         this.workerId = workerId;
+        this.taskId = taskId;
         this.displayName = displayName;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
         this.expiryDate = expiryDate;
         this.fileId = fileId;
+        this.version = version;
     }
 
     public static DocumentItemResponse from(WorkerDocument document, String displayName) {
         return new DocumentItemResponse(
                 document.workerDocumentId(),
                 document.workerId(),
+                document.taskId(),
                 displayName,
                 document.documentType(),
                 document.submissionStatus(),
                 document.expiryDate(),
-                document.fileId()
+                document.fileId(),
+                document.version()
         );
     }
 
@@ -79,6 +93,10 @@ public final class DocumentItemResponse {
 
     public UUID getWorkerId() {
         return workerId;
+    }
+
+    public UUID getTaskId() {
+        return taskId;
     }
 
     public String getWorkerDisplayName() {
@@ -99,5 +117,9 @@ public final class DocumentItemResponse {
 
     public UUID getFileId() {
         return fileId;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }
