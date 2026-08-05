@@ -10,5 +10,6 @@ public enum CaseDisplayStatus {
     DOCUMENT_PENDING,
     REQUEST_SENT,
     REVIEW_REQUIRED,
-    COMPLETED
+    COMPLETED,
+    CANCELLED
 }

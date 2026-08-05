@@ -17,6 +17,7 @@ import com.fowoco.server.reliability.application.port.DomainEventPublisher;
 import com.fowoco.server.task.application.TaskContentCodec.EncodedTaskContent;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskChecklistRepository;
+import com.fowoco.server.task.application.port.TaskCaseRegistrar;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.application.port.TaskRepository.TaskPage;
 import com.fowoco.server.task.application.port.TaskRepository.TaskSearchCriteria;
@@ -49,6 +50,7 @@ public class TaskWorkflowService {
     private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
     private final TaskChecklistRepository checklistRepository;
+    private final TaskCaseRegistrar taskCaseRegistrar;
     private final TaskTransitionRecorder transitionRecorder;
     private final WorkerTaskContextReader workerReader;
     private final WorkflowCatalogService catalogService;
@@ -64,6 +66,7 @@ public class TaskWorkflowService {
             TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
             TaskChecklistRepository checklistRepository,
+            TaskCaseRegistrar taskCaseRegistrar,
             TaskTransitionRecorder transitionRecorder,
             WorkerTaskContextReader workerReader,
             WorkflowCatalogService catalogService,
@@ -78,6 +81,7 @@ public class TaskWorkflowService {
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
         this.checklistRepository = checklistRepository;
+        this.taskCaseRegistrar = taskCaseRegistrar;
         this.transitionRecorder = transitionRecorder;
         this.workerReader = workerReader;
         this.catalogService = catalogService;
@@ -123,11 +127,13 @@ public class TaskWorkflowService {
                 businessData
         );
         Instant now = Instant.now(clock);
+        UUID taskId = uuidGenerator.generate();
+        UUID caseId = command.caseId() == null ? uuidGenerator.generate() : command.caseId();
         Task task = Task.create(
-                uuidGenerator.generate(),
+                taskId,
                 actor.companyId(),
                 command.workerId(),
-                command.caseId() == null ? uuidGenerator.generate() : command.caseId(),
+                caseId,
                 command.taskType(),
                 workflow.workflowId(),
                 catalogService.getActiveCatalog().bundleVersion(),
@@ -141,6 +147,7 @@ public class TaskWorkflowService {
                 actor.actorId(),
                 now
         );
+        taskCaseRegistrar.register(task, workflow, LocalDate.now(clock));
         Task savedTask = taskRepository.save(task);
         List<TaskChecklistItem> checklistItems = checklistRepository.saveAll(
                 workflow.checklistItems().stream()

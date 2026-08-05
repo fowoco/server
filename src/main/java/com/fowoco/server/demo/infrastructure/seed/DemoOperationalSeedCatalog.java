@@ -32,8 +32,8 @@ final class DemoOperationalSeedCatalog {
     private final List<TaskSeed> testTasks = DemoTaskSeedCatalog.testTasks();
     private final List<StoredFileSeed> demoStoredFiles =
             DemoStoredFileSeedCatalog.demoStoredFiles(demoTasks);
-    private final List<DocumentSeed> demoDocuments = DemoDocumentSeedCatalog.demoDocuments();
-    private final List<DocumentSeed> testDocuments = DemoDocumentSeedCatalog.testDocuments();
+    private final List<DocumentSeed> demoDocuments = DemoDocumentSeedCatalog.demoDocuments(demoTasks);
+    private final List<DocumentSeed> testDocuments = DemoDocumentSeedCatalog.testDocuments(testTasks);
     private final List<ChecklistSeed> demoChecklists =
             DemoTaskWorkflowSeedCatalog.demoChecklists(demoTasks);
     private final List<ApprovalSeed> demoApprovals =
@@ -540,6 +540,7 @@ final class DemoOperationalSeedCatalog {
     record DocumentSeed(
             UUID documentId,
             UUID workerId,
+            UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             Integer expiryDays,

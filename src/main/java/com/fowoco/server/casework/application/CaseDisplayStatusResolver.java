@@ -11,6 +11,9 @@ public final class CaseDisplayStatusResolver {
     public CaseDisplayState resolve(CaseDisplayFacts facts) {
         Objects.requireNonNull(facts, "facts must not be null");
 
+        if (facts.cancelled()) {
+            return new CaseDisplayState(CaseDisplayStatus.CANCELLED, false);
+        }
         if (facts.completed()) {
             return new CaseDisplayState(CaseDisplayStatus.COMPLETED, false);
         }

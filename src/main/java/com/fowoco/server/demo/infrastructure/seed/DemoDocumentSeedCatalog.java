@@ -1,6 +1,8 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentSeed;
+import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
+import com.fowoco.server.task.domain.TaskType;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
 import java.util.ArrayList;
@@ -19,7 +21,7 @@ final class DemoDocumentSeedCatalog {
     private DemoDocumentSeedCatalog() {
     }
 
-    static List<DocumentSeed> demoDocuments() {
+    static List<DocumentSeed> demoDocuments(List<TaskSeed> tasks) {
         List<DocumentSeed> documents = new ArrayList<>(84);
         addExistingDocuments(documents);
         int documentNumber = 8;
@@ -42,11 +44,11 @@ final class DemoDocumentSeedCatalog {
                 additionIndex++;
             }
         }
-        return List.copyOf(documents);
+        return linkToTasks(documents, tasks);
     }
 
-    static List<DocumentSeed> testDocuments() {
-        return List.of(
+    static List<DocumentSeed> testDocuments(List<TaskSeed> tasks) {
+        return linkToTasks(List.of(
                 testDocument(1, 1, DocumentType.PASSPORT_COPY, SubmissionStatus.VERIFIED, 120),
                 testDocument(2, 1, DocumentType.ARC, SubmissionStatus.MISSING, 15),
                 testDocument(3, 2, DocumentType.CONTRACT, SubmissionStatus.SUBMITTED, 45),
@@ -55,7 +57,40 @@ final class DemoDocumentSeedCatalog {
                 testDocument(6, 3, DocumentType.ARC, SubmissionStatus.SUBMITTED, 7),
                 testDocument(7, 4, DocumentType.CONTRACT, SubmissionStatus.MISSING, -10),
                 testDocument(8, 5, DocumentType.PERMIT, SubmissionStatus.VERIFIED, 240)
-        );
+        ), tasks);
+    }
+
+    private static List<DocumentSeed> linkToTasks(
+            List<DocumentSeed> documents,
+            List<TaskSeed> tasks
+    ) {
+        return documents.stream()
+                .map(document -> new DocumentSeed(
+                        document.documentId(),
+                        document.workerId(),
+                        matchingTaskId(document, tasks),
+                        document.documentType(),
+                        document.submissionStatus(),
+                        document.expiryDays(),
+                        document.destination(),
+                        document.note(),
+                        document.fileId()
+                ))
+                .toList();
+    }
+
+    private static UUID matchingTaskId(DocumentSeed document, List<TaskSeed> tasks) {
+        TaskType taskType = switch (document.documentType()) {
+            case PASSPORT_COPY, ARC -> TaskType.STAY_PERIOD_EXTENSION;
+            case CONTRACT -> TaskType.RECONTRACT;
+            case PERMIT -> TaskType.EMPLOYMENT_PERIOD_EXTENSION;
+        };
+        return tasks.stream()
+                .filter(task -> task.workerId().equals(document.workerId()))
+                .filter(task -> task.taskType() == taskType)
+                .map(TaskSeed::taskId)
+                .findFirst()
+                .orElse(null);
     }
 
     private static void addExistingDocuments(List<DocumentSeed> documents) {
@@ -232,6 +267,7 @@ final class DemoDocumentSeedCatalog {
         return new DocumentSeed(
                 demoUuid(documentPrefix, documentNumber),
                 demoUuid(workerPrefix, workerNumber),
+                null,
                 documentType,
                 status,
                 expiryDays,

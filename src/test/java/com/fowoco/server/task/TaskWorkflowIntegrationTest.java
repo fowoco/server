@@ -97,6 +97,7 @@ class TaskWorkflowIntegrationTest {
         assertThat(created.statusCode()).isEqualTo(201);
         assertThat(created.headers().firstValue(HttpHeaders.LOCATION)).isPresent();
         UUID taskId = UUID.fromString(JsonPath.read(created.body(), "$.task_id"));
+        UUID caseId = UUID.fromString(JsonPath.read(created.body(), "$.case_id"));
         assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("DRAFT");
         assertThat(JsonPath.<String>read(created.body(), "$.workflow_catalog_version"))
                 .isEqualTo("0.2.0");
@@ -111,6 +112,20 @@ class TaskWorkflowIntegrationTest {
                 "$.checklist_items[*].checklist_item_id"
         );
         assertThat(checklistIds).hasSize(2);
+
+        HttpResponse<String> caseProjection = get(
+                "/api/v1/cases/" + caseId + "/projection",
+                token
+        );
+        assertThat(caseProjection.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(caseProjection.body(), "$.current_task.task_id"))
+                .isEqualTo(taskId.toString());
+        assertThat(JsonPath.<List<String>>read(caseProjection.body(), "$.tasks[*].task_id"))
+                .containsExactly(taskId.toString());
+        assertThat(JsonPath.<String>read(
+                caseProjection.body(),
+                "$.workflow_snapshot.steps[0].task_id"
+        )).isEqualTo(taskId.toString());
 
         HttpResponse<String> page = get(
                 "/api/v1/tasks?worker_id=" + WORKER_A + "&status=DRAFT",

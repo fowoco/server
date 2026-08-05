@@ -31,6 +31,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     private final DemoAuthSeedProperties properties;
     private final Clock clock;
     private final DemoOperationalSeedCatalog catalog;
+    private final DemoCaseSeeder caseSeeder;
     private final DemoTaskSeeder taskSeeder;
     private final DemoWorkerDocumentSeeder documentSeeder;
     private final DemoTaskChecklistSeeder checklistSeeder;
@@ -47,6 +48,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             DemoAuthSeedProperties properties,
             Clock clock,
             DemoOperationalSeedCatalog catalog,
+            DemoCaseSeeder caseSeeder,
             DemoTaskSeeder taskSeeder,
             DemoWorkerDocumentSeeder documentSeeder,
             DemoTaskChecklistSeeder checklistSeeder,
@@ -62,6 +64,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.catalog = Objects.requireNonNull(catalog, "catalog must not be null");
+        this.caseSeeder = Objects.requireNonNull(caseSeeder, "caseSeeder must not be null");
         this.taskSeeder = Objects.requireNonNull(taskSeeder, "taskSeeder must not be null");
         this.documentSeeder = Objects.requireNonNull(documentSeeder, "documentSeeder must not be null");
         this.checklistSeeder = Objects.requireNonNull(checklistSeeder, "checklistSeeder must not be null");
@@ -156,6 +159,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             List<AuditSeed> audits,
             DemoOperationalSeedContext context
     ) {
+        caseSeeder.seed(tasks, context);
         tasks.forEach(seed -> taskSeeder.seed(seed, context));
         storedFiles.forEach(seed -> storedFileSeeder.seed(seed, context));
         documents.forEach(seed -> documentSeeder.seed(seed, context));
