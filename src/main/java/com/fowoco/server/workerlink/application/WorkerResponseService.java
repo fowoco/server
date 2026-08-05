@@ -96,7 +96,7 @@ public class WorkerResponseService {
             if (!storedFile.verified() || !link.taskId().equals(storedFile.taskId())) {
                 throw new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE);
             }
-            if (workerResponseRepository.isUploadAlreadyLinked(uploadId)) {
+            if (workerResponseRepository.isUploadAlreadyLinked(uploadId, companyId)) {
                 throw new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE);
             }
         }
@@ -114,7 +114,7 @@ public class WorkerResponseService {
         workerResponseRepository.insert(response);
 
         for (UUID uploadId : uploadIds) {
-            workerResponseRepository.linkUpload(responseId, uploadId);
+            workerResponseRepository.linkUpload(responseId, uploadId, companyId);
         }
 
         if (command.responseType() == WorkerResponseType.QUESTION

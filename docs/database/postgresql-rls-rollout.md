@@ -20,15 +20,17 @@ transaction-local tenant context와 connection pool 비누수 테스트를 준�
 JWT로 인증된 Worker·Task·Approval·Audit 업무 transaction은 요청 값이 아니라
 `ActorContext.companyId`를 transaction-local context의 신뢰 원본으로 사용합니다.
 H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 검증합니다.
-`V10`에서 bootstrap 함수와 tenant 테이블 RLS policy를 생성했으며, RLS는 아직 활성화하지 않았습니다.
+`V10`에서 공통 bootstrap 함수와 기존 tenant 테이블 policy를, `V13`에서 Worker Link
+bootstrap 함수와 policy를, `V14`에서 AI 실행 테이블 policy를 생성했습니다. RLS는 아직
+활성화하지 않았습니다.
 
 로그인·Refresh Token·Logout은 tenant context가 생기기 전 최소 bootstrap 조회가
 필요합니다. Issue #34 작성 뒤 추가된 사업장 회원가입도 새 tenant 행을 처음 만드는
-별도 bootstrap 흐름으로 함께 검토해야 합니다. Worker Link는 해당 기능이 구현된 뒤
-같은 기준으로 확장합니다.
+별도 bootstrap 흐름으로 함께 검토해야 합니다. Worker Link는 `V13`에서 같은 기준으로
+확장했습니다.
 
-현재 `main`의 V1~V9에는 `company_id`를 직접 보유한 아래 16개 tenant table과,
-부모 초안의 tenant를 따르는 `document_request_draft_type`이 존재합니다. 기반 단계의
+`V16` 적용 후에는 `company_id`를 직접 보유한 아래 tenant table과, 부모 초안의 tenant를
+따르는 `document_request_draft_type`이 존재합니다. 기반 단계의
 제한 role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
 `REFERENCES` 권한과 RLS 우회 권한이 없음을 확인합니다.
 
@@ -38,6 +40,27 @@ H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 �
 - `approval_request`, `external_submission`, `task_evidence`, `audit_event`
 - `event_publication`, `event_consumption`
 - `document_request_draft`, `document_request_draft_type`
+- `worker_link`, `worker_response`, `worker_response_upload`
+- `worker_document_upload_idempotency`
+- `ai_run`, `ai_attempt`, `ai_question`, `ai_candidate`
+
+### V16 최초 배포 전제
+
+`V16`은 Worker Link 자식 테이블의 `company_id`를 backfill하고 `NOT NULL`, 복합
+`UNIQUE`, tenant-aware 복합 FK를 한 번에 적용합니다. 또한 `worker_document`의 Task
+참조를 `(task_id, worker_id, company_id)` 복합 FK로 전환합니다.
+
+이 migration은 pre-V16 애플리케이션이 같은 DB에 계속 쓰는 상황과
+backward-compatible하지 않습니다. 현재는 운영 DB·운영 트래픽·구버전 Pod가 없는 최초
+배포 전이므로 이 전제를 충족하며 expand-contract migration을 적용하지 않습니다. 이
+전제를 충족하지 않는 환경에 적용할 때는 쓰기 중단 또는 expand-contract 절차를 먼저
+설계해야 합니다.
+
+기존 개발·테스트 데이터는 신뢰할 수 있는 부모 관계에서 사업장을 복원합니다.
+`worker_response_upload`는 `worker_response`,
+`worker_document_upload_idempotency`는 `worker_link`를 기준으로 backfill합니다. 복원한
+사업장이 `stored_file.company_id`와 다르거나 NULL·orphan·교차 tenant 관계가 남으면
+migration을 실패시키며, 임의 사업장으로 보정하거나 행을 삭제하지 않습니다.
 
 `document_request_draft_type`에는 `company_id`가 없으므로 부모
 `document_request_draft`의 `draft_id`와 현재 tenant context를 확인하는 `EXISTS`

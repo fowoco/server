@@ -5,7 +5,7 @@ import java.util.UUID;
 
 public interface WorkerDocumentUploadIdempotencyRepository {
 
-    Optional<UUID> findStoredFileId(UUID workerLinkId, String clientRequestId);
+    Optional<UUID> findStoredFileId(UUID workerLinkId, UUID companyId, String clientRequestId);
 
-    void save(UUID workerLinkId, String clientRequestId, UUID storedFileId);
+    void save(UUID workerLinkId, UUID companyId, String clientRequestId, UUID storedFileId);
 }

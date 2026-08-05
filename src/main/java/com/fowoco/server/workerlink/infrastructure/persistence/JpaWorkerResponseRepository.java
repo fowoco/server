@@ -46,24 +46,30 @@ public class JpaWorkerResponseRepository implements WorkerResponseRepository {
     }
 
     @Override
-    public void linkUpload(UUID responseId, UUID storedFileId) {
+    public void linkUpload(UUID responseId, UUID storedFileId, UUID companyId) {
         Objects.requireNonNull(responseId, "responseId must not be null");
         Objects.requireNonNull(storedFileId, "storedFileId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
         Query query = entityManager.createNativeQuery(
-                "INSERT INTO worker_response_upload (response_id, stored_file_id) VALUES (?1, ?2)"
+                "INSERT INTO worker_response_upload "
+                        + "(response_id, stored_file_id, company_id) VALUES (?1, ?2, ?3)"
         );
         query.setParameter(1, responseId);
         query.setParameter(2, storedFileId);
+        query.setParameter(3, companyId);
         query.executeUpdate();
     }
 
     @Override
-    public boolean isUploadAlreadyLinked(UUID storedFileId) {
+    public boolean isUploadAlreadyLinked(UUID storedFileId, UUID companyId) {
         Objects.requireNonNull(storedFileId, "storedFileId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
         Long count = (Long) entityManager.createNativeQuery(
-                        "SELECT COUNT(*) FROM worker_response_upload WHERE stored_file_id = ?1"
+                        "SELECT COUNT(*) FROM worker_response_upload "
+                                + "WHERE stored_file_id = ?1 AND company_id = ?2"
                 )
                 .setParameter(1, storedFileId)
+                .setParameter(2, companyId)
                 .getSingleResult();
         return count != null && count > 0;
     }

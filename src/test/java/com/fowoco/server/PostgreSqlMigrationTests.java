@@ -82,7 +82,11 @@ class PostgreSqlMigrationTests {
                         "ai_run",
                         "ai_attempt",
                         "ai_question",
-                        "ai_candidate"
+                        "ai_candidate",
+                        "worker_link",
+                        "worker_response",
+                        "worker_response_upload",
+                        "worker_document_upload_idempotency"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -120,6 +124,7 @@ class PostgreSqlMigrationTests {
                 .containsEntry("worker_document_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", true))
                 .containsEntry("document_type", new ColumnSpec("varchar", false))
                 .containsEntry("submission_status", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false));
@@ -200,6 +205,23 @@ class PostgreSqlMigrationTests {
                 .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
                 .containsEntry("confidence", new ColumnSpec("numeric", false));
+        assertThat(columnSpecs(connection, "worker_link"))
+                .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("replaces_link_id", new ColumnSpec("uuid", true));
+        assertThat(columnSpecs(connection, "worker_response"))
+                .containsEntry("response_id", new ColumnSpec("uuid", false))
+                .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false));
+        assertThat(columnSpecs(connection, "worker_response_upload"))
+                .containsEntry("response_id", new ColumnSpec("uuid", false))
+                .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false));
+        assertThat(columnSpecs(connection, "worker_document_upload_idempotency"))
+                .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
+                .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -237,7 +259,18 @@ class PostgreSqlMigrationTests {
                         "pk_ai_question",
                         "fk_ai_question_attempt_company",
                         "pk_ai_candidate",
-                        "fk_ai_candidate_worker_company"
+                        "fk_ai_candidate_worker_company",
+                        "uq_task_id_worker_company",
+                        "fk_worker_document_task_worker_company",
+                        "uq_worker_link_id_company",
+                        "fk_worker_link_replaces_company",
+                        "uq_worker_response_id_company",
+                        "fk_worker_response_link_company",
+                        "uq_stored_file_id_company",
+                        "fk_worker_response_upload_response_company",
+                        "fk_worker_response_upload_file_company",
+                        "fk_worker_document_upload_idempotency_link_company",
+                        "fk_worker_document_upload_idempotency_file_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -258,7 +291,9 @@ class PostgreSqlMigrationTests {
                         "idx_ai_run_company_created",
                         "idx_ai_attempt_run",
                         "idx_ai_question_run",
-                        "idx_ai_candidate_run"
+                        "idx_ai_candidate_run",
+                        "idx_worker_response_upload_company",
+                        "idx_worker_document_upload_idempotency_company"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(

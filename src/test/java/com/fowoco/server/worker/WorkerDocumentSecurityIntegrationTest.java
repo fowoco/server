@@ -176,6 +176,56 @@ class WorkerDocumentSecurityIntegrationTest {
     }
 
     @Test
+    void registerRejectsTaskOwnedByAnotherWorkerInSameCompany() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String anotherWorkerId = registerWorker(accessToken, "다른 근로자");
+        String anotherWorkerTaskId = createTask(accessToken, anotherWorkerId);
+
+        HttpResponse<String> response = registerDocumentRequest(
+                accessToken,
+                workerIdInCompanyA,
+                anotherWorkerTaskId
+        );
+
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("WORKER_DOCUMENT_TASK_WORKER_MISMATCH");
+    }
+
+    @Test
+    void registerReturnsNotFoundForTaskFromAnotherCompany() throws Exception {
+        String companyAToken = accessToken(login(HR_A_EMAIL));
+        String companyBToken = accessToken(login(HR_B_EMAIL));
+        String companyBWorkerId = registerWorker(companyBToken, "다른 사업장 근로자");
+        String companyBTaskId = createTask(companyBToken, companyBWorkerId);
+
+        HttpResponse<String> response = registerDocumentRequest(
+                companyAToken,
+                workerIdInCompanyA,
+                companyBTaskId
+        );
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("TASK_NOT_FOUND");
+    }
+
+    @Test
+    void registerReturnsNotFoundForUnknownTask() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = registerDocumentRequest(
+                accessToken,
+                workerIdInCompanyA,
+                "70000000-0000-0000-0000-000000000099"
+        );
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("TASK_NOT_FOUND");
+    }
+
+    @Test
     void documentFromAnotherCompanyIsReturnedAsNotFoundOnPatch() throws Exception {
         String companyAToken = accessToken(login(HR_A_EMAIL));
         String companyBToken = accessToken(login(HR_B_EMAIL));
@@ -235,16 +285,24 @@ class WorkerDocumentSecurityIntegrationTest {
     }
 
     private String registerDocument(String accessToken, String workerId, String taskId) throws Exception {
+        HttpResponse<String> response = registerDocumentRequest(accessToken, workerId, taskId);
+        assertThat(response.statusCode()).isEqualTo(201);
+        return JsonPath.read(response.body(), "$.worker_document_id");
+    }
+
+    private HttpResponse<String> registerDocumentRequest(
+            String accessToken,
+            String workerId,
+            String taskId
+    ) throws Exception {
         String body = """
                 {"document_type": "PASSPORT_COPY", "submission_status": "MISSING", "task_id": %s}
                 """.formatted(taskId == null ? "null" : "\"" + taskId + "\"");
-        HttpResponse<String> response = postJson(
+        return postJson(
                 "/api/v1/workers/" + workerId + "/documents",
                 body,
                 accessToken
         );
-        assertThat(response.statusCode()).isEqualTo(201);
-        return JsonPath.read(response.body(), "$.worker_document_id");
     }
 
     private String createTask(String accessToken, String workerId) throws Exception {
