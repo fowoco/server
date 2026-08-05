@@ -15,6 +15,7 @@ import com.fowoco.server.task.domain.TaskStatus;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +95,15 @@ public class CaseQueryService {
     }
 
     private CaseProjection toProjection(CaseRecord record, List<CaseTaskProjection> tasks) {
-        List<CaseTaskProjection> orderedTasks = tasks.stream().sorted(CURRENT_TASK_ORDER).toList();
+        Map<String, Object> workflowSnapshot = decodeSnapshot(record.workflowSnapshotJson());
+        Map<UUID, SnapshotStep> snapshotSteps = snapshotSteps(workflowSnapshot);
+        List<CaseTaskProjection> orderedTasks = tasks.stream()
+                .sorted(Comparator
+                        .comparingInt((CaseTaskProjection task) -> snapshotSteps
+                                .getOrDefault(task.taskId(), SnapshotStep.fallback())
+                                .order())
+                        .thenComparing(CURRENT_TASK_ORDER))
+                .toList();
         List<CaseTaskProjection> countedTasks = orderedTasks.stream()
                 .filter(task -> task.status() != TaskStatus.CANCELLED)
                 .toList();
@@ -111,8 +120,11 @@ public class CaseQueryService {
                 record.reviewRequired(),
                 record.unreadResponse()
         ));
+        Map<UUID, TaskStatus> statusesByTaskId = orderedTasks.stream()
+                .collect(Collectors.toMap(CaseTaskProjection::taskId, CaseTaskProjection::status));
         CaseTaskProjection currentTask = orderedTasks.stream()
                 .filter(task -> !task.status().isTerminal())
+                .filter(task -> dependencySatisfied(task, snapshotSteps, statusesByTaskId))
                 .findFirst()
                 .orElse(null);
         LocalDate dueDate = orderedTasks.stream()
@@ -146,9 +158,58 @@ public class CaseQueryService {
                 currentTask,
                 orderedTasks,
                 record.workflowCatalogVersion(),
-                decodeSnapshot(record.workflowSnapshotJson()),
+                workflowSnapshot,
                 record.updatedAt()
         );
+    }
+
+    private boolean dependencySatisfied(
+            CaseTaskProjection task,
+            Map<UUID, SnapshotStep> snapshotSteps,
+            Map<UUID, TaskStatus> statusesByTaskId
+    ) {
+        SnapshotStep step = snapshotSteps.get(task.taskId());
+        if (step == null || step.dependsOnTaskId() == null) {
+            return true;
+        }
+        return statusesByTaskId.get(step.dependsOnTaskId()) == TaskStatus.COMPLETED;
+    }
+
+    private Map<UUID, SnapshotStep> snapshotSteps(Map<String, Object> snapshot) {
+        Object rawSteps = snapshot.get("steps");
+        if (!(rawSteps instanceof List<?> steps)) {
+            return Map.of();
+        }
+        Map<UUID, SnapshotStep> result = new HashMap<>();
+        for (Object rawStep : steps) {
+            if (!(rawStep instanceof Map<?, ?> step)) {
+                continue;
+            }
+            UUID taskId = uuidValue(step.get("task_id"));
+            if (taskId == null) {
+                continue;
+            }
+            int order = step.get("order") instanceof Number number
+                    ? number.intValue()
+                    : Integer.MAX_VALUE;
+            UUID dependsOnTaskId = null;
+            if (step.get("required_conditions") instanceof Map<?, ?> conditions) {
+                dependsOnTaskId = uuidValue(conditions.get("depends_on_task_id"));
+            }
+            result.put(taskId, new SnapshotStep(order, dependsOnTaskId));
+        }
+        return Map.copyOf(result);
+    }
+
+    private UUID uuidValue(Object value) {
+        if (!(value instanceof String text)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(text);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     private static CaseTaskProjection toTaskProjection(CaseTaskRecord task) {
@@ -168,6 +229,13 @@ public class CaseQueryService {
             return Collections.unmodifiableMap(new LinkedHashMap<>(snapshot));
         } catch (JacksonException | NullPointerException exception) {
             throw new IllegalStateException("저장된 Workflow Snapshot을 읽을 수 없습니다.", exception);
+        }
+    }
+
+    private record SnapshotStep(int order, UUID dependsOnTaskId) {
+
+        private static SnapshotStep fallback() {
+            return new SnapshotStep(Integer.MAX_VALUE, null);
         }
     }
 }

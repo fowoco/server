@@ -105,6 +105,7 @@ class DemoAuthSeedIntegrationTest {
             Map.entry("user_account", 20),
             Map.entry("worker", 28),
             Map.entry("task", 24),
+            Map.entry("workflow_case", 22),
             Map.entry("worker_document", 84),
             Map.entry("stored_file", 3),
             Map.entry("task_checklist_item", 68),
@@ -119,6 +120,7 @@ class DemoAuthSeedIntegrationTest {
             "user_account", 3,
             "worker", 5,
             "task", 3,
+            "workflow_case", 3,
             "worker_document", 8,
             "audit_event", 8
     );
@@ -412,12 +414,13 @@ class DemoAuthSeedIntegrationTest {
         )).isEqualTo(7);
 
         Map<String, Map<String, Object>> documentsByType = jdbcTemplate.query(
-                "SELECT document_type, submission_status, expiry_date, destination, note "
+                "SELECT document_type, task_id, submission_status, expiry_date, destination, note "
                         + "FROM worker_document WHERE worker_id = ? AND company_id = ?",
                 resultSet -> {
                     Map<String, Map<String, Object>> result = new LinkedHashMap<>();
                     while (resultSet.next()) {
                         Map<String, Object> document = new LinkedHashMap<>();
+                        document.put("task_id", resultSet.getObject("task_id", UUID.class));
                         document.put("submission_status", resultSet.getString("submission_status"));
                         document.put("expiry_date", resultSet.getObject("expiry_date", LocalDate.class));
                         document.put("destination", resultSet.getString("destination"));
@@ -431,12 +434,15 @@ class DemoAuthSeedIntegrationTest {
         );
         assertThat(documentsByType).containsOnlyKeys("PASSPORT_COPY", "ARC", "CONTRACT");
         assertThat(documentsByType.get("PASSPORT_COPY"))
+                .containsEntry("task_id", PASSPORT_REQUEST_TASK_ID)
                 .containsEntry("submission_status", "MISSING")
                 .containsEntry("destination", "근로자 문서 요청");
         assertThat(documentsByType.get("PASSPORT_COPY").get("expiry_date")).isNull();
         assertThat(documentsByType.get("ARC"))
+                .containsEntry("task_id", PASSPORT_REQUEST_TASK_ID)
                 .containsEntry("submission_status", "VERIFIED");
         assertThat(documentsByType.get("CONTRACT"))
+                .containsEntry("task_id", RECONTRACT_CANDIDATE_TASK_ID)
                 .containsEntry("submission_status", "VERIFIED");
     }
 
@@ -778,7 +784,7 @@ class DemoAuthSeedIntegrationTest {
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, worker_id"
         ));
         snapshot.put("worker_document", snapshotRows(
-                "SELECT worker_document_id, company_id, expiry_date, file_id, "
+                "SELECT worker_document_id, company_id, task_id, expiry_date, file_id, "
                         + "created_at, updated_at, version "
                         + "FROM worker_document WHERE company_id IN (?, ?) "
                         + "ORDER BY company_id, worker_document_id"
@@ -793,6 +799,12 @@ class DemoAuthSeedIntegrationTest {
                 "SELECT task_id, company_id, due_date, business_data_json, critical_fingerprint, "
                         + "content_revision, created_at, updated_at, version FROM task "
                         + "WHERE company_id IN (?, ?) ORDER BY company_id, task_id"
+        ));
+        snapshot.put("workflow_case", snapshotRows(
+                "SELECT case_id, company_id, worker_id, title, lifecycle_status, priority, "
+                        + "workflow_catalog_version, workflow_snapshot_json, created_by, "
+                        + "created_at, updated_at, version FROM workflow_case "
+                        + "WHERE company_id IN (?, ?) ORDER BY company_id, case_id"
         ));
         snapshot.put("task_checklist_item", snapshotRows(
                 "SELECT checklist_item_id, company_id, completed_at, created_at, updated_at, version "
@@ -874,6 +886,31 @@ class DemoAuthSeedIntegrationTest {
         assertThat(JsonPath.<Number>read(tasks.body(), "$.total_elements").intValue()).isEqualTo(24);
         List<Map<String, Object>> taskItems = JsonPath.read(tasks.body(), "$.items");
         assertThat(taskItems).hasSize(24);
+        HttpResponse<String> compoundCase = authorizedGet(
+                "/api/v1/cases/" + COMPOUND_CASE_ID + "/projection",
+                demoToken
+        );
+        assertOk(compoundCase);
+        assertThat(JsonPath.<String>read(compoundCase.body(), "$.display_status"))
+                .isEqualTo("REVIEW_REQUIRED");
+        assertThat(JsonPath.<String>read(compoundCase.body(), "$.current_task.task_id"))
+                .isEqualTo(RECONTRACT_CANDIDATE_TASK_ID.toString());
+        assertThat(JsonPath.<Number>read(
+                compoundCase.body(),
+                "$.readiness.verified_documents"
+        ).intValue()).isEqualTo(2);
+        assertThat(JsonPath.<Number>read(
+                compoundCase.body(),
+                "$.readiness.total_documents"
+        ).intValue()).isEqualTo(3);
+        assertThat(JsonPath.<List<String>>read(
+                compoundCase.body(),
+                "$.tasks[*].task_id"
+        )).containsExactly(
+                RECONTRACT_CANDIDATE_TASK_ID.toString(),
+                PASSPORT_REQUEST_TASK_ID.toString(),
+                EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID.toString()
+        );
         assertStatusApiCount(demoToken, "READY_FOR_REVIEW", 4);
         assertStatusApiCount(demoToken, "DRAFT", 3);
         assertThat(taskItems).anyMatch(task -> today.toString().equals(task.get("due_date")));
