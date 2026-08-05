@@ -36,6 +36,7 @@ final class DemoWorkerDocumentSeeder {
                 seed.documentId(),
                 seed.workerId(),
                 context.companyId(),
+                null,
                 seed.documentType(),
                 seed.submissionStatus(),
                 expiryDate,
