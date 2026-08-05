@@ -41,7 +41,8 @@ public class FileService {
             "image/jpeg",
             "image/png",
             "image/webp",
-            "application/pdf"
+            "application/pdf",
+            "application/hwp+zip"
     );
 
     private final StoredFileRepository storedFileRepository;
