@@ -193,6 +193,7 @@ public class JdbcCaseQueryRepository implements CaseQueryRepository {
                         + " ORDER BY CASE c.priority"
                         + " WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1"
                         + " WHEN 'NORMAL' THEN 2 ELSE 3 END, c.updated_at DESC"
+                        + ", c.case_id ASC"
                         + " LIMIT :limit OFFSET :offset",
                 parameters,
                 (resultSet, rowNumber) -> mapCase(resultSet)

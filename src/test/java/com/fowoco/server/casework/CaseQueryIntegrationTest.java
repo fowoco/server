@@ -33,9 +33,17 @@ class CaseQueryIntegrationTest {
     private static final UUID WORKER_B = UUID.fromString("cb200000-0000-0000-0000-000000000001");
     private static final UUID CASE_A = UUID.fromString("ca300000-0000-0000-0000-000000000001");
     private static final UUID CASE_B = UUID.fromString("cb300000-0000-0000-0000-000000000001");
+    private static final UUID CASE_CANCELLED =
+            UUID.fromString("ca300000-0000-0000-0000-000000000002");
+    private static final UUID CASE_ORDER_FIRST =
+            UUID.fromString("ca310000-0000-0000-0000-000000000001");
+    private static final UUID CASE_ORDER_SECOND =
+            UUID.fromString("ca320000-0000-0000-0000-000000000001");
     private static final UUID TASK_A_DONE = UUID.fromString("ca400000-0000-0000-0000-000000000001");
     private static final UUID TASK_A_WAITING = UUID.fromString("ca400000-0000-0000-0000-000000000002");
     private static final UUID TASK_B = UUID.fromString("cb400000-0000-0000-0000-000000000001");
+    private static final UUID TASK_CANCELLED =
+            UUID.fromString("ca400000-0000-0000-0000-000000000003");
     private static final String PASSWORD = "Test-password-1!";
     private static final String HR_A_EMAIL = "case.hr.a@example.com";
 
@@ -63,6 +71,7 @@ class CaseQueryIntegrationTest {
         insertWorker(WORKER_B, COMPANY_B, "다른 사업장 근로자");
         insertCase(CASE_A, COMPANY_A, WORKER_A, HR_A, "재계약·연장 준비", "URGENT");
         insertCase(CASE_B, COMPANY_B, WORKER_B, HR_B, "다른 사업장 Case", "NORMAL");
+        insertCancelledCase();
         insertTask(TASK_A_DONE, CASE_A, COMPANY_A, WORKER_A, HR_A, "RECONTRACT", "COMPLETED", 10);
         insertTask(
                 TASK_A_WAITING,
@@ -75,6 +84,16 @@ class CaseQueryIntegrationTest {
                 5
         );
         insertTask(TASK_B, CASE_B, COMPANY_B, WORKER_B, HR_B, "RECONTRACT", "DRAFT", 20);
+        insertTask(
+                TASK_CANCELLED,
+                CASE_CANCELLED,
+                COMPANY_A,
+                WORKER_A,
+                HR_A,
+                "RECONTRACT",
+                "CANCELLED",
+                30
+        );
         insertWorkerResponse();
     }
 
@@ -104,14 +123,16 @@ class CaseQueryIntegrationTest {
         HttpResponse<String> page = get("/api/v1/cases?page=0&size=20", token);
 
         assertThat(page.statusCode()).isEqualTo(200);
-        assertThat(JsonPath.<Number>read(page.body(), "$.total_elements").intValue()).isEqualTo(1);
+        assertThat(JsonPath.<Number>read(page.body(), "$.total_elements").intValue()).isEqualTo(2);
         assertThat(JsonPath.<List<String>>read(page.body(), "$.items[*].case_id"))
-                .containsExactly(CASE_A.toString());
+                .containsExactly(CASE_A.toString(), CASE_CANCELLED.toString());
         assertThat(JsonPath.<String>read(page.body(), "$.items[0].display_status"))
                 .isEqualTo("REVIEW_REQUIRED");
         assertThat(JsonPath.<Boolean>read(page.body(), "$.items[0].has_unread_response")).isTrue();
         assertThat(JsonPath.<Number>read(page.body(), "$.items[0].progress.percentage").intValue())
                 .isEqualTo(50);
+        assertThat(JsonPath.<String>read(page.body(), "$.items[1].display_status"))
+                .isEqualTo("CANCELLED");
 
         HttpResponse<String> detail = get("/api/v1/cases/" + CASE_A + "/projection", token);
         assertThat(detail.statusCode()).isEqualTo(200);
@@ -124,6 +145,12 @@ class CaseQueryIntegrationTest {
                 .isEqualTo(1);
         assertThat(JsonPath.<Number>read(detail.body(), "$.readiness.pending_approvals").intValue())
                 .isZero();
+        assertThat(JsonPath.<Number>read(detail.body(), "$.workflow_snapshot.steps[0].order").intValue())
+                .isEqualTo(1);
+        assertThat(JsonPath.<String>read(
+                detail.body(),
+                "$.workflow_snapshot.steps[1].required_conditions.depends_on_task_id"
+        )).isEqualTo(TASK_A_DONE.toString());
 
         HttpResponse<String> hidden = get("/api/v1/cases/" + CASE_B + "/projection", token);
         assertThat(hidden.statusCode()).isEqualTo(404);
@@ -140,6 +167,21 @@ class CaseQueryIntegrationTest {
                 response.body(),
                 "$.paths['/api/v1/cases/{caseId}/projection'].get.operationId"
         )).isEqualTo("getCaseProjection");
+    }
+
+    @Test
+    void keepsStableCaseOrderAcrossPagesWhenPriorityAndUpdatedAtAreEqual() throws Exception {
+        insertOrderingCase(CASE_ORDER_SECOND, "정렬 Case B");
+        insertOrderingCase(CASE_ORDER_FIRST, "정렬 Case A");
+        String token = login();
+
+        HttpResponse<String> firstPage = get("/api/v1/cases?page=0&size=2", token);
+        HttpResponse<String> secondPage = get("/api/v1/cases?page=1&size=2", token);
+
+        assertThat(JsonPath.<List<String>>read(firstPage.body(), "$.items[*].case_id"))
+                .containsExactly(CASE_A.toString(), CASE_ORDER_FIRST.toString());
+        assertThat(JsonPath.<List<String>>read(secondPage.body(), "$.items[*].case_id"))
+                .containsExactly(CASE_ORDER_SECOND.toString(), CASE_CANCELLED.toString());
     }
 
     private String login() throws Exception {
@@ -224,7 +266,7 @@ class CaseQueryIntegrationTest {
                     case_id, company_id, worker_id, title, lifecycle_status, priority,
                     workflow_catalog_version, workflow_snapshot_json, created_by,
                     created_at, updated_at, version
-                ) VALUES (?, ?, ?, ?, 'ACTIVE', ?, '0.2.0', '{}', ?,
+                ) VALUES (?, ?, ?, ?, 'ACTIVE', ?, '0.2.0', ?, ?,
                           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
                 """,
                 caseId,
@@ -232,6 +274,14 @@ class CaseQueryIntegrationTest {
                 workerId,
                 title,
                 priority,
+                caseId.equals(CASE_A) ? """
+                        {"steps":[
+                          {"order":1,"task_id":"%s","required_conditions":{}},
+                          {"order":2,"task_id":"%s","required_conditions":{
+                            "depends_on_task_id":"%s"
+                          }}
+                        ]}
+                        """.formatted(TASK_A_DONE, TASK_A_WAITING, TASK_A_DONE) : "{}",
                 actorId
         );
     }
@@ -267,6 +317,42 @@ class CaseQueryIntegrationTest {
                 LocalDate.now().plusDays(dueDays),
                 actorId,
                 actorId
+        );
+    }
+
+    private void insertCancelledCase() {
+        jdbcTemplate.update(
+                """
+                INSERT INTO workflow_case (
+                    case_id, company_id, worker_id, title, lifecycle_status, priority,
+                    workflow_catalog_version, workflow_snapshot_json, created_by,
+                    created_at, updated_at, version
+                ) VALUES (?, ?, ?, '재계약 검토 취소', 'CANCELLED', 'LOW', '0.2.0', '{}', ?,
+                          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                CASE_CANCELLED,
+                COMPANY_A,
+                WORKER_A,
+                HR_A
+        );
+    }
+
+    private void insertOrderingCase(UUID caseId, String title) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO workflow_case (
+                    case_id, company_id, worker_id, title, lifecycle_status, priority,
+                    workflow_catalog_version, workflow_snapshot_json, created_by,
+                    created_at, updated_at, version
+                ) VALUES (?, ?, ?, ?, 'ACTIVE', 'NORMAL', '0.2.0', '{}', ?, ?, ?, 0)
+                """,
+                caseId,
+                COMPANY_A,
+                WORKER_A,
+                title,
+                HR_A,
+                java.time.Instant.parse("2026-08-01T00:00:00Z"),
+                java.time.Instant.parse("2026-08-01T00:00:00Z")
         );
     }
 

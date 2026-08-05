@@ -106,6 +106,7 @@ public class CaseQueryService {
                 || (totalSteps > 0 && completedSteps == totalSteps);
         CaseDisplayState displayState = displayStatusResolver.resolve(new CaseDisplayFacts(
                 completed,
+                record.lifecycleStatus() == CaseLifecycleStatus.CANCELLED,
                 record.linkIssued(),
                 record.reviewRequired(),
                 record.unreadResponse()

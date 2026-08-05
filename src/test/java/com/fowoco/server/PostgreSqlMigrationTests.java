@@ -297,6 +297,7 @@ class PostgreSqlMigrationTests {
                         "pl_ai_attempt_tenant_isolation",
                         "pl_ai_question_tenant_isolation",
                         "pl_ai_candidate_tenant_isolation",
+                        "pl_workflow_case_tenant_isolation",
                         "pl_worker_link_tenant_isolation",
                         "pl_worker_response_tenant_isolation",
                         "pl_worker_response_upload_tenant_isolation"

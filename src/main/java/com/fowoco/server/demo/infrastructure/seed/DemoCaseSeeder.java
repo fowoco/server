@@ -104,21 +104,61 @@ final class DemoCaseSeeder {
         return "LOW";
     }
 
-    private String snapshot(List<TaskSeed> tasks) {
-        List<Map<String, String>> workflows = tasks.stream()
-                .sorted(Comparator.comparing(TaskSeed::taskId))
-                .map(task -> Map.of(
-                        "workflow_id", task.workflowId(),
-                        "task_type", task.taskType().name()
-                ))
+    String snapshot(List<TaskSeed> tasks) {
+        List<TaskSeed> orderedTasks = tasks.stream()
+                .sorted(Comparator
+                        .comparingInt((TaskSeed task) -> candidateOrder(task))
+                        .thenComparing(TaskSeed::taskId))
+                .toList();
+        List<Map<String, Object>> steps = java.util.stream.IntStream
+                .range(0, orderedTasks.size())
+                .mapToObj(index -> snapshotStep(orderedTasks.get(index), index + 1))
                 .toList();
         try {
             return objectMapper.writeValueAsString(Map.of(
                     "workflow_catalog_version", DemoOperationalSeedCatalog.WORKFLOW_CATALOG_VERSION,
-                    "workflows", workflows
+                    "steps", steps
             ));
         } catch (JacksonException exception) {
             throw new IllegalStateException("demo workflow snapshot cannot be encoded", exception);
         }
+    }
+
+    private Map<String, Object> snapshotStep(TaskSeed task, int fallbackOrder) {
+        Map<String, Object> step = new LinkedHashMap<>();
+        step.put("order", candidateOrder(task, fallbackOrder));
+        step.put("task_id", task.taskId().toString());
+        step.put("workflow_id", task.workflowId());
+        step.put("task_type", task.taskType().name());
+        step.put("required_conditions", requiredConditions(task.businessData()));
+        return Map.copyOf(step);
+    }
+
+    private int candidateOrder(TaskSeed task) {
+        return candidateOrder(task, Integer.MAX_VALUE);
+    }
+
+    private int candidateOrder(TaskSeed task, int fallback) {
+        Object value = task.businessData().get("candidate_order");
+        if (value instanceof Number number && number.intValue() > 0) {
+            return number.intValue();
+        }
+        return fallback;
+    }
+
+    private Map<String, Object> requiredConditions(Map<String, Object> businessData) {
+        Map<String, Object> conditions = new LinkedHashMap<>();
+        List.of(
+                "approval_required",
+                "depends_on_task_id",
+                "dependency_reason",
+                "missing_information",
+                "submission_due_offset_days"
+        ).forEach(key -> {
+            if (businessData.containsKey(key)) {
+                conditions.put(key, businessData.get(key));
+            }
+        });
+        return Map.copyOf(conditions);
     }
 }
