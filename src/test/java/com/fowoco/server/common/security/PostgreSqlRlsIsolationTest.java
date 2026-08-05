@@ -45,6 +45,12 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("a6000000-0000-0000-0000-000000000001");
     private static final UUID DRAFT_B =
             UUID.fromString("b6000000-0000-0000-0000-000000000002");
+    private static final UUID CASE_A =
+            UUID.fromString("a7000000-0000-0000-0000-000000000001");
+    private static final UUID CASE_B =
+            UUID.fromString("b7000000-0000-0000-0000-000000000002");
+    private static final UUID CASE_A_NEW =
+            UUID.fromString("a7000000-0000-0000-0000-000000000003");
 
     @Test
     void restrictedRoleEnforcesTenantCrudAndFailsClosedWithoutValidContext()
@@ -114,7 +120,7 @@ class PostgreSqlRlsIsolationTest {
                     "GRANT SELECT, INSERT, UPDATE, DELETE "
                             + "ON TABLE public.company, public.worker, "
                             + "public.stored_file, public.document_request_draft, "
-                            + "public.document_request_draft_type TO "
+                            + "public.document_request_draft_type, public.workflow_case TO "
                             + quotedRole
             );
 
@@ -142,6 +148,20 @@ class PostgreSqlRlsIsolationTest {
                         ('%s', '%s', 'rls-b@example.com', 'rls-b@example.com',
                          'test-password-hash-b', 'ADMIN', 'ACTIVE')
                     """.formatted(USER_A, COMPANY_A, USER_B, COMPANY_B));
+            statement.execute("""
+                    INSERT INTO workflow_case (
+                        case_id, company_id, worker_id, title, lifecycle_status,
+                        priority, workflow_catalog_version, workflow_snapshot_json,
+                        created_by, created_at, updated_at
+                    ) VALUES
+                        ('%s', '%s', '%s', 'RLS Case A', 'ACTIVE', 'NORMAL',
+                         '2026.07', '{}', '%s', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                        ('%s', '%s', '%s', 'RLS Case B', 'ACTIVE', 'NORMAL',
+                         '2026.07', '{}', '%s', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """.formatted(
+                    CASE_A, COMPANY_A, WORKER_A, USER_A,
+                    CASE_B, COMPANY_B, WORKER_B, USER_B
+            ));
             statement.execute("""
                     INSERT INTO task (
                         task_id, company_id, worker_id, case_id, task_type,
@@ -188,6 +208,7 @@ class PostgreSqlRlsIsolationTest {
             statement.execute("ALTER TABLE public.company ENABLE ROW LEVEL SECURITY");
             statement.execute("ALTER TABLE public.worker ENABLE ROW LEVEL SECURITY");
             statement.execute("ALTER TABLE public.stored_file ENABLE ROW LEVEL SECURITY");
+            statement.execute("ALTER TABLE public.workflow_case ENABLE ROW LEVEL SECURITY");
             statement.execute("ALTER TABLE public.document_request_draft ENABLE ROW LEVEL SECURITY");
             statement.execute(
                     "ALTER TABLE public.document_request_draft_type ENABLE ROW LEVEL SECURITY"
@@ -203,6 +224,7 @@ class PostgreSqlRlsIsolationTest {
             assertThat(tableCount(connection, "stored_file")).isZero();
             assertThat(tableCount(connection, "document_request_draft")).isZero();
             assertThat(tableCount(connection, "document_request_draft_type")).isZero();
+            assertThat(tableCount(connection, "workflow_case")).isZero();
 
             setTenantContext(connection, "");
             assertThat(workerCount(connection)).isZero();
@@ -234,6 +256,10 @@ class PostgreSqlRlsIsolationTest {
                     "SELECT document_type FROM public.document_request_draft_type "
                             + "ORDER BY document_type"
             )).containsExactly("PASSPORT_COPY");
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT case_id FROM public.workflow_case ORDER BY case_id"
+            )).containsExactly(CASE_A);
             assertThat(executeUpdate(
                     connection,
                     """
@@ -243,6 +269,26 @@ class PostgreSqlRlsIsolationTest {
                     """,
                     WORKER_A_NEW,
                     COMPANY_A
+            )).isOne();
+            assertThat(executeUpdate(
+                    connection,
+                    """
+                    INSERT INTO workflow_case (
+                        case_id, company_id, worker_id, title, lifecycle_status,
+                        priority, workflow_catalog_version, workflow_snapshot_json,
+                        created_by, created_at, updated_at
+                    ) VALUES (?, ?, ?, 'RLS Case A New', 'ACTIVE', 'NORMAL',
+                              '2026.07', '{}', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """,
+                    CASE_A_NEW,
+                    COMPANY_A,
+                    WORKER_A,
+                    USER_A
+            )).isOne();
+            assertThat(executeUpdate(
+                    connection,
+                    "UPDATE workflow_case SET title = 'RLS Case A Updated' WHERE case_id = ?",
+                    CASE_A_NEW
             )).isOne();
             assertThat(executeUpdate(
                     connection,
@@ -260,6 +306,30 @@ class PostgreSqlRlsIsolationTest {
                         '%s', '%s', 'Forbidden Worker B', 'ACTIVE'
                     )
                     """.formatted(WORKER_B_NEW, COMPANY_B)
+            );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO workflow_case (
+                        case_id, company_id, worker_id, title, lifecycle_status,
+                        priority, workflow_catalog_version, workflow_snapshot_json,
+                        created_by, created_at, updated_at
+                    ) VALUES (
+                        'b7000000-0000-0000-0000-000000000099', '%s', '%s',
+                        'Forbidden Case B', 'ACTIVE', 'NORMAL', '2026.07', '{}', '%s',
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    """.formatted(COMPANY_B, WORKER_B, USER_B)
+            );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    UPDATE workflow_case
+                       SET company_id = '%s', worker_id = '%s', created_by = '%s'
+                     WHERE case_id = '%s'
+                    """.formatted(COMPANY_B, WORKER_B, USER_B, CASE_A_NEW)
             );
             assertSqlState(
                     connection,
@@ -300,6 +370,21 @@ class PostgreSqlRlsIsolationTest {
             )).isZero();
             assertThat(executeUpdate(
                     connection,
+                    "UPDATE workflow_case SET title = 'Hidden Update' WHERE case_id = ?",
+                    CASE_B
+            )).isZero();
+            assertThat(executeUpdate(
+                    connection,
+                    "DELETE FROM workflow_case WHERE case_id = ?",
+                    CASE_B
+            )).isZero();
+            assertThat(executeUpdate(
+                    connection,
+                    "DELETE FROM workflow_case WHERE case_id = ?",
+                    CASE_A_NEW
+            )).isOne();
+            assertThat(executeUpdate(
+                    connection,
                     "DELETE FROM worker WHERE worker_id = ?",
                     WORKER_B
             )).isZero();
@@ -320,8 +405,13 @@ class PostgreSqlRlsIsolationTest {
         connection.commit();
 
         assertThat(workerCount(connection)).isZero();
+        assertThat(tableCount(connection, "workflow_case")).isZero();
         setTenantContext(connection, COMPANY_B.toString());
         assertThat(workerIds(connection)).containsExactly(WORKER_B);
+        assertThat(uuidValues(
+                connection,
+                "SELECT case_id FROM public.workflow_case ORDER BY case_id"
+        )).containsExactly(CASE_B);
         connection.rollback();
     }
 
@@ -334,6 +424,7 @@ class PostgreSqlRlsIsolationTest {
                     "ALTER TABLE public.document_request_draft DISABLE ROW LEVEL SECURITY"
             );
             statement.execute("ALTER TABLE public.stored_file DISABLE ROW LEVEL SECURITY");
+            statement.execute("ALTER TABLE public.workflow_case DISABLE ROW LEVEL SECURITY");
             statement.execute("ALTER TABLE public.worker DISABLE ROW LEVEL SECURITY");
             statement.execute("ALTER TABLE public.company DISABLE ROW LEVEL SECURITY");
             deleteFixtureRows(statement);
@@ -361,6 +452,10 @@ class PostgreSqlRlsIsolationTest {
                 DELETE FROM task
                 WHERE task_id IN ('%s', '%s')
                 """.formatted(TASK_A, TASK_B));
+        statement.execute("""
+                DELETE FROM workflow_case
+                WHERE case_id IN ('%s', '%s', '%s')
+                """.formatted(CASE_A, CASE_B, CASE_A_NEW));
         statement.execute("""
                 DELETE FROM worker
                 WHERE worker_id IN (
