@@ -22,7 +22,7 @@ Figma의 재계약·고용기간 연장·체류기간 연장 초안 흐름은 �
 | Figma 의미 | 예약 fixture | 저장 내용 | 현재 노출 |
 | --- | --- | --- | --- |
 | 대상 근로자 | Worker `92000000-0000-0000-0000-000000000006` | 응웬반A, `VN`, `vi`, 체류 만료 `D+45` | `GET /api/v1/workers`, `GET /api/v1/workers/{workerId}` |
-| 복합 Case | Case ID `94100000-0000-0000-0000-000000000006` | 세 업무의 연속성을 나타내는 공통 식별자 | Task 응답의 `case_id`로 노출; Case 전용 API는 없음 |
+| 복합 Case | Case ID `94100000-0000-0000-0000-000000000006` | 세 업무의 연속성과 생성 당시 Workflow Snapshot | Case 목록·Projection API와 Task 응답의 `case_id`로 노출 |
 | 재계약 조건 검토 | Task `94000000-0000-0000-0000-000000000006` | `RECONTRACT`, `READY_FOR_REVIEW`, candidate order 1 | Task 목록·상세 API |
 | 후행 고용기간 연장 | Task `94000000-0000-0000-0000-000000000007` | `DRAFT`, candidate order 3, Task 6 의존 | Task 목록·상세 API |
 | 여권 사본 요청 | Task `94000000-0000-0000-0000-000000000008` | `WAITING_WORKER`, candidate order 2, 제출 기한 7일 | Task 목록·상세 API |
@@ -30,8 +30,8 @@ Figma의 재계약·고용기간 연장·체류기간 연장 초안 흐름은 �
 | 베트남어 요청 초안 | Draft `94700000-0000-0000-0000-000000000002` | `vi`, `PASSPORT_COPY`, 7일 이내 제출 문구 | 저장 전용; Draft 조회 API 없음 |
 | AI 처리 흔적 | trace ID `demo-compound-draft-flow` | 대상 확인부터 후행 후보 준비까지 AI Agent 이벤트 5건 | 업무 활동 API에서 노출 |
 
-Case 진행률, Case 상태와 Case 전용 엔티티는 만들지 않는다. 클라이언트가 세 Task의
-`case_id`와 `business_data`를 조합해야 한다.
+Case 진행률과 표시 상태는 `GET /api/v1/cases`에서 확인하고, 세 Task와 준비도 요약은
+`GET /api/v1/cases/{caseId}/projection`에서 확인한다.
 
 ## 검토·승인·제출 lifecycle
 
@@ -85,6 +85,7 @@ Demo Company의 근로자 28명은 AI 팀이 지원하는 locale 15개를 모두
 | 데이터 | 저장 | 조회 API | 비고 |
 | --- | --- | --- | --- |
 | Worker | O | O | 이름·국적·선호 언어·체류/계약일 노출 |
+| Case와 Workflow Snapshot | O | O | 진행률·현재 Task·준비도 요약 노출 |
 | Task와 Checklist | O | O | `case_id`, `business_data`, 상태와 마감일 노출 |
 | WorkerDocument | O | O | 통합 문서함에서 상태·만료일·선택적 `file_id` 노출 |
 | Audit Event | O | O | 업무 활동과 ADMIN 감사 검색 지원 |

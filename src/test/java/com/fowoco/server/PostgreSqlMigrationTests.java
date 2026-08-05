@@ -82,7 +82,8 @@ class PostgreSqlMigrationTests {
                         "ai_run",
                         "ai_attempt",
                         "ai_question",
-                        "ai_candidate"
+                        "ai_candidate",
+                        "workflow_case"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -200,6 +201,13 @@ class PostgreSqlMigrationTests {
                 .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
                 .containsEntry("confidence", new ColumnSpec("numeric", false));
+        assertThat(columnSpecs(connection, "workflow_case"))
+                .containsEntry("case_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("lifecycle_status", new ColumnSpec("varchar", false))
+                .containsEntry("workflow_snapshot_json", new ColumnSpec("text", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -237,7 +245,11 @@ class PostgreSqlMigrationTests {
                         "pk_ai_question",
                         "fk_ai_question_attempt_company",
                         "pk_ai_candidate",
-                        "fk_ai_candidate_worker_company"
+                        "fk_ai_candidate_worker_company",
+                        "pk_workflow_case",
+                        "uq_workflow_case_id_company",
+                        "fk_workflow_case_worker_company",
+                        "fk_workflow_case_created_by_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -258,7 +270,9 @@ class PostgreSqlMigrationTests {
                         "idx_ai_run_company_created",
                         "idx_ai_attempt_run",
                         "idx_ai_question_run",
-                        "idx_ai_candidate_run"
+                        "idx_ai_candidate_run",
+                        "idx_workflow_case_company_updated",
+                        "idx_workflow_case_company_worker"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -344,6 +358,17 @@ class PostgreSqlMigrationTests {
                     '%s', '%s', 'Worker A', 'VNM', 'vi', 'ACTIVE', CURRENT_DATE + 30
                 )
                 """.formatted(WORKER_A, COMPANY_A));
+        execute(connection, """
+                INSERT INTO workflow_case (
+                    case_id, company_id, worker_id, title, lifecycle_status,
+                    priority, workflow_catalog_version, workflow_snapshot_json,
+                    created_by, created_at, updated_at
+                ) VALUES (
+                    '14000000-0000-0000-0000-000000000001', '%s', '%s',
+                    'Recontract case', 'ACTIVE', 'NORMAL', '2026.07', '{}', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, WORKER_A, USER_A));
         execute(connection, """
                 INSERT INTO task (
                     task_id, company_id, worker_id, case_id, task_type,
@@ -515,6 +540,17 @@ class PostgreSqlMigrationTests {
                 "23503",
                 "DELETE FROM company WHERE company_id = '%s'".formatted(COMPANY_A)
         );
+        assertSqlState(connection, "23503", """
+                INSERT INTO workflow_case (
+                    case_id, company_id, worker_id, title, lifecycle_status,
+                    priority, workflow_catalog_version, workflow_snapshot_json,
+                    created_by, created_at, updated_at
+                ) VALUES (
+                    '14000000-0000-0000-0000-000000000002', '%s', '%s',
+                    'Wrong tenant case', 'ACTIVE', 'NORMAL', '2026.07', '{}', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_B, WORKER_A, USER_B));
         assertSqlState(connection, "23503", """
                 INSERT INTO approval_request (
                     approval_request_id, task_id, company_id,
