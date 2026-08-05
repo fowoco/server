@@ -13,7 +13,6 @@ import com.fowoco.server.worker.domain.Worker;
 import com.fowoco.server.worker.domain.WorkerDocument;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -49,9 +48,7 @@ public class DocumentService {
                 .findByIdAndCompanyId(workerDocumentId, companyId)
                 .orElseThrow(() -> new ApiException(DocumentErrorCode.DOCUMENT_NOT_FOUND));
         String displayName = workerRepository
-                .findAllByWorkerIdsAndCompanyId(Set.of(document.workerId()), companyId)
-                .stream()
-                .findFirst()
+                .findByWorkerIdAndCompanyId(document.workerId(), companyId)
                 .map(Worker::displayName)
                 .orElse(null);
         StoredFile storedFile = document.fileId() == null
