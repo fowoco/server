@@ -92,11 +92,15 @@ class ServerApplicationTests {
 	}
 
 	@Test
-	void reactDevelopmentOriginCanSendPreflightRequest() throws Exception {
+	void reactDevelopmentOriginCanSendAiRunPreflightRequest() throws Exception {
 		HttpRequest request = HttpRequest.newBuilder()
-				.uri(URI.create("http://localhost:" + port + "/health"))
+				.uri(URI.create("http://localhost:" + port + "/api/v1/ai-runs"))
 				.header("Origin", "http://localhost:5173")
-				.header("Access-Control-Request-Method", "GET")
+				.header("Access-Control-Request-Method", "POST")
+				.header(
+						"Access-Control-Request-Headers",
+						"authorization,content-type,idempotency-key"
+				)
 				.method("OPTIONS", HttpRequest.BodyPublishers.noBody())
 				.build();
 
@@ -105,6 +109,10 @@ class ServerApplicationTests {
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.headers().firstValue("Access-Control-Allow-Origin"))
 				.contains("http://localhost:5173");
+		assertThat(response.headers().firstValue("Access-Control-Allow-Headers").orElseThrow())
+				.containsIgnoringCase("authorization")
+				.containsIgnoringCase("content-type")
+				.containsIgnoringCase("idempotency-key");
 	}
 
 	@Test

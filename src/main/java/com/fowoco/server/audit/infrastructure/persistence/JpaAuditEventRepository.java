@@ -5,6 +5,7 @@ import com.fowoco.server.audit.application.port.AuditEventRepository;
 import com.fowoco.server.audit.domain.AuditEvent;
 import com.fowoco.server.audit.domain.AuditTargetType;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
@@ -21,6 +22,11 @@ public class JpaAuditEventRepository implements AuditEventRepository {
     @Override
     public void append(AuditEvent event) {
         repository.save(new AuditEventJpaEntity(event));
+    }
+
+    @Override
+    public Optional<AuditEvent> findById(UUID auditEventId) {
+        return repository.findById(auditEventId).map(AuditEventJpaEntity::toDomain);
     }
 
     @Override

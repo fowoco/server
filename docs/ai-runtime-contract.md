@@ -32,9 +32,10 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
 ## PLAN 요청 계약
 
 첫 호출은 HR 발화문을 이해하고 Server에 필요한 DB field를 요청하는 단계입니다. 화면의
-빠른 선택 태그는 별도 JSON 필드로 보내지 않고 `발화문, INTENT_TAG` 형식으로
-`instruction` 끝에 붙입니다. Runtime이 받는 업무 입력은 이 문자열 하나이며, 최종 분류
-결과는 Runtime이 `detectedIntent`로 반환합니다. 이 단계에는 Worker UUID나 DB 조회값을
+빠른 선택 태그는 입력 예시를 채우는 UI 기능일 뿐, API 데이터가 아닙니다. Client는 사용자가
+최종 작성한 발화문만 `instruction`으로 보내고, Server도 이를 그대로 Runtime에 전달합니다.
+`intentHint`를 보내거나 `instruction` 뒤에 Intent 코드를 붙이지 않습니다. 최종 분류 결과는
+Runtime이 반환한 `detectedIntent`를 사용합니다. 이 단계에는 Worker UUID나 DB 조회값을
 넣지 않습니다.
 
 ```json
@@ -42,7 +43,7 @@ Prompt, Agent Pipeline, Provider retry와 모델 선택은 `fowoco/ai` 책임입
   "requestId": "10000000-0000-0000-0000-000000000001",
   "phase": "PLAN",
   "analysisInput": {
-    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL"
+    "instruction": "응웬반안 체류연장 준비해줘"
   }
 }
 ```
@@ -97,7 +98,7 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
   "requestId": "10000000-0000-0000-0000-000000000001",
   "phase": "ANALYZE",
   "analysisInput": {
-    "instruction": "응웬반안 체류연장 준비해줘, EXPIRY_RENEWAL",
+    "instruction": "응웬반안 체류연장 준비해줘",
     "requestedFieldKeys": [
       "legal_name",
       "stay_expiry_date"
@@ -117,8 +118,10 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
 
 - `requestId`: Server 요청과 Runtime 응답을 같은 실행으로 연결합니다.
 - `phase`: 발화문을 해석하는 `PLAN`과 Server 보유정보로 결과를 만드는 `ANALYZE`를 구분합니다.
-- `instruction`: HR 발화문에 선택한 태그가 있으면 `발화문, INTENT_TAG` 형식으로 붙인
-  단일 문자열입니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
+- `instruction`: 사용자가 최종 작성한 HR 발화문 원문입니다. 빠른 선택 태그나 Server가
+  추측한 Intent를 덧붙이지 않습니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
+- `detectedIntent`: Runtime 응답에서만 정해지는 최종 Intent입니다. Server가 발화문이나
+  화면 태그를 기준으로 별도 판정하지 않습니다.
 - `requestedFieldKeys`: Agent가 PLAN에서 요청했던 전체 key입니다. DB에 값이 없어도 목록에는 남습니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
 

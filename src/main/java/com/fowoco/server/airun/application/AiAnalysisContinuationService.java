@@ -66,10 +66,17 @@ public final class AiAnalysisContinuationService {
         validateSameWorker(previousRequest, resolution.worker());
 
         int nextContextRound = completedContextRounds + 1;
+        AnalysisInput analyzeInput = buildAnalyzeInput(
+                previousRequest.analysisInput(),
+                previousResponse,
+                resolution
+        );
         UUID attemptId = attemptStarter.startAttempt(
+                companyId,
                 previousRequest.requestId(),
                 AiAnalysisPhase.ANALYZE,
-                nextContextRound
+                nextContextRound,
+                analyzeInput
         );
         AiAnalysisRequest analyzeRequest = new AiAnalysisRequest(
                 previousRequest.requestId(),
@@ -78,7 +85,7 @@ public final class AiAnalysisContinuationService {
                 previousRequest.contractVersion(),
                 previousRequest.requiredKnowledgeVersion(),
                 remainingDeadlineMs,
-                buildAnalyzeInput(previousRequest.analysisInput(), previousResponse, resolution)
+                analyzeInput
         );
         AiAnalysisResponse response = runtimeClient.analyze(analyzeRequest, callContext);
         return new AiAnalysisContinuationResult(

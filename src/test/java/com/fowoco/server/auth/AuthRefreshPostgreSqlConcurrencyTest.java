@@ -50,8 +50,8 @@ import org.springframework.test.context.DynamicPropertySource;
 @Import(AuthRefreshPostgreSqlConcurrencyTest.ConcurrencyConfiguration.class)
 class AuthRefreshPostgreSqlConcurrencyTest {
 
-    private static final UUID COMPANY_ID = UUID.fromString("91000000-0000-0000-0000-000000000001");
-    private static final UUID USER_ID = UUID.fromString("92000000-0000-0000-0000-000000000001");
+    private static final UUID COMPANY_ID = UUID.fromString("ca000000-0000-0000-0000-000000000001");
+    private static final UUID USER_ID = UUID.fromString("ca100000-0000-0000-0000-000000000001");
     private static final String EMAIL = "postgres.refresh@example.com";
     private static final String PASSWORD = "Test-password-1!";
     private static final String REFRESH_TOKEN_COOKIE_NAME = "fowoco_refresh_token";
@@ -320,11 +320,19 @@ class AuthRefreshPostgreSqlConcurrencyTest {
     }
 
     private void clearAuthenticationRows() {
-        jdbcTemplate.update("DELETE FROM event_consumption");
-        jdbcTemplate.update("DELETE FROM event_publication");
-        jdbcTemplate.update("DELETE FROM refresh_token");
-        jdbcTemplate.update("DELETE FROM user_account");
-        jdbcTemplate.update("DELETE FROM company");
+        jdbcTemplate.update("DELETE FROM event_consumption WHERE company_id = ?", COMPANY_ID);
+        jdbcTemplate.update("DELETE FROM event_publication WHERE company_id = ?", COMPANY_ID);
+        jdbcTemplate.update(
+                "DELETE FROM refresh_token WHERE company_id = ? AND user_id = ?",
+                COMPANY_ID,
+                USER_ID
+        );
+        jdbcTemplate.update(
+                "DELETE FROM user_account WHERE company_id = ? AND user_id = ?",
+                COMPANY_ID,
+                USER_ID
+        );
+        jdbcTemplate.update("DELETE FROM company WHERE company_id = ?", COMPANY_ID);
     }
 
     private static String requiredEnvironmentVariable(String name) {
