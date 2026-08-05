@@ -20,7 +20,7 @@ public final class DocumentItemResponse {
     private final UUID workerId;
 
     @JsonProperty("task_id")
-    @Schema(name = "task_id", format = "uuid", description = "연결된 업무카드 ID (없으면 null)")
+    @Schema(name = "task_id", format = "uuid", description = "연결된 업무카드 ID")
     private final UUID taskId;
 
     @JsonProperty("display_name")
