@@ -73,6 +73,12 @@ class WorkerDocumentSecurityIntegrationTest {
     @BeforeEach
     void resetWorkerDocumentState() throws Exception {
         jdbcTemplate.update("DELETE FROM worker_document");
+        jdbcTemplate.update("DELETE FROM task_checklist_item");
+        jdbcTemplate.update("DELETE FROM task_transition_history");
+        jdbcTemplate.update("DELETE FROM approval_request");
+        jdbcTemplate.update("DELETE FROM external_submission");
+        jdbcTemplate.update("DELETE FROM task_evidence");
+        jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM worker");
         workerIdInCompanyA = registerWorker(accessToken(login(HR_A_EMAIL)), "서류테스트근로자");
     }
@@ -152,6 +158,24 @@ class WorkerDocumentSecurityIntegrationTest {
     }
 
     @Test
+    void listDocumentsFiltersByTaskId() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String taskId = createTask(accessToken, workerIdInCompanyA);
+        String documentIdWithTask = registerDocument(accessToken, workerIdInCompanyA, taskId);
+        String documentIdWithoutTask = registerDocument(accessToken, workerIdInCompanyA, null);
+
+        HttpResponse<String> response = getJson(
+                "/api/v1/documents?taskId=" + taskId,
+                accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        java.util.List<String> ids = JsonPath.read(response.body(), "$.items[*].worker_document_id");
+        assertThat(ids).contains(documentIdWithTask);
+        assertThat(ids).doesNotContain(documentIdWithoutTask);
+    }
+
+    @Test
     void documentFromAnotherCompanyIsReturnedAsNotFoundOnPatch() throws Exception {
         String companyAToken = accessToken(login(HR_A_EMAIL));
         String companyBToken = accessToken(login(HR_B_EMAIL));
@@ -210,6 +234,36 @@ class WorkerDocumentSecurityIntegrationTest {
         return JsonPath.read(response.body(), "$.worker_document_id");
     }
 
+    private String registerDocument(String accessToken, String workerId, String taskId) throws Exception {
+        String body = """
+                {"document_type": "PASSPORT_COPY", "submission_status": "MISSING", "task_id": %s}
+                """.formatted(taskId == null ? "null" : "\"" + taskId + "\"");
+        HttpResponse<String> response = postJson(
+                "/api/v1/workers/" + workerId + "/documents",
+                body,
+                accessToken
+        );
+        assertThat(response.statusCode()).isEqualTo(201);
+        return JsonPath.read(response.body(), "$.worker_document_id");
+    }
+
+    private String createTask(String accessToken, String workerId) throws Exception {
+        String body = """
+                {
+                  "worker_id":"%s",
+                  "task_type":"RECONTRACT",
+                  "workflow_id":"WF-CON-001",
+                  "title":"필터 테스트 업무",
+                  "description":"taskId 필터 검증용",
+                  "due_date":"2026-12-31",
+                  "business_data":{}
+                }
+                """.formatted(workerId);
+        HttpResponse<String> response = postJson("/api/v1/tasks", body, accessToken);
+        assertThat(response.statusCode()).isEqualTo(201);
+        return JsonPath.read(response.body(), "$.task_id");
+    }
+
     private void insertCompany(UUID companyId, String name) {
         jdbcTemplate.update(
                 """
@@ -255,6 +309,14 @@ class WorkerDocumentSecurityIntegrationTest {
 
     private HttpResponse<String> patchJson(String path, String body, String accessToken) throws Exception {
         return sendJson(path, body, accessToken, "PATCH");
+    }
+
+    private HttpResponse<String> getJson(String path, String accessToken) throws Exception {
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri(path)).GET();
+        if (accessToken != null) {
+            requestBuilder.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
+        }
+        return httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> sendJson(String path, String body, String accessToken, String method)
