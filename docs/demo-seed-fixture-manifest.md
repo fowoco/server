@@ -65,9 +65,11 @@ PDF는 모두 합성 데이터이며 `DEMO / SAMPLE - NOT FOR OFFICIAL SUBMISSIO
 검증한다.
 
 Demo Seed가 활성화되면 classpath PDF를 `app.file-storage.local-path`에 설치한다.
-동일한 storage key의 파일은 크기와 SHA-256이 같을 때만 재사용하며, 다른 파일은
-덮어쓰지 않고 시작을 중단한다. 파일만 남거나 DB row만 남은 상태는 동일 fixture인
-경우 복구한다. 현재 installer는 `LocalFileStorage` 구성만 지원한다.
+동일한 storage key의 일반 파일은 크기와 SHA-256이 같으면 재사용하고, classpath
+fixture가 변경되었으면 현재 내용으로 원자적으로 교체한다. 디렉터리나 심볼릭 링크처럼
+일반 파일이 아닌 경로는 덮어쓰지 않고 시작을 중단한다. DB row의 예약 ID·소유권·메타데이터
+충돌도 기존 값을 덮어쓰지 않고 시작을 중단한다. 파일만 남거나 DB row만 남은 상태는
+동일 fixture인 경우 복구한다. 현재 installer는 `LocalFileStorage` 구성만 지원한다.
 
 ## 근로자와 지원 언어
 

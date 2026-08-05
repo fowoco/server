@@ -1,8 +1,6 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.StoredFileSeed;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +15,7 @@ class DemoFileFixtureInstallerTest {
     Path storageRoot;
 
     @Test
-    void installsReusesAndRejectsConflictingFixtureContent() throws Exception {
+    void installsReusesAndRefreshesChangedFixtureContent() throws Exception {
         UUID fileId = UUID.fromString("94800000-0000-0000-0000-000000000001");
         StoredFileSeed seed = new StoredFileSeed(
                 fileId,
@@ -45,8 +43,15 @@ class DemoFileFixtureInstallerTest {
         conflicting[conflicting.length - 1] ^= 1;
         Files.write(installed, conflicting);
         assertThat(Files.size(installed)).isEqualTo(expected.length);
-        assertThatThrownBy(() -> installer.install(seed))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining(seed.storageKey());
+
+        installer.install(seed);
+
+        assertThat(Files.readAllBytes(installed)).isEqualTo(expected);
+
+        Files.write(installed, new byte[]{1});
+
+        installer.install(seed);
+
+        assertThat(Files.readAllBytes(installed)).isEqualTo(expected);
     }
 }
