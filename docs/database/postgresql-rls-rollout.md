@@ -21,8 +21,9 @@ JWT로 인증된 Worker·Task·Approval·Audit 업무 transaction은 요청 값�
 `ActorContext.companyId`를 transaction-local context의 신뢰 원본으로 사용합니다.
 H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 검증합니다.
 `V10`에서 공통 bootstrap 함수와 기존 tenant 테이블 policy를, `V13`에서 Worker Link
-bootstrap 함수와 policy를, `V14`에서 AI 실행 테이블 policy를 생성했습니다. RLS는 아직
-활성화하지 않았습니다.
+bootstrap 함수와 policy를, `V14`에서 AI 실행 테이블 policy를 생성했습니다. `V17`은
+V16에서 추가한 직접 tenant 컬럼에 맞춰 Worker Link 업로드 policy를 단순화하고 업로드
+멱등성 테이블 policy를 추가합니다. RLS는 아직 활성화하지 않았습니다.
 
 로그인·Refresh Token·Logout은 tenant context가 생기기 전 최소 bootstrap 조회가
 필요합니다. Issue #34 작성 뒤 추가된 사업장 회원가입도 새 tenant 행을 처음 만드는

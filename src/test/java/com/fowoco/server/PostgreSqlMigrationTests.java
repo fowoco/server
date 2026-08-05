@@ -322,7 +322,8 @@ class PostgreSqlMigrationTests {
                         "pl_ai_candidate_tenant_isolation",
                         "pl_worker_link_tenant_isolation",
                         "pl_worker_response_tenant_isolation",
-                        "pl_worker_response_upload_tenant_isolation"
+                        "pl_worker_response_upload_tenant_isolation",
+                        "pl_worker_document_upload_idempotency_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
