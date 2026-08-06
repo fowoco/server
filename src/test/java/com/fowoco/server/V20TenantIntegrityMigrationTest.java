@@ -16,7 +16,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
-class V16TenantIntegrityMigrationTest {
+class V20TenantIntegrityMigrationTest {
 
     private static final String COMPANY_A = "10000000-0000-0000-0000-000000000001";
     private static final String COMPANY_B = "20000000-0000-0000-0000-000000000002";
@@ -31,7 +31,7 @@ class V16TenantIntegrityMigrationTest {
     @Test
     void backfillsCompanyIdsBeforeEnforcingTenantAwareRelationships() throws SQLException {
         try (Connection connection = dataSource().getConnection()) {
-            createPreV16Schema(connection);
+            createPreV20Schema(connection);
             insertBaseFixture(connection, FILE_A, COMPANY_A);
             execute(connection, """
                     INSERT INTO worker_response_upload (response_id, stored_file_id)
@@ -44,7 +44,7 @@ class V16TenantIntegrityMigrationTest {
                     """.formatted(LINK_A, FILE_A));
             execute(connection, workerDocumentInsert(WORKER_A, TASK_A));
 
-            applyV16(connection);
+            applyV20(connection);
 
             assertThat(queryString(
                     connection,
@@ -61,7 +61,7 @@ class V16TenantIntegrityMigrationTest {
     @Test
     void rejectsExistingCrossTenantStoredFileRelationship() throws SQLException {
         try (Connection connection = dataSource().getConnection()) {
-            createPreV16Schema(connection);
+            createPreV20Schema(connection);
             insertBaseFixture(connection, FILE_B, COMPANY_B);
             execute(connection, """
                     INSERT INTO worker_document_upload_idempotency (
@@ -69,7 +69,7 @@ class V16TenantIntegrityMigrationTest {
                     ) VALUES ('%s', 'cross-tenant-upload', '%s')
                     """.formatted(LINK_A, FILE_B));
 
-            assertThatThrownBy(() -> applyV16(connection))
+            assertThatThrownBy(() -> applyV20(connection))
                     .isInstanceOf(RuntimeException.class);
         }
     }
@@ -77,11 +77,11 @@ class V16TenantIntegrityMigrationTest {
     @Test
     void rejectsExistingTaskLinkedToAnotherWorker() throws SQLException {
         try (Connection connection = dataSource().getConnection()) {
-            createPreV16Schema(connection);
+            createPreV20Schema(connection);
             insertBaseFixture(connection, FILE_A, COMPANY_A);
             execute(connection, workerDocumentInsert(WORKER_A2, TASK_A));
 
-            assertThatThrownBy(() -> applyV16(connection))
+            assertThatThrownBy(() -> applyV20(connection))
                     .isInstanceOf(RuntimeException.class);
         }
     }
@@ -89,9 +89,9 @@ class V16TenantIntegrityMigrationTest {
     @Test
     void preventsStoredFileFromBeingLinkedToMultipleResponses() throws SQLException {
         try (Connection connection = dataSource().getConnection()) {
-            createPreV16Schema(connection);
+            createPreV20Schema(connection);
             insertBaseFixture(connection, FILE_A, COMPANY_A);
-            applyV16(connection);
+            applyV20(connection);
 
             String secondResponseId = "15000000-0000-0000-0000-000000000002";
             execute(connection, """
@@ -114,7 +114,7 @@ class V16TenantIntegrityMigrationTest {
         }
     }
 
-    private void createPreV16Schema(Connection connection) {
+    private void createPreV20Schema(Connection connection) {
         String sql = """
                 CREATE TABLE task (
                     task_id UUID NOT NULL,
@@ -224,15 +224,15 @@ class V16TenantIntegrityMigrationTest {
                 """.formatted(UUID.randomUUID(), workerId, COMPANY_A, taskId);
     }
 
-    private void applyV16(Connection connection) {
+    private void applyV20(Connection connection) {
         ScriptUtils.executeSqlScript(
                 connection,
-                new ClassPathResource("db/migration/V16__harden_tenant_integrity.sql")
+                new ClassPathResource("db/migration/V20__harden_tenant_integrity.sql")
         );
     }
 
     private DataSource dataSource() {
-        String url = "jdbc:h2:mem:v16_" + UUID.randomUUID()
+        String url = "jdbc:h2:mem:v20_" + UUID.randomUUID()
                 + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH";
         return new DriverManagerDataSource(url, "sa", "");
     }

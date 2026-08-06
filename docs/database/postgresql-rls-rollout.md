@@ -21,8 +21,8 @@ JWT로 인증된 Worker·Task·Approval·Audit 업무 transaction은 요청 값�
 `ActorContext.companyId`를 transaction-local context의 신뢰 원본으로 사용합니다.
 H2는 PostgreSQL custom setting을 흉내 내지 않고 transaction 경계만 검증합니다.
 `V10`에서 공통 bootstrap 함수와 기존 tenant 테이블 policy를, `V13`에서 Worker Link
-bootstrap 함수와 policy를, `V14`에서 AI 실행 테이블 policy를 생성했습니다. `V17`은
-V16에서 추가한 직접 tenant 컬럼에 맞춰 Worker Link 업로드 policy를 단순화하고 업로드
+bootstrap 함수와 policy를, `V14`에서 AI 실행 테이블 policy를 생성했습니다. `V21`은
+V20에서 추가한 직접 tenant 컬럼에 맞춰 Worker Link 업로드 policy를 단순화하고 업로드
 멱등성 테이블 policy를 추가합니다. Worker Link bootstrap도 ACTIVE이면서 DB 시각 기준
 미만료인 링크만 사업장을 반환하도록 제한합니다. RLS는 아직 활성화하지 않았습니다.
 
@@ -31,7 +31,7 @@ V16에서 추가한 직접 tenant 컬럼에 맞춰 Worker Link 업로드 policy�
 별도 bootstrap 흐름으로 함께 검토해야 합니다. Worker Link는 `V13`에서 같은 기준으로
 확장했습니다.
 
-`V16` 적용 후에는 `company_id`를 직접 보유한 아래 tenant table과, 부모 초안의 tenant를
+`V20` 적용 후에는 `company_id`를 직접 보유한 아래 tenant table과, 부모 초안의 tenant를
 따르는 `document_request_draft_type`이 존재합니다. 기반 단계의
 제한 role 테스트는 이 전체 범위에 업무 DML만 허용하고, table owner·DDL·`TRUNCATE`·
 `REFERENCES` 권한과 RLS 우회 권한이 없음을 확인합니다.
@@ -46,13 +46,13 @@ V16에서 추가한 직접 tenant 컬럼에 맞춰 Worker Link 업로드 policy�
 - `worker_document_upload_idempotency`
 - `ai_run`, `ai_attempt`, `ai_question`, `ai_candidate`
 
-### V16 최초 배포 전제
+### V20 최초 배포 전제
 
-`V16`은 Worker Link 자식 테이블의 `company_id`를 backfill하고 `NOT NULL`, 복합
+`V20`은 Worker Link 자식 테이블의 `company_id`를 backfill하고 `NOT NULL`, 복합
 `UNIQUE`, tenant-aware 복합 FK를 한 번에 적용합니다. 또한 `worker_document`의 Task
 참조를 `(task_id, worker_id, company_id)` 복합 FK로 전환합니다.
 
-이 migration은 pre-V16 애플리케이션이 같은 DB에 계속 쓰는 상황과
+이 migration은 pre-V20 애플리케이션이 같은 DB에 계속 쓰는 상황과
 backward-compatible하지 않습니다. 현재는 운영 DB·운영 트래픽·구버전 Pod가 없는 최초
 배포 전이므로 이 전제를 충족하며 expand-contract migration을 적용하지 않습니다. 이
 전제를 충족하지 않는 환경에 적용할 때는 쓰기 중단 또는 expand-contract 절차를 먼저
