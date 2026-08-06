@@ -4,13 +4,15 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record OutboxManualRetryRequest(
         @JsonProperty("expected_version")
         @Schema(description = "운영자가 확인한 현재 Outbox event version", example = "3")
+        @NotNull(message = "expected_version은 필수입니다.")
         @Min(value = 0, message = "expected_version은 0 이상이어야 합니다.")
-        long expectedVersion,
+        Long expectedVersion,
 
         @Schema(
                 description = "재처리 근거. 개인정보·payload·token·예외 원문은 입력하지 않습니다.",

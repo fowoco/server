@@ -220,6 +220,30 @@ class OutboxManualRetryApiIntegrationTest {
     }
 
     @Test
+    void expectedVersionIsRequired() throws Exception {
+        String token = login(ADMIN_A_EMAIL);
+
+        assertThat(retry(
+                EVENT_A,
+                token,
+                "outbox-retry-missing-version",
+                """
+                {"reason":"내부 handler 복구와 점검을 완료했습니다."}
+                """
+        ).statusCode()).isEqualTo(400);
+        assertThat(retry(
+                EVENT_A,
+                token,
+                "outbox-retry-null-version",
+                """
+                {"expected_version":null,"reason":"내부 handler 복구와 점검을 완료했습니다."}
+                """
+        ).statusCode()).isEqualTo(400);
+        assertThat(status(EVENT_A)).isEqualTo("REVIEW_REQUIRED");
+        assertThat(count("outbox_manual_retry")).isZero();
+    }
+
+    @Test
     void concurrentRequestsAllowOnlyOneRetry() throws Exception {
         String token = login(ADMIN_A_EMAIL);
         ExecutorService executor = Executors.newFixedThreadPool(2);
