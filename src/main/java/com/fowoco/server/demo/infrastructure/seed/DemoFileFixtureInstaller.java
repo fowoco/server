@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -31,16 +31,16 @@ final class DemoFileFixtureInstaller {
         Path target = target(seed.storageKey());
         try {
             Files.createDirectories(rootDirectory);
-            if (Files.exists(target)) {
-                verify(target, expected, seed);
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                requireRegularFile(target, seed);
+            }
+            if (matches(target, expected)) {
                 return;
             }
             Path temporary = Files.createTempFile(rootDirectory, ".demo-fixture-", ".tmp");
             try {
                 Files.write(temporary, expected);
-                moveWithoutOverwrite(temporary, target);
-            } catch (FileAlreadyExistsException exception) {
-                verify(target, expected, seed);
+                moveReplacing(temporary, target);
             } finally {
                 Files.deleteIfExists(temporary);
             }
@@ -76,20 +76,37 @@ final class DemoFileFixtureInstaller {
         return target;
     }
 
-    private void moveWithoutOverwrite(Path source, Path target) throws IOException {
+    private void moveReplacing(Path source, Path target) throws IOException {
         try {
-            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+            Files.move(
+                    source,
+                    target,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
         } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(source, target);
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
     private void verify(Path target, byte[] expected, StoredFileSeed seed) throws IOException {
-        if (!Files.isRegularFile(target)
-                || Files.size(target) != expected.length
-                || !Arrays.equals(sha256(Files.readAllBytes(target)), sha256(expected))) {
+        if (!matches(target, expected)) {
             throw new IllegalStateException(
                     "a demo file storage key already contains different content: " + seed.storageKey()
+            );
+        }
+    }
+
+    private boolean matches(Path target, byte[] expected) throws IOException {
+        return Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)
+                && Files.size(target) == expected.length
+                && Arrays.equals(sha256(Files.readAllBytes(target)), sha256(expected));
+    }
+
+    private void requireRegularFile(Path target, StoredFileSeed seed) {
+        if (!Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalStateException(
+                    "a demo file storage key is not a regular file: " + seed.storageKey()
             );
         }
     }
