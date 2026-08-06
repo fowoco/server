@@ -139,6 +139,45 @@ class FileSecurityIntegrationTest {
     }
 
     @Test
+    void uploadAcceptsValidHwpFileBySignature() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        byte[] hwpContent = buildValidHwpOleFile();
+
+        HttpResponse<String> response = uploadFile(
+                token, "contract.hwp", "application/octet-stream", hwpContent, "GENERAL"
+        );
+
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(response.body(), "$.name")).isEqualTo("contract.hwp");
+    }
+
+    @Test
+    void uploadRejectsHwpExtensionWithInvalidSignature() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = uploadFile(
+                token, "fake.hwp", "application/octet-stream",
+                "this is not a real hwp file".getBytes(StandardCharsets.UTF_8), "GENERAL"
+        );
+
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(415);
+    }
+
+    private byte[] buildValidHwpOleFile() throws Exception {
+        try (org.apache.poi.poifs.filesystem.POIFSFileSystem fileSystem =
+                new org.apache.poi.poifs.filesystem.POIFSFileSystem()) {
+            byte[] header = new byte[256];
+            byte[] signatureBytes = "HWP Document File".getBytes(StandardCharsets.US_ASCII);
+            System.arraycopy(signatureBytes, 0, header, 0, signatureBytes.length);
+            fileSystem.createDocument(new java.io.ByteArrayInputStream(header), "FileHeader");
+
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            fileSystem.writeFilesystem(out);
+            return out.toByteArray();
+        }
+    }
+
+    @Test
     void uploadRejectsNonExistentTaskId() throws Exception {
         String token = accessToken(login(HR_A_EMAIL));
         UUID nonExistentTaskId = UUID.randomUUID();
