@@ -96,6 +96,26 @@ public final class UserAccount {
         return this.companyId.equals(companyId);
     }
 
+    public UserAccount changePassword(String newPasswordHash, Instant now) {
+        Objects.requireNonNull(now, "now must not be null");
+        if (now.isBefore(updatedAt)) {
+            throw new IllegalArgumentException("now must not be before updatedAt");
+        }
+        return new UserAccount(
+                userId,
+                companyId,
+                displayName,
+                email,
+                normalizedEmail,
+                newPasswordHash,
+                role,
+                status,
+                createdAt,
+                now,
+                version + 1
+        );
+    }
+
     public UUID userId() {
         return userId;
     }

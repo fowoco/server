@@ -130,4 +130,13 @@ public class UserAccountJpaEntity {
         );
     }
 
+    void applyState(UserAccount userAccount) {
+        Objects.requireNonNull(userAccount, "userAccount must not be null");
+        if (!userId.equals(userAccount.userId()) || version + 1 != userAccount.version()) {
+            throw new IllegalArgumentException("user account version transition is invalid");
+        }
+        passwordHash = userAccount.passwordHash();
+        updatedAt = userAccount.updatedAt();
+    }
+
 }

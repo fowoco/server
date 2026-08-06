@@ -24,6 +24,9 @@ public class PostgreSqlAuthTenantBootstrap implements AuthTenantBootstrap {
     private static final String REFRESH_TOKEN_BOOTSTRAP_SQL = """
             SELECT public.bootstrap_company_id_by_refresh_token_hash(?1)
             """;
+    private static final String PASSWORD_RESET_TOKEN_BOOTSTRAP_SQL = """
+            SELECT public.bootstrap_company_id_by_password_reset_token_hash(?1)
+            """;
 
     private final EntityManager entityManager;
 
@@ -41,6 +44,12 @@ public class PostgreSqlAuthTenantBootstrap implements AuthTenantBootstrap {
     public Optional<UUID> findCompanyIdByRefreshTokenHash(String tokenHash) {
         Objects.requireNonNull(tokenHash, "tokenHash must not be null");
         return queryCompanyId(REFRESH_TOKEN_BOOTSTRAP_SQL, tokenHash);
+    }
+
+    @Override
+    public Optional<UUID> findCompanyIdByPasswordResetTokenHash(String tokenHash) {
+        Objects.requireNonNull(tokenHash, "tokenHash must not be null");
+        return queryCompanyId(PASSWORD_RESET_TOKEN_BOOTSTRAP_SQL, tokenHash);
     }
 
     private Optional<UUID> queryCompanyId(String sql, String lookupValue) {

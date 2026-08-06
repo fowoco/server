@@ -29,6 +29,7 @@ class PostgreSqlMigrationTests {
     private static final String TASK_A = "13000000-0000-0000-0000-000000000001";
     private static final String EVENT_A = "18000000-0000-0000-0000-000000000001";
     private static final String TOKEN_HASH_A = "a".repeat(64);
+    private static final String PASSWORD_RESET_TOKEN_HASH_A = "e".repeat(64);
     private static final String ACTIVE_WORKER_LINK_TOKEN_HASH = "b".repeat(64);
     private static final String REVOKED_WORKER_LINK_TOKEN_HASH = "c".repeat(64);
     private static final String EXPIRED_WORKER_LINK_TOKEN_HASH = "d".repeat(64);
@@ -100,7 +101,9 @@ class PostgreSqlMigrationTests {
                         "worker_link",
                         "worker_response",
                         "worker_response_upload",
-                        "worker_document_upload_idempotency"
+                        "worker_document_upload_idempotency",
+                        "user_agreement_consent",
+                        "password_reset_token"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -126,6 +129,22 @@ class PostgreSqlMigrationTests {
                 .containsEntry("expires_at", new ColumnSpec("timestamptz", false))
                 .containsEntry("used_at", new ColumnSpec("timestamptz", true))
                 .containsEntry("revoked_at", new ColumnSpec("timestamptz", true))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "user_agreement_consent"))
+                .containsEntry("consent_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("user_id", new ColumnSpec("uuid", false))
+                .containsEntry("agreement_type", new ColumnSpec("varchar", false))
+                .containsEntry("policy_version", new ColumnSpec("varchar", false))
+                .containsEntry("agreed", new ColumnSpec("bool", false))
+                .containsEntry("request_id", new ColumnSpec("varchar", false));
+        assertThat(columnSpecs(connection, "password_reset_token"))
+                .containsEntry("password_reset_token_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("user_id", new ColumnSpec("uuid", false))
+                .containsEntry("token_hash", new ColumnSpec("varchar", false))
+                .containsEntry("expires_at", new ColumnSpec("timestamptz", false))
+                .containsEntry("used_at", new ColumnSpec("timestamptz", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "worker"))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
@@ -322,7 +341,12 @@ class PostgreSqlMigrationTests {
                         "fk_worker_response_upload_response_company",
                         "fk_worker_response_upload_file_company",
                         "fk_worker_document_upload_idempotency_link_company",
-                        "fk_worker_document_upload_idempotency_file_company"
+                        "fk_worker_document_upload_idempotency_file_company",
+                        "pk_user_agreement_consent",
+                        "fk_user_agreement_consent_user_company",
+                        "pk_password_reset_token",
+                        "uq_password_reset_token_hash",
+                        "fk_password_reset_token_user_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -351,7 +375,10 @@ class PostgreSqlMigrationTests {
                         "idx_workflow_case_company_worker",
                         "idx_worker_response_upload_company",
                         "idx_worker_document_upload_idempotency_company",
-                        "idx_worker_document_upload_idempotency_file_company"
+                        "idx_worker_document_upload_idempotency_file_company",
+                        "idx_user_agreement_consent_user_time",
+                        "idx_password_reset_token_company_user",
+                        "idx_password_reset_token_active"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -383,13 +410,16 @@ class PostgreSqlMigrationTests {
                         "pl_worker_link_tenant_isolation",
                         "pl_worker_response_tenant_isolation",
                         "pl_worker_response_upload_tenant_isolation",
-                        "pl_worker_document_upload_idempotency_tenant_isolation"
+                        "pl_worker_document_upload_idempotency_tenant_isolation",
+                        "pl_user_agreement_consent_tenant_isolation",
+                        "pl_password_reset_token_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
                         "bootstrap_company_id_by_refresh_token_hash",
+                        "bootstrap_company_id_by_password_reset_token_hash",
                         "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
@@ -399,6 +429,7 @@ class PostgreSqlMigrationTests {
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
                         "bootstrap_company_id_by_refresh_token_hash",
+                        "bootstrap_company_id_by_password_reset_token_hash",
                         "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
@@ -434,6 +465,24 @@ class PostgreSqlMigrationTests {
                     '%s', CURRENT_TIMESTAMP + INTERVAL '1 day'
                 )
                 """.formatted(USER_A, COMPANY_A, TOKEN_HASH_A));
+        execute(connection, """
+                INSERT INTO user_agreement_consent (
+                    consent_id, company_id, user_id, agreement_type,
+                    policy_version, agreed, request_id, recorded_at
+                ) VALUES (
+                    '33000000-0000-0000-0000-000000000001', '%s', '%s',
+                    'PRIVACY_POLICY', '1.0', TRUE, 'migration-test-request', CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, USER_A));
+        execute(connection, """
+                INSERT INTO password_reset_token (
+                    password_reset_token_id, company_id, user_id, token_hash,
+                    expires_at, created_at, updated_at
+                ) VALUES (
+                    '34000000-0000-0000-0000-000000000001', '%s', '%s', '%s',
+                    CURRENT_TIMESTAMP + INTERVAL '30 minutes', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, USER_A, PASSWORD_RESET_TOKEN_HASH_A));
         execute(connection, """
                 INSERT INTO worker (
                     worker_id, company_id, display_name, nationality_code,
@@ -549,6 +598,16 @@ class PostgreSqlMigrationTests {
         assertThat(queryNullableString(
                 connection,
                 "SELECT public.bootstrap_company_id_by_refresh_token_hash(?)",
+                "0".repeat(64)
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_password_reset_token_hash(?)",
+                PASSWORD_RESET_TOKEN_HASH_A
+        )).isEqualTo(COMPANY_A);
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_password_reset_token_hash(?)",
                 "0".repeat(64)
         )).isNull();
         assertThat(queryNullableString(

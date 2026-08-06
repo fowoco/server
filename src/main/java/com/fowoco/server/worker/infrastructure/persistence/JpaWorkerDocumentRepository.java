@@ -56,6 +56,26 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository {
     }
 
     @Override
+    public Optional<WorkerDocument> findByIdAndCompanyId(UUID workerDocumentId, UUID companyId) {
+        Objects.requireNonNull(workerDocumentId, "workerDocumentId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        return entityManager.createQuery(
+                        """
+                        select document
+                        from WorkerDocumentJpaEntity document
+                        where document.workerDocumentId = :workerDocumentId
+                          and document.companyId = :companyId
+                        """,
+                        WorkerDocumentJpaEntity.class
+                )
+                .setParameter("workerDocumentId", workerDocumentId)
+                .setParameter("companyId", companyId)
+                .getResultStream()
+                .findFirst()
+                .map(WorkerDocumentJpaEntity::toDomain);
+    }
+
+    @Override
     public WorkerDocument update(WorkerDocument document) {
         Objects.requireNonNull(document, "document must not be null");
         WorkerDocumentJpaEntity entity = entityManager.find(

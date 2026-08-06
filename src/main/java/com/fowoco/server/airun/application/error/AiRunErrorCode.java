@@ -14,6 +14,8 @@ public enum AiRunErrorCode implements ApiErrorCode {
     AI_RUN_INVALID_INSTRUCTION(HttpStatus.BAD_REQUEST, "업무 요청 문장을 확인해 주세요."),
     AI_RUN_INVALID_IDEMPOTENCY_KEY(HttpStatus.BAD_REQUEST, "Idempotency-Key를 확인해 주세요."),
     AI_RUN_INVALID_ANSWER(HttpStatus.BAD_REQUEST, "추가 답변의 항목과 값을 확인해 주세요."),
+    AI_RUN_INVALID_LAST_EVENT_ID(HttpStatus.BAD_REQUEST, "Last-Event-ID를 확인해 주세요."),
+    AI_RUN_SSE_CONNECTION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "이 AI 분석에 연결할 수 있는 실시간 구독 수를 초과했습니다."),
     AI_RUN_INVALID_DECISION(HttpStatus.BAD_REQUEST, "AI 업무 후보 결정값을 확인해 주세요.");
 
     private final HttpStatus status;

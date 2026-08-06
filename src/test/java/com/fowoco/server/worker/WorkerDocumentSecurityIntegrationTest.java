@@ -176,6 +176,31 @@ class WorkerDocumentSecurityIntegrationTest {
     }
 
     @Test
+    void getDocumentReturnsDetailWithVersionAndFileInfo() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String documentId = registerDocument(accessToken, workerIdInCompanyA);
+
+        HttpResponse<String> response = getJson("/api/v1/documents/" + documentId, accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.worker_document_id")).isEqualTo(documentId);
+        assertThat(JsonPath.<String>read(response.body(), "$.worker_id")).isEqualTo(workerIdInCompanyA);
+        assertThat(JsonPath.<Number>read(response.body(), "$.version").longValue()).isZero();
+        assertThat(JsonPath.<Object>read(response.body(), "$.file_id")).isNull();
+    }
+
+    @Test
+    void getDocumentFromAnotherCompanyReturnsNotFound() throws Exception {
+        String companyAToken = accessToken(login(HR_A_EMAIL));
+        String companyBToken = accessToken(login(HR_B_EMAIL));
+        String documentId = registerDocument(companyAToken, workerIdInCompanyA);
+
+        HttpResponse<String> response = getJson("/api/v1/documents/" + documentId, companyBToken);
+
+        assertThat(response.statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void registerRejectsTaskOwnedByAnotherWorkerInSameCompany() throws Exception {
         String accessToken = accessToken(login(HR_A_EMAIL));
         String anotherWorkerId = registerWorker(accessToken, "다른 근로자");
