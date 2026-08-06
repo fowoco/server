@@ -29,14 +29,32 @@ final class DemoWorkerDocumentSeeder {
                         context.companyId()
                 );
         if (existing.isPresent()) {
-            verifyExisting(existing.get(), seed, context);
+            WorkerDocument document = existing.get();
+            verifyExistingExceptTask(document, seed, context);
+            if (!Objects.equals(document.taskId(), seed.taskId())) {
+                workerDocumentRepository.update(new WorkerDocument(
+                        document.workerDocumentId(),
+                        document.workerId(),
+                        document.companyId(),
+                        seed.taskId(),
+                        document.documentType(),
+                        document.submissionStatus(),
+                        document.expiryDate(),
+                        document.destination(),
+                        document.note(),
+                        document.fileId(),
+                        document.createdAt(),
+                        context.now(),
+                        document.version()
+                ));
+            }
             return;
         }
         workerDocumentRepository.insert(new WorkerDocument(
                 seed.documentId(),
                 seed.workerId(),
                 context.companyId(),
-                null,
+                seed.taskId(),
                 seed.documentType(),
                 seed.submissionStatus(),
                 expiryDate,
@@ -50,6 +68,19 @@ final class DemoWorkerDocumentSeeder {
     }
 
     void verifyExisting(
+            WorkerDocument document,
+            DocumentSeed seed,
+            DemoOperationalSeedContext context
+    ) {
+        verifyExistingExceptTask(document, seed, context);
+        if (!Objects.equals(seed.taskId(), document.taskId())) {
+            throw new IllegalStateException(
+                    "a reserved demo worker document id already belongs to different task data"
+            );
+        }
+    }
+
+    private void verifyExistingExceptTask(
             WorkerDocument document,
             DocumentSeed seed,
             DemoOperationalSeedContext context

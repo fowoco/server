@@ -22,6 +22,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 public class DemoOperationalSeedConfiguration {
@@ -45,6 +46,7 @@ public class DemoOperationalSeedConfiguration {
             AuditEventRepository auditEventRepository,
             EntityManager entityManager,
             JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
             Clock clock,
             @Value("${app.file-storage.local-path}") String localFileStoragePath
     ) {
@@ -54,6 +56,7 @@ public class DemoOperationalSeedConfiguration {
             );
         }
         DemoOperationalSeedCatalog catalog = new DemoOperationalSeedCatalog();
+        DemoCaseSeeder caseSeeder = new DemoCaseSeeder(jdbcTemplate, objectMapper);
         DemoTaskSeeder taskSeeder = new DemoTaskSeeder(taskRepository, taskContentCodec);
         DemoStoredFileSeeder storedFileSeeder = new DemoStoredFileSeeder(
                 storedFileRepository,
@@ -104,6 +107,7 @@ public class DemoOperationalSeedConfiguration {
                 properties,
                 clock,
                 catalog,
+                caseSeeder,
                 taskSeeder,
                 documentSeeder,
                 checklistSeeder,

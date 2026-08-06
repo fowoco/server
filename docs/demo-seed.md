@@ -63,6 +63,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-dev.ps1
 | --- | ---: | --- |
 | 계정 | 20 | `ADMIN` 2, `HR` 12, `VIEWER` 6 |
 | 근로자 | 28 | `ACTIVE`와 `ON_LEAVE`, AI 지원 locale 15개, 다양한 체류 만료 구간 |
+| Case | 22 | 단일 업무 Case 21개, 세 업무를 묶은 복합 Case 1개 |
 | 업무 | 24 | 세 가지 지원 업무 유형과 여덟 가지 상태 |
 | 근로자 서류 | 84 | `VERIFIED` 48, `SUBMITTED` 20, `MISSING` 16 |
 | 체크리스트 항목 | 68 | 24개 업무에 연결 |
@@ -100,6 +101,7 @@ Demo Company 업무 유형은 `STAY_PERIOD_EXTENSION` 10개, `RECONTRACT` 8개,
 | --- | ---: |
 | 계정 | 3 |
 | 근로자 | 5 |
+| Case | 3 |
 | 업무 | 3 |
 | 근로자 서류 | 8 |
 | Audit Event | 8 |
@@ -124,8 +126,8 @@ Test Company에는 Demo Company의 전체 운영 데이터를 복제하지 않�
 | 아디 수르야 | 고용기간 연장 자료 보완 | 지원되는 업무 유형의 `NEEDS_INFO`; 신규 등록 업무는 만들지 않음 |
 | 모하메드 라힘 | 오늘 마감된 체류기간 연장 완료 | `COMPLETED`, 승인 상태, 외부 제출, 완료 증빙, 상태 전이 이력 |
 
-응웬반A의 세 업무는 별도 Case 엔티티 없이 같은 `caseId`로 연속성만 표현한다.
-서버는 Case 진행률이나 Case 전용 API를 제공하지 않는다.
+응웬반A의 세 업무는 하나의 Case 엔티티에 연결된다. 서버는 Case 목록과 Projection
+API에서 진행률, 현재 Task, Workflow Snapshot과 준비도 요약을 제공한다.
 
 ## 클라이언트에서 확인되는 데이터
 
