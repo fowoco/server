@@ -2,6 +2,7 @@ package com.fowoco.server.document.api;
 
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.document.application.DocumentDetailResult;
 import com.fowoco.server.document.application.DocumentPageResult;
 import com.fowoco.server.document.application.DocumentService;
 import com.fowoco.server.worker.application.WorkerDocumentSearchQuery;
@@ -23,6 +24,7 @@ import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -95,5 +97,31 @@ public class DocumentController {
                 ))
                 .toList();
         return new DocumentPageResponse(items, result.page(), result.size(), result.totalElements());
+    }
+    
+    @Operation(
+            operationId = "getDocument",
+            summary = "서류 단건 상세 조회",
+            description = "연결된 파일 정보와 expected_version 기준값을 함께 반환합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = DocumentDetailResponse.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound")
+    })
+    @GetMapping(path = "/{documentId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
+    public DocumentDetailResponse findById(@Parameter(description = "서류 ID") @PathVariable UUID documentId) {
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        DocumentDetailResult result = documentService.findById(documentId, actor);
+        return DocumentDetailResponse.from(result);
     }
 }
