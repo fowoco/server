@@ -74,7 +74,7 @@ public class JdbcAiRunRepository implements AiRunRepository {
                     ai_run_id, company_id, requested_by, request_id,
                     instruction, instruction_hash, idempotency_key_hash,
                     status, attempt_count, created_at, updated_at, version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'RUNNING', 1, ?, ?, 0)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'QUEUED', 1, ?, ?, 0)
                 """,
                 run.aiRunId(),
                 run.companyId(),
@@ -97,6 +97,37 @@ public class JdbcAiRunRepository implements AiRunRepository {
                 run.input(),
                 run.createdAt()
         ));
+    }
+
+    @Override
+    @Transactional
+    public ExecutionState startInitialAttempt(UUID aiRunId, UUID companyId, Instant startedAt) {
+        int updated = jdbcTemplate.update(
+                """
+                UPDATE ai_run
+                SET status = 'RUNNING', updated_at = ?, version = version + 1
+                WHERE ai_run_id = ? AND company_id = ? AND status = 'QUEUED'
+                """,
+                timestamp(startedAt),
+                aiRunId,
+                companyId
+        );
+        if (updated != 1) {
+            throw new IllegalStateException("queued AI Run was not found");
+        }
+        jdbcTemplate.update(
+                """
+                UPDATE ai_attempt
+                SET started_at = ?
+                WHERE ai_run_id = ? AND company_id = ? AND sequence_no = 1
+                  AND status = 'RUNNING'
+                """,
+                timestamp(startedAt),
+                aiRunId,
+                companyId
+        );
+        return findExecutionState(aiRunId, companyId)
+                .orElseThrow(() -> new IllegalStateException("started AI Run has no attempt"));
     }
 
     @Override
