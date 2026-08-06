@@ -88,9 +88,12 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
                 workerSeed.nationalityCode(),
                 workerSeed.preferredLanguage(),
                 workerSeed.workStatus(),
+                "E-9",
                 relativeDate(today, workerSeed.stayExpiryDays()),
                 today.minusYears(1),
                 today.plusDays(workerSeed.contractEndDays()),
+                null,
+                null,
                 now,
                 now,
                 0L

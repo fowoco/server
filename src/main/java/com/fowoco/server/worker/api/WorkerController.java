@@ -118,9 +118,12 @@ public class WorkerController {
                 request.getDisplayName(),
                 request.getNationalityCode(),
                 request.getPreferredLanguage(),
+                request.getVisaType(),
                 request.getStayExpiryDate(),
                 request.getContractStartDate(),
-                request.getContractEndDate()
+                request.getContractEndDate(),
+                request.getEmploymentPermitEndDate(),
+                request.getEmploymentActivityEndDate()
         );
         Worker worker = workerService.register(command, actor);
         return ResponseEntity.status(HttpStatus.CREATED).body(WorkerResponse.from(worker));
@@ -201,9 +204,12 @@ public class WorkerController {
                 request.getNationalityCode(),
                 request.getPreferredLanguage(),
                 request.getWorkStatus(),
+                request.getVisaType(),
                 request.getStayExpiryDate(),
                 request.getContractStartDate(),
                 request.getContractEndDate(),
+                request.getEmploymentPermitEndDate(),
+                request.getEmploymentActivityEndDate(),
                 request.getExpectedVersion()
         );
         Worker worker = workerService.patch(command, actor);

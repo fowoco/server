@@ -22,6 +22,7 @@ public final class WorkerResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final UUID workerId;
+
     @JsonProperty("company_id")
     @Schema(
             name = "company_id",
@@ -30,6 +31,7 @@ public final class WorkerResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final UUID companyId;
+
     @JsonProperty("display_name")
     @Schema(
             name = "display_name",
@@ -38,6 +40,7 @@ public final class WorkerResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final String displayName;
+
     @JsonProperty("nationality_code")
     @Schema(
             name = "nationality_code",
@@ -45,6 +48,7 @@ public final class WorkerResponse {
             example = "VN"
     )
     private final String nationalityCode;
+
     @JsonProperty("preferred_language")
     @Schema(
             name = "preferred_language",
@@ -52,6 +56,7 @@ public final class WorkerResponse {
             example = "vi"
     )
     private final String preferredLanguage;
+
     @JsonProperty("work_status")
     @Schema(
             name = "work_status",
@@ -59,13 +64,23 @@ public final class WorkerResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final WorkerStatus workStatus;
+
+    @JsonProperty("visa_type")
+    @Schema(
+            name = "visa_type",
+            description = "체류자격 종류",
+            example = "E-9"
+    )
+    private final String visaType;
+
     @JsonProperty("stay_expiry_date")
     @Schema(
             name = "stay_expiry_date",
-            description = "체류 만료일",
+            description = "체류자격이 만료되는 날",
             format = "date"
     )
     private final LocalDate stayExpiryDate;
+
     @JsonProperty("contract_start_date")
     @Schema(
             name = "contract_start_date",
@@ -73,13 +88,31 @@ public final class WorkerResponse {
             format = "date"
     )
     private final LocalDate contractStartDate;
+
     @JsonProperty("contract_end_date")
     @Schema(
             name = "contract_end_date",
-            description = "계약 종료일",
+            description = "현재 근로계약이 끝나는 날",
             format = "date"
     )
     private final LocalDate contractEndDate;
+
+    @JsonProperty("employment_permit_end_date")
+    @Schema(
+            name = "employment_permit_end_date",
+            description = "사업장의 고용허가 관련 기준 종료일",
+            format = "date"
+    )
+    private final LocalDate employmentPermitEndDate;
+
+    @JsonProperty("employment_activity_end_date")
+    @Schema(
+            name = "employment_activity_end_date",
+            description = "E-9 근로자가 취업활동할 수 있는 기간의 종료일",
+            format = "date"
+    )
+    private final LocalDate employmentActivityEndDate;
+
     @JsonProperty("created_at")
     @Schema(
             name = "created_at",
@@ -88,6 +121,7 @@ public final class WorkerResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final Instant createdAt;
+
     @JsonProperty("updated_at")
     @Schema(
             name = "updated_at",
@@ -96,6 +130,7 @@ public final class WorkerResponse {
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     private final Instant updatedAt;
+
     @JsonProperty("version")
     @Schema(
             description = "낙관적 잠금 버전. PATCH 요청 시 expected_version으로 그대로 보내야 합니다.",
@@ -112,9 +147,12 @@ public final class WorkerResponse {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
+            String visaType,
             LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
+            LocalDate employmentPermitEndDate,
+            LocalDate employmentActivityEndDate,
             Instant createdAt,
             Instant updatedAt,
             long version
@@ -125,9 +163,12 @@ public final class WorkerResponse {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
+        this.visaType = visaType;
         this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
+        this.employmentPermitEndDate = employmentPermitEndDate;
+        this.employmentActivityEndDate = employmentActivityEndDate;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
@@ -141,9 +182,12 @@ public final class WorkerResponse {
                 worker.nationalityCode(),
                 worker.preferredLanguage(),
                 worker.workStatus(),
+                worker.visaType(),
                 worker.stayExpiryDate(),
                 worker.contractStartDate(),
                 worker.contractEndDate(),
+                worker.employmentPermitEndDate(),
+                worker.employmentActivityEndDate(),
                 worker.createdAt(),
                 worker.updatedAt(),
                 worker.version()
@@ -174,6 +218,10 @@ public final class WorkerResponse {
         return workStatus;
     }
 
+    public String getVisaType() {
+        return visaType;
+    }
+
     public LocalDate getStayExpiryDate() {
         return stayExpiryDate;
     }
@@ -184,6 +232,14 @@ public final class WorkerResponse {
 
     public LocalDate getContractEndDate() {
         return contractEndDate;
+    }
+
+    public LocalDate getEmploymentPermitEndDate() {
+        return employmentPermitEndDate;
+    }
+
+    public LocalDate getEmploymentActivityEndDate() {
+        return employmentActivityEndDate;
     }
 
     public Instant getCreatedAt() {

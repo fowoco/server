@@ -11,9 +11,12 @@ public final class WorkerPatchCommand {
     private final String nationalityCode;
     private final String preferredLanguage;
     private final WorkerStatus workStatus;
+    private final String visaType;
     private final LocalDate stayExpiryDate;
     private final LocalDate contractStartDate;
     private final LocalDate contractEndDate;
+    private final LocalDate employmentPermitEndDate;
+    private final LocalDate employmentActivityEndDate;
     private final long expectedVersion;
 
     public WorkerPatchCommand(
@@ -22,9 +25,12 @@ public final class WorkerPatchCommand {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
+            String visaType,
             LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
+            LocalDate employmentPermitEndDate,
+            LocalDate employmentActivityEndDate,
             long expectedVersion
     ) {
         this.workerId = workerId;
@@ -32,9 +38,12 @@ public final class WorkerPatchCommand {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
+        this.visaType = visaType;
         this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
+        this.employmentPermitEndDate = employmentPermitEndDate;
+        this.employmentActivityEndDate = employmentActivityEndDate;
         this.expectedVersion = expectedVersion;
     }
 
@@ -58,6 +67,10 @@ public final class WorkerPatchCommand {
         return workStatus;
     }
 
+    public String visaType() {
+        return visaType;
+    }
+
     public LocalDate stayExpiryDate() {
         return stayExpiryDate;
     }
@@ -68,6 +81,14 @@ public final class WorkerPatchCommand {
 
     public LocalDate contractEndDate() {
         return contractEndDate;
+    }
+
+    public LocalDate employmentPermitEndDate() {
+        return employmentPermitEndDate;
+    }
+
+    public LocalDate employmentActivityEndDate() {
+        return employmentActivityEndDate;
     }
 
     public long expectedVersion() {
