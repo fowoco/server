@@ -228,6 +228,23 @@ public final class EventPublication {
         updatedAt = now;
     }
 
+    public void requestManualRetry(long expectedVersion, Instant now) {
+        Objects.requireNonNull(now);
+        if (version != expectedVersion) {
+            throw new IllegalArgumentException("Event publication version does not match.");
+        }
+        if (status != EventPublicationStatus.REVIEW_REQUIRED
+                || leaseOwner != null
+                || leaseExpiresAt != null) {
+            throw new IllegalStateException("Only an unleased review-required event can be retried.");
+        }
+        status = EventPublicationStatus.PENDING;
+        nextAttemptAt = now;
+        lastErrorCode = null;
+        completedAt = null;
+        updatedAt = now;
+    }
+
     public void requireActiveLease(String owner, Instant now) {
         String normalizedOwner = requireOwner(owner);
         Objects.requireNonNull(now);

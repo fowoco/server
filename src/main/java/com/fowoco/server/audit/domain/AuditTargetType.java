@@ -8,5 +8,6 @@ public enum AuditTargetType {
     FILE,
     WORKER_DOCUMENT,
     DOCUMENT_REQUEST_DRAFT,
-    AI_RUN
+    AI_RUN,
+    OUTBOX_EVENT
 }
