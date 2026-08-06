@@ -1,5 +1,7 @@
 package com.fowoco.server.airun.api;
 
+import com.fowoco.server.airun.application.AiCandidateDecisionCommand;
+import com.fowoco.server.airun.application.AiCandidateDecisionService;
 import com.fowoco.server.airun.application.AiRunService;
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
@@ -33,13 +35,16 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class AiRunController {
 
     private final AiRunService aiRunService;
+    private final AiCandidateDecisionService candidateDecisionService;
     private final ActorContextProvider actorContextProvider;
 
     public AiRunController(
             AiRunService aiRunService,
+            AiCandidateDecisionService candidateDecisionService,
             ActorContextProvider actorContextProvider
     ) {
         this.aiRunService = aiRunService;
+        this.candidateDecisionService = candidateDecisionService;
         this.actorContextProvider = actorContextProvider;
     }
 
@@ -114,6 +119,49 @@ public class AiRunController {
                 actor(),
                 RequestMetadata.from(servletRequest)
         )));
+    }
+
+    @Operation(
+            operationId = "decideAiRunCandidates",
+            summary = "AI 업무 후보 채택·폐기",
+            description = "HR이 채택한 후보만 Case와 업무카드로 생성합니다. 승인과 발송은 별도입니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "후보 결정 완료"),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+    })
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    @PostMapping(
+            path = "/{aiRunId}/candidate-decisions",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public AiCandidateDecisionResponse decideCandidates(
+            @PathVariable UUID aiRunId,
+            @Parameter(description = "같은 후보 결정을 중복 생성하지 않기 위한 키", required = true)
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody DecideAiRunCandidatesRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        AiCandidateDecisionCommand command = new AiCandidateDecisionCommand(
+                request.expectedRunVersion(),
+                request.decisions().stream()
+                        .map(decision -> new AiCandidateDecisionCommand.Decision(
+                                decision.candidateId(),
+                                decision.action()
+                        ))
+                        .toList()
+        );
+        return AiCandidateDecisionResponse.from(candidateDecisionService.decide(
+                aiRunId,
+                idempotencyKey,
+                command,
+                actor(),
+                RequestMetadata.from(servletRequest)
+        ));
     }
 
     private ActorContext actor() {

@@ -86,6 +86,9 @@ class PostgreSqlMigrationTests {
                         "ai_attempt",
                         "ai_question",
                         "ai_candidate",
+                        "ai_candidate_decision_batch",
+                        "ai_candidate_decision",
+                        "ai_candidate_decision_task",
                         "workflow_case",
                         "worker_link",
                         "worker_response",
@@ -209,6 +212,22 @@ class PostgreSqlMigrationTests {
                 .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
                 .containsEntry("confidence", new ColumnSpec("numeric", false));
+        assertThat(columnSpecs(connection, "ai_candidate_decision_batch"))
+                .containsEntry("decision_batch_id", new ColumnSpec("uuid", false))
+                .containsEntry("ai_run_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("case_id", new ColumnSpec("uuid", true))
+                .containsEntry("resulting_run_version", new ColumnSpec("int8", true));
+        assertThat(columnSpecs(connection, "ai_candidate_decision"))
+                .containsEntry("decision_id", new ColumnSpec("uuid", false))
+                .containsEntry("ai_candidate_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("action", new ColumnSpec("varchar", false));
+        assertThat(columnSpecs(connection, "ai_candidate_decision_task"))
+                .containsEntry("decision_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("sequence_no", new ColumnSpec("int4", false));
         assertThat(columnSpecs(connection, "worker_link"))
                 .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
                 .containsEntry("task_id", new ColumnSpec("uuid", false))
@@ -270,7 +289,17 @@ class PostgreSqlMigrationTests {
                         "pk_ai_question",
                         "fk_ai_question_attempt_company",
                         "pk_ai_candidate",
+                        "uq_ai_candidate_id_company",
                         "fk_ai_candidate_worker_company",
+                        "pk_ai_candidate_decision_batch",
+                        "uq_ai_candidate_decision_batch_idempotency",
+                        "fk_ai_candidate_decision_batch_run_company",
+                        "fk_ai_candidate_decision_batch_case_company",
+                        "pk_ai_candidate_decision",
+                        "uq_ai_candidate_decision_candidate",
+                        "fk_ai_candidate_decision_candidate_company",
+                        "pk_ai_candidate_decision_task",
+                        "fk_ai_candidate_decision_task_task_company",
                         "pk_workflow_case",
                         "uq_workflow_case_id_company",
                         "fk_workflow_case_worker_company",
@@ -308,6 +337,9 @@ class PostgreSqlMigrationTests {
                         "idx_ai_attempt_run",
                         "idx_ai_question_run",
                         "idx_ai_candidate_run",
+                        "idx_ai_candidate_decision_batch_run",
+                        "idx_ai_candidate_decision_run",
+                        "idx_ai_candidate_decision_task_task",
                         "idx_workflow_case_company_updated",
                         "idx_workflow_case_company_worker",
                         "idx_worker_response_upload_company",
@@ -337,6 +369,9 @@ class PostgreSqlMigrationTests {
                         "pl_ai_attempt_tenant_isolation",
                         "pl_ai_question_tenant_isolation",
                         "pl_ai_candidate_tenant_isolation",
+                        "pl_ai_candidate_decision_batch_tenant_isolation",
+                        "pl_ai_candidate_decision_tenant_isolation",
+                        "pl_ai_candidate_decision_task_tenant_isolation",
                         "pl_workflow_case_tenant_isolation",
                         "pl_worker_link_tenant_isolation",
                         "pl_worker_response_tenant_isolation",

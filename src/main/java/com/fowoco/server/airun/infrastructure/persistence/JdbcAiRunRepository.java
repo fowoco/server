@@ -575,7 +575,9 @@ public class JdbcAiRunRepository implements AiRunRepository {
         if (response.contextRequirement() != null) {
             return response.contextRequirement().detectedIntent();
         }
-        return response.candidates().isEmpty() ? null : response.candidates().get(0).workflowId();
+        // ANALYZE candidates carry canonical Workflow IDs, not Intent codes.
+        // Returning null preserves the Intent detected during PLAN through the COALESCE update.
+        return null;
     }
 
     private String encode(Object value) {
