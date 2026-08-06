@@ -58,4 +58,23 @@ public class JpaAuthTenantBootstrap implements AuthTenantBootstrap {
                 .getResultStream()
                 .findFirst();
     }
+
+    @Override
+    public Optional<UUID> findCompanyIdByPasswordResetTokenHash(String tokenHash) {
+        Objects.requireNonNull(tokenHash, "tokenHash must not be null");
+        return entityManager.createQuery(
+                        """
+                        select token.companyId
+                        from PasswordResetTokenJpaEntity token
+                        where token.tokenHash = :tokenHash
+                          and token.usedAt is null
+                          and token.expiresAt > CURRENT_TIMESTAMP
+                        """,
+                        UUID.class
+                )
+                .setParameter("tokenHash", tokenHash)
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst();
+    }
 }

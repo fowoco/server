@@ -52,6 +52,9 @@ class SignupIntegrationTest {
     void cleanSignupData() {
         jdbcTemplate.update("DELETE FROM event_consumption");
         jdbcTemplate.update("DELETE FROM event_publication");
+        jdbcTemplate.update("DELETE FROM audit_event");
+        jdbcTemplate.update("DELETE FROM password_reset_token");
+        jdbcTemplate.update("DELETE FROM user_agreement_consent");
         jdbcTemplate.update("DELETE FROM refresh_token");
         jdbcTemplate.update("DELETE FROM user_account");
         jdbcTemplate.update("DELETE FROM company");
@@ -106,6 +109,30 @@ class SignupIntegrationTest {
         );
         assertThat(passwordHash).isNotEqualTo(PASSWORD);
         assertThat(passwordEncoder.matches(PASSWORD, passwordHash)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_agreement_consent WHERE user_id = ?",
+                Integer.class,
+                userId
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM user_agreement_consent
+                WHERE user_id = ? AND agreement_type IN ('SERVICE_TERMS', 'PRIVACY_POLICY')
+                  AND agreed = TRUE AND policy_version = '1.0'
+                """,
+                Integer.class,
+                userId
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM audit_event
+                WHERE target_id = ? AND action = 'USER_AGREEMENTS_RECORDED'
+                  AND actor_type = 'HR_USER' AND actor_id = ? AND user_role = 'ADMIN'
+                """,
+                Integer.class,
+                userId,
+                userId
+        )).isEqualTo(1);
 
         HttpResponse<String> loginResponse = login("admin@example.com", PASSWORD);
         assertThat(loginResponse.statusCode()).isEqualTo(200);
@@ -207,6 +234,43 @@ class SignupIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_account", Integer.class)).isZero();
     }
 
+    @Test
+    void requiredAgreementAndSupportedVersionsAreValidated() throws Exception {
+        HttpResponse<String> missingRequiredConsent = postJson("/api/v1/auth/signup", """
+                {
+                  "company_name":"사업장",
+                  "display_name":"담당자",
+                  "email":"owner@example.com",
+                  "password":"Signup-password-1!",
+                  "agreements":{
+                    "service_terms":{"agreed":false,"version":"1.0"},
+                    "privacy_policy":{"agreed":true,"version":"1.0"},
+                    "marketing":{"agreed":false,"version":"1.0"}
+                  }
+                }
+                """);
+        assertThat(missingRequiredConsent.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(missingRequiredConsent.body(), "$.code"))
+                .isEqualTo("INVALID_AGREEMENT_CONSENT");
+
+        HttpResponse<String> unsupportedVersion = postJson("/api/v1/auth/signup", """
+                {
+                  "company_name":"사업장",
+                  "display_name":"담당자",
+                  "email":"owner@example.com",
+                  "password":"Signup-password-1!",
+                  "agreements":{
+                    "service_terms":{"agreed":true,"version":"0.9"},
+                    "privacy_policy":{"agreed":true,"version":"1.0"},
+                    "marketing":{"agreed":false,"version":"1.0"}
+                  }
+                }
+                """);
+        assertThat(unsupportedVersion.statusCode()).isEqualTo(422);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company", Integer.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_account", Integer.class)).isZero();
+    }
+
     private void assertBadRequest(String body) throws Exception {
         HttpResponse<String> response = postJson("/api/v1/auth/signup", body);
         assertThat(response.statusCode()).isEqualTo(400);
@@ -225,7 +289,12 @@ class SignupIntegrationTest {
                   "company_name": "%s",
                   "display_name": "%s",
                   "email": "%s",
-                  "password": "%s"
+                  "password": "%s",
+                  "agreements": {
+                    "service_terms": {"agreed": true, "version": "1.0"},
+                    "privacy_policy": {"agreed": true, "version": "1.0"},
+                    "marketing": {"agreed": false, "version": "1.0"}
+                  }
                 }
                 """.formatted(companyName, displayName, email, password));
     }

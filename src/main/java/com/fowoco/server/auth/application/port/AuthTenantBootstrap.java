@@ -11,4 +11,6 @@ public interface AuthTenantBootstrap {
     Optional<UUID> findCompanyIdByNormalizedEmail(String normalizedEmail);
 
     Optional<UUID> findCompanyIdByRefreshTokenHash(String tokenHash);
+
+    Optional<UUID> findCompanyIdByPasswordResetTokenHash(String tokenHash);
 }
