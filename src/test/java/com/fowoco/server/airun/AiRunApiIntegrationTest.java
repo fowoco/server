@@ -161,6 +161,59 @@ class AiRunApiIntegrationTest {
     }
 
     @Test
+    void replaysSafeOrderedSseEventsAndEnforcesTenantScope() throws Exception {
+        String tokenA = login(HR_A_EMAIL);
+        String tokenB = login(HR_B_EMAIL);
+        HttpResponse<String> created = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"응웬반A 체류연장 준비해줘"}
+                """,
+                tokenA,
+                "airun-sse-001"
+        );
+        UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+        long currentVersion = JsonPath.<Number>read(created.body(), "$.version").longValue();
+
+        HttpResponse<String> stream = getEvents(aiRunId, tokenA, null);
+        assertThat(stream.statusCode()).isEqualTo(200);
+        assertThat(stream.headers().firstValue(HttpHeaders.CONTENT_TYPE).orElseThrow())
+                .startsWith("text/event-stream");
+        assertThat(stream.body())
+                .contains("id:0", "event:RUN_STARTED", "event:SLOT_CHECKING", "event:NEEDS_INFO")
+                .doesNotContain("응웬반A 체류연장 준비해줘", "analysis_input", "prompt", "provider");
+
+        HttpResponse<String> alreadyConsumed = getEvents(aiRunId, tokenA, Long.toString(currentVersion));
+        assertThat(alreadyConsumed.statusCode()).isEqualTo(200);
+        assertThat(alreadyConsumed.body()).isEmpty();
+
+        assertThat(getEvents(aiRunId, tokenB, null).statusCode()).isEqualTo(404);
+        assertThat(getEvents(aiRunId, tokenA, "not-a-number").statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void allowsLastEventIdHeaderInCorsPreflight() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        uri("/api/v1/ai-runs/" + UUID.randomUUID() + "/events")
+                )
+                .header("Origin", "http://localhost:5173")
+                .header("Access-Control-Request-Method", "GET")
+                .header("Access-Control-Request-Headers", "authorization,last-event-id")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Access-Control-Allow-Headers").orElseThrow())
+                .containsIgnoringCase("authorization")
+                .containsIgnoringCase("last-event-id");
+    }
+
+    @Test
     void idempotencyAndCompanyIsolationAreEnforced() throws Exception {
         String tokenA = login(HR_A_EMAIL);
         String tokenB = login(HR_B_EMAIL);
@@ -484,6 +537,20 @@ class AiRunApiIntegrationTest {
                 .GET()
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getEvents(UUID aiRunId, String token, String lastEventId)
+            throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(
+                        uri("/api/v1/ai-runs/" + aiRunId + "/events")
+                )
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.ACCEPT, "text/event-stream")
+                .GET();
+        if (lastEventId != null) {
+            builder.header("Last-Event-ID", lastEventId);
+        }
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> post(
