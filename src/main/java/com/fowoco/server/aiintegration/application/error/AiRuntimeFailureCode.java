@@ -5,6 +5,7 @@ package com.fowoco.server.aiintegration.application.error;
  */
 public enum AiRuntimeFailureCode {
     INVALID_REQUEST_CONTRACT,
+    UNSUPPORTED_OCR_COUNTRY,
     SENSITIVE_DATA_REJECTED,
     INVALID_RESPONSE_CONTRACT,
     REQUEST_ID_MISMATCH,
