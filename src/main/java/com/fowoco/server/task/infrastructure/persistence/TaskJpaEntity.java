@@ -3,6 +3,7 @@ package com.fowoco.server.task.infrastructure.persistence;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -31,9 +32,12 @@ public class TaskJpaEntity {
     private UUID taskId;
     @Column(name = "company_id", nullable = false, updatable = false)
     private UUID companyId;
-    @Column(name = "worker_id", nullable = false, updatable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_type", nullable = false, length = 20, updatable = false)
+    private TaskTargetType targetType;
+    @Column(name = "worker_id", updatable = false)
     private UUID workerId;
-    @Column(name = "case_id", nullable = false, updatable = false)
+    @Column(name = "case_id", updatable = false)
     private UUID caseId;
     @Enumerated(EnumType.STRING)
     @Column(name = "task_type", nullable = false, length = 40, updatable = false)
@@ -95,6 +99,7 @@ public class TaskJpaEntity {
     private void copyFrom(Task task) {
         this.taskId = task.taskId();
         this.companyId = task.companyId();
+        this.targetType = task.targetType();
         this.workerId = task.workerId();
         this.caseId = task.caseId();
         this.taskType = task.taskType();
@@ -118,6 +123,7 @@ public class TaskJpaEntity {
         return new Task(
                 taskId,
                 companyId,
+                targetType,
                 workerId,
                 caseId,
                 taskType,

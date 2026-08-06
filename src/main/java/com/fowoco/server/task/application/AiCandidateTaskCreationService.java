@@ -311,6 +311,7 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
             case RECONTRACT -> 1;
             case STAY_PERIOD_EXTENSION -> 2;
             case EMPLOYMENT_PERIOD_EXTENSION -> 3;
+            default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
         };
     }
 
@@ -319,6 +320,7 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
             case RECONTRACT -> "재계약 조건 확인";
             case STAY_PERIOD_EXTENSION -> "체류기간 연장 준비";
             case EMPLOYMENT_PERIOD_EXTENSION -> "취업활동기간 연장 준비";
+            default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
         };
     }
 
@@ -327,6 +329,7 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
             case RECONTRACT -> "재계약 조건과 계속 고용 의사를 검토합니다.";
             case STAY_PERIOD_EXTENSION -> "체류기간 연장에 필요한 정보와 서류를 확인합니다.";
             case EMPLOYMENT_PERIOD_EXTENSION -> "재계약 결과를 바탕으로 취업활동기간 연장을 준비합니다.";
+            default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
         };
     }
 
