@@ -14,6 +14,7 @@ import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.error.FileErrorCode;
 import com.fowoco.server.file.application.port.FileStorage;
 import com.fowoco.server.file.application.port.StoredFileRepository;
+import com.fowoco.server.file.application.validation.HwpSignatureValidator;
 import com.fowoco.server.file.domain.StoredFile;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
@@ -41,10 +42,13 @@ public class FileService {
             "image/jpeg",
             "image/png",
             "image/webp",
-            "application/pdf"
+            "application/pdf",
+            "application/hwp+zip"
     );
+    private static final String HWP_EXTENSION = ".hwp";
 
     private final StoredFileRepository storedFileRepository;
+    private final HwpSignatureValidator hwpSignatureValidator;
     private final FileStorage fileStorage;
     private final TaskRepository taskRepository;
     private final WorkerRepository workerRepository;
@@ -55,6 +59,7 @@ public class FileService {
 
     public FileService(
             StoredFileRepository storedFileRepository,
+            HwpSignatureValidator hwpSignatureValidator,
             FileStorage fileStorage,
             TaskRepository taskRepository,
             WorkerRepository workerRepository,
@@ -64,6 +69,7 @@ public class FileService {
             Clock clock
     ) {
         this.storedFileRepository = storedFileRepository;
+        this.hwpSignatureValidator = hwpSignatureValidator;
         this.fileStorage = fileStorage;
         this.taskRepository = taskRepository;
         this.workerRepository = workerRepository;
@@ -80,7 +86,12 @@ public class FileService {
         if (command.size() > MAX_FILE_SIZE_BYTES) {
             throw new ApiException(FileErrorCode.FILE_TOO_LARGE);
         }
-        if (!ALLOWED_MIME_TYPES.contains(command.mimeType())) {
+        byte[] contentBytes = readAllBytes(command.content());
+        if (isHwpExtension(command.name())) {
+            if (!hwpSignatureValidator.isValidHwp(contentBytes)) {
+                throw new ApiException(FileErrorCode.UNSUPPORTED_FILE_TYPE);
+            }
+        } else if (!ALLOWED_MIME_TYPES.contains(command.mimeType())) {
             throw new ApiException(FileErrorCode.UNSUPPORTED_FILE_TYPE);
         }
         if (command.taskId() != null) {
@@ -109,7 +120,7 @@ public class FileService {
                 now
         );
 
-        fileStorage.store(storageKey, command.content(), command.size(), command.mimeType());
+        fileStorage.store(storageKey, new java.io.ByteArrayInputStream(contentBytes), command.size(), command.mimeType());
         storedFileRepository.insert(storedFile);
 
         appendAudit(
@@ -163,5 +174,17 @@ public class FileService {
             case HR -> 1;
             case VIEWER -> 2;
         };
+    }
+
+    private boolean isHwpExtension(String name) {
+        return name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(HWP_EXTENSION);
+    }
+
+    private byte[] readAllBytes(java.io.InputStream content) {
+        try {
+            return content.readAllBytes();
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("파일 내용을 읽을 수 없습니다.", exception);
+        }
     }
 }

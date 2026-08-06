@@ -1,15 +1,16 @@
 package com.fowoco.server.document.api;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fowoco.server.document.application.DocumentDetailResult;
+import com.fowoco.server.file.domain.ScanStatus;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
-import com.fowoco.server.worker.domain.WorkerDocument;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.UUID;
 
-@Schema(name = "DocumentItemResponse", description = "통합 문서함의 서류 항목 (근로자 표시 정보 포함)")
-public final class DocumentItemResponse {
+@Schema(name = "DocumentDetailResponse", description = "서류 단건 상세 응답 (연결된 파일 정보 포함)")
+public final class DocumentDetailResponse {
 
     @JsonProperty("worker_document_id")
     @Schema(name = "worker_document_id", format = "uuid", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -24,11 +25,7 @@ public final class DocumentItemResponse {
     private final UUID taskId;
 
     @JsonProperty("display_name")
-    @Schema(
-            name = "display_name",
-            description = "근로자 화면 표시 이름. 근로자가 조회 시점에 삭제된 경우 null.",
-            requiredMode = Schema.RequiredMode.REQUIRED
-    )
+    @Schema(name = "display_name", description = "근로자 화면 표시 이름")
     private final String displayName;
 
     @JsonProperty("document_type")
@@ -43,15 +40,31 @@ public final class DocumentItemResponse {
     @Schema(name = "expiry_date", format = "date")
     private final LocalDate expiryDate;
 
-    @JsonProperty("file_id")
-    @Schema(name = "file_id", format = "uuid")
-    private final UUID fileId;
-
     @JsonProperty("version")
     @Schema(name = "version", description = "PATCH 요청의 expected_version 기준값", requiredMode = Schema.RequiredMode.REQUIRED)
     private final long version;
 
-    private DocumentItemResponse(
+    @JsonProperty("file_id")
+    @Schema(name = "file_id", format = "uuid")
+    private final UUID fileId;
+
+    @JsonProperty("file_name")
+    @Schema(name = "file_name", description = "연결된 파일의 표시 파일명 (파일 없으면 null)")
+    private final String fileName;
+
+    @JsonProperty("file_mime_type")
+    @Schema(name = "file_mime_type", description = "연결된 파일의 MIME 타입 (파일 없으면 null)")
+    private final String fileMimeType;
+
+    @JsonProperty("file_size")
+    @Schema(name = "file_size", description = "연결된 파일의 크기(byte) (파일 없으면 null)")
+    private final Long fileSize;
+
+    @JsonProperty("file_scan_status")
+    @Schema(name = "file_scan_status", description = "연결된 파일의 검사 상태 (파일 없으면 null)")
+    private final ScanStatus fileScanStatus;
+
+    private DocumentDetailResponse(
             UUID workerDocumentId,
             UUID workerId,
             UUID taskId,
@@ -59,8 +72,12 @@ public final class DocumentItemResponse {
             DocumentType documentType,
             SubmissionStatus submissionStatus,
             LocalDate expiryDate,
+            long version,
             UUID fileId,
-            long version
+            String fileName,
+            String fileMimeType,
+            Long fileSize,
+            ScanStatus fileScanStatus
     ) {
         this.workerDocumentId = workerDocumentId;
         this.workerId = workerId;
@@ -69,21 +86,31 @@ public final class DocumentItemResponse {
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
         this.expiryDate = expiryDate;
-        this.fileId = fileId;
         this.version = version;
+        this.fileId = fileId;
+        this.fileName = fileName;
+        this.fileMimeType = fileMimeType;
+        this.fileSize = fileSize;
+        this.fileScanStatus = fileScanStatus;
     }
 
-    public static DocumentItemResponse from(WorkerDocument document, String displayName) {
-        return new DocumentItemResponse(
+    public static DocumentDetailResponse from(DocumentDetailResult result) {
+        var document = result.document();
+        var storedFile = result.storedFile();
+        return new DocumentDetailResponse(
                 document.workerDocumentId(),
                 document.workerId(),
                 document.taskId(),
-                displayName,
+                result.workerDisplayName(),
                 document.documentType(),
                 document.submissionStatus(),
                 document.expiryDate(),
+                document.version(),
                 document.fileId(),
-                document.version()
+                storedFile == null ? null : storedFile.name(),
+                storedFile == null ? null : storedFile.mimeType(),
+                storedFile == null ? null : storedFile.size(),
+                storedFile == null ? null : storedFile.scanStatus()
         );
     }
 
@@ -115,11 +142,27 @@ public final class DocumentItemResponse {
         return expiryDate;
     }
 
+    public long getVersion() {
+        return version;
+    }
+
     public UUID getFileId() {
         return fileId;
     }
 
-    public long getVersion() {
-        return version;
+    public String getFileName() {
+        return fileName;
+    }
+
+    public String getFileMimeType() {
+        return fileMimeType;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public ScanStatus getFileScanStatus() {
+        return fileScanStatus;
     }
 }

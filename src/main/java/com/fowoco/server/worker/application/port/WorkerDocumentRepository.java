@@ -16,6 +16,8 @@ public interface WorkerDocumentRepository {
             UUID companyId
     );
 
+    Optional<WorkerDocument> findByIdAndCompanyId(UUID workerDocumentId, UUID companyId);
+
     WorkerDocument update(WorkerDocument document);
 
     List<WorkerDocument> findPage(UUID companyId, WorkerDocumentSearchQuery query);
