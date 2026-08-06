@@ -13,6 +13,9 @@ import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.port.StoredFileRepository;
+import com.fowoco.server.task.application.error.TaskErrorCode;
+import com.fowoco.server.task.application.port.TaskRepository;
+import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.worker.application.error.WorkerErrorCode;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.application.port.WorkerRepository;
@@ -31,6 +34,7 @@ public class WorkerDocumentService {
 
     private final WorkerDocumentRepository workerDocumentRepository;
     private final WorkerRepository workerRepository;
+    private final TaskRepository taskRepository;
     private final StoredFileRepository storedFileRepository;
     private final AuditEventRepository auditRepository;
     private final TenantDatabaseContext tenantDatabaseContext;
@@ -40,6 +44,7 @@ public class WorkerDocumentService {
     public WorkerDocumentService(
             WorkerDocumentRepository workerDocumentRepository,
             WorkerRepository workerRepository,
+            TaskRepository taskRepository,
             StoredFileRepository storedFileRepository,
             AuditEventRepository auditRepository,
             TenantDatabaseContext tenantDatabaseContext,
@@ -48,6 +53,7 @@ public class WorkerDocumentService {
     ) {
         this.workerDocumentRepository = workerDocumentRepository;
         this.workerRepository = workerRepository;
+        this.taskRepository = taskRepository;
         this.storedFileRepository = storedFileRepository;
         this.auditRepository = auditRepository;
         this.tenantDatabaseContext = tenantDatabaseContext;
@@ -60,6 +66,7 @@ public class WorkerDocumentService {
         bindTenant(actor);
         workerRepository.findByWorkerIdAndCompanyId(command.workerId(), actor.companyId())
                 .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_NOT_FOUND));
+        validateTaskAssignment(command, actor.companyId());
 
         WorkerDocument document = WorkerDocument.create(
                 uuidGenerator.generate(),
@@ -152,6 +159,17 @@ public class WorkerDocumentService {
         storedFileRepository.findByIdAndCompanyId(requestedFileId, companyId)
                 .orElseThrow(() -> new ApiException(WorkerErrorCode.WORKER_DOCUMENT_FILE_NOT_FOUND));
         return requestedFileId;
+    }
+
+    private void validateTaskAssignment(WorkerDocumentCreateCommand command, UUID companyId) {
+        if (command.taskId() == null) {
+            return;
+        }
+        Task task = taskRepository.findByIdAndCompanyId(command.taskId(), companyId)
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+        if (!task.workerId().equals(command.workerId())) {
+            throw new ApiException(WorkerErrorCode.WORKER_DOCUMENT_TASK_WORKER_MISMATCH);
+        }
     }
 
     private void appendAudit(
