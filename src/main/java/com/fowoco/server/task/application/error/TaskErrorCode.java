@@ -20,6 +20,10 @@ public enum TaskErrorCode implements ApiErrorCode {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "업무카드에 저장할 수 없는 개인정보 또는 Secret이 포함되어 있습니다."
     ),
+    INVALID_AI_CANDIDATE_TASK_DATA(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "AI 업무 후보의 Workflow 또는 필수정보를 확인해 주세요."
+    ),
     CHECKLIST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "체크리스트 항목을 찾을 수 없습니다."),
     CASE_WORKER_MISMATCH(HttpStatus.CONFLICT, "Case와 업무카드의 근로자가 일치하지 않습니다."),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "업무카드가 다른 요청에서 변경되었습니다."),
