@@ -41,10 +41,20 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("a5000000-0000-0000-0000-000000000001");
     private static final UUID STORED_FILE_B =
             UUID.fromString("b5000000-0000-0000-0000-000000000002");
+    private static final UUID STORED_FILE_B_UNLINKED =
+            UUID.fromString("b5000000-0000-0000-0000-000000000003");
     private static final UUID DRAFT_A =
             UUID.fromString("a6000000-0000-0000-0000-000000000001");
     private static final UUID DRAFT_B =
             UUID.fromString("b6000000-0000-0000-0000-000000000002");
+    private static final UUID WORKER_LINK_A =
+            UUID.fromString("a7000000-0000-0000-0000-000000000001");
+    private static final UUID WORKER_LINK_B =
+            UUID.fromString("b7000000-0000-0000-0000-000000000002");
+    private static final UUID WORKER_RESPONSE_A =
+            UUID.fromString("a8000000-0000-0000-0000-000000000001");
+    private static final UUID WORKER_RESPONSE_B =
+            UUID.fromString("b8000000-0000-0000-0000-000000000002");
     private static final UUID CASE_A =
             UUID.fromString("a7000000-0000-0000-0000-000000000001");
     private static final UUID CASE_B =
@@ -120,7 +130,10 @@ class PostgreSqlRlsIsolationTest {
                     "GRANT SELECT, INSERT, UPDATE, DELETE "
                             + "ON TABLE public.company, public.worker, "
                             + "public.stored_file, public.document_request_draft, "
-                            + "public.document_request_draft_type, public.workflow_case TO "
+                            + "public.document_request_draft_type, public.workflow_case, "
+                            + "public.worker_link, public.worker_response, "
+                            + "public.worker_response_upload, "
+                            + "public.worker_document_upload_idempotency TO "
                             + quotedRole
             );
 
@@ -189,8 +202,14 @@ class PostgreSqlRlsIsolationTest {
                         ('%s', '%s', 'tenant-a.pdf', 'application/pdf', 1,
                          'RLS_TEST', 'rls-tenant-a', 'NOT_SCANNED'),
                         ('%s', '%s', 'tenant-b.pdf', 'application/pdf', 1,
-                         'RLS_TEST', 'rls-tenant-b', 'NOT_SCANNED')
-                    """.formatted(STORED_FILE_A, COMPANY_A, STORED_FILE_B, COMPANY_B));
+                         'RLS_TEST', 'rls-tenant-b', 'NOT_SCANNED'),
+                        ('%s', '%s', 'tenant-b-unlinked.pdf', 'application/pdf', 1,
+                         'RLS_TEST', 'rls-tenant-b-unlinked', 'NOT_SCANNED')
+                    """.formatted(
+                    STORED_FILE_A, COMPANY_A,
+                    STORED_FILE_B, COMPANY_B,
+                    STORED_FILE_B_UNLINKED, COMPANY_B
+            ));
             statement.execute("""
                     INSERT INTO document_request_draft (
                         draft_id, task_id, company_id, language, message, review_status
@@ -204,6 +223,52 @@ class PostgreSqlRlsIsolationTest {
                         ('%s', 'PASSPORT_COPY'),
                         ('%s', 'ARC')
                     """.formatted(DRAFT_A, DRAFT_B));
+            statement.execute("""
+                    INSERT INTO worker_link (
+                        worker_link_id, task_id, company_id, token_hash, expires_at,
+                        status, conversation_status, issued_by, idempotency_key
+                    ) VALUES
+                        ('%s', '%s', '%s', repeat('c', 64),
+                         CURRENT_TIMESTAMP + INTERVAL '1 day', 'ACTIVE',
+                         'WAITING_WORKER', '%s', 'rls-link-a'),
+                        ('%s', '%s', '%s', repeat('d', 64),
+                         CURRENT_TIMESTAMP + INTERVAL '1 day', 'ACTIVE',
+                         'WAITING_WORKER', '%s', 'rls-link-b')
+                    """.formatted(
+                    WORKER_LINK_A, TASK_A, COMPANY_A, USER_A,
+                    WORKER_LINK_B, TASK_B, COMPANY_B, USER_B
+            ));
+            statement.execute("""
+                    INSERT INTO worker_response (
+                        response_id, worker_link_id, company_id,
+                        response_type, idempotency_key
+                    ) VALUES
+                        ('%s', '%s', '%s', 'DOCUMENT_SUBMITTED', 'rls-response-a'),
+                        ('%s', '%s', '%s', 'DOCUMENT_SUBMITTED', 'rls-response-b')
+                    """.formatted(
+                    WORKER_RESPONSE_A, WORKER_LINK_A, COMPANY_A,
+                    WORKER_RESPONSE_B, WORKER_LINK_B, COMPANY_B
+            ));
+            statement.execute("""
+                    INSERT INTO worker_response_upload (
+                        response_id, stored_file_id, company_id
+                    ) VALUES
+                        ('%s', '%s', '%s'),
+                        ('%s', '%s', '%s')
+                    """.formatted(
+                    WORKER_RESPONSE_A, STORED_FILE_A, COMPANY_A,
+                    WORKER_RESPONSE_B, STORED_FILE_B, COMPANY_B
+            ));
+            statement.execute("""
+                    INSERT INTO worker_document_upload_idempotency (
+                        worker_link_id, company_id, client_request_id, stored_file_id
+                    ) VALUES
+                        ('%s', '%s', 'rls-upload-a', '%s'),
+                        ('%s', '%s', 'rls-upload-b', '%s')
+                    """.formatted(
+                    WORKER_LINK_A, COMPANY_A, STORED_FILE_A,
+                    WORKER_LINK_B, COMPANY_B, STORED_FILE_B
+            ));
 
             statement.execute("ALTER TABLE public.company ENABLE ROW LEVEL SECURITY");
             statement.execute("ALTER TABLE public.worker ENABLE ROW LEVEL SECURITY");
@@ -212,6 +277,15 @@ class PostgreSqlRlsIsolationTest {
             statement.execute("ALTER TABLE public.document_request_draft ENABLE ROW LEVEL SECURITY");
             statement.execute(
                     "ALTER TABLE public.document_request_draft_type ENABLE ROW LEVEL SECURITY"
+            );
+            statement.execute("ALTER TABLE public.worker_link ENABLE ROW LEVEL SECURITY");
+            statement.execute("ALTER TABLE public.worker_response ENABLE ROW LEVEL SECURITY");
+            statement.execute(
+                    "ALTER TABLE public.worker_response_upload ENABLE ROW LEVEL SECURITY"
+            );
+            statement.execute(
+                    "ALTER TABLE public.worker_document_upload_idempotency "
+                            + "ENABLE ROW LEVEL SECURITY"
             );
         }
     }
@@ -224,6 +298,10 @@ class PostgreSqlRlsIsolationTest {
             assertThat(tableCount(connection, "stored_file")).isZero();
             assertThat(tableCount(connection, "document_request_draft")).isZero();
             assertThat(tableCount(connection, "document_request_draft_type")).isZero();
+            assertThat(tableCount(connection, "worker_link")).isZero();
+            assertThat(tableCount(connection, "worker_response")).isZero();
+            assertThat(tableCount(connection, "worker_response_upload")).isZero();
+            assertThat(tableCount(connection, "worker_document_upload_idempotency")).isZero();
             assertThat(tableCount(connection, "workflow_case")).isZero();
 
             setTenantContext(connection, "");
@@ -256,10 +334,34 @@ class PostgreSqlRlsIsolationTest {
                     "SELECT document_type FROM public.document_request_draft_type "
                             + "ORDER BY document_type"
             )).containsExactly("PASSPORT_COPY");
+
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT worker_link_id FROM public.worker_link ORDER BY worker_link_id"
+            )).containsExactly(WORKER_LINK_A);
+
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT response_id FROM public.worker_response ORDER BY response_id"
+            )).containsExactly(WORKER_RESPONSE_A);
+
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT stored_file_id FROM public.worker_response_upload "
+                            + "ORDER BY stored_file_id"
+            )).containsExactly(STORED_FILE_A);
+
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT stored_file_id FROM public.worker_document_upload_idempotency "
+                            + "ORDER BY stored_file_id"
+            )).containsExactly(STORED_FILE_A);
+
             assertThat(uuidValues(
                     connection,
                     "SELECT case_id FROM public.workflow_case ORDER BY case_id"
             )).containsExactly(CASE_A);
+
             assertThat(executeUpdate(
                     connection,
                     """
@@ -362,6 +464,31 @@ class PostgreSqlRlsIsolationTest {
                     VALUES ('%s', 'CONTRACT')
                     """.formatted(DRAFT_B)
             );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO worker_document_upload_idempotency (
+                        worker_link_id, company_id, client_request_id, stored_file_id
+                    ) VALUES (
+                        '%s', '%s', 'forbidden-rls-upload-b', '%s'
+                    )
+                    """.formatted(WORKER_LINK_B, COMPANY_B, STORED_FILE_B)
+            );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO worker_response_upload (
+                        response_id, stored_file_id, company_id
+                    ) VALUES (
+                        '%s', '%s', '%s'
+                    )
+                    """.formatted(
+                    WORKER_RESPONSE_B,
+                    STORED_FILE_B_UNLINKED,
+                    COMPANY_B
+            ));
 
             assertThat(executeUpdate(
                     connection,
@@ -418,6 +545,15 @@ class PostgreSqlRlsIsolationTest {
     private void restoreFixture(Connection connection, String runtimeRole) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute(
+                    "ALTER TABLE public.worker_document_upload_idempotency "
+                            + "DISABLE ROW LEVEL SECURITY"
+            );
+            statement.execute(
+                    "ALTER TABLE public.worker_response_upload DISABLE ROW LEVEL SECURITY"
+            );
+            statement.execute("ALTER TABLE public.worker_response DISABLE ROW LEVEL SECURITY");
+            statement.execute("ALTER TABLE public.worker_link DISABLE ROW LEVEL SECURITY");
+            statement.execute(
                     "ALTER TABLE public.document_request_draft_type DISABLE ROW LEVEL SECURITY"
             );
             statement.execute(
@@ -436,6 +572,22 @@ class PostgreSqlRlsIsolationTest {
 
     private void deleteFixtureRows(Statement statement) throws SQLException {
         statement.execute("""
+                DELETE FROM worker_document_upload_idempotency
+                WHERE worker_link_id IN ('%s', '%s')
+                """.formatted(WORKER_LINK_A, WORKER_LINK_B));
+        statement.execute("""
+                DELETE FROM worker_response_upload
+                WHERE response_id IN ('%s', '%s')
+                """.formatted(WORKER_RESPONSE_A, WORKER_RESPONSE_B));
+        statement.execute("""
+                DELETE FROM worker_response
+                WHERE response_id IN ('%s', '%s')
+                """.formatted(WORKER_RESPONSE_A, WORKER_RESPONSE_B));
+        statement.execute("""
+                DELETE FROM worker_link
+                WHERE worker_link_id IN ('%s', '%s')
+                """.formatted(WORKER_LINK_A, WORKER_LINK_B));
+        statement.execute("""
                 DELETE FROM document_request_draft_type
                 WHERE draft_id IN ('%s', '%s')
                 """.formatted(DRAFT_A, DRAFT_B));
@@ -445,9 +597,9 @@ class PostgreSqlRlsIsolationTest {
                 """.formatted(DRAFT_A, DRAFT_B));
         statement.execute("""
                 DELETE FROM stored_file
-                WHERE stored_file_id IN ('%s', '%s')
+                WHERE stored_file_id IN ('%s', '%s', '%s')
                    OR storage_key = 'rls-forbidden-b'
-                """.formatted(STORED_FILE_A, STORED_FILE_B));
+                """.formatted(STORED_FILE_A, STORED_FILE_B, STORED_FILE_B_UNLINKED));
         statement.execute("""
                 DELETE FROM task
                 WHERE task_id IN ('%s', '%s')

@@ -2,9 +2,10 @@ package com.fowoco.server.workerlink.application;
 
 import com.fowoco.server.approval.application.port.ApprovalRequestRepository;
 import com.fowoco.server.approval.domain.ApprovalRequest;
+import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
-import com.fowoco.server.task.application.error.TaskErrorCode;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
@@ -29,6 +30,7 @@ public class WorkerLinkService {
     private final WorkerLinkRepository workerLinkRepository;
     private final WorkerLinkGenerator workerLinkGenerator;
     private final WorkerLinkHasher workerLinkHasher;
+    private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -38,6 +40,7 @@ public class WorkerLinkService {
             WorkerLinkRepository workerLinkRepository,
             WorkerLinkGenerator workerLinkGenerator,
             WorkerLinkHasher workerLinkHasher,
+            TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -46,17 +49,20 @@ public class WorkerLinkService {
         this.workerLinkRepository = workerLinkRepository;
         this.workerLinkGenerator = workerLinkGenerator;
         this.workerLinkHasher = workerLinkHasher;
+        this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
 
     @Transactional
-    public WorkerLinkIssueResult issue(WorkerLinkIssueCommand command) {
-        Task task = taskRepository.findByIdAndCompanyId(command.taskId(), command.companyId())
+    public WorkerLinkIssueResult issue(WorkerLinkIssueCommand command, ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+
+        Task task = taskRepository.findByIdAndCompanyId(command.taskId(), actor.companyId())
                 .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.TASK_NOT_FOUND));
 
         ApprovalRequest approval = approvalRequestRepository
-                .findLatestApprovedByTaskIdAndCompanyId(command.taskId(), command.companyId())
+                .findLatestApprovedByTaskIdAndCompanyId(command.taskId(), actor.companyId())
                 .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.TASK_NOT_APPROVED));
 
         if (!approval.isValidFor(task.contentRevision(), task.criticalFingerprint())) {
@@ -73,7 +79,7 @@ public class WorkerLinkService {
 
         Instant now = clock.instant();
         Optional<WorkerLink> existingActive = workerLinkRepository
-                .findActiveByTaskIdAndCompanyId(command.taskId(), command.companyId());
+                .findActiveByTaskIdAndCompanyId(command.taskId(), actor.companyId());
 
         WorkerLink previousLink = null;
         if (existingActive.isPresent()) {
@@ -92,10 +98,10 @@ public class WorkerLinkService {
         WorkerLink workerLink = WorkerLink.issue(
                 uuidGenerator.generate(),
                 command.taskId(),
-                command.companyId(),
+                actor.companyId(),
                 generated.tokenHash(),
                 expiresAt,
-                command.issuedBy(),
+                actor.actorId(),
                 previousLink != null ? previousLink.workerLinkId() : null,
                 idempotencyKeyHash,
                 now

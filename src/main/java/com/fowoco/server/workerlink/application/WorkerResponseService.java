@@ -12,6 +12,7 @@ import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.file.domain.StoredFile;
 import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
+import com.fowoco.server.workerlink.application.error.WorkerResponseUploadAlreadyLinkedException;
 import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
 import com.fowoco.server.workerlink.application.port.WorkerLinkTenantBootstrap;
 import com.fowoco.server.workerlink.application.port.WorkerResponseRepository;
@@ -96,7 +97,7 @@ public class WorkerResponseService {
             if (!storedFile.verified() || !link.taskId().equals(storedFile.taskId())) {
                 throw new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE);
             }
-            if (workerResponseRepository.isUploadAlreadyLinked(uploadId)) {
+            if (workerResponseRepository.isUploadAlreadyLinked(uploadId, companyId)) {
                 throw new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE);
             }
         }
@@ -114,7 +115,11 @@ public class WorkerResponseService {
         workerResponseRepository.insert(response);
 
         for (UUID uploadId : uploadIds) {
-            workerResponseRepository.linkUpload(responseId, uploadId);
+            try {
+                workerResponseRepository.linkUpload(responseId, uploadId, companyId);
+            } catch (WorkerResponseUploadAlreadyLinkedException exception) {
+                throw new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE);
+            }
         }
 
         if (command.responseType() == WorkerResponseType.QUESTION

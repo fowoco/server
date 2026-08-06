@@ -28,6 +28,9 @@ class PostgreSqlMigrationTests {
     private static final String TASK_A = "13000000-0000-0000-0000-000000000001";
     private static final String EVENT_A = "18000000-0000-0000-0000-000000000001";
     private static final String TOKEN_HASH_A = "a".repeat(64);
+    private static final String ACTIVE_WORKER_LINK_TOKEN_HASH = "b".repeat(64);
+    private static final String REVOKED_WORKER_LINK_TOKEN_HASH = "c".repeat(64);
+    private static final String EXPIRED_WORKER_LINK_TOKEN_HASH = "d".repeat(64);
 
     @Test
     void migrationsApplyCanonicalServerSchemaOnPostgreSql() throws SQLException {
@@ -83,7 +86,14 @@ class PostgreSqlMigrationTests {
                         "ai_attempt",
                         "ai_question",
                         "ai_candidate",
-                        "workflow_case"
+                        "ai_candidate_decision_batch",
+                        "ai_candidate_decision",
+                        "ai_candidate_decision_task",
+                        "workflow_case",
+                        "worker_link",
+                        "worker_response",
+                        "worker_response_upload",
+                        "worker_document_upload_idempotency"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -121,6 +131,7 @@ class PostgreSqlMigrationTests {
                 .containsEntry("worker_document_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", true))
                 .containsEntry("document_type", new ColumnSpec("varchar", false))
                 .containsEntry("submission_status", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false));
@@ -201,6 +212,39 @@ class PostgreSqlMigrationTests {
                 .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
                 .containsEntry("confidence", new ColumnSpec("numeric", false));
+        assertThat(columnSpecs(connection, "ai_candidate_decision_batch"))
+                .containsEntry("decision_batch_id", new ColumnSpec("uuid", false))
+                .containsEntry("ai_run_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("case_id", new ColumnSpec("uuid", true))
+                .containsEntry("resulting_run_version", new ColumnSpec("int8", true));
+        assertThat(columnSpecs(connection, "ai_candidate_decision"))
+                .containsEntry("decision_id", new ColumnSpec("uuid", false))
+                .containsEntry("ai_candidate_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("action", new ColumnSpec("varchar", false));
+        assertThat(columnSpecs(connection, "ai_candidate_decision_task"))
+                .containsEntry("decision_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("sequence_no", new ColumnSpec("int4", false));
+        assertThat(columnSpecs(connection, "worker_link"))
+                .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
+                .containsEntry("task_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("replaces_link_id", new ColumnSpec("uuid", true));
+        assertThat(columnSpecs(connection, "worker_response"))
+                .containsEntry("response_id", new ColumnSpec("uuid", false))
+                .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false));
+        assertThat(columnSpecs(connection, "worker_response_upload"))
+                .containsEntry("response_id", new ColumnSpec("uuid", false))
+                .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false));
+        assertThat(columnSpecs(connection, "worker_document_upload_idempotency"))
+                .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
+                .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false));
         assertThat(columnSpecs(connection, "workflow_case"))
                 .containsEntry("case_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
@@ -245,11 +289,33 @@ class PostgreSqlMigrationTests {
                         "pk_ai_question",
                         "fk_ai_question_attempt_company",
                         "pk_ai_candidate",
+                        "uq_ai_candidate_id_company",
                         "fk_ai_candidate_worker_company",
+                        "pk_ai_candidate_decision_batch",
+                        "uq_ai_candidate_decision_batch_idempotency",
+                        "fk_ai_candidate_decision_batch_run_company",
+                        "fk_ai_candidate_decision_batch_case_company",
+                        "pk_ai_candidate_decision",
+                        "uq_ai_candidate_decision_candidate",
+                        "fk_ai_candidate_decision_candidate_company",
+                        "pk_ai_candidate_decision_task",
+                        "fk_ai_candidate_decision_task_task_company",
                         "pk_workflow_case",
                         "uq_workflow_case_id_company",
                         "fk_workflow_case_worker_company",
-                        "fk_workflow_case_created_by_company"
+                        "fk_workflow_case_created_by_company",
+                        "uq_task_id_worker_company",
+                        "fk_worker_document_task_worker_company",
+                        "uq_worker_link_id_company",
+                        "fk_worker_link_replaces_company",
+                        "uq_worker_response_id_company",
+                        "fk_worker_response_link_company",
+                        "uq_stored_file_id_company",
+                        "uq_worker_response_upload_file_company",
+                        "fk_worker_response_upload_response_company",
+                        "fk_worker_response_upload_file_company",
+                        "fk_worker_document_upload_idempotency_link_company",
+                        "fk_worker_document_upload_idempotency_file_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -271,8 +337,14 @@ class PostgreSqlMigrationTests {
                         "idx_ai_attempt_run",
                         "idx_ai_question_run",
                         "idx_ai_candidate_run",
+                        "idx_ai_candidate_decision_batch_run",
+                        "idx_ai_candidate_decision_run",
+                        "idx_ai_candidate_decision_task_task",
                         "idx_workflow_case_company_updated",
-                        "idx_workflow_case_company_worker"
+                        "idx_workflow_case_company_worker",
+                        "idx_worker_response_upload_company",
+                        "idx_worker_document_upload_idempotency_company",
+                        "idx_worker_document_upload_idempotency_file_company"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -297,10 +369,14 @@ class PostgreSqlMigrationTests {
                         "pl_ai_attempt_tenant_isolation",
                         "pl_ai_question_tenant_isolation",
                         "pl_ai_candidate_tenant_isolation",
+                        "pl_ai_candidate_decision_batch_tenant_isolation",
+                        "pl_ai_candidate_decision_tenant_isolation",
+                        "pl_ai_candidate_decision_task_tenant_isolation",
                         "pl_workflow_case_tenant_isolation",
                         "pl_worker_link_tenant_isolation",
                         "pl_worker_response_tenant_isolation",
-                        "pl_worker_response_upload_tenant_isolation"
+                        "pl_worker_response_upload_tenant_isolation",
+                        "pl_worker_document_upload_idempotency_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
@@ -384,6 +460,36 @@ class PostgreSqlMigrationTests {
                 )
                 """.formatted(TASK_A, COMPANY_A, WORKER_A, "f".repeat(64), USER_A, USER_A));
         execute(connection, """
+                INSERT INTO worker_link (
+                    worker_link_id, task_id, company_id, token_hash, expires_at,
+                    status, conversation_status, issued_by, idempotency_key,
+                    created_at, updated_at
+                ) VALUES
+                    (
+                        '21000000-0000-0000-0000-000000000001', '%s', '%s', '%s',
+                        CURRENT_TIMESTAMP + INTERVAL '1 day', 'ACTIVE',
+                        'WAITING_WORKER', '%s', 'active-link',
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    ),
+                    (
+                        '21000000-0000-0000-0000-000000000002', '%s', '%s', '%s',
+                        CURRENT_TIMESTAMP + INTERVAL '1 day', 'REVOKED',
+                        'WAITING_WORKER', '%s', 'revoked-link',
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    ),
+                    (
+                        '21000000-0000-0000-0000-000000000003', '%s', '%s', '%s',
+                        CURRENT_TIMESTAMP - INTERVAL '1 day', 'ACTIVE',
+                        'WAITING_WORKER', '%s', 'expired-link',
+                        CURRENT_TIMESTAMP - INTERVAL '2 days',
+                        CURRENT_TIMESTAMP - INTERVAL '2 days'
+                    )
+                """.formatted(
+                TASK_A, COMPANY_A, ACTIVE_WORKER_LINK_TOKEN_HASH, USER_A,
+                TASK_A, COMPANY_A, REVOKED_WORKER_LINK_TOKEN_HASH, USER_A,
+                TASK_A, COMPANY_A, EXPIRED_WORKER_LINK_TOKEN_HASH, USER_A
+        ));
+        execute(connection, """
                 INSERT INTO approval_request (
                     approval_request_id, task_id, company_id,
                     target_task_version, target_content_revision, target_fingerprint,
@@ -436,6 +542,26 @@ class PostgreSqlMigrationTests {
         assertThat(queryNullableString(
                 connection,
                 "SELECT public.bootstrap_company_id_by_refresh_token_hash(?)",
+                "0".repeat(64)
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
+                ACTIVE_WORKER_LINK_TOKEN_HASH
+        )).isEqualTo(COMPANY_A);
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
+                REVOKED_WORKER_LINK_TOKEN_HASH
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
+                EXPIRED_WORKER_LINK_TOKEN_HASH
+        )).isNull();
+        assertThat(queryNullableString(
+                connection,
+                "SELECT public.bootstrap_company_id_by_worker_link_token_hash(?)",
                 "0".repeat(64)
         )).isNull();
 

@@ -8,9 +8,15 @@ public enum AiRunErrorCode implements ApiErrorCode {
     AI_RUN_IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT, "같은 Idempotency-Key가 다른 요청에 이미 사용되었습니다."),
     AI_RUN_VERSION_CONFLICT(HttpStatus.CONFLICT, "다른 요청에서 먼저 변경했습니다. 최신 상태를 다시 확인해 주세요."),
     AI_RUN_ANSWERS_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "현재 상태에서는 추가 답변을 제출할 수 없습니다."),
+    AI_RUN_DECISION_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "현재 상태에서는 AI 업무 후보를 결정할 수 없습니다."),
+    AI_RUN_CANDIDATE_NOT_READY(HttpStatus.UNPROCESSABLE_ENTITY, "누락정보가 있는 AI 업무 후보는 채택할 수 없습니다."),
+    AI_RUN_CANDIDATE_ALREADY_DECIDED(HttpStatus.CONFLICT, "이미 결정된 AI 업무 후보입니다."),
     AI_RUN_INVALID_INSTRUCTION(HttpStatus.BAD_REQUEST, "업무 요청 문장을 확인해 주세요."),
     AI_RUN_INVALID_IDEMPOTENCY_KEY(HttpStatus.BAD_REQUEST, "Idempotency-Key를 확인해 주세요."),
-    AI_RUN_INVALID_ANSWER(HttpStatus.BAD_REQUEST, "추가 답변의 항목과 값을 확인해 주세요.");
+    AI_RUN_INVALID_ANSWER(HttpStatus.BAD_REQUEST, "추가 답변의 항목과 값을 확인해 주세요."),
+    AI_RUN_INVALID_LAST_EVENT_ID(HttpStatus.BAD_REQUEST, "Last-Event-ID를 확인해 주세요."),
+    AI_RUN_SSE_CONNECTION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "이 AI 분석에 연결할 수 있는 실시간 구독 수를 초과했습니다."),
+    AI_RUN_INVALID_DECISION(HttpStatus.BAD_REQUEST, "AI 업무 후보 결정값을 확인해 주세요.");
 
     private final HttpStatus status;
     private final String defaultMessage;

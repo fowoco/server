@@ -102,7 +102,7 @@ public class WorkerLinkDocumentService {
         }
 
         Optional<UUID> existingStoredFileId = uploadIdempotencyRepository
-                .findStoredFileId(link.workerLinkId(), command.clientRequestId());
+                .findStoredFileId(link.workerLinkId(), companyId, command.clientRequestId());
         if (existingStoredFileId.isPresent()) {
             StoredFile existingFile = storedFileRepository.findByIdAndCompanyId(existingStoredFileId.get(), companyId)
                     .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.UPLOAD_NOT_AVAILABLE));
@@ -130,7 +130,12 @@ public class WorkerLinkDocumentService {
 
         fileStorage.store(storageKey, command.content(), command.size(), command.mimeType());
         storedFileRepository.insert(verifiedFile);
-        uploadIdempotencyRepository.save(link.workerLinkId(), command.clientRequestId(), storedFileId);
+        uploadIdempotencyRepository.save(
+                link.workerLinkId(),
+                companyId,
+                command.clientRequestId(),
+                storedFileId
+        );
 
         auditRepository.append(new AuditEvent(
                 uuidGenerator.generate(),

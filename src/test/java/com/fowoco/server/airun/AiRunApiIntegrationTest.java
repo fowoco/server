@@ -14,15 +14,19 @@ import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.jayway.jsonpath.JsonPath;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,6 +76,9 @@ class AiRunApiIntegrationTest {
             return scriptedResponse(request, runtimeCalls.incrementAndGet());
         });
 
+        jdbcTemplate.update("DELETE FROM ai_candidate_decision_task");
+        jdbcTemplate.update("DELETE FROM ai_candidate_decision");
+        jdbcTemplate.update("DELETE FROM ai_candidate_decision_batch");
         jdbcTemplate.update("DELETE FROM ai_candidate");
         jdbcTemplate.update("DELETE FROM ai_question");
         jdbcTemplate.update("DELETE FROM ai_attempt");
@@ -85,6 +92,7 @@ class AiRunApiIntegrationTest {
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM task_checklist_item");
         jdbcTemplate.update("DELETE FROM task");
+        jdbcTemplate.update("DELETE FROM workflow_case");
         jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
         jdbcTemplate.update("DELETE FROM refresh_token");
@@ -113,21 +121,21 @@ class AiRunApiIntegrationTest {
 
         assertThat(created.statusCode()).isEqualTo(202);
         UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
-        assertThat(JsonPath.<String>read(created.body(), "$.analysis_outcome"))
-                .isEqualTo("NEEDS_INFO");
-        assertThat(JsonPath.<String>read(created.body(), "$.detected_intent"))
-                .isEqualTo("EXPIRY_RENEWAL");
+        assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("QUEUED");
+        assertThat(JsonPath.<String>read(created.body(), "$.analysis_outcome")).isNull();
         assertThat(JsonPath.<String>read(created.body(), "$.instruction"))
                 .isEqualTo("응웬반A 체류연장 준비해줘");
-        assertThat(JsonPath.<List<String>>read(created.body(), "$.questions[*].slot_key"))
-                .containsExactly("due_at");
         assertThat(JsonPath.<Number>read(created.body(), "$.attempt_count").intValue())
-                .isEqualTo(2);
-        long version = JsonPath.<Number>read(created.body(), "$.version").longValue();
+                .isEqualTo(1);
 
-        HttpResponse<String> detail = get("/api/v1/ai-runs/" + aiRunId, token);
+        HttpResponse<String> detail = awaitRun(aiRunId, token, "NEEDS_INFO", 2);
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<String>read(detail.body(), "$.status")).isEqualTo("SUCCEEDED");
+        assertThat(JsonPath.<String>read(detail.body(), "$.detected_intent"))
+                .isEqualTo("EXPIRY_RENEWAL");
+        assertThat(JsonPath.<List<String>>read(detail.body(), "$.questions[*].slot_key"))
+                .containsExactly("due_at");
+        long version = JsonPath.<Number>read(detail.body(), "$.version").longValue();
 
         HttpResponse<String> answered = post(
                 "/api/v1/ai-runs/" + aiRunId + "/answers",
@@ -157,6 +165,86 @@ class AiRunApiIntegrationTest {
     }
 
     @Test
+    void replaysSafeOrderedSseEventsAndEnforcesTenantScope() throws Exception {
+        CountDownLatch planStarted = new CountDownLatch(1);
+        CountDownLatch releasePlan = new CountDownLatch(1);
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> {
+            int call = runtimeCalls.incrementAndGet();
+            if (call == 1) {
+                planStarted.countDown();
+                if (!releasePlan.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("test did not release delayed PLAN call");
+                }
+            }
+            return scriptedResponse(invocation.getArgument(0), call);
+        });
+        String tokenA = login(HR_A_EMAIL);
+        String tokenB = login(HR_B_EMAIL);
+        UUID aiRunId;
+        String streamBody;
+        try {
+            HttpResponse<String> created = post(
+                    "/api/v1/ai-runs",
+                    """
+                    {"instruction":"응웬반A 체류연장 준비해줘"}
+                    """,
+                    tokenA,
+                    "airun-sse-001"
+            );
+            assertThat(created.statusCode()).isEqualTo(202);
+            assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("QUEUED");
+            aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+            assertThat(planStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+            HttpResponse<InputStream> stream = openEventStream(aiRunId, tokenA);
+            assertThat(stream.statusCode()).isEqualTo(200);
+            assertThat(stream.headers().firstValue(HttpHeaders.CONTENT_TYPE).orElseThrow())
+                    .startsWith("text/event-stream");
+            releasePlan.countDown();
+            streamBody = new String(stream.body().readAllBytes(), StandardCharsets.UTF_8);
+        } finally {
+            releasePlan.countDown();
+        }
+        assertThat(streamBody)
+                .contains("event:RUN_QUEUED", "event:RUN_STARTED", "event:SLOT_CHECKING", "event:NEEDS_INFO")
+                .doesNotContain("응웬반A 체류연장 준비해줘", "analysis_input", "prompt", "provider");
+
+        HttpResponse<String> detail = awaitRun(aiRunId, tokenA, "NEEDS_INFO", 2);
+        long currentVersion = JsonPath.<Number>read(detail.body(), "$.version").longValue();
+
+        HttpResponse<String> alreadyConsumed = getEvents(aiRunId, tokenA, Long.toString(currentVersion));
+        assertThat(alreadyConsumed.statusCode()).isEqualTo(200);
+        assertThat(alreadyConsumed.body()).isEmpty();
+
+        assertThat(getEvents(aiRunId, tokenB, null).statusCode()).isEqualTo(404);
+        assertThat(getEvents(aiRunId, tokenA, "not-a-number").statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void allowsLastEventIdHeaderInCorsPreflight() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        uri("/api/v1/ai-runs/" + UUID.randomUUID() + "/events")
+                )
+                .header("Origin", "http://localhost:5173")
+                .header("Access-Control-Request-Method", "GET")
+                .header("Access-Control-Request-Headers", "authorization,last-event-id")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Access-Control-Allow-Headers").orElseThrow())
+                .containsIgnoringCase("authorization")
+                .containsIgnoringCase("last-event-id");
+    }
+
+    @Test
     void idempotencyAndCompanyIsolationAreEnforced() throws Exception {
         String tokenA = login(HR_A_EMAIL);
         String tokenB = login(HR_B_EMAIL);
@@ -180,6 +268,7 @@ class AiRunApiIntegrationTest {
         assertThat(repeated.statusCode()).isEqualTo(202);
         assertThat(JsonPath.<String>read(repeated.body(), "$.ai_run_id"))
                 .isEqualTo(aiRunId.toString());
+        awaitRun(aiRunId, tokenA, "NEEDS_INFO", 2);
         assertThat(runtimeCalls).hasValue(2);
         assertThat(get("/api/v1/ai-runs/" + aiRunId, tokenB).statusCode()).isEqualTo(404);
 
@@ -192,6 +281,163 @@ class AiRunApiIntegrationTest {
                 "airun-demo-duplicate"
         );
         assertThat(conflict.statusCode()).isEqualTo(409);
+    }
+
+    @Test
+    void acceptedCandidateCreatesOneCaseAndThreeTasksIdempotently() throws Exception {
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> {
+            AiAnalysisRequest request = invocation.getArgument(0);
+            return directReviewResponse(request, runtimeCalls.incrementAndGet());
+        });
+        String tokenA = login(HR_A_EMAIL);
+        String tokenB = login(HR_B_EMAIL);
+        HttpResponse<String> reviewed = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"응웬반A 체류연장 준비해줘"}
+                """,
+                tokenA,
+                "airun-decision-run"
+        );
+        assertThat(reviewed.statusCode()).isEqualTo(202);
+        UUID aiRunId = UUID.fromString(JsonPath.read(reviewed.body(), "$.ai_run_id"));
+        HttpResponse<String> detail = awaitRun(aiRunId, tokenA, "REVIEW_REQUIRED", 2);
+        assertThat(runtimeCalls).hasValue(2);
+        UUID candidateId = UUID.fromString(JsonPath.read(
+                detail.body(),
+                "$.candidates[0].candidate_id"
+        ));
+        long expectedVersion = JsonPath.<Number>read(detail.body(), "$.version").longValue();
+        assertThat(JsonPath.<String>read(detail.body(), "$.detected_intent"))
+                .isEqualTo("EXPIRY_RENEWAL");
+
+        String decisionBody = """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(expectedVersion, candidateId);
+        HttpResponse<String> first = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                tokenA,
+                "candidate-decision-001"
+        );
+        HttpResponse<String> repeated = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                tokenA,
+                "candidate-decision-001"
+        );
+
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(repeated.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(repeated.body(), "$.decision_batch_id"))
+                .isEqualTo(JsonPath.read(first.body(), "$.decision_batch_id"));
+        UUID caseId = UUID.fromString(JsonPath.read(first.body(), "$.case_id"));
+        assertThat(JsonPath.<List<String>>read(first.body(), "$.task_ids")).hasSize(3);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workflow_case WHERE case_id = ? AND company_id = ?",
+                Integer.class,
+                caseId,
+                COMPANY_A
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForList(
+                """
+                SELECT task_type
+                FROM task
+                WHERE case_id = ? AND company_id = ?
+                ORDER BY CASE task_type
+                    WHEN 'RECONTRACT' THEN 1
+                    WHEN 'STAY_PERIOD_EXTENSION' THEN 2
+                    ELSE 3
+                END
+                """,
+                String.class,
+                caseId,
+                COMPANY_A
+        )).containsExactly(
+                "RECONTRACT",
+                "STAY_PERIOD_EXTENSION",
+                "EMPLOYMENT_PERIOD_EXTENSION"
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE case_id = ? AND source = 'AI_CANDIDATE'",
+                Integer.class,
+                caseId
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT due_date FROM task WHERE case_id = ? ORDER BY task_id",
+                LocalDate.class,
+                caseId
+        )).containsOnly(LocalDate.of(2026, 9, 30));
+        String snapshot = jdbcTemplate.queryForObject(
+                "SELECT workflow_snapshot_json FROM workflow_case WHERE case_id = ?",
+                String.class,
+                caseId
+        );
+        assertThat(JsonPath.<List<Integer>>read(snapshot, "$.steps[*].order"))
+                .containsExactly(1, 2, 3);
+        assertThat(JsonPath.<List<String>>read(snapshot, "$.steps[*].task_type"))
+                .containsExactly(
+                        "RECONTRACT",
+                        "STAY_PERIOD_EXTENSION",
+                        "EMPLOYMENT_PERIOD_EXTENSION"
+                );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ai_candidate_decision_batch WHERE ai_run_id = ?",
+                Integer.class,
+                aiRunId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ai_candidate_decision_task",
+                Integer.class
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT action FROM audit_event WHERE target_id = ? ORDER BY created_at",
+                String.class,
+                aiRunId
+        )).containsExactly(
+                "AI_RUN_CREATED",
+                "AI_RUN_CANDIDATES_DECIDED"
+        );
+
+        HttpResponse<String> reusedKeyWithDifferentPayload = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"DISCARD"}]
+                }
+                """.formatted(expectedVersion, candidateId),
+                tokenA,
+                "candidate-decision-001"
+        );
+        assertThat(reusedKeyWithDifferentPayload.statusCode()).isEqualTo(409);
+
+        long decidedVersion = JsonPath.<Number>read(first.body(), "$.run_version").longValue();
+        HttpResponse<String> alreadyDecided = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(decidedVersion, candidateId),
+                tokenA,
+                "candidate-decision-002"
+        );
+        assertThat(alreadyDecided.statusCode()).isEqualTo(409);
+
+        HttpResponse<String> otherCompany = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                tokenB,
+                "candidate-decision-other-company"
+        );
+        assertThat(otherCompany.statusCode()).isEqualTo(404);
     }
 
     private AiAnalysisResponse scriptedResponse(AiAnalysisRequest request, int call) {
@@ -247,6 +493,49 @@ class AiRunApiIntegrationTest {
         );
     }
 
+    private AiAnalysisResponse directReviewResponse(AiAnalysisRequest request, int call) {
+        if (call == 1) {
+            return new AiAnalysisResponse(
+                    request.requestId(),
+                    AiAnalysisOutcome.CONTEXT_REQUIRED,
+                    new AiContextRequirement(
+                            "EXPIRY_RENEWAL",
+                            new BigDecimal("0.96"),
+                            "응웬반A",
+                            Map.of(),
+                            List.of("worker_id", "stay_expiry_date")
+                    ),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    versions(),
+                    1,
+                    30
+            );
+        }
+        return new AiAnalysisResponse(
+                request.requestId(),
+                AiAnalysisOutcome.REVIEW_REQUIRED,
+                null,
+                List.of(),
+                List.of(new AiCandidate(
+                        "candidate-1",
+                        WORKER_A,
+                        "WF-STY-001",
+                        Map.of(
+                                "worker_id", WORKER_A.toString(),
+                                "stay_expiry_date", "2026-09-30"
+                        ),
+                        List.of(),
+                        new BigDecimal("0.93")
+                )),
+                List.of(),
+                versions(),
+                1,
+                25
+        );
+    }
+
     private AiRuntimeVersions versions() {
         return new AiRuntimeVersions(
                 "agent-demo-1",
@@ -279,6 +568,53 @@ class AiRunApiIntegrationTest {
                 .GET()
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> awaitRun(
+            UUID aiRunId,
+            String token,
+            String expectedOutcome,
+            int expectedAttemptCount
+    ) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        HttpResponse<String> latest = null;
+        while (System.nanoTime() < deadline) {
+            latest = get("/api/v1/ai-runs/" + aiRunId, token);
+            String outcome = JsonPath.read(latest.body(), "$.analysis_outcome");
+            int attemptCount = JsonPath.<Number>read(latest.body(), "$.attempt_count").intValue();
+            if (expectedOutcome.equals(outcome) && attemptCount == expectedAttemptCount) {
+                return latest;
+            }
+            Thread.sleep(25);
+        }
+        throw new AssertionError("AI Run did not reach expected state: "
+                + (latest == null ? "no response" : latest.body()));
+    }
+
+    private HttpResponse<InputStream> openEventStream(UUID aiRunId, String token)
+            throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        uri("/api/v1/ai-runs/" + aiRunId + "/events")
+                )
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.ACCEPT, "text/event-stream")
+                .GET()
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+    }
+
+    private HttpResponse<String> getEvents(UUID aiRunId, String token, String lastEventId)
+            throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(
+                        uri("/api/v1/ai-runs/" + aiRunId + "/events")
+                )
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.ACCEPT, "text/event-stream")
+                .GET();
+        if (lastEventId != null) {
+            builder.header("Last-Event-ID", lastEventId);
+        }
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> post(

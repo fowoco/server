@@ -5,6 +5,7 @@ import com.fowoco.server.aiintegration.application.validation.AiRuntimeContractV
 import com.fowoco.server.aiintegration.application.validation.ValidatingAiRuntimeClient;
 import java.net.http.HttpClient;
 import java.time.Clock;
+import java.time.Duration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,10 +34,7 @@ public class AiRuntimeHttpConfiguration {
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 .build();
-        HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(properties.getConnectTimeout())
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build();
+        HttpClient httpClient = createHttpClient(properties.getConnectTimeout());
         AiRuntimeCircuitBreaker circuitBreaker = new AiRuntimeCircuitBreaker(
                 properties.getCircuitBreakerFailureThreshold(),
                 properties.getCircuitBreakerOpenDuration(),
@@ -53,5 +51,13 @@ public class AiRuntimeHttpConfiguration {
                 circuitBreaker
         );
         return new ValidatingAiRuntimeClient(remote, validator);
+    }
+
+    static HttpClient createHttpClient(Duration connectTimeout) {
+        return HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(connectTimeout)
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build();
     }
 }

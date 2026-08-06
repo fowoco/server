@@ -76,13 +76,11 @@ public class WorkerLinkController {
         ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerLinkIssueCommand command = new WorkerLinkIssueCommand(
                 taskId,
-                actor.companyId(),
                 request.getExpiresInHours(),
                 request.isRotateExisting(),
-                actor.actorId(),
                 idempotencyKey
         );
-        WorkerLinkIssueResult result = workerLinkService.issue(command);
+        WorkerLinkIssueResult result = workerLinkService.issue(command, actor);
         return ResponseEntity.status(HttpStatus.CREATED).body(WorkerLinkIssueResponse.from(result));
     }
 }
