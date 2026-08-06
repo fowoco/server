@@ -98,7 +98,7 @@ public class DocumentController {
                 .toList();
         return new DocumentPageResponse(items, result.page(), result.size(), result.totalElements());
     }
-    
+
     @Operation(
             operationId = "getDocument",
             summary = "서류 단건 상세 조회",

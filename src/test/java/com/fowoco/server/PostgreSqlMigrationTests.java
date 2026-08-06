@@ -2,6 +2,7 @@ package com.fowoco.server;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fowoco.server.common.security.PostgreSqlRlsTestLock;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -38,27 +39,33 @@ class PostgreSqlMigrationTests {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String username = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         String password = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
-        Flyway flyway = Flyway.configure()
-                .dataSource(url, username, password)
-                .locations(
-                        "classpath:db/migration",
-                        "classpath:db/migration-postgresql"
-                )
-                .load();
+        try (PostgreSqlRlsTestLock ignored = PostgreSqlRlsTestLock.acquire(
+                url,
+                username,
+                password
+        )) {
+            Flyway flyway = Flyway.configure()
+                    .dataSource(url, username, password)
+                    .locations(
+                            "classpath:db/migration",
+                            "classpath:db/migration-postgresql"
+                    )
+                    .load();
 
-        flyway.migrate();
-        flyway.validate();
+            flyway.migrate();
+            flyway.validate();
 
-        assertThat(flyway.info().current()).isNotNull();
-        assertThat(flyway.info().pending()).isEmpty();
+            assertThat(flyway.info().current()).isNotNull();
+            assertThat(flyway.info().pending()).isEmpty();
 
-        try (Connection connection = DriverManager.getConnection(url, username, password)) {
-            assertSchemaContract(connection);
-            connection.setAutoCommit(false);
-            try {
-                assertConstraintBehavior(connection);
-            } finally {
-                connection.rollback();
+            try (Connection connection = DriverManager.getConnection(url, username, password)) {
+                assertSchemaContract(connection);
+                connection.setAutoCommit(false);
+                try {
+                    assertConstraintBehavior(connection);
+                } finally {
+                    connection.rollback();
+                }
             }
         }
     }

@@ -13,6 +13,8 @@ import com.fowoco.server.reliability.domain.DomainEventEnvelope;
 import com.fowoco.server.reliability.domain.EventActorType;
 import com.fowoco.server.reliability.domain.SafeEventPayload;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -24,6 +26,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -185,11 +188,12 @@ class OutboxIntegrationTest {
         jdbcTemplate.update(
                 """
                 UPDATE event_publication
-                SET lease_expires_at = DATEADD('SECOND', -1, CURRENT_TIMESTAMP),
+                SET lease_expires_at = ?,
                     updated_at = CURRENT_TIMESTAMP,
                     version = version + 1
                 WHERE event_id = ?
                 """,
+                clock.instant().minusSeconds(1),
                 event.eventId()
         );
 
@@ -317,6 +321,15 @@ class OutboxIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)
     static class ReliabilityTestConfiguration {
+
+        @Bean
+        @Primary
+        Clock reliabilityTestClock() {
+            return Clock.fixed(
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    ZoneOffset.UTC
+            );
+        }
 
         @Bean
         TestEventHandler testEventHandler(JdbcTemplate jdbcTemplate) {

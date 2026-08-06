@@ -174,7 +174,7 @@ class WorkerDocumentSecurityIntegrationTest {
         assertThat(ids).contains(documentIdWithTask);
         assertThat(ids).doesNotContain(documentIdWithoutTask);
     }
-    
+
     @Test
     void getDocumentReturnsDetailWithVersionAndFileInfo() throws Exception {
         String accessToken = accessToken(login(HR_A_EMAIL));

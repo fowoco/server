@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.sql.Statement;
+import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,22 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("aa000000-0000-0000-0000-000000000001");
     private static final UUID PASSWORD_RESET_B =
             UUID.fromString("ba000000-0000-0000-0000-000000000002");
+    private static final List<String> RLS_TABLES = List.of(
+            "company",
+            "user_account",
+            "worker",
+            "task",
+            "stored_file",
+            "workflow_case",
+            "document_request_draft",
+            "document_request_draft_type",
+            "worker_link",
+            "worker_response",
+            "worker_response_upload",
+            "worker_document_upload_idempotency",
+            "user_agreement_consent",
+            "password_reset_token"
+    );
 
     @Test
     void restrictedRoleEnforcesTenantCrudAndFailsClosedWithoutValidContext()
@@ -76,35 +93,51 @@ class PostgreSqlRlsIsolationTest {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String migrationUsername = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         String migrationPassword = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
-        Flyway.configure()
-                .dataSource(url, migrationUsername, migrationPassword)
-                .locations(
-                        "classpath:db/migration",
-                        "classpath:db/migration-postgresql"
-                )
-                .load()
-                .migrate();
-
         String runtimeRole = "rls_isolation_test_"
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String runtimePassword = "Rls-isolation-" + UUID.randomUUID();
 
-        try (Connection migrationConnection = DriverManager.getConnection(
+        try (PostgreSqlRlsTestLock ignored = PostgreSqlRlsTestLock.acquire(
                 url,
                 migrationUsername,
                 migrationPassword
         )) {
-            prepareFixture(migrationConnection, runtimeRole, runtimePassword);
-            try (Connection runtimeConnection = DriverManager.getConnection(
+            Flyway.configure()
+                    .dataSource(url, migrationUsername, migrationPassword)
+                    .locations(
+                            "classpath:db/migration",
+                            "classpath:db/migration-postgresql"
+                    )
+                    .load()
+                    .migrate();
+
+            try (Connection migrationConnection = DriverManager.getConnection(
                     url,
-                    runtimeRole,
-                    runtimePassword
+                    migrationUsername,
+                    migrationPassword
+            ); PostgreSqlRlsStateFixture rlsState = PostgreSqlRlsStateFixture.capture(
+                    migrationConnection,
+                    RLS_TABLES
+            ); FixtureCleanup fixtureCleanup = () -> restoreFixture(
+                    migrationConnection,
+                    runtimeRole
             )) {
-                assertMissingAndInvalidContextFailClosed(runtimeConnection);
-                assertTenantCrudIsolation(runtimeConnection);
-                assertCommittedContextDoesNotLeak(runtimeConnection);
-            } finally {
-                restoreFixture(migrationConnection, runtimeRole);
+                rlsState.disableRowLevelSecurityForFixtureSetup();
+                prepareFixture(
+                        migrationConnection,
+                        runtimeRole,
+                        runtimePassword,
+                        rlsState
+                );
+                try (Connection runtimeConnection = DriverManager.getConnection(
+                        url,
+                        runtimeRole,
+                        runtimePassword
+                )) {
+                    assertMissingAndInvalidContextFailClosed(runtimeConnection);
+                    assertTenantCrudIsolation(runtimeConnection);
+                    assertCommittedContextDoesNotLeak(runtimeConnection);
+                }
             }
         }
     }
@@ -112,7 +145,8 @@ class PostgreSqlRlsIsolationTest {
     private void prepareFixture(
             Connection connection,
             String runtimeRole,
-            String runtimePassword
+            String runtimePassword,
+            PostgreSqlRlsStateFixture rlsState
     ) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             String quotedRole = quoteIdentifier(runtimeRole);
@@ -306,26 +340,8 @@ class PostgreSqlRlsIsolationTest {
                     WORKER_LINK_B, COMPANY_B, STORED_FILE_B
             ));
 
-            statement.execute("ALTER TABLE public.company ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.stored_file ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.workflow_case ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.document_request_draft ENABLE ROW LEVEL SECURITY");
-            statement.execute(
-                    "ALTER TABLE public.document_request_draft_type ENABLE ROW LEVEL SECURITY"
-            );
-            statement.execute("ALTER TABLE public.worker_link ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker_response ENABLE ROW LEVEL SECURITY");
-            statement.execute(
-                    "ALTER TABLE public.worker_response_upload ENABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.worker_document_upload_idempotency "
-                            + "ENABLE ROW LEVEL SECURITY"
-            );
-            statement.execute("ALTER TABLE public.user_agreement_consent ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.password_reset_token ENABLE ROW LEVEL SECURITY");
         }
+        rlsState.enableRowLevelSecurity();
     }
 
     private void assertMissingAndInvalidContextFailClosed(Connection connection)
@@ -611,33 +627,41 @@ class PostgreSqlRlsIsolationTest {
     }
 
     private void restoreFixture(Connection connection, String runtimeRole) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("ALTER TABLE public.password_reset_token DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.user_agreement_consent DISABLE ROW LEVEL SECURITY");
-            statement.execute(
-                    "ALTER TABLE public.worker_document_upload_idempotency "
-                            + "DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.worker_response_upload DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute("ALTER TABLE public.worker_response DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker_link DISABLE ROW LEVEL SECURITY");
-            statement.execute(
-                    "ALTER TABLE public.document_request_draft_type DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.document_request_draft DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute("ALTER TABLE public.stored_file DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.workflow_case DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.company DISABLE ROW LEVEL SECURITY");
-            deleteFixtureRows(statement);
-            String quotedRole = quoteIdentifier(runtimeRole);
-            statement.execute("DROP OWNED BY " + quotedRole);
-            statement.execute("DROP ROLE " + quotedRole);
+        SQLException failure = null;
+        failure = runCleanupStep(failure, () -> {
+            try (Statement statement = connection.createStatement()) {
+                deleteFixtureRows(statement);
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            try (Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP OWNED BY " + quoteIdentifier(runtimeRole));
+                }
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            try (Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP ROLE " + quoteIdentifier(runtimeRole));
+                }
+            }
+        });
+        if (failure != null) {
+            throw failure;
         }
+    }
+
+    private SQLException runCleanupStep(SQLException failure, SqlCleanupStep step) {
+        try {
+            step.run();
+        } catch (SQLException exception) {
+            if (failure == null) {
+                return exception;
+            }
+            failure.addSuppressed(exception);
+        }
+        return failure;
     }
 
     private void deleteFixtureRows(Statement statement) throws SQLException {
@@ -801,6 +825,16 @@ class PostgreSqlRlsIsolationTest {
         assertThat(failure.getSQLState()).isEqualTo(expectedSqlState);
     }
 
+    private static boolean roleExists(Statement statement, String roleName)
+            throws SQLException {
+        try (ResultSet resultSet = statement.executeQuery(
+                "SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = "
+                        + quoteLiteral(roleName)
+        )) {
+            return resultSet.next();
+        }
+    }
+
     private static String quoteIdentifier(String value) {
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
@@ -815,5 +849,18 @@ class PostgreSqlRlsIsolationTest {
             throw new IllegalStateException(name + " environment variable is required.");
         }
         return value;
+    }
+
+    @FunctionalInterface
+    private interface FixtureCleanup extends AutoCloseable {
+
+        @Override
+        void close() throws SQLException;
+    }
+
+    @FunctionalInterface
+    private interface SqlCleanupStep {
+
+        void run() throws SQLException;
     }
 }

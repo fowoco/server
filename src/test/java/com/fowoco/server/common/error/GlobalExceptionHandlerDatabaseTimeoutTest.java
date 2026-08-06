@@ -8,7 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.fowoco.server.common.database.DatabaseAccessDeniedMetrics;
 import com.fowoco.server.common.database.DatabaseTimeoutMetrics;
+import com.fowoco.server.common.database.PostgreSqlAccessDeniedClassifier;
 import com.fowoco.server.common.database.PostgreSqlTimeoutClassifier;
 import com.fowoco.server.common.web.RequestIdFilter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -58,6 +60,8 @@ class GlobalExceptionHandlerDatabaseTimeoutTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new TimeoutTestController())
                 .setControllerAdvice(new GlobalExceptionHandler(
                         fixedClock,
+                        new PostgreSqlAccessDeniedClassifier(),
+                        new DatabaseAccessDeniedMetrics(meterRegistry),
                         new PostgreSqlTimeoutClassifier(),
                         new DatabaseTimeoutMetrics(meterRegistry)
                 ))
