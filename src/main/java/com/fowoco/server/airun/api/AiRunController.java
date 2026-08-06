@@ -82,7 +82,7 @@ public class AiRunController {
             @Valid @RequestBody CreateAiRunRequest request,
             HttpServletRequest servletRequest
     ) {
-        AiRunResponse response = AiRunResponse.from(aiRunService.createAndExecute(
+        AiRunResponse response = AiRunResponse.from(aiRunService.createAndSchedule(
                 request.instruction(),
                 idempotencyKey,
                 actor(),
