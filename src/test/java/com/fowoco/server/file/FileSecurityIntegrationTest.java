@@ -88,6 +88,11 @@ class FileSecurityIntegrationTest {
         jdbcTemplate.update("DELETE FROM stored_file");
     }
 
+    @org.junit.jupiter.api.AfterAll
+    void cleanupFileState() {
+        jdbcTemplate.update("DELETE FROM stored_file");
+    }
+
     @Test
     void uploadSucceedsAndAppendsAuditEvent() throws Exception {
         String token = accessToken(login(HR_A_EMAIL));
@@ -119,6 +124,18 @@ class FileSecurityIntegrationTest {
         );
 
         assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(415);
+    }
+
+    @Test
+    void uploadAcceptsHwpxMimeType() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = uploadFile(
+                token, "contract.hwpx", "application/hwp+zip", "hwpx content".getBytes(StandardCharsets.UTF_8), "GENERAL"
+        );
+
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(response.body(), "$.name")).isEqualTo("contract.hwpx");
     }
 
     @Test
