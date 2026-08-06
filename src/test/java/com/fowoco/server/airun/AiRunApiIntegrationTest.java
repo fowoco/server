@@ -72,6 +72,9 @@ class AiRunApiIntegrationTest {
             return scriptedResponse(request, runtimeCalls.incrementAndGet());
         });
 
+        jdbcTemplate.update("DELETE FROM ai_candidate_decision_task");
+        jdbcTemplate.update("DELETE FROM ai_candidate_decision");
+        jdbcTemplate.update("DELETE FROM ai_candidate_decision_batch");
         jdbcTemplate.update("DELETE FROM ai_candidate");
         jdbcTemplate.update("DELETE FROM ai_question");
         jdbcTemplate.update("DELETE FROM ai_attempt");
@@ -85,6 +88,7 @@ class AiRunApiIntegrationTest {
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM task_checklist_item");
         jdbcTemplate.update("DELETE FROM task");
+        jdbcTemplate.update("DELETE FROM workflow_case");
         jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
         jdbcTemplate.update("DELETE FROM refresh_token");
@@ -194,6 +198,164 @@ class AiRunApiIntegrationTest {
         assertThat(conflict.statusCode()).isEqualTo(409);
     }
 
+    @Test
+    void acceptedCandidateCreatesOneCaseAndThreeTasksIdempotently() throws Exception {
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> {
+            AiAnalysisRequest request = invocation.getArgument(0);
+            return directReviewResponse(request, runtimeCalls.incrementAndGet());
+        });
+        String tokenA = login(HR_A_EMAIL);
+        String tokenB = login(HR_B_EMAIL);
+        HttpResponse<String> reviewed = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"응웬반A 체류연장 준비해줘"}
+                """,
+                tokenA,
+                "airun-decision-run"
+        );
+        assertThat(reviewed.statusCode()).isEqualTo(202);
+        assertThat(JsonPath.<String>read(reviewed.body(), "$.analysis_outcome"))
+                .isEqualTo("REVIEW_REQUIRED");
+        assertThat(runtimeCalls).hasValue(2);
+        UUID aiRunId = UUID.fromString(JsonPath.read(reviewed.body(), "$.ai_run_id"));
+        UUID candidateId = UUID.fromString(JsonPath.read(
+                reviewed.body(),
+                "$.candidates[0].candidate_id"
+        ));
+        long expectedVersion = JsonPath.<Number>read(reviewed.body(), "$.version").longValue();
+        assertThat(JsonPath.<String>read(reviewed.body(), "$.detected_intent"))
+                .isEqualTo("EXPIRY_RENEWAL");
+
+        String decisionBody = """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(expectedVersion, candidateId);
+        HttpResponse<String> first = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                tokenA,
+                "candidate-decision-001"
+        );
+        HttpResponse<String> repeated = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                tokenA,
+                "candidate-decision-001"
+        );
+
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(repeated.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(repeated.body(), "$.decision_batch_id"))
+                .isEqualTo(JsonPath.read(first.body(), "$.decision_batch_id"));
+        UUID caseId = UUID.fromString(JsonPath.read(first.body(), "$.case_id"));
+        assertThat(JsonPath.<List<String>>read(first.body(), "$.task_ids")).hasSize(3);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workflow_case WHERE case_id = ? AND company_id = ?",
+                Integer.class,
+                caseId,
+                COMPANY_A
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForList(
+                """
+                SELECT task_type
+                FROM task
+                WHERE case_id = ? AND company_id = ?
+                ORDER BY CASE task_type
+                    WHEN 'RECONTRACT' THEN 1
+                    WHEN 'STAY_PERIOD_EXTENSION' THEN 2
+                    ELSE 3
+                END
+                """,
+                String.class,
+                caseId,
+                COMPANY_A
+        )).containsExactly(
+                "RECONTRACT",
+                "STAY_PERIOD_EXTENSION",
+                "EMPLOYMENT_PERIOD_EXTENSION"
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE case_id = ? AND source = 'AI_CANDIDATE'",
+                Integer.class,
+                caseId
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT due_date FROM task WHERE case_id = ? ORDER BY task_id",
+                LocalDate.class,
+                caseId
+        )).containsOnly(LocalDate.of(2026, 9, 30));
+        String snapshot = jdbcTemplate.queryForObject(
+                "SELECT workflow_snapshot_json FROM workflow_case WHERE case_id = ?",
+                String.class,
+                caseId
+        );
+        assertThat(JsonPath.<List<Integer>>read(snapshot, "$.steps[*].order"))
+                .containsExactly(1, 2, 3);
+        assertThat(JsonPath.<List<String>>read(snapshot, "$.steps[*].task_type"))
+                .containsExactly(
+                        "RECONTRACT",
+                        "STAY_PERIOD_EXTENSION",
+                        "EMPLOYMENT_PERIOD_EXTENSION"
+                );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ai_candidate_decision_batch WHERE ai_run_id = ?",
+                Integer.class,
+                aiRunId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ai_candidate_decision_task",
+                Integer.class
+        )).isEqualTo(3);
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT action FROM audit_event WHERE target_id = ? ORDER BY created_at",
+                String.class,
+                aiRunId
+        )).containsExactly(
+                "AI_RUN_CREATED",
+                "AI_RUN_CANDIDATES_DECIDED"
+        );
+
+        HttpResponse<String> reusedKeyWithDifferentPayload = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"DISCARD"}]
+                }
+                """.formatted(expectedVersion, candidateId),
+                tokenA,
+                "candidate-decision-001"
+        );
+        assertThat(reusedKeyWithDifferentPayload.statusCode()).isEqualTo(409);
+
+        long decidedVersion = JsonPath.<Number>read(first.body(), "$.run_version").longValue();
+        HttpResponse<String> alreadyDecided = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(decidedVersion, candidateId),
+                tokenA,
+                "candidate-decision-002"
+        );
+        assertThat(alreadyDecided.statusCode()).isEqualTo(409);
+
+        HttpResponse<String> otherCompany = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                tokenB,
+                "candidate-decision-other-company"
+        );
+        assertThat(otherCompany.statusCode()).isEqualTo(404);
+    }
+
     private AiAnalysisResponse scriptedResponse(AiAnalysisRequest request, int call) {
         if (call == 1) {
             return new AiAnalysisResponse(
@@ -237,6 +399,49 @@ class AiRunApiIntegrationTest {
                         WORKER_A,
                         "WF-STY-001",
                         Map.of("due_at", "2026-08-31"),
+                        List.of(),
+                        new BigDecimal("0.93")
+                )),
+                List.of(),
+                versions(),
+                1,
+                25
+        );
+    }
+
+    private AiAnalysisResponse directReviewResponse(AiAnalysisRequest request, int call) {
+        if (call == 1) {
+            return new AiAnalysisResponse(
+                    request.requestId(),
+                    AiAnalysisOutcome.CONTEXT_REQUIRED,
+                    new AiContextRequirement(
+                            "EXPIRY_RENEWAL",
+                            new BigDecimal("0.96"),
+                            "응웬반A",
+                            Map.of(),
+                            List.of("worker_id", "stay_expiry_date")
+                    ),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    versions(),
+                    1,
+                    30
+            );
+        }
+        return new AiAnalysisResponse(
+                request.requestId(),
+                AiAnalysisOutcome.REVIEW_REQUIRED,
+                null,
+                List.of(),
+                List.of(new AiCandidate(
+                        "candidate-1",
+                        WORKER_A,
+                        "WF-STY-001",
+                        Map.of(
+                                "worker_id", WORKER_A.toString(),
+                                "stay_expiry_date", "2026-09-30"
+                        ),
                         List.of(),
                         new BigDecimal("0.93")
                 )),
