@@ -122,10 +122,8 @@ public class WorkerResponseService {
             }
         }
 
-        if (command.responseType() == WorkerResponseType.QUESTION
-                || command.responseType() == WorkerResponseType.NOT_UNDERSTOOD) {
+        if (requiresHrReview(command.responseType())) {
             workerLinkRepository.update(link.markNeedsFollowup(now));
-            // HR 후속 업무/활동 이력
         }
 
         auditRepository.append(new AuditEvent(
@@ -145,5 +143,9 @@ public class WorkerResponseService {
         ));
 
         return new WorkerResponseSubmitResult(responseId, now);
+    }
+
+    private boolean requiresHrReview(WorkerResponseType responseType) {
+        return responseType != WorkerResponseType.ACKNOWLEDGED;
     }
 }
