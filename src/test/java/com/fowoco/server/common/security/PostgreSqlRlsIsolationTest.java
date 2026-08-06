@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 import java.sql.Statement;
+import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,31 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("aa000000-0000-0000-0000-000000000001");
     private static final UUID MANUAL_RETRY_B =
             UUID.fromString("bb000000-0000-0000-0000-000000000002");
+    private static final UUID CONSENT_A =
+            UUID.fromString("a9000000-0000-0000-0000-000000000001");
+    private static final UUID CONSENT_B =
+            UUID.fromString("b9000000-0000-0000-0000-000000000002");
+    private static final UUID PASSWORD_RESET_A =
+            UUID.fromString("aa000000-0000-0000-0000-000000000001");
+    private static final UUID PASSWORD_RESET_B =
+            UUID.fromString("ba000000-0000-0000-0000-000000000002");
+    private static final List<String> RLS_TABLES = List.of(
+            "company",
+            "user_account",
+            "worker",
+            "task",
+            "stored_file",
+            "workflow_case",
+            "document_request_draft",
+            "document_request_draft_type",
+            "worker_link",
+            "worker_response",
+            "worker_response_upload",
+            "worker_document_upload_idempotency",
+            "outbox_manual_retry",
+            "user_agreement_consent",
+            "password_reset_token"
+    );
 
     @Test
     void restrictedRoleEnforcesTenantCrudAndFailsClosedWithoutValidContext()
@@ -76,35 +102,51 @@ class PostgreSqlRlsIsolationTest {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String migrationUsername = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         String migrationPassword = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
-        Flyway.configure()
-                .dataSource(url, migrationUsername, migrationPassword)
-                .locations(
-                        "classpath:db/migration",
-                        "classpath:db/migration-postgresql"
-                )
-                .load()
-                .migrate();
-
         String runtimeRole = "rls_isolation_test_"
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String runtimePassword = "Rls-isolation-" + UUID.randomUUID();
 
-        try (Connection migrationConnection = DriverManager.getConnection(
+        try (PostgreSqlRlsTestLock ignored = PostgreSqlRlsTestLock.acquire(
                 url,
                 migrationUsername,
                 migrationPassword
         )) {
-            prepareFixture(migrationConnection, runtimeRole, runtimePassword);
-            try (Connection runtimeConnection = DriverManager.getConnection(
+            Flyway.configure()
+                    .dataSource(url, migrationUsername, migrationPassword)
+                    .locations(
+                            "classpath:db/migration",
+                            "classpath:db/migration-postgresql"
+                    )
+                    .load()
+                    .migrate();
+
+            try (Connection migrationConnection = DriverManager.getConnection(
                     url,
-                    runtimeRole,
-                    runtimePassword
+                    migrationUsername,
+                    migrationPassword
+            ); PostgreSqlRlsStateFixture rlsState = PostgreSqlRlsStateFixture.capture(
+                    migrationConnection,
+                    RLS_TABLES
+            ); FixtureCleanup fixtureCleanup = () -> restoreFixture(
+                    migrationConnection,
+                    runtimeRole
             )) {
-                assertMissingAndInvalidContextFailClosed(runtimeConnection);
-                assertTenantCrudIsolation(runtimeConnection);
-                assertCommittedContextDoesNotLeak(runtimeConnection);
-            } finally {
-                restoreFixture(migrationConnection, runtimeRole);
+                rlsState.disableRowLevelSecurityForFixtureSetup();
+                prepareFixture(
+                        migrationConnection,
+                        runtimeRole,
+                        runtimePassword,
+                        rlsState
+                );
+                try (Connection runtimeConnection = DriverManager.getConnection(
+                        url,
+                        runtimeRole,
+                        runtimePassword
+                )) {
+                    assertMissingAndInvalidContextFailClosed(runtimeConnection);
+                    assertTenantCrudIsolation(runtimeConnection);
+                    assertCommittedContextDoesNotLeak(runtimeConnection);
+                }
             }
         }
     }
@@ -112,7 +154,8 @@ class PostgreSqlRlsIsolationTest {
     private void prepareFixture(
             Connection connection,
             String runtimeRole,
-            String runtimePassword
+            String runtimePassword,
+            PostgreSqlRlsStateFixture rlsState
     ) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             String quotedRole = quoteIdentifier(runtimeRole);
@@ -142,7 +185,9 @@ class PostgreSqlRlsIsolationTest {
                             + "public.worker_link, public.worker_response, "
                             + "public.worker_response_upload, "
                             + "public.worker_document_upload_idempotency, "
-                            + "public.outbox_manual_retry TO "
+                            + "public.outbox_manual_retry, "
+                            + "public.user_agreement_consent, "
+                            + "public.password_reset_token TO "
                             + quotedRole
             );
 
@@ -170,6 +215,32 @@ class PostgreSqlRlsIsolationTest {
                         ('%s', '%s', 'rls-b@example.com', 'rls-b@example.com',
                          'test-password-hash-b', 'ADMIN', 'ACTIVE')
                     """.formatted(USER_A, COMPANY_A, USER_B, COMPANY_B));
+            statement.execute("""
+                    INSERT INTO user_agreement_consent (
+                        consent_id, company_id, user_id, agreement_type,
+                        policy_version, agreed, request_id, recorded_at
+                    ) VALUES
+                        ('%s', '%s', '%s', 'PRIVACY_POLICY', '1.0', TRUE,
+                         'rls-consent-a', CURRENT_TIMESTAMP),
+                        ('%s', '%s', '%s', 'PRIVACY_POLICY', '1.0', TRUE,
+                         'rls-consent-b', CURRENT_TIMESTAMP)
+                    """.formatted(
+                    CONSENT_A, COMPANY_A, USER_A,
+                    CONSENT_B, COMPANY_B, USER_B
+            ));
+            statement.execute("""
+                    INSERT INTO password_reset_token (
+                        password_reset_token_id, company_id, user_id, token_hash,
+                        expires_at, created_at, updated_at
+                    ) VALUES
+                        ('%s', '%s', '%s', repeat('e', 64),
+                         CURRENT_TIMESTAMP + INTERVAL '1 hour', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                        ('%s', '%s', '%s', repeat('f', 64),
+                         CURRENT_TIMESTAMP + INTERVAL '1 hour', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """.formatted(
+                    PASSWORD_RESET_A, COMPANY_A, USER_A,
+                    PASSWORD_RESET_B, COMPANY_B, USER_B
+            ));
             statement.execute("""
                     INSERT INTO workflow_case (
                         case_id, company_id, worker_id, title, lifecycle_status,
@@ -314,27 +385,8 @@ class PostgreSqlRlsIsolationTest {
                     MANUAL_RETRY_B, COMPANY_B, EVENT_B, USER_B
             ));
 
-            statement.execute("ALTER TABLE public.company ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.stored_file ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.workflow_case ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.document_request_draft ENABLE ROW LEVEL SECURITY");
-            statement.execute(
-                    "ALTER TABLE public.document_request_draft_type ENABLE ROW LEVEL SECURITY"
-            );
-            statement.execute("ALTER TABLE public.worker_link ENABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker_response ENABLE ROW LEVEL SECURITY");
-            statement.execute(
-                    "ALTER TABLE public.worker_response_upload ENABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.worker_document_upload_idempotency "
-                            + "ENABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.outbox_manual_retry ENABLE ROW LEVEL SECURITY"
-            );
         }
+        rlsState.enableRowLevelSecurity();
     }
 
     private void assertMissingAndInvalidContextFailClosed(Connection connection)
@@ -351,6 +403,8 @@ class PostgreSqlRlsIsolationTest {
             assertThat(tableCount(connection, "worker_document_upload_idempotency")).isZero();
             assertThat(tableCount(connection, "workflow_case")).isZero();
             assertThat(tableCount(connection, "outbox_manual_retry")).isZero();
+            assertThat(tableCount(connection, "user_agreement_consent")).isZero();
+            assertThat(tableCount(connection, "password_reset_token")).isZero();
 
             setTenantContext(connection, "");
             assertThat(workerCount(connection)).isZero();
@@ -414,6 +468,15 @@ class PostgreSqlRlsIsolationTest {
                     "SELECT manual_retry_id FROM public.outbox_manual_retry "
                             + "ORDER BY manual_retry_id"
             )).containsExactly(MANUAL_RETRY_A);
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT consent_id FROM public.user_agreement_consent ORDER BY consent_id"
+            )).containsExactly(CONSENT_A);
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT password_reset_token_id FROM public.password_reset_token "
+                            + "ORDER BY password_reset_token_id"
+            )).containsExactly(PASSWORD_RESET_A);
 
             assertThat(executeUpdate(
                     connection,
@@ -532,6 +595,19 @@ class PostgreSqlRlsIsolationTest {
                     connection,
                     "42501",
                     """
+                    INSERT INTO password_reset_token (
+                        password_reset_token_id, company_id, user_id, token_hash,
+                        expires_at, created_at, updated_at
+                    ) VALUES (
+                        'bb000000-0000-0000-0000-000000000099', '%s', '%s', repeat('9', 64),
+                        CURRENT_TIMESTAMP + INTERVAL '1 hour', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    """.formatted(COMPANY_B, USER_B)
+            );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
                     INSERT INTO worker_response_upload (
                         response_id, stored_file_id, company_id
                     ) VALUES (
@@ -594,6 +670,12 @@ class PostgreSqlRlsIsolationTest {
                     "DELETE FROM worker WHERE worker_id = ?",
                     WORKER_A_NEW
             )).isOne();
+            assertThat(executeUpdate(
+                    connection,
+                    "UPDATE password_reset_token SET used_at = CURRENT_TIMESTAMP "
+                            + "WHERE password_reset_token_id = ?",
+                    PASSWORD_RESET_B
+            )).isZero();
         } finally {
             connection.rollback();
         }
@@ -622,34 +704,41 @@ class PostgreSqlRlsIsolationTest {
     }
 
     private void restoreFixture(Connection connection, String runtimeRole) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute(
-                    "ALTER TABLE public.outbox_manual_retry DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.worker_document_upload_idempotency "
-                            + "DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.worker_response_upload DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute("ALTER TABLE public.worker_response DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker_link DISABLE ROW LEVEL SECURITY");
-            statement.execute(
-                    "ALTER TABLE public.document_request_draft_type DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute(
-                    "ALTER TABLE public.document_request_draft DISABLE ROW LEVEL SECURITY"
-            );
-            statement.execute("ALTER TABLE public.stored_file DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.workflow_case DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.worker DISABLE ROW LEVEL SECURITY");
-            statement.execute("ALTER TABLE public.company DISABLE ROW LEVEL SECURITY");
-            deleteFixtureRows(statement);
-            String quotedRole = quoteIdentifier(runtimeRole);
-            statement.execute("DROP OWNED BY " + quotedRole);
-            statement.execute("DROP ROLE " + quotedRole);
+        SQLException failure = null;
+        failure = runCleanupStep(failure, () -> {
+            try (Statement statement = connection.createStatement()) {
+                deleteFixtureRows(statement);
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            try (Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP OWNED BY " + quoteIdentifier(runtimeRole));
+                }
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            try (Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP ROLE " + quoteIdentifier(runtimeRole));
+                }
+            }
+        });
+        if (failure != null) {
+            throw failure;
         }
+    }
+
+    private SQLException runCleanupStep(SQLException failure, SqlCleanupStep step) {
+        try {
+            step.run();
+        } catch (SQLException exception) {
+            if (failure == null) {
+                return exception;
+            }
+            failure.addSuppressed(exception);
+        }
+        return failure;
     }
 
     private void deleteFixtureRows(Statement statement) throws SQLException {
@@ -661,6 +750,14 @@ class PostgreSqlRlsIsolationTest {
                 DELETE FROM event_publication
                 WHERE event_id IN ('%s', '%s')
                 """.formatted(EVENT_A, EVENT_B));
+        statement.execute("""
+                DELETE FROM password_reset_token
+                WHERE password_reset_token_id IN ('%s', '%s')
+                """.formatted(PASSWORD_RESET_A, PASSWORD_RESET_B));
+        statement.execute("""
+                DELETE FROM user_agreement_consent
+                WHERE consent_id IN ('%s', '%s')
+                """.formatted(CONSENT_A, CONSENT_B));
         statement.execute("""
                 DELETE FROM worker_document_upload_idempotency
                 WHERE worker_link_id IN ('%s', '%s')
@@ -813,6 +910,16 @@ class PostgreSqlRlsIsolationTest {
         assertThat(failure.getSQLState()).isEqualTo(expectedSqlState);
     }
 
+    private static boolean roleExists(Statement statement, String roleName)
+            throws SQLException {
+        try (ResultSet resultSet = statement.executeQuery(
+                "SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = "
+                        + quoteLiteral(roleName)
+        )) {
+            return resultSet.next();
+        }
+    }
+
     private static String quoteIdentifier(String value) {
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
@@ -827,5 +934,18 @@ class PostgreSqlRlsIsolationTest {
             throw new IllegalStateException(name + " environment variable is required.");
         }
         return value;
+    }
+
+    @FunctionalInterface
+    private interface FixtureCleanup extends AutoCloseable {
+
+        @Override
+        void close() throws SQLException;
+    }
+
+    @FunctionalInterface
+    private interface SqlCleanupStep {
+
+        void run() throws SQLException;
     }
 }

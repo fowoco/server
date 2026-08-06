@@ -98,6 +98,7 @@ class PostgreSqlTenantDatabaseContextTest {
     private PlatformTransactionManager transactionManager;
     private TransactionTemplate transactionTemplate;
     private TenantDatabaseContext tenantDatabaseContext;
+    private PostgreSqlRlsTestLock rlsTestLock;
 
     @BeforeAll
     void setUpRestrictedRuntimeConnection() throws SQLException {
@@ -105,79 +106,144 @@ class PostgreSqlTenantDatabaseContextTest {
         migrationUsername = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         migrationPassword = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
 
-        Flyway.configure()
-                .dataSource(migrationUrl, migrationUsername, migrationPassword)
-                .locations(
-                        "classpath:db/migration",
-                        "classpath:db/migration-postgresql"
-                )
-                .load()
-                .migrate();
+        rlsTestLock = PostgreSqlRlsTestLock.acquire(
+                migrationUrl,
+                migrationUsername,
+                migrationPassword
+        );
+        try {
+            Flyway.configure()
+                    .dataSource(migrationUrl, migrationUsername, migrationPassword)
+                    .locations(
+                            "classpath:db/migration",
+                            "classpath:db/migration-postgresql"
+                    )
+                    .load()
+                    .migrate();
 
-        runtimeRole = "rls_runtime_test_"
-                + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        runtimePassword = "Rls-test-" + UUID.randomUUID();
+            runtimeRole = "rls_runtime_test_"
+                    + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+            runtimePassword = "Rls-test-" + UUID.randomUUID();
 
-        try (Connection connection = migrationConnection();
-             Statement statement = connection.createStatement()) {
-            String quotedRole = quoteIdentifier(runtimeRole);
-            statement.execute("""
-                    CREATE ROLE %s
-                    LOGIN
-                    PASSWORD %s
-                    NOSUPERUSER
-                    NOCREATEDB
-                    NOCREATEROLE
-                    NOINHERIT
-                    NOREPLICATION
-                    NOBYPASSRLS
-                    """.formatted(quotedRole, quoteLiteral(runtimePassword)));
-            statement.execute(
-                    "GRANT CONNECT ON DATABASE "
-                            + quoteIdentifier(connection.getCatalog())
-                            + " TO "
-                            + quotedRole
-            );
-            statement.execute("GRANT USAGE ON SCHEMA public TO " + quotedRole);
-            statement.execute("""
-                    GRANT SELECT, INSERT, UPDATE, DELETE
-                    ON TABLE %s
-                    TO %s
-                    """.formatted(TENANT_TABLE_SQL, quotedRole));
+            try (Connection connection = migrationConnection();
+                 Statement statement = connection.createStatement()) {
+                String quotedRole = quoteIdentifier(runtimeRole);
+                statement.execute("""
+                        CREATE ROLE %s
+                        LOGIN
+                        PASSWORD %s
+                        NOSUPERUSER
+                        NOCREATEDB
+                        NOCREATEROLE
+                        NOINHERIT
+                        NOREPLICATION
+                        NOBYPASSRLS
+                        """.formatted(quotedRole, quoteLiteral(runtimePassword)));
+                statement.execute(
+                        "GRANT CONNECT ON DATABASE "
+                                + quoteIdentifier(connection.getCatalog())
+                                + " TO "
+                                + quotedRole
+                );
+                statement.execute("GRANT USAGE ON SCHEMA public TO " + quotedRole);
+                statement.execute("""
+                        GRANT SELECT, INSERT, UPDATE, DELETE
+                        ON TABLE %s
+                        TO %s
+                        """.formatted(TENANT_TABLE_SQL, quotedRole));
+            }
+
+            migrationDataSource = new DriverManagerDataSource();
+            migrationDataSource.setUrl(migrationUrl);
+            migrationDataSource.setUsername(migrationUsername);
+            migrationDataSource.setPassword(migrationPassword);
+            migrationJdbc = new JdbcTemplate(migrationDataSource);
+
+            applicationContext = startRestrictedRuntimeApplication();
+            DataSource runtimeDataSource = applicationContext.getBean(DataSource.class);
+            runtimeJdbc = new JdbcTemplate(runtimeDataSource);
+            entityManager = applicationContext.getBean(EntityManager.class);
+            transactionManager = applicationContext.getBean(PlatformTransactionManager.class);
+            transactionTemplate = new TransactionTemplate(transactionManager);
+            tenantDatabaseContext = applicationContext.getBean(TenantDatabaseContext.class);
+        } catch (Throwable setupFailure) {
+            try {
+                removeRestrictedRuntimeConnection();
+            } catch (Throwable cleanupFailure) {
+                setupFailure.addSuppressed(cleanupFailure);
+            }
+            throwFailure(setupFailure);
         }
-
-        migrationDataSource = new DriverManagerDataSource();
-        migrationDataSource.setUrl(migrationUrl);
-        migrationDataSource.setUsername(migrationUsername);
-        migrationDataSource.setPassword(migrationPassword);
-        migrationJdbc = new JdbcTemplate(migrationDataSource);
-
-        applicationContext = startRestrictedRuntimeApplication();
-        DataSource runtimeDataSource = applicationContext.getBean(DataSource.class);
-        runtimeJdbc = new JdbcTemplate(runtimeDataSource);
-        entityManager = applicationContext.getBean(EntityManager.class);
-        transactionManager = applicationContext.getBean(PlatformTransactionManager.class);
-        transactionTemplate = new TransactionTemplate(transactionManager);
-        tenantDatabaseContext = applicationContext.getBean(TenantDatabaseContext.class);
     }
 
     @AfterAll
     void removeRestrictedRuntimeConnection() throws SQLException {
-        if (applicationContext != null) {
-            applicationContext.close();
-        }
-        if (runtimeRole == null) {
-            return;
-        }
-
-        try (Connection connection = migrationConnection();
-             Statement statement = connection.createStatement()) {
-            if (roleExists(statement, runtimeRole)) {
-                String quotedRole = quoteIdentifier(runtimeRole);
-                statement.execute("DROP OWNED BY " + quotedRole);
-                statement.execute("DROP ROLE " + quotedRole);
+        Throwable failure = null;
+        failure = runCleanupStep(failure, () -> {
+            ConfigurableApplicationContext contextToClose = applicationContext;
+            if (contextToClose != null) {
+                contextToClose.close();
+                applicationContext = null;
             }
+        });
+        failure = runCleanupStep(failure, () -> {
+            if (runtimeRole == null) {
+                return;
+            }
+            try (Connection connection = migrationConnection();
+                 Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP OWNED BY " + quoteIdentifier(runtimeRole));
+                }
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            if (runtimeRole == null) {
+                return;
+            }
+            try (Connection connection = migrationConnection();
+                 Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP ROLE " + quoteIdentifier(runtimeRole));
+                }
+                runtimeRole = null;
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            PostgreSqlRlsTestLock lockToClose = rlsTestLock;
+            if (lockToClose != null) {
+                lockToClose.close();
+                rlsTestLock = null;
+            }
+        });
+        if (failure != null) {
+            throwFailure(failure);
         }
+    }
+
+    private static Throwable runCleanupStep(Throwable failure, CleanupStep step) {
+        try {
+            step.run();
+        } catch (Throwable cleanupFailure) {
+            if (failure == null) {
+                return cleanupFailure;
+            }
+            failure.addSuppressed(cleanupFailure);
+        }
+        return failure;
+    }
+
+    private static void throwFailure(Throwable failure) throws SQLException {
+        if (failure instanceof SQLException sqlException) {
+            throw sqlException;
+        }
+        if (failure instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        if (failure instanceof Error error) {
+            throw error;
+        }
+        throw new IllegalStateException("Unexpected PostgreSQL test lifecycle failure", failure);
     }
 
     @Test
@@ -802,6 +868,12 @@ class PostgreSqlTenantDatabaseContextTest {
     }
 
     private record ContextProbe(Integer backendPid, String companyId) {
+    }
+
+    @FunctionalInterface
+    private interface CleanupStep {
+
+        void run() throws Exception;
     }
 
     @Configuration(proxyBeanMethods = false)

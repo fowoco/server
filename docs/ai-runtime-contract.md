@@ -186,6 +186,26 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
 Candidate는 Task도 승인도 아니며, #24에서 HR이 채택한 후에만 Server Task command로
 전달됩니다.
 
+## 여권 OCR 국가 코드
+
+Worker의 `nationality_code`는 ISO 3166-1 alpha-2 대문자(`VN`, `PH`)를 기준으로 합니다.
+여권 OCR 요청의 `countryCode`는 Worker 값을 그대로 보내지 않고, AI가 배포한 국가별
+Template을 고를 수 있도록 alpha-3 코드(`VNM`, `PHL`)로 변환합니다.
+
+현재 AI Runtime이 배포한 여권 Template과 Server 변환 범위는 다음 다섯 국가입니다.
+
+| Worker 국적 | OCR 국가 | 지원 상태 |
+| --- | --- | --- |
+| `KR` | `KOR` | 지원 |
+| `PH` | `PHL` | 지원 |
+| `JP` | `JPN` | 지원 |
+| `CN` | `CHN` | 지원 |
+| `VN` | `VNM` | 지원 |
+
+`TH`, `NP`처럼 배포된 여권 Template이 없는 국가는 `UNSUPPORTED_OCR_COUNTRY`로 구분하고
+AI를 호출하지 않습니다. 국가를 추가할 때는 AI Template 배포, Server 변환표와 양쪽 계약
+테스트를 함께 변경합니다. 외국인등록증(`ARC`) 요청에는 국가 코드를 보내지 않습니다.
+
 ## Server가 거부하는 응답
 
 - 요청과 다른 `requestId`
