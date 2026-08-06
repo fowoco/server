@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ValidatingAiOcrClientTest {
 
@@ -75,6 +77,26 @@ class ValidatingAiOcrClientTest {
                 () -> new ValidatingAiOcrClient(fake, validator)
                         .recognize(request, AiRuntimeCallContext.withoutTrace()),
                 AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
+        );
+        assertThat(fake.receivedRequests()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"THA", "NPL"})
+    void countryWithoutADeployedTemplateIsRejectedBeforeRuntimeCall(String countryCode) {
+        FakeAiOcrClient fake = new FakeAiOcrClient();
+        AiOcrRequest request = new AiOcrRequest(
+                REQUEST_ID,
+                DOCUMENT_ID,
+                AiOcrDocumentType.PASSPORT_COPY,
+                countryCode,
+                new AiOcrFile("passport.png", "image/png", new byte[]{1})
+        );
+
+        assertFailureCode(
+                () -> new ValidatingAiOcrClient(fake, validator)
+                        .recognize(request, AiRuntimeCallContext.withoutTrace()),
+                AiRuntimeFailureCode.UNSUPPORTED_OCR_COUNTRY
         );
         assertThat(fake.receivedRequests()).isEmpty();
     }

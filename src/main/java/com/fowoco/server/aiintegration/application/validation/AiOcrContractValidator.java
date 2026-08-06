@@ -3,6 +3,7 @@ package com.fowoco.server.aiintegration.application.validation;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrDocumentType;
+import com.fowoco.server.aiintegration.application.ocr.AiOcrPassportCountryCodeResolver;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrRequest;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrResponse;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrStatus;
@@ -18,13 +19,6 @@ public final class AiOcrContractValidator {
             "image/jpeg",
             "image/png",
             "application/pdf"
-    );
-    private static final Set<String> PASSPORT_COUNTRY_CODES = Set.of(
-            "KOR",
-            "PHL",
-            "JPN",
-            "CHN",
-            "VNM"
     );
     private static final Set<String> PASSPORT_FIELDS = Set.of(
             "passport_number",
@@ -43,6 +37,9 @@ public final class AiOcrContractValidator {
     );
     private static final Pattern SAFE_REASON = Pattern.compile("[a-z0-9_:-]{1,120}");
 
+    private final AiOcrPassportCountryCodeResolver passportCountryCodeResolver =
+            new AiOcrPassportCountryCodeResolver();
+
     public void validateRequest(AiOcrRequest request) {
         if (request == null) {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "OCR request is missing.");
@@ -57,9 +54,11 @@ public final class AiOcrContractValidator {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "OCR file name is invalid.");
         }
         if (request.documentType() == AiOcrDocumentType.PASSPORT_COPY) {
-            if (request.countryCode() == null
-                    || !PASSPORT_COUNTRY_CODES.contains(request.countryCode())) {
+            if (request.countryCode() == null || !request.countryCode().matches("[A-Z]{3}")) {
                 reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "OCR country code is invalid.");
+            }
+            if (!passportCountryCodeResolver.isSupportedOcrCountryCode(request.countryCode())) {
+                reject(AiRuntimeFailureCode.UNSUPPORTED_OCR_COUNTRY, "Passport OCR country is unsupported.");
             }
         } else if (request.countryCode() != null && !request.countryCode().isBlank()) {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "ARC country code must be omitted.");
