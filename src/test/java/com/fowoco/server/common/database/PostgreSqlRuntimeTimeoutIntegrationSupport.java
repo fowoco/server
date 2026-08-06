@@ -1,6 +1,7 @@
 package com.fowoco.server.common.database;
 
 import com.fowoco.server.ServerApplication;
+import com.fowoco.server.common.security.PostgreSqlRlsTestLock;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -40,6 +41,7 @@ abstract class PostgreSqlRuntimeTimeoutIntegrationSupport {
     protected JdbcTemplate runtimeJdbc;
     protected HikariDataSource runtimeDataSource;
     protected TransactionTemplate transactionTemplate;
+    private PostgreSqlRlsTestLock rlsTestLock;
 
     protected abstract String statementTimeout();
 
@@ -57,87 +59,155 @@ abstract class PostgreSqlRuntimeTimeoutIntegrationSupport {
                 .load()
                 .migrate();
 
-        runtimeRole = "timeout_runtime_test_"
-                + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
-        runtimePassword = "Timeout-test-" + UUID.randomUUID();
-        try (Connection connection = migrationConnection();
-             Statement statement = connection.createStatement()) {
-            String quotedRole = quoteIdentifier(runtimeRole);
-            statement.execute("""
-                    CREATE ROLE %s
-                    LOGIN
-                    PASSWORD %s
-                    NOSUPERUSER
-                    NOCREATEDB
-                    NOCREATEROLE
-                    NOINHERIT
-                    NOREPLICATION
-                    NOBYPASSRLS
-                    """.formatted(quotedRole, quoteLiteral(runtimePassword)));
-            statement.execute(
-                    "GRANT CONNECT ON DATABASE "
-                            + quoteIdentifier(connection.getCatalog())
-                            + " TO "
-                            + quotedRole
-            );
-            statement.execute("GRANT USAGE ON SCHEMA public TO " + quotedRole);
-            statement.execute(
-                    "GRANT SELECT, UPDATE ON TABLE public.company TO " + quotedRole
-            );
-        }
-
-        DataSource migrationDataSource = new DriverManagerDataSource(
+        rlsTestLock = PostgreSqlRlsTestLock.acquire(
                 migrationUrl,
                 migrationUsername,
                 migrationPassword
         );
-        migrationJdbc = new JdbcTemplate(migrationDataSource);
-        migrationJdbc.update(
-                """
-                INSERT INTO company (
-                    company_id, name, status, created_at, updated_at, version
-                ) VALUES (?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
-                ON CONFLICT (company_id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                FIXTURE_COMPANY_ID,
-                ORIGINAL_COMPANY_NAME
-        );
+        try {
+            runtimeRole = "timeout_runtime_test_"
+                    + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+            runtimePassword = "Timeout-test-" + UUID.randomUUID();
+            try (Connection connection = migrationConnection();
+                 Statement statement = connection.createStatement()) {
+                String quotedRole = quoteIdentifier(runtimeRole);
+                statement.execute("""
+                        CREATE ROLE %s
+                        LOGIN
+                        PASSWORD %s
+                        NOSUPERUSER
+                        NOCREATEDB
+                        NOCREATEROLE
+                        NOINHERIT
+                        NOREPLICATION
+                        NOBYPASSRLS
+                        """.formatted(quotedRole, quoteLiteral(runtimePassword)));
+                statement.execute(
+                        "GRANT CONNECT ON DATABASE "
+                                + quoteIdentifier(connection.getCatalog())
+                                + " TO "
+                                + quotedRole
+                );
+                statement.execute("GRANT USAGE ON SCHEMA public TO " + quotedRole);
+                statement.execute(
+                        "GRANT SELECT, UPDATE ON TABLE public.company TO " + quotedRole
+                );
+            }
 
-        applicationContext = startRuntimeApplication();
-        runtimeDataSource = applicationContext.getBean(
-                "dataSource",
-                HikariDataSource.class
-        );
-        runtimeJdbc = new JdbcTemplate(runtimeDataSource);
-        transactionTemplate = new TransactionTemplate(
-                applicationContext.getBean(PlatformTransactionManager.class)
-        );
+            DataSource migrationDataSource = new DriverManagerDataSource(
+                    migrationUrl,
+                    migrationUsername,
+                    migrationPassword
+            );
+            migrationJdbc = new JdbcTemplate(migrationDataSource);
+            migrationJdbc.update(
+                    """
+                    INSERT INTO company (
+                        company_id, name, status, created_at, updated_at, version
+                    ) VALUES (?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                    ON CONFLICT (company_id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    FIXTURE_COMPANY_ID,
+                    ORIGINAL_COMPANY_NAME
+            );
+
+            applicationContext = startRuntimeApplication();
+            runtimeDataSource = applicationContext.getBean(
+                    "dataSource",
+                    HikariDataSource.class
+            );
+            runtimeJdbc = new JdbcTemplate(runtimeDataSource);
+            transactionTemplate = new TransactionTemplate(
+                    applicationContext.getBean(PlatformTransactionManager.class)
+            );
+        } catch (Throwable setupFailure) {
+            try {
+                tearDownRuntimeTimeoutFixture();
+            } catch (Throwable cleanupFailure) {
+                setupFailure.addSuppressed(cleanupFailure);
+            }
+            throwFailure(setupFailure);
+        }
     }
 
     @AfterAll
     void tearDownRuntimeTimeoutFixture() throws SQLException {
-        if (applicationContext != null) {
-            applicationContext.close();
-        }
-        if (migrationJdbc != null) {
-            migrationJdbc.update(
-                    "DELETE FROM company WHERE company_id = ?",
-                    FIXTURE_COMPANY_ID
-            );
-        }
-        if (runtimeRole == null) {
-            return;
-        }
-        try (Connection connection = migrationConnection();
-             Statement statement = connection.createStatement()) {
-            if (roleExists(statement, runtimeRole)) {
-                String quotedRole = quoteIdentifier(runtimeRole);
-                statement.execute("DROP OWNED BY " + quotedRole);
-                statement.execute("DROP ROLE " + quotedRole);
+        Throwable failure = null;
+        failure = runCleanupStep(failure, () -> {
+            ConfigurableApplicationContext contextToClose = applicationContext;
+            if (contextToClose != null) {
+                contextToClose.close();
+                applicationContext = null;
             }
+        });
+        failure = runCleanupStep(failure, () -> {
+            if (migrationJdbc != null) {
+                migrationJdbc.update(
+                        "DELETE FROM company WHERE company_id = ?",
+                        FIXTURE_COMPANY_ID
+                );
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            if (runtimeRole == null) {
+                return;
+            }
+            try (Connection connection = migrationConnection();
+                 Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP OWNED BY " + quoteIdentifier(runtimeRole));
+                }
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            if (runtimeRole == null) {
+                return;
+            }
+            try (Connection connection = migrationConnection();
+                 Statement statement = connection.createStatement()) {
+                if (roleExists(statement, runtimeRole)) {
+                    statement.execute("DROP ROLE " + quoteIdentifier(runtimeRole));
+                }
+                runtimeRole = null;
+            }
+        });
+        failure = runCleanupStep(failure, () -> {
+            PostgreSqlRlsTestLock lockToClose = rlsTestLock;
+            if (lockToClose != null) {
+                lockToClose.close();
+                rlsTestLock = null;
+            }
+        });
+        if (failure != null) {
+            throwFailure(failure);
         }
+    }
+
+    private static Throwable runCleanupStep(Throwable failure, CleanupStep step) {
+        try {
+            step.run();
+        } catch (Throwable cleanupFailure) {
+            if (failure == null) {
+                return cleanupFailure;
+            }
+            failure.addSuppressed(cleanupFailure);
+        }
+        return failure;
+    }
+
+    private static void throwFailure(Throwable failure) throws SQLException {
+        if (failure instanceof SQLException sqlException) {
+            throw sqlException;
+        }
+        if (failure instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        if (failure instanceof Error error) {
+            throw error;
+        }
+        throw new IllegalStateException("Unexpected PostgreSQL test lifecycle failure", failure);
     }
 
     protected Connection migrationConnection() throws SQLException {
@@ -242,5 +312,11 @@ abstract class PostgreSqlRuntimeTimeoutIntegrationSupport {
             throw new IllegalStateException(name + " environment variable is required.");
         }
         return value;
+    }
+
+    @FunctionalInterface
+    private interface CleanupStep {
+
+        void run() throws Exception;
     }
 }
