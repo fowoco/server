@@ -12,25 +12,23 @@ Server 이미지를 만드는 일과 Kubernetes에 최초 환경을 만드는 �
 
 ## 현재 최초 배포 선행조건
 
-`server`의 deploy Workflow를 실행하기 전에 Infra 담당자가 아래 리소스를 한 번 생성해야
-합니다.
+`deploy.yml`이 매 실행마다 `fowoco/infra`의 `00-namespace.yaml`/`01-postgres.yaml`/
+`02-server.yaml`을 자동으로 `kubectl apply`합니다 (idempotent self-heal, `client`/`ai`와
+동일 패턴). Namespace·PostgreSQL·`deployment/server` 자체를 수동으로 먼저 만들어둘 필요는
+없습니다.
+
+다만 **Secret 두 개(`postgres-secret`, `server-env`)는 자동화 대상이 아니며, 없으면 Server
+배포는 의도적으로 실패합니다**:
 
 ```bash
-kubectl apply -f k8s/00-namespace.yaml
-kubectl apply -f k8s/01-postgres.yaml
-kubectl apply -f k8s/02-server.yaml
-```
-
-다음 리소스가 없으면 Server 배포는 의도적으로 실패합니다.
-
-```bash
+kubectl -n fowoco get secret/postgres-secret
 kubectl -n fowoco get secret/server-env
-kubectl -n fowoco get service/postgres
-kubectl -n fowoco get deployment/server
 ```
 
 Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secret` 또는 승인된 Secret
-관리 도구로 생성합니다.
+관리 도구로 생성합니다. 정확한 키 목록과 생성 순서는 `fowoco/infra` Wiki의
+[Deployment Guide](https://github.com/fowoco/infra/wiki/Deployment-Guide) 참고 (PostgreSQL
+`fowoco_migration`/`fowoco_runtime` role 분리 절차 포함).
 
 ## `server-env` 필수 설정
 
