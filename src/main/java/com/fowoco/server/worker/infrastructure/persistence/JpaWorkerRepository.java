@@ -121,8 +121,17 @@ public class JpaWorkerRepository implements WorkerRepository {
         if (query.language() != null) {
             where.append(" and worker.preferredLanguage = :language");
         }
-        if (query.expiryBefore() != null) {
-            where.append(" and worker.stayExpiryDate < :expiryBefore");
+        if (query.stayExpiryBefore() != null) {
+            where.append(" and worker.stayExpiryDate < :stayExpiryBefore");
+        }
+        if (query.contractEndBefore() != null) {
+            where.append(" and worker.contractEndDate < :contractEndBefore");
+        }
+        if (query.employmentPermitEndBefore() != null) {
+            where.append(" and worker.employmentPermitEndDate < :employmentPermitEndBefore");
+        }
+        if (query.employmentActivityEndBefore() != null) {
+            where.append(" and worker.employmentActivityEndDate < :employmentActivityEndBefore");
         }
         return where.toString();
     }
@@ -135,8 +144,17 @@ public class JpaWorkerRepository implements WorkerRepository {
         if (query.language() != null) {
             jpaQuery.setParameter("language", query.language());
         }
-        if (query.expiryBefore() != null) {
-            jpaQuery.setParameter("expiryBefore", query.expiryBefore());
+        if (query.stayExpiryBefore() != null) {
+            jpaQuery.setParameter("stayExpiryBefore", query.stayExpiryBefore());
+        }
+        if (query.contractEndBefore() != null) {
+            jpaQuery.setParameter("contractEndBefore", query.contractEndBefore());
+        }
+        if (query.employmentPermitEndBefore() != null) {
+            jpaQuery.setParameter("employmentPermitEndBefore", query.employmentPermitEndBefore());
+        }
+        if (query.employmentActivityEndBefore() != null) {
+            jpaQuery.setParameter("employmentActivityEndBefore", query.employmentActivityEndBefore());
         }
     }
 }

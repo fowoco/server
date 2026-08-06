@@ -78,14 +78,20 @@ public class WorkerController {
     public WorkerPageResponse list(
             @Parameter(description = "근무 상태 필터") @RequestParam(required = false) WorkerStatus status,
             @Parameter(description = "선호 언어 필터") @RequestParam(required = false) String language,
-            @Parameter(description = "체류 만료일 이전 필터") @RequestParam(required = false) LocalDate expiryBefore,
+            @Parameter(description = "체류자격 만료일 이전 필터") @RequestParam(required = false) LocalDate stayExpiryBefore,
+            @Parameter(description = "근로계약 종료일 이전 필터") @RequestParam(required = false) LocalDate contractEndBefore,
+            @Parameter(description = "고용허가 기준 종료일 이전 필터") @RequestParam(required = false) LocalDate employmentPermitEndBefore,
+            @Parameter(description = "취업활동기간 종료일 이전 필터") @RequestParam(required = false) LocalDate employmentActivityEndBefore,
             @Parameter(description = "페이지 번호 (0부터 시작)")
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "페이지당 항목 수 (1~100)")
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
         ActorContext actor = actorContextProvider.requireCurrentActor();
-        WorkerSearchQuery query = new WorkerSearchQuery(status, language, expiryBefore, page, size);
+        WorkerSearchQuery query = new WorkerSearchQuery(
+                status, language, stayExpiryBefore, contractEndBefore,
+                employmentPermitEndBefore, employmentActivityEndBefore, page, size
+        );
         WorkerPageResult result = workerService.findPage(actor, query);
         List<WorkerResponse> items = result.items().stream().map(WorkerResponse::from).toList();
         return new WorkerPageResponse(items, result.page(), result.size(), result.totalElements());

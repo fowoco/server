@@ -302,6 +302,85 @@ class WorkerSecurityIntegrationTest {
         assertThat(getAttempt.statusCode()).isEqualTo(200);
     }
 
+    @Test
+    void e9FieldsAreStoredIndependentlyAndNullByDefault() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        String registerBody = """
+                {
+                  "display_name": "E9필드테스트",
+                  "visa_type": "E-9",
+                  "stay_expiry_date": "2027-03-01",
+                  "contract_end_date": "2027-12-31",
+                  "employment_permit_end_date": "2028-01-31",
+                  "employment_activity_end_date": "2028-06-30"
+                }
+                """;
+        HttpResponse<String> registerResponse = postJson("/api/v1/workers", registerBody, accessToken);
+
+        assertThat(registerResponse.statusCode()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(registerResponse.body(), "$.visa_type")).isEqualTo("E-9");
+        assertThat(JsonPath.<String>read(registerResponse.body(), "$.stay_expiry_date")).isEqualTo("2027-03-01");
+        assertThat(JsonPath.<String>read(registerResponse.body(), "$.contract_end_date")).isEqualTo("2027-12-31");
+        assertThat(JsonPath.<String>read(registerResponse.body(), "$.employment_permit_end_date"))
+                .isEqualTo("2028-01-31");
+        assertThat(JsonPath.<String>read(registerResponse.body(), "$.employment_activity_end_date"))
+                .isEqualTo("2028-06-30");
+    }
+
+    @Test
+    void e9FieldsAreNullableAndOmittedFieldsStayNull() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        String registerBody = """
+                {"display_name": "필드누락테스트"}
+                """;
+        HttpResponse<String> registerResponse = postJson("/api/v1/workers", registerBody, accessToken);
+
+        assertThat(registerResponse.statusCode()).isEqualTo(201);
+        assertThat(JsonPath.<Object>read(registerResponse.body(), "$.visa_type")).isNull();
+        assertThat(JsonPath.<Object>read(registerResponse.body(), "$.employment_permit_end_date")).isNull();
+        assertThat(JsonPath.<Object>read(registerResponse.body(), "$.employment_activity_end_date")).isNull();
+    }
+
+    @Test
+    void patchUpdatesEmploymentPermitEndDateIndependentlyOfOtherDates() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(accessToken, "부분수정테스트");
+
+        String patchBody = """
+                {"employment_permit_end_date": "2028-02-28", "expected_version": 0}
+                """;
+        HttpResponse<String> patchResponse = patchJson(
+                "/api/v1/workers/" + workerId,
+                patchBody,
+                accessToken
+        );
+
+        assertThat(patchResponse.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(patchResponse.body(), "$.employment_permit_end_date"))
+                .isEqualTo("2028-02-28");
+        assertThat(JsonPath.<Object>read(patchResponse.body(), "$.employment_activity_end_date")).isNull();
+        assertThat(JsonPath.<Object>read(patchResponse.body(), "$.contract_end_date")).isNull();
+    }
+
+    @Test
+    void e9FieldsAcceptFarFutureDateBoundary() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        String registerBody = """
+                {
+                  "display_name": "날짜경계테스트",
+                  "employment_activity_end_date": "2099-12-31"
+                }
+                """;
+        HttpResponse<String> registerResponse = postJson("/api/v1/workers", registerBody, accessToken);
+
+        assertThat(registerResponse.statusCode()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(registerResponse.body(), "$.employment_activity_end_date"))
+                .isEqualTo("2099-12-31");
+    }
+
     private String registerWorker(String accessToken, String displayName) throws Exception {
         String body = """
                 {"display_name": "%s"}

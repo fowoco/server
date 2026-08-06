@@ -67,6 +67,9 @@ class PostgreSqlWorkerRepositoryRlsTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 0,
                 20
         );
@@ -161,9 +164,12 @@ class PostgreSqlWorkerRepositoryRlsTest {
                 "PH",
                 "en",
                 WorkerStatus.ON_LEAVE,
+                "E-9",
                 LocalDate.of(2027, 12, 31),
                 LocalDate.of(2026, 9, 1),
                 LocalDate.of(2027, 8, 31),
+                null,
+                null,
                 dataFixture.fixtureTime(),
                 dataFixture.fixtureTime().plusSeconds(3600),
                 0L
