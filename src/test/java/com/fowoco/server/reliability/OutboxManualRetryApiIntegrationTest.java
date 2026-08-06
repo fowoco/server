@@ -2,6 +2,9 @@ package com.fowoco.server.reliability;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fowoco.server.reliability.application.OutboxProcessor;
+import com.fowoco.server.reliability.application.port.DomainEventHandler;
+import com.fowoco.server.reliability.domain.DomainEventEnvelope;
 import com.jayway.jsonpath.JsonPath;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -14,18 +17,26 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(OutboxManualRetryApiIntegrationTest.ManualRetryTestConfiguration.class)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "app.reliability.outbox.enabled=false"
+)
 class OutboxManualRetryApiIntegrationTest {
 
     private static final UUID COMPANY_A =
@@ -54,10 +65,17 @@ class OutboxManualRetryApiIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private OutboxProcessor outboxProcessor;
+
+    @Autowired
+    private ManualRetryProbeHandler probeHandler;
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @BeforeEach
     void resetAndSeed() {
+        probeHandler.reset();
         jdbcTemplate.update("DELETE FROM outbox_manual_retry");
         jdbcTemplate.update("DELETE FROM ai_candidate_decision_task");
         jdbcTemplate.update("DELETE FROM ai_candidate_decision");
@@ -96,6 +114,31 @@ class OutboxManualRetryApiIntegrationTest {
         insertUser(HR_A, COMPANY_A, HR_A_EMAIL, "HR", passwordHash);
         insertUser(ADMIN_B, COMPANY_B, ADMIN_B_EMAIL, "ADMIN", passwordHash);
         insertReviewRequiredEvent(EVENT_A, COMPANY_A);
+    }
+
+    @Test
+    void exhaustedEventGetsOneFreshHandlerAttemptAfterManualRetry() throws Exception {
+        String token = login(ADMIN_A_EMAIL);
+
+        HttpResponse<String> response = retry(
+                EVENT_A,
+                token,
+                "outbox-retry-exhausted",
+                validBody(0)
+        );
+
+        assertThat(response.statusCode()).isEqualTo(202);
+        assertThat(attemptCount(EVENT_A)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT previous_attempt_count FROM outbox_manual_retry WHERE event_id = ?",
+                Integer.class,
+                EVENT_A
+        )).isEqualTo(8);
+
+        assertThat(outboxProcessor.processAvailable()).isEqualTo(1);
+        assertThat(probeHandler.invocationCount()).isEqualTo(1);
+        assertThat(status(EVENT_A)).isEqualTo("COMPLETED");
+        assertThat(attemptCount(EVENT_A)).isEqualTo(1);
     }
 
     @Test
@@ -313,7 +356,7 @@ class OutboxManualRetryApiIntegrationTest {
                     ?, ?, 'ReliabilityTestRequested', '1',
                     'ReliabilityProbe', ?, 'SYSTEM_RULE', NULL,
                     'outbox-manual-retry-fixture', '{"result":"secret-value"}',
-                    'REVIEW_REQUIRED', 3, 'TEST_PAYLOAD_REJECTED',
+                    'REVIEW_REQUIRED', 8, 'TEST_PAYLOAD_REJECTED',
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0
                 )
                 """,
@@ -341,5 +384,50 @@ class OutboxManualRetryApiIntegrationTest {
                 String.class,
                 eventId
         );
+    }
+
+    private int attemptCount(UUID eventId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT attempt_count FROM event_publication WHERE event_id = ?",
+                Integer.class,
+                eventId
+        );
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class ManualRetryTestConfiguration {
+
+        @Bean
+        ManualRetryProbeHandler manualRetryProbeHandler() {
+            return new ManualRetryProbeHandler();
+        }
+    }
+
+    static final class ManualRetryProbeHandler implements DomainEventHandler {
+
+        private final AtomicInteger invocationCount = new AtomicInteger();
+
+        @Override
+        public String handlerName() {
+            return "manual-retry-probe-v1";
+        }
+
+        @Override
+        public boolean supports(String eventType) {
+            return "ReliabilityTestRequested".equals(eventType);
+        }
+
+        @Override
+        public void handle(DomainEventEnvelope event) {
+            invocationCount.incrementAndGet();
+        }
+
+        int invocationCount() {
+            return invocationCount.get();
+        }
+
+        void reset() {
+            invocationCount.set(0);
+        }
     }
 }

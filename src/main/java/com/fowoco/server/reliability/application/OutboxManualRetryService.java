@@ -101,6 +101,7 @@ public class OutboxManualRetryService {
         }
 
         Instant now = clock.instant();
+        int previousAttemptCount = publication.attemptCount();
         publication.requestManualRetry(expectedVersion, now);
         EventPublication saved = publicationRepository.save(publication);
         OutboxManualRetry retry = retryRepository.append(new OutboxManualRetry(
@@ -113,6 +114,7 @@ public class OutboxManualRetryService {
                 actor.actorId(),
                 metadata.requestId(),
                 metadata.traceId(),
+                previousAttemptCount,
                 saved.status(),
                 saved.version(),
                 now

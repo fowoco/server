@@ -155,8 +155,9 @@ Content-Type: application/json
 - 같은 `Idempotency-Key`와 같은 요청은 재실행하지 않고 최초 접수 결과를 반환합니다.
 - 사유는 10~300자로 작성하며 이름·연락처·문서 원문·token·payload·예외 원문을
   입력하지 않습니다.
-- 수동 재처리는 기존 `attempt_count`를 초기화하지 않습니다. 실패하면 자동 재시도를
-  새로 여러 번 반복하지 않고 다시 운영자 확인 상태로 돌아갈 수 있습니다.
+- 수동 재처리가 승인되면 `attempt_count`를 0으로 초기화해 handler가 실제로 다시
+  실행될 기회를 부여합니다. 초기화 전 횟수는 `outbox_manual_retry.previous_attempt_count`에
+  변경 불가 이력으로 보존합니다. 이후 실패하면 일반 자동 재시도 한도를 다시 적용합니다.
 - HR·VIEWER와 다른 사업장의 ADMIN은 호출할 수 없습니다.
 
 `OUTBOX_ENABLED=false`는 자동 처리를 멈출 뿐 새 이벤트 저장을 막지 않습니다. 장애 중
@@ -172,7 +173,7 @@ Content-Type: application/json
 - 기능 통합 테스트: 실제 command가 올바른 event type과 최소 payload를 발행하는지
   검증
 - 운영 API 통합 테스트: ADMIN 권한, 사업장 격리, version 충돌, Idempotency-Key,
-  동시 재처리와 감사로그 검증
+  동시 재처리와 감사로그, 최대 횟수 이벤트의 실제 handler 재실행 검증
 
 로컬 전체 검증:
 

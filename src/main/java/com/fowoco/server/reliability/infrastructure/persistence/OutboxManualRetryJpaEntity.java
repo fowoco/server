@@ -34,6 +34,8 @@ class OutboxManualRetryJpaEntity {
     private String requestId;
     @Column(name = "trace_id", length = 32, updatable = false)
     private String traceId;
+    @Column(name = "previous_attempt_count", nullable = false, updatable = false)
+    private int previousAttemptCount;
     @Enumerated(EnumType.STRING)
     @Column(name = "accepted_status", nullable = false, length = 30, updatable = false)
     private EventPublicationStatus acceptedStatus;
@@ -55,6 +57,7 @@ class OutboxManualRetryJpaEntity {
         requestedBy = retry.requestedBy();
         requestId = retry.requestId();
         traceId = retry.traceId();
+        previousAttemptCount = retry.previousAttemptCount();
         acceptedStatus = retry.acceptedStatus();
         acceptedVersion = retry.acceptedVersion();
         createdAt = retry.createdAt();
@@ -71,6 +74,7 @@ class OutboxManualRetryJpaEntity {
                 requestedBy,
                 requestId,
                 traceId,
+                previousAttemptCount,
                 acceptedStatus,
                 acceptedVersion,
                 createdAt

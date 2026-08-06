@@ -187,6 +187,7 @@ class PostgreSqlMigrationTests {
                 .containsEntry("request_hash", new ColumnSpec("varchar", false))
                 .containsEntry("reason", new ColumnSpec("varchar", false))
                 .containsEntry("requested_by", new ColumnSpec("uuid", false))
+                .containsEntry("previous_attempt_count", new ColumnSpec("int4", false))
                 .containsEntry("accepted_version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "document_request_draft"))
                 .containsEntry("draft_id", new ColumnSpec("uuid", false))

@@ -239,6 +239,7 @@ public final class EventPublication {
             throw new IllegalStateException("Only an unleased review-required event can be retried.");
         }
         status = EventPublicationStatus.PENDING;
+        attemptCount = 0;
         nextAttemptAt = now;
         lastErrorCode = null;
         completedAt = null;

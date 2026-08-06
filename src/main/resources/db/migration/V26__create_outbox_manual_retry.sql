@@ -8,6 +8,7 @@ CREATE TABLE outbox_manual_retry (
     requested_by UUID NOT NULL,
     request_id VARCHAR(128) NOT NULL,
     trace_id VARCHAR(32),
+    previous_attempt_count INTEGER NOT NULL DEFAULT 0,
     accepted_status VARCHAR(30) NOT NULL,
     accepted_version BIGINT NOT NULL,
     created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
@@ -30,6 +31,8 @@ CREATE TABLE outbox_manual_retry (
         CHECK (CHAR_LENGTH(TRIM(request_id)) BETWEEN 1 AND 128),
     CONSTRAINT ck_outbox_manual_retry_trace_id
         CHECK (trace_id IS NULL OR CHAR_LENGTH(trace_id) = 32),
+    CONSTRAINT ck_outbox_manual_retry_previous_attempt_count
+        CHECK (previous_attempt_count >= 0),
     CONSTRAINT ck_outbox_manual_retry_status
         CHECK (accepted_status = 'PENDING'),
     CONSTRAINT ck_outbox_manual_retry_version

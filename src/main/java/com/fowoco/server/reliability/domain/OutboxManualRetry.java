@@ -14,6 +14,7 @@ public record OutboxManualRetry(
         UUID requestedBy,
         String requestId,
         String traceId,
+        int previousAttemptCount,
         EventPublicationStatus acceptedStatus,
         long acceptedVersion,
         Instant createdAt
@@ -34,6 +35,9 @@ public record OutboxManualRetry(
         }
         if (acceptedVersion < 0) {
             throw new IllegalArgumentException("acceptedVersion must not be negative");
+        }
+        if (previousAttemptCount < 0) {
+            throw new IllegalArgumentException("previousAttemptCount must not be negative");
         }
     }
 
