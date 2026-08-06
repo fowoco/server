@@ -125,18 +125,18 @@ final class PostgreSqlRestrictedRoleHttpEnvironment implements AutoCloseable {
     }
 
     private void start(Class<?> testConfiguration) throws SQLException {
-        Flyway.configure()
-                .dataSource(migrationUrl, migrationUsername, migrationPassword)
-                .locations("classpath:db/migration", "classpath:db/migration-postgresql")
-                .load()
-                .migrate();
-
         rlsTestLock = PostgreSqlRlsTestLock.acquire(
                 migrationUrl,
                 migrationUsername,
                 migrationPassword
         );
         try {
+            Flyway.configure()
+                    .dataSource(migrationUrl, migrationUsername, migrationPassword)
+                    .locations("classpath:db/migration", "classpath:db/migration-postgresql")
+                    .load()
+                    .migrate();
+
             migrationDataSource = new DriverManagerDataSource(
                     migrationUrl,
                     migrationUsername,

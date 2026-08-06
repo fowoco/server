@@ -64,7 +64,9 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("a7000000-0000-0000-0000-000000000003");
     private static final List<String> RLS_TABLES = List.of(
             "company",
+            "user_account",
             "worker",
+            "task",
             "stored_file",
             "workflow_case",
             "document_request_draft",
@@ -81,15 +83,6 @@ class PostgreSqlRlsIsolationTest {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String migrationUsername = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         String migrationPassword = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
-        Flyway.configure()
-                .dataSource(url, migrationUsername, migrationPassword)
-                .locations(
-                        "classpath:db/migration",
-                        "classpath:db/migration-postgresql"
-                )
-                .load()
-                .migrate();
-
         String runtimeRole = "rls_isolation_test_"
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String runtimePassword = "Rls-isolation-" + UUID.randomUUID();
@@ -98,32 +91,43 @@ class PostgreSqlRlsIsolationTest {
                 url,
                 migrationUsername,
                 migrationPassword
-        ); Connection migrationConnection = DriverManager.getConnection(
-                url,
-                migrationUsername,
-                migrationPassword
-        ); PostgreSqlRlsStateFixture rlsState = PostgreSqlRlsStateFixture.capture(
-                migrationConnection,
-                RLS_TABLES
-        ); FixtureCleanup fixtureCleanup = () -> restoreFixture(
-                migrationConnection,
-                runtimeRole
         )) {
-            rlsState.disableRowLevelSecurityForFixtureSetup();
-            prepareFixture(
-                    migrationConnection,
-                    runtimeRole,
-                    runtimePassword,
-                    rlsState
-            );
-            try (Connection runtimeConnection = DriverManager.getConnection(
+            Flyway.configure()
+                    .dataSource(url, migrationUsername, migrationPassword)
+                    .locations(
+                            "classpath:db/migration",
+                            "classpath:db/migration-postgresql"
+                    )
+                    .load()
+                    .migrate();
+
+            try (Connection migrationConnection = DriverManager.getConnection(
                     url,
-                    runtimeRole,
-                    runtimePassword
+                    migrationUsername,
+                    migrationPassword
+            ); PostgreSqlRlsStateFixture rlsState = PostgreSqlRlsStateFixture.capture(
+                    migrationConnection,
+                    RLS_TABLES
+            ); FixtureCleanup fixtureCleanup = () -> restoreFixture(
+                    migrationConnection,
+                    runtimeRole
             )) {
-                assertMissingAndInvalidContextFailClosed(runtimeConnection);
-                assertTenantCrudIsolation(runtimeConnection);
-                assertCommittedContextDoesNotLeak(runtimeConnection);
+                rlsState.disableRowLevelSecurityForFixtureSetup();
+                prepareFixture(
+                        migrationConnection,
+                        runtimeRole,
+                        runtimePassword,
+                        rlsState
+                );
+                try (Connection runtimeConnection = DriverManager.getConnection(
+                        url,
+                        runtimeRole,
+                        runtimePassword
+                )) {
+                    assertMissingAndInvalidContextFailClosed(runtimeConnection);
+                    assertTenantCrudIsolation(runtimeConnection);
+                    assertCommittedContextDoesNotLeak(runtimeConnection);
+                }
             }
         }
     }

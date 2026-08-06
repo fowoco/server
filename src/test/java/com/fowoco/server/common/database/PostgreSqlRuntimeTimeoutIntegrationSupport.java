@@ -53,18 +53,18 @@ abstract class PostgreSqlRuntimeTimeoutIntegrationSupport {
         migrationUsername = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         migrationPassword = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
 
-        Flyway.configure()
-                .dataSource(migrationUrl, migrationUsername, migrationPassword)
-                .locations("classpath:db/migration", "classpath:db/migration-postgresql")
-                .load()
-                .migrate();
-
         rlsTestLock = PostgreSqlRlsTestLock.acquire(
                 migrationUrl,
                 migrationUsername,
                 migrationPassword
         );
         try {
+            Flyway.configure()
+                    .dataSource(migrationUrl, migrationUsername, migrationPassword)
+                    .locations("classpath:db/migration", "classpath:db/migration-postgresql")
+                    .load()
+                    .migrate();
+
             runtimeRole = "timeout_runtime_test_"
                     + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
             runtimePassword = "Timeout-test-" + UUID.randomUUID();

@@ -42,6 +42,7 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
             "user_account",
             "refresh_token",
             "worker",
+            "task",
             "worker_link",
             "worker_response",
             "audit_event"
@@ -142,6 +143,7 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
         assertTablePrivileges("user_account", true, false, false, false);
         assertTablePrivileges("refresh_token", true, true, true, false);
         assertTablePrivileges("worker", true, true, true, false);
+        assertTablePrivileges("task", false, false, false, false);
         assertTablePrivileges("worker_link", true, false, false, false);
         assertTablePrivileges("worker_response", true, true, false, false);
         assertTablePrivileges("audit_event", true, true, false, false);

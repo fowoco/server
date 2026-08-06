@@ -70,6 +70,7 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
             "user_account",
             "refresh_token",
             "worker",
+            "task",
             "worker_link",
             "worker_response",
             "audit_event"

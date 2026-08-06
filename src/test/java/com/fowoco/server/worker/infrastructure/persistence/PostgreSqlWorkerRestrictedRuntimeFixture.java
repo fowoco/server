@@ -77,12 +77,6 @@ final class PostgreSqlWorkerRestrictedRuntimeFixture implements AutoCloseable {
     }
 
     private void start() throws SQLException {
-        Flyway.configure()
-                .dataSource(migrationUrl, migrationUsername, migrationPassword)
-                .locations("classpath:db/migration", "classpath:db/migration-postgresql")
-                .load()
-                .migrate();
-
         rlsTestLock = PostgreSqlRlsTestLock.acquire(
                 migrationUrl,
                 migrationUsername,
@@ -90,6 +84,12 @@ final class PostgreSqlWorkerRestrictedRuntimeFixture implements AutoCloseable {
         );
 
         try {
+            Flyway.configure()
+                    .dataSource(migrationUrl, migrationUsername, migrationPassword)
+                    .locations("classpath:db/migration", "classpath:db/migration-postgresql")
+                    .load()
+                    .migrate();
+
             rlsStateConnection = migrationConnection();
             rlsStateFixture = PostgreSqlRlsStateFixture.capture(
                     rlsStateConnection,
