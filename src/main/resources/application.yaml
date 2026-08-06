@@ -33,6 +33,24 @@ management:
   endpoint:
     health:
       show-details: never
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+server:
+  shutdown: graceful
+
+spring.lifecycle:
+  timeout-per-shutdown-phase: 20s
 
 springdoc:
   api-docs:
@@ -145,7 +163,7 @@ app:
   database:
     tenant-context-mode: postgresql
   demo-seed:
-    enabled: false
+    enabled: ${DEMO_SEED_ENABLED:false}
   auth:
     jwt:
       issuer: ${JWT_ISSUER:fowoco-server-dev}
@@ -188,6 +206,11 @@ spring:
     url: ${DB_URL}
     username: ${DB_RUNTIME_USERNAME}
     password: ${DB_RUNTIME_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:10}
+      minimum-idle: ${DB_MIN_IDLE:2}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:5000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:3000}
   flyway:
     url: ${DB_URL}
     user: ${DB_MIGRATION_USERNAME}
