@@ -124,6 +124,18 @@ public class OpenApiConfig {
                                 .description("구형 캐시의 오류 응답 저장 방지")
                                 .schema(new StringSchema().example("no-cache"))
                 ))
+                .addResponses("InvalidPasswordResetToken", errorResponse(
+                        "만료·위조·사용 완료된 비밀번호 재설정 token",
+                        Map.of(
+                                "timestamp", "2026-08-06T09:00:00Z",
+                                "status", 400,
+                                "code", "INVALID_PASSWORD_RESET_TOKEN",
+                                "message", "비밀번호 재설정 링크가 유효하지 않습니다.",
+                                "path", "/api/v1/auth/password-resets",
+                                "request_id", "01-example-request-id",
+                                "field_errors", java.util.List.of()
+                        )
+                ))
                 .addResponses("Forbidden", errorResponse("권한 부족"))
                 .addResponses("NotFound", errorResponse("리소스를 찾을 수 없음"))
                 .addResponses("Conflict", errorResponse("동시성 또는 현재 상태 충돌"))

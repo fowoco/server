@@ -2,6 +2,7 @@ package com.fowoco.server.auth.infrastructure.persistence;
 
 import com.fowoco.server.auth.domain.UserAccount;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,21 @@ public class JpaUserAccountRepository
     public void insert(UserAccount userAccount) {
         Objects.requireNonNull(userAccount, "userAccount must not be null");
         entityManager.persist(UserAccountJpaEntity.fromDomain(userAccount));
+        entityManager.flush();
+    }
+
+    @Override
+    public void update(UserAccount userAccount) {
+        Objects.requireNonNull(userAccount, "userAccount must not be null");
+        UserAccountJpaEntity entity = entityManager.find(
+                UserAccountJpaEntity.class,
+                userAccount.userId(),
+                LockModeType.PESSIMISTIC_WRITE
+        );
+        if (entity == null) {
+            throw new IllegalStateException("user account to update was not found");
+        }
+        entity.applyState(userAccount);
         entityManager.flush();
     }
 
@@ -51,6 +67,25 @@ public class JpaUserAccountRepository
                         UserAccountJpaEntity.class
                 )
                 .setParameter("normalizedEmail", normalizedEmail)
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst()
+                .map(UserAccountJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<UserAccount> findByNormalizedEmailWithLock(String normalizedEmail) {
+        Objects.requireNonNull(normalizedEmail, "normalizedEmail must not be null");
+        return entityManager.createQuery(
+                        """
+                        select userAccount
+                        from UserAccountJpaEntity userAccount
+                        where userAccount.normalizedEmail = :normalizedEmail
+                        """,
+                        UserAccountJpaEntity.class
+                )
+                .setParameter("normalizedEmail", normalizedEmail)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()

@@ -2,6 +2,7 @@ package com.fowoco.server.auth.api;
 
 import com.fowoco.server.auth.application.AuthService;
 import com.fowoco.server.auth.application.LoginResult;
+import com.fowoco.server.auth.application.PasswordResetService;
 import com.fowoco.server.auth.application.RefreshResult;
 import com.fowoco.server.auth.application.SignupResult;
 import com.fowoco.server.auth.application.SignupService;
@@ -19,6 +20,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import com.fowoco.server.common.web.RequestMetadata;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -39,17 +42,20 @@ public class AuthController {
 
     private final AuthService authService;
     private final SignupService signupService;
+    private final PasswordResetService passwordResetService;
     private final RefreshTokenCookieFactory refreshTokenCookieFactory;
     private final ActorContextProvider actorContextProvider;
 
     public AuthController(
             AuthService authService,
             SignupService signupService,
+            PasswordResetService passwordResetService,
             RefreshTokenCookieFactory refreshTokenCookieFactory,
             ActorContextProvider actorContextProvider
     ) {
         this.authService = authService;
         this.signupService = signupService;
+        this.passwordResetService = passwordResetService;
         this.refreshTokenCookieFactory = refreshTokenCookieFactory;
         this.actorContextProvider = actorContextProvider;
     }
@@ -83,6 +89,7 @@ public class AuthController {
             ),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
             @ApiResponse(responseCode = "409", ref = "#/components/responses/EmailAlreadyRegistered"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity"),
             @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType")
     })
     @PostMapping(
@@ -90,12 +97,81 @@ public class AuthController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    public ResponseEntity<SignupResponse> signup(@Valid @RequestBody SignupRequest request) {
-        SignupResult result = signupService.signup(request.toCommand());
+    public ResponseEntity<SignupResponse> signup(
+            @Valid @RequestBody SignupRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        SignupResult result = signupService.signup(
+                request.toCommand(RequestMetadata.from(httpRequest).requestId())
+        );
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.PRAGMA, "no-cache")
                 .body(SignupResponse.from(result));
+    }
+
+    @Operation(
+            operationId = "requestPasswordReset",
+            summary = "비밀번호 재설정 link 요청",
+            description = "계정 존재 여부가 노출되지 않도록 가입 여부와 관계없이 202를 반환합니다. "
+                    + "실제 token은 알림 Provider에만 전달하고 DB에는 SHA-256 hash만 저장합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "재설정 요청 접수"),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType")
+    })
+    @PostMapping(
+            path = "/password-reset-requests",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<Void> requestPasswordReset(
+            @Valid @RequestBody PasswordResetRequestRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        RequestMetadata metadata = RequestMetadata.from(httpRequest);
+        passwordResetService.request(
+                request.getEmail(),
+                httpRequest.getRemoteAddr(),
+                metadata.requestId(),
+                metadata.traceId()
+        );
+        return ResponseEntity.accepted()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .build();
+    }
+
+    @Operation(
+            operationId = "completePasswordReset",
+            summary = "새 비밀번호 저장",
+            description = "유효한 1회용 token으로 비밀번호를 변경합니다. 성공하면 token을 사용 처리하고 "
+                    + "해당 사용자의 기존 Refresh Token을 모두 폐기합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "비밀번호 재설정 성공"),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/InvalidPasswordResetToken"),
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType")
+    })
+    @PostMapping(
+            path = "/password-resets",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<Void> completePasswordReset(
+            @Valid @RequestBody PasswordResetCompleteRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        RequestMetadata metadata = RequestMetadata.from(httpRequest);
+        passwordResetService.complete(
+                request.getToken(),
+                request.getNewPassword(),
+                metadata.requestId(),
+                metadata.traceId()
+        );
+        return ResponseEntity.noContent()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .build();
     }
 
     @Operation(
