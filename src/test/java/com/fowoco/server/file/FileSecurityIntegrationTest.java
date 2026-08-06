@@ -29,6 +29,9 @@ class FileSecurityIntegrationTest {
     private static final UUID COMPANY_A = UUID.fromString("70000000-0000-0000-0000-000000000001");
     private static final UUID HR_A = UUID.fromString("71000000-0000-0000-0000-000000000001");
     private static final String HR_A_EMAIL = "hr.file.a@example.com";
+    private static final UUID COMPANY_B = UUID.fromString("70000000-0000-0000-0000-000000000002");
+    private static final UUID HR_B = UUID.fromString("71000000-0000-0000-0000-000000000002");
+    private static final String HR_B_EMAIL = "hr.file.b@example.com";
     private static final String PASSWORD = "Test-password-1!";
     private static final String BOUNDARY = "FowocoTestBoundary1234";
 
@@ -67,6 +70,14 @@ class FileSecurityIntegrationTest {
                 COMPANY_A,
                 "사업장 A"
         );
+        jdbcTemplate.update(
+                """
+                INSERT INTO company (company_id, name, status, created_at, updated_at, version)
+                VALUES (?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                COMPANY_B,
+                "사업장 B"
+        );
         String passwordHash = passwordEncoder.encode(PASSWORD);
         jdbcTemplate.update(
                 """
@@ -79,6 +90,19 @@ class FileSecurityIntegrationTest {
                 COMPANY_A,
                 HR_A_EMAIL,
                 HR_A_EMAIL,
+                passwordHash
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO user_account (
+                    user_id, company_id, email, normalized_email, password_hash,
+                    role, status, created_at, updated_at, version
+                ) VALUES (?, ?, ?, ?, ?, 'HR', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                HR_B,
+                COMPANY_B,
+                HR_B_EMAIL,
+                HR_B_EMAIL,
                 passwordHash
         );
     }
@@ -104,9 +128,6 @@ class FileSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(response.body(), "$.name")).isEqualTo("note.pdf");
         assertThat(JsonPath.<String>read(response.body(), "$.scan_status")).isEqualTo("NOT_SCANNED");
 
-        java.util.List<java.util.Map<String, Object>> allAuditRows = jdbcTemplate.queryForList("SELECT * FROM audit_event");
-        System.out.println("DEBUG audit_event rows: " + allAuditRows);
-        System.out.println("DEBUG looking for fileId: " + fileId);
         Integer auditCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'FILE_UPLOADED'",
                 Integer.class,
@@ -189,6 +210,64 @@ class FileSecurityIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(404);
     }
 
+    @Test
+    void sameCompanyUserCanDownloadFileAndDownloadIsAudited() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        byte[] content = "다운로드할 계약서".getBytes(StandardCharsets.UTF_8);
+        HttpResponse<String> uploadResponse = uploadFile(
+                token, "근로계약서.pdf", "application/pdf", content, "GENERAL"
+        );
+        UUID fileId = UUID.fromString(JsonPath.read(uploadResponse.body(), "$.file_id"));
+
+        HttpResponse<byte[]> downloadResponse = downloadFile(fileId, token);
+
+        assertThat(downloadResponse.statusCode()).isEqualTo(200);
+        assertThat(downloadResponse.body()).isEqualTo(content);
+        assertThat(downloadResponse.headers().firstValue(HttpHeaders.CONTENT_TYPE)).contains("application/pdf");
+        assertThat(downloadResponse.headers().firstValue(HttpHeaders.CONTENT_DISPOSITION))
+                .hasValueSatisfying(value -> assertThat(value).contains("attachment").contains("filename*="));
+        assertThat(downloadResponse.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'FILE_DOWNLOADED'",
+                Integer.class,
+                fileId
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void otherCompanyCannotDownloadFile() throws Exception {
+        String companyAToken = accessToken(login(HR_A_EMAIL));
+        HttpResponse<String> uploadResponse = uploadFile(
+                companyAToken,
+                "note.pdf",
+                "application/pdf",
+                "company A file".getBytes(StandardCharsets.UTF_8),
+                "GENERAL"
+        );
+        UUID fileId = UUID.fromString(JsonPath.read(uploadResponse.body(), "$.file_id"));
+        String companyBToken = accessToken(login(HR_B_EMAIL));
+
+        HttpResponse<byte[]> response = downloadFile(fileId, companyBToken);
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'FILE_DOWNLOADED'",
+                Integer.class,
+                fileId
+        )).isZero();
+    }
+
+    @Test
+    void unauthenticatedUserCannotDownloadFile() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/files/" + UUID.randomUUID() + "/content"))
+                .GET()
+                .build();
+
+        HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+    }
+
     private HttpResponse<String> uploadFile(
             String token, String filename, String mimeType, byte[] content, String purpose
     ) throws Exception {
@@ -219,6 +298,14 @@ class FileSecurityIntegrationTest {
             String token, String filename, String mimeType, byte[] content, UUID taskId
     ) throws Exception {
         return uploadFile(token, filename, mimeType, content, "TASK_EVIDENCE", taskId);
+    }
+
+    private HttpResponse<byte[]> downloadFile(UUID fileId, String token) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/files/" + fileId + "/content"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .GET()
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
     }
 
 
