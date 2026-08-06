@@ -149,7 +149,7 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
     {
       "candidateRef": "candidate-1",
       "workerRef": "30000000-0000-0000-0000-000000000001",
-      "workflowId": "EXPIRY_RENEWAL",
+      "workflowId": "WF-STY-001",
       "extractedSlots": {
         "stay_expiry_date": "2026-12-31"
       },
