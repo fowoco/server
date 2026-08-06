@@ -17,4 +17,6 @@ public interface UserAccountRepository {
     Optional<UserAccount> findByNormalizedEmailWithLock(String normalizedEmail);
 
     Optional<UserAccount> findByUserIdAndCompanyId(UUID userId, UUID companyId);
+
+    Optional<UserAccount> findByUserIdAndCompanyIdWithLock(UUID userId, UUID companyId);
 }

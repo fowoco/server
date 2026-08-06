@@ -11,7 +11,9 @@ public interface PasswordResetTokenRepository {
 
     boolean existsActiveCreatedAfter(UUID userId, Instant cutoff, Instant now);
 
+    Optional<PasswordResetToken> findByTokenHash(String tokenHash);
+
     Optional<PasswordResetToken> findByTokenHashWithLock(String tokenHash);
 
-    void update(PasswordResetToken token);
+    int markAllUnusedAsUsed(UUID userId, UUID companyId, Instant usedAt);
 }

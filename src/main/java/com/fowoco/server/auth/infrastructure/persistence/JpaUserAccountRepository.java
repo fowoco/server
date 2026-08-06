@@ -94,7 +94,20 @@ public class JpaUserAccountRepository
 
     @Override
     public Optional<UserAccount> findByUserIdAndCompanyId(UUID userId, UUID companyId) {
-        return entityManager.createQuery(
+        return findByUserIdAndCompanyId(userId, companyId, null);
+    }
+
+    @Override
+    public Optional<UserAccount> findByUserIdAndCompanyIdWithLock(UUID userId, UUID companyId) {
+        return findByUserIdAndCompanyId(userId, companyId, LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    private Optional<UserAccount> findByUserIdAndCompanyId(
+            UUID userId,
+            UUID companyId,
+            LockModeType lockMode
+    ) {
+        var query = entityManager.createQuery(
                         """
                         select userAccount
                         from UserAccountJpaEntity userAccount
@@ -104,7 +117,11 @@ public class JpaUserAccountRepository
                         UserAccountJpaEntity.class
                 )
                 .setParameter("userId", userId)
-                .setParameter("companyId", companyId)
+                .setParameter("companyId", companyId);
+        if (lockMode != null) {
+            query.setLockMode(lockMode);
+        }
+        return query
                 .getResultStream()
                 .findFirst()
                 .map(UserAccountJpaEntity::toDomain);

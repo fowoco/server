@@ -1,6 +1,5 @@
 package com.fowoco.server.auth.application;
 
-import com.fowoco.server.auth.application.port.PasswordResetNotificationPort;
 import com.fowoco.server.auth.infrastructure.security.PasswordResetProperties;
 import java.util.Optional;
 import java.util.concurrent.locks.LockSupport;
@@ -10,18 +9,18 @@ import org.springframework.stereotype.Service;
 public class PasswordResetService {
 
     private final PasswordResetTransaction transaction;
-    private final PasswordResetNotificationPort notificationPort;
+    private final PasswordResetNotificationDispatcher notificationDispatcher;
     private final PasswordResetRequestRateLimiter rateLimiter;
     private final PasswordResetProperties properties;
 
     public PasswordResetService(
             PasswordResetTransaction transaction,
-            PasswordResetNotificationPort notificationPort,
+            PasswordResetNotificationDispatcher notificationDispatcher,
             PasswordResetRequestRateLimiter rateLimiter,
             PasswordResetProperties properties
     ) {
         this.transaction = transaction;
-        this.notificationPort = notificationPort;
+        this.notificationDispatcher = notificationDispatcher;
         this.rateLimiter = rateLimiter;
         this.properties = properties;
     }
@@ -33,11 +32,7 @@ public class PasswordResetService {
                 return;
             }
             Optional<PasswordResetDispatch> dispatch = transaction.issue(email, requestId, traceId);
-            dispatch.ifPresent(value -> notificationPort.sendResetLink(
-                    value.email(),
-                    value.rawToken(),
-                    value.expiresAt()
-            ));
+            dispatch.ifPresent(notificationDispatcher::dispatch);
         } finally {
             waitForMinimumResponseTime(startedAt);
         }

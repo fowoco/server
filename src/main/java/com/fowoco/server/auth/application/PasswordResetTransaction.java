@@ -123,15 +123,29 @@ public class PasswordResetTransaction {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
 
         Instant now = clock.instant();
-        PasswordResetToken token = tokenRepository.findByTokenHashWithLock(tokenHash)
+        PasswordResetToken tokenCandidate = tokenRepository.findByTokenHash(tokenHash)
                 .filter(candidate -> candidate.isUsableAt(now))
                 .orElseThrow(this::invalidToken);
-        UserAccount account = userAccountRepository.findByUserIdAndCompanyId(token.userId(), companyId)
+        UserAccount account = userAccountRepository.findByUserIdAndCompanyIdWithLock(
+                        tokenCandidate.userId(),
+                        companyId
+                )
                 .filter(UserAccount::canLogin)
+                .orElseThrow(this::invalidToken);
+        PasswordResetToken lockedToken = tokenRepository.findByTokenHashWithLock(tokenHash)
+                .filter(candidate -> candidate.isUsableAt(now))
+                .filter(candidate -> candidate.userId().equals(account.userId()))
                 .orElseThrow(this::invalidToken);
 
         userAccountRepository.update(account.changePassword(passwordHasher.hash(newPassword), now));
-        tokenRepository.update(token.markUsed(now));
+        int invalidatedTokens = tokenRepository.markAllUnusedAsUsed(
+                lockedToken.userId(),
+                companyId,
+                now
+        );
+        if (invalidatedTokens < 1) {
+            throw invalidToken();
+        }
         refreshTokenRepository.revokeAllByUser(account.userId(), now);
         appendAudit(
                 account,

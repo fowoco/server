@@ -47,8 +47,17 @@ public class JpaPasswordResetTokenRepository implements PasswordResetTokenReposi
     }
 
     @Override
+    public Optional<PasswordResetToken> findByTokenHash(String tokenHash) {
+        return findByTokenHash(tokenHash, null);
+    }
+
+    @Override
     public Optional<PasswordResetToken> findByTokenHashWithLock(String tokenHash) {
-        return entityManager.createQuery(
+        return findByTokenHash(tokenHash, LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    private Optional<PasswordResetToken> findByTokenHash(String tokenHash, LockModeType lockMode) {
+        var query = entityManager.createQuery(
                         """
                         select token
                         from PasswordResetTokenJpaEntity token
@@ -56,25 +65,33 @@ public class JpaPasswordResetTokenRepository implements PasswordResetTokenReposi
                         """,
                         PasswordResetTokenJpaEntity.class
                 )
-                .setParameter("tokenHash", tokenHash)
-                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
-                .setMaxResults(1)
+                .setParameter("tokenHash", tokenHash);
+        if (lockMode != null) {
+            query.setLockMode(lockMode);
+        }
+        return query.setMaxResults(1)
                 .getResultStream()
                 .findFirst()
                 .map(PasswordResetTokenJpaEntity::toDomain);
     }
 
     @Override
-    public void update(PasswordResetToken token) {
-        PasswordResetTokenJpaEntity entity = entityManager.find(
-                PasswordResetTokenJpaEntity.class,
-                token.passwordResetTokenId(),
-                LockModeType.PESSIMISTIC_WRITE
-        );
-        if (entity == null) {
-            throw new IllegalStateException("password reset token was not found");
-        }
-        entity.applyState(token);
+    public int markAllUnusedAsUsed(UUID userId, UUID companyId, Instant usedAt) {
         entityManager.flush();
+        return entityManager.createQuery(
+                        """
+                        update PasswordResetTokenJpaEntity token
+                        set token.usedAt = :usedAt,
+                            token.updatedAt = :usedAt,
+                            token.version = token.version + 1
+                        where token.userId = :userId
+                          and token.companyId = :companyId
+                          and token.usedAt is null
+                        """
+                )
+                .setParameter("usedAt", usedAt)
+                .setParameter("userId", userId)
+                .setParameter("companyId", companyId)
+                .executeUpdate();
     }
 }

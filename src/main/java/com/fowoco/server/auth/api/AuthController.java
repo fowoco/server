@@ -114,7 +114,8 @@ public class AuthController {
             operationId = "requestPasswordReset",
             summary = "비밀번호 재설정 link 요청",
             description = "계정 존재 여부가 노출되지 않도록 가입 여부와 관계없이 202를 반환합니다. "
-                    + "실제 token은 알림 Provider에만 전달하고 DB에는 SHA-256 hash만 저장합니다."
+                    + "실제 token은 알림 Provider에만 전달하고 DB에는 SHA-256 hash만 저장합니다. "
+                    + "알림 발송은 응답과 분리되어 Provider 실패가 202 응답에 영향을 주지 않습니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "202", description = "재설정 요청 접수"),
@@ -145,8 +146,8 @@ public class AuthController {
     @Operation(
             operationId = "completePasswordReset",
             summary = "새 비밀번호 저장",
-            description = "유효한 1회용 token으로 비밀번호를 변경합니다. 성공하면 token을 사용 처리하고 "
-                    + "해당 사용자의 기존 Refresh Token을 모두 폐기합니다."
+            description = "유효한 1회용 token으로 비밀번호를 변경합니다. 성공하면 해당 사용자의 "
+                    + "모든 미사용 재설정 token과 기존 Refresh Token을 폐기합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "비밀번호 재설정 성공"),

@@ -134,13 +134,13 @@ class AuthOpenApiContractTest {
 
         assertThat(requestReset.path("operationId").asText()).isEqualTo("requestPasswordReset");
         assertThat(requestReset.path("description").asText())
-                .contains("계정 존재 여부", "202", "SHA-256 hash");
+                .contains("계정 존재 여부", "202", "SHA-256 hash", "Provider 실패");
         assertThat(requestReset.at("/responses/202/content").isMissingNode()).isTrue();
         assertThat(requestReset.has("security") && !requestReset.path("security").isEmpty()).isFalse();
 
         assertThat(completeReset.path("operationId").asText()).isEqualTo("completePasswordReset");
         assertThat(completeReset.path("description").asText())
-                .contains("1회용", "Refresh Token", "폐기");
+                .contains("1회용", "모든 미사용 재설정 token", "Refresh Token", "폐기");
         assertThat(completeReset.at("/responses/204/content").isMissingNode()).isTrue();
         assertThat(completeReset.at("/responses/400/$ref").asText())
                 .isEqualTo("#/components/responses/InvalidPasswordResetToken");

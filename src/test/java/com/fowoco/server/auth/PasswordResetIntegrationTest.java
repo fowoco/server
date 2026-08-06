@@ -1,8 +1,10 @@
 package com.fowoco.server.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 import com.fowoco.server.auth.application.port.PasswordResetNotificationPort;
@@ -86,7 +88,7 @@ class PasswordResetIntegrationTest {
 
         ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Instant> expiryCaptor = ArgumentCaptor.forClass(Instant.class);
-        verify(notificationPort).sendResetLink(
+        verify(notificationPort, timeout(1_000)).sendResetLink(
                 org.mockito.ArgumentMatchers.eq(EMAIL),
                 tokenCaptor.capture(),
                 expiryCaptor.capture()
@@ -131,6 +133,80 @@ class PasswordResetIntegrationTest {
     }
 
     @Test
+    void completingOneResetInvalidatesEveryOtherUnusedLinkForTheAccount() throws Exception {
+        assertThat(postJson(
+                "/api/v1/auth/password-reset-requests",
+                "{\"email\":\"owner@example.com\"}"
+        ).statusCode()).isEqualTo(202);
+        ArgumentCaptor<String> firstTokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationPort, timeout(1_000)).sendResetLink(
+                org.mockito.ArgumentMatchers.eq(EMAIL),
+                firstTokenCaptor.capture(),
+                org.mockito.ArgumentMatchers.any(Instant.class)
+        );
+        String firstToken = firstTokenCaptor.getValue();
+
+        jdbcTemplate.update(
+                """
+                UPDATE password_reset_token
+                SET created_at = DATEADD('MINUTE', -2, CURRENT_TIMESTAMP),
+                    updated_at = CURRENT_TIMESTAMP
+                """
+        );
+        reset(notificationPort);
+
+        assertThat(postJson(
+                "/api/v1/auth/password-reset-requests",
+                "{\"email\":\"owner@example.com\"}"
+        ).statusCode()).isEqualTo(202);
+        ArgumentCaptor<String> secondTokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(notificationPort, timeout(1_000)).sendResetLink(
+                org.mockito.ArgumentMatchers.eq(EMAIL),
+                secondTokenCaptor.capture(),
+                org.mockito.ArgumentMatchers.any(Instant.class)
+        );
+
+        assertThat(completeReset(secondTokenCaptor.getValue(), NEW_PASSWORD).statusCode()).isEqualTo(204);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM password_reset_token WHERE used_at IS NOT NULL",
+                Integer.class
+        )).isEqualTo(2);
+
+        HttpResponse<String> oldLinkAttempt = completeReset(firstToken, "Another-password-3!");
+        assertThat(oldLinkAttempt.statusCode()).isEqualTo(400);
+        assertThat(JsonPath.<String>read(oldLinkAttempt.body(), "$.code"))
+                .isEqualTo("INVALID_PASSWORD_RESET_TOKEN");
+    }
+
+    @Test
+    void notificationProviderFailureDoesNotChangeTheAcceptedResponse() throws Exception {
+        doThrow(new IllegalStateException("simulated provider failure"))
+                .when(notificationPort)
+                .sendResetLink(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(Instant.class)
+                );
+
+        HttpResponse<String> response = postJson(
+                "/api/v1/auth/password-reset-requests",
+                "{\"email\":\"owner@example.com\"}"
+        );
+
+        assertThat(response.statusCode()).isEqualTo(202);
+        assertThat(response.body()).isEmpty();
+        verify(notificationPort, timeout(1_000)).sendResetLink(
+                org.mockito.ArgumentMatchers.eq(EMAIL),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any(Instant.class)
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM password_reset_token",
+                Integer.class
+        )).isEqualTo(1);
+    }
+
+    @Test
     void unknownEmailReturnsTheSameAcceptedResponseWithoutIssuingAToken() throws Exception {
         HttpResponse<String> response = postJson(
                 "/api/v1/auth/password-reset-requests",
@@ -161,7 +237,7 @@ class PasswordResetIntegrationTest {
                 "{\"email\":\"owner@example.com\"}"
         ).statusCode()).isEqualTo(202);
 
-        verify(notificationPort).sendResetLink(
+        verify(notificationPort, timeout(1_000)).sendResetLink(
                 org.mockito.ArgumentMatchers.eq(EMAIL),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(Instant.class)
@@ -187,7 +263,7 @@ class PasswordResetIntegrationTest {
             executor.shutdownNow();
         }
 
-        verify(notificationPort).sendResetLink(
+        verify(notificationPort, timeout(1_000)).sendResetLink(
                 org.mockito.ArgumentMatchers.eq(EMAIL),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(Instant.class)
@@ -205,7 +281,7 @@ class PasswordResetIntegrationTest {
                 "{\"email\":\"owner@example.com\"}"
         ).statusCode()).isEqualTo(202);
         ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
-        verify(notificationPort).sendResetLink(
+        verify(notificationPort, timeout(1_000)).sendResetLink(
                 org.mockito.ArgumentMatchers.eq(EMAIL),
                 tokenCaptor.capture(),
                 org.mockito.ArgumentMatchers.any(Instant.class)

@@ -263,5 +263,10 @@ class DemoAuthSeedRunnerTest {
             return Optional.ofNullable(users.get(userId))
                     .filter(user -> user.companyId().equals(companyId));
         }
+
+        @Override
+        public Optional<UserAccount> findByUserIdAndCompanyIdWithLock(UUID userId, UUID companyId) {
+            return findByUserIdAndCompanyId(userId, companyId);
+        }
     }
 }
