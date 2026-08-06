@@ -14,6 +14,7 @@ import com.fowoco.server.airun.application.error.AiContextResolutionException;
 import com.fowoco.server.airun.application.error.AiRunErrorCode;
 import com.fowoco.server.airun.application.port.AiAttemptStarter;
 import com.fowoco.server.airun.application.port.AiRunRepository;
+import com.fowoco.server.airun.application.port.AiRunPublicEventPublisher;
 import com.fowoco.server.airun.application.port.AiRunRepository.ExecutionState;
 import com.fowoco.server.auth.application.ActorAuthorizer;
 import com.fowoco.server.auth.application.ActorContext;
@@ -70,6 +71,7 @@ public class AiRunService implements AiAttemptStarter {
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
     private final AuditEventRepository auditEventRepository;
+    private final AiRunPublicEventPublisher publicEventPublisher;
 
     public AiRunService(
             ActorAuthorizer actorAuthorizer,
@@ -81,7 +83,8 @@ public class AiRunService implements AiAttemptStarter {
             UuidGenerator uuidGenerator,
             Clock clock,
             TransactionTemplate transactionTemplate,
-            AuditEventRepository auditEventRepository
+            AuditEventRepository auditEventRepository,
+            AiRunPublicEventPublisher publicEventPublisher
     ) {
         this.actorAuthorizer = actorAuthorizer;
         this.tenantDatabaseContext = tenantDatabaseContext;
@@ -93,6 +96,7 @@ public class AiRunService implements AiAttemptStarter {
         this.clock = clock;
         this.transactionTemplate = transactionTemplate;
         this.auditEventRepository = auditEventRepository;
+        this.publicEventPublisher = publicEventPublisher;
     }
 
     public AiRunResult createAndExecute(
@@ -113,6 +117,7 @@ public class AiRunService implements AiAttemptStarter {
                 actor,
                 metadata
         );
+        publishCurrent(creation.aiRunId(), creation.companyId());
         if (creation.newlyCreated()) {
             executePlan(creation);
         }
@@ -160,6 +165,7 @@ public class AiRunService implements AiAttemptStarter {
             );
             return state;
         });
+        publishCurrent(started.aiRunId(), started.companyId());
         executeOne(started, request(
                 started.requestId(),
                 attemptId,
@@ -178,7 +184,7 @@ public class AiRunService implements AiAttemptStarter {
             AnalysisInput analysisInput
     ) {
         UUID attemptId = uuidGenerator.generate();
-        inTenant(companyId, () -> repository.startContinuationAttempt(
+        ExecutionState started = inTenant(companyId, () -> repository.startContinuationAttempt(
                 requestId,
                 attemptId,
                 phase,
@@ -186,6 +192,7 @@ public class AiRunService implements AiAttemptStarter {
                 analysisInput,
                 clock.instant()
         ));
+        publishCurrent(started.aiRunId(), started.companyId());
         return attemptId;
     }
 
@@ -345,6 +352,7 @@ public class AiRunService implements AiAttemptStarter {
             repository.markAttemptSucceeded(aiRunId, companyId, attemptId, response, clock.instant());
             return null;
         });
+        publishCurrent(aiRunId, companyId);
     }
 
     private void markLatestFailed(ExecutionState fallback, RuntimeException failure) {
@@ -361,6 +369,7 @@ public class AiRunService implements AiAttemptStarter {
             );
             return null;
         });
+        publishCurrent(latest.aiRunId(), latest.companyId());
     }
 
     private ExecutionState requireExecution(UUID aiRunId, ActorContext actor) {
@@ -477,6 +486,13 @@ public class AiRunService implements AiAttemptStarter {
             tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
             return action.get();
         });
+    }
+
+    private void publishCurrent(UUID aiRunId, UUID companyId) {
+        AiRunResult current = inTenant(companyId, () -> repository
+                .findByIdAndCompanyId(aiRunId, companyId)
+                .orElseThrow(() -> new IllegalStateException("AI Run for public event was not found")));
+        publicEventPublisher.publish(companyId, current);
     }
 
     private void appendAudit(
