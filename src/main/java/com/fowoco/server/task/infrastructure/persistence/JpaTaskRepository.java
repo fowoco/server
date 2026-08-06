@@ -29,6 +29,8 @@ public class JpaTaskRepository implements TaskRepository {
                 criteria.companyId(),
                 criteria.status(),
                 criteria.taskType(),
+                criteria.targetType(),
+                criteria.source(),
                 criteria.workerId(),
                 criteria.caseId(),
                 criteria.dueFrom(),

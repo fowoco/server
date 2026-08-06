@@ -26,6 +26,7 @@ import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskChecklistItem;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import com.fowoco.server.worker.application.WorkerTaskContext;
 import com.fowoco.server.worker.application.port.WorkerTaskContextReader;
@@ -105,10 +106,7 @@ public class TaskWorkflowService {
         if (!workflow.supportedTaskTypes().contains(command.taskType())) {
             throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
         }
-        WorkerTaskContext worker = requireWorker(command.workerId(), actor.companyId());
-        if (!worker.canReceiveNewTask()) {
-            throw new ApiException(TaskErrorCode.WORKER_NOT_ELIGIBLE);
-        }
+        WorkerTaskContext worker = resolveCreateTarget(command, workflow, actor.companyId());
         Map<String, Object> businessData =
                 command.businessData() == null ? Map.of() : command.businessData();
         List<String> missingSlots = missingRequiredSlots(
@@ -118,6 +116,7 @@ public class TaskWorkflowService {
                 businessData
         );
         EncodedTaskContent content = contentCodec.encode(
+                command.targetType(),
                 command.workerId(),
                 workflow.workflowId(),
                 command.taskType().name(),
@@ -128,10 +127,13 @@ public class TaskWorkflowService {
         );
         Instant now = Instant.now(clock);
         UUID taskId = uuidGenerator.generate();
-        UUID caseId = command.caseId() == null ? uuidGenerator.generate() : command.caseId();
+        UUID caseId = command.targetType() == TaskTargetType.WORKER
+                ? (command.caseId() == null ? uuidGenerator.generate() : command.caseId())
+                : null;
         Task task = Task.create(
                 taskId,
                 actor.companyId(),
+                command.targetType(),
                 command.workerId(),
                 caseId,
                 command.taskType(),
@@ -147,7 +149,9 @@ public class TaskWorkflowService {
                 actor.actorId(),
                 now
         );
-        taskCaseRegistrar.register(task, workflow, LocalDate.now(clock));
+        if (task.targetType() == TaskTargetType.WORKER) {
+            taskCaseRegistrar.register(task, workflow, LocalDate.now(clock));
+        }
         Task savedTask = taskRepository.save(task);
         List<TaskChecklistItem> checklistItems = checklistRepository.saveAll(
                 workflow.checklistItems().stream()
@@ -184,6 +188,8 @@ public class TaskWorkflowService {
     public TaskPageResult findAll(
             TaskStatus status,
             TaskType taskType,
+            TaskTargetType targetType,
+            TaskSource source,
             UUID workerId,
             UUID caseId,
             LocalDate dueFrom,
@@ -202,6 +208,8 @@ public class TaskWorkflowService {
                 actor.companyId(),
                 status,
                 taskType,
+                targetType,
+                source,
                 workerId,
                 caseId,
                 dueFrom,
@@ -227,7 +235,7 @@ public class TaskWorkflowService {
         return toResult(
                 task,
                 checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId()),
-                requireWorker(task.workerId(), actor.companyId()),
+                findWorker(task, actor.companyId()),
                 catalogService.requireWorkflow(task.workflowId())
         );
     }
@@ -243,7 +251,7 @@ public class TaskWorkflowService {
         actorAuthorizer.requireHrWrite(actor);
         Task task = requireTask(taskId, actor.companyId());
         WorkflowDefinition workflow = catalogService.requireWorkflow(task.workflowId());
-        WorkerTaskContext worker = requireWorker(task.workerId(), actor.companyId());
+        WorkerTaskContext worker = findWorker(task, actor.companyId());
         Map<String, Object> businessData =
                 command.businessData() == null ? Map.of() : command.businessData();
         List<String> missingSlots = missingRequiredSlots(
@@ -257,6 +265,7 @@ public class TaskWorkflowService {
         boolean checklistSatisfied = checklistItems.stream()
                 .noneMatch(item -> item.required() && !item.completed());
         EncodedTaskContent content = contentCodec.encode(
+                task.targetType(),
                 task.workerId(),
                 task.workflowId(),
                 task.taskType().name(),
@@ -350,7 +359,7 @@ public class TaskWorkflowService {
         }
         List<TaskChecklistItem> items =
                 checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId());
-        WorkerTaskContext worker = requireWorker(task.workerId(), actor.companyId());
+        WorkerTaskContext worker = findWorker(task, actor.companyId());
         WorkflowDefinition workflow = catalogService.requireWorkflow(task.workflowId());
         Map<String, Object> businessData = contentCodec.decodeBusinessData(task.businessDataJson());
         boolean slotsSatisfied = missingRequiredSlots(
@@ -447,7 +456,7 @@ public class TaskWorkflowService {
         return toResult(
                 savedTask,
                 checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId()),
-                requireWorker(task.workerId(), actor.companyId()),
+                findWorker(task, actor.companyId()),
                 catalogService.requireWorkflow(task.workflowId())
         );
     }
@@ -476,11 +485,11 @@ public class TaskWorkflowService {
         List<String> missing = new ArrayList<>();
         workflow.requiredSlots().stream().sorted().forEach(slot -> {
             boolean present = switch (slot) {
-                case "worker_id" -> worker.workerId() != null;
+                case "worker_id" -> worker != null && worker.workerId() != null;
                 case "due_at", "due_date" -> dueDate != null;
-                case "contract_start_date" -> worker.contractStartDate() != null;
-                case "contract_end_date" -> worker.contractEndDate() != null;
-                case "stay_expiry_date" -> worker.stayExpiryDate() != null;
+                case "contract_start_date" -> worker != null && worker.contractStartDate() != null;
+                case "contract_end_date" -> worker != null && worker.contractEndDate() != null;
+                case "stay_expiry_date" -> worker != null && worker.stayExpiryDate() != null;
                 default -> hasBusinessValue(businessData.get(slot));
             };
             if (!present) {
@@ -500,6 +509,35 @@ public class TaskWorkflowService {
     private WorkerTaskContext requireWorker(UUID workerId, UUID companyId) {
         return workerReader.findByIdAndCompanyId(workerId, companyId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.WORKER_NOT_FOUND));
+    }
+
+    private WorkerTaskContext findWorker(Task task, UUID companyId) {
+        return task.targetType() == TaskTargetType.WORKER
+                ? requireWorker(task.workerId(), companyId)
+                : null;
+    }
+
+    private WorkerTaskContext resolveCreateTarget(
+            CreateTaskCommand command,
+            WorkflowDefinition workflow,
+            UUID companyId
+    ) {
+        if (command.targetType() == TaskTargetType.COMPANY) {
+            if (command.workerId() != null
+                    || command.caseId() != null
+                    || workflow.requiredSlots().contains("worker_id")) {
+                throw new ApiException(TaskErrorCode.INVALID_TASK_TARGET);
+            }
+            return null;
+        }
+        if (command.workerId() == null) {
+            throw new ApiException(TaskErrorCode.INVALID_TASK_TARGET);
+        }
+        WorkerTaskContext worker = requireWorker(command.workerId(), companyId);
+        if (!worker.canReceiveNewTask()) {
+            throw new ApiException(TaskErrorCode.WORKER_NOT_ELIGIBLE);
+        }
+        return worker;
     }
 
     private Task requireTask(UUID taskId, UUID companyId) {

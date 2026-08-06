@@ -1,7 +1,9 @@
 package com.fowoco.server.task.application.port;
 
 import com.fowoco.server.task.domain.Task;
+import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import java.time.LocalDate;
 import java.util.List;
@@ -20,6 +22,8 @@ public interface TaskRepository {
             UUID companyId,
             TaskStatus status,
             TaskType taskType,
+            TaskTargetType targetType,
+            TaskSource source,
             UUID workerId,
             UUID caseId,
             LocalDate dueFrom,
