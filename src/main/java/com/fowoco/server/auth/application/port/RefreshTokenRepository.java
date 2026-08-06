@@ -14,4 +14,6 @@ public interface RefreshTokenRepository {
     void update(RefreshToken refreshToken);
 
     int revokeFamily(UUID tokenFamilyId, Instant revokedAt);
+
+    int revokeAllByUser(UUID userId, Instant revokedAt);
 }

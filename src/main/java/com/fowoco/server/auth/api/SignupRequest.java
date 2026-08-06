@@ -9,6 +9,8 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 
 @Schema(name = "SignupRequest", description = "사업장과 최초 ADMIN 계정 생성 요청")
 public final class SignupRequest {
@@ -65,17 +67,24 @@ public final class SignupRequest {
     @Utf8ByteLength(max = 72, message = "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.")
     private final String password;
 
+    @Valid
+    @NotNull(message = "가입 약관 동의 정보를 입력해 주세요.")
+    @Schema(description = "서비스·개인정보·마케팅 약관 동의 결과", requiredMode = Schema.RequiredMode.REQUIRED)
+    private final SignupAgreementsRequest agreements;
+
     @JsonCreator
     public SignupRequest(
             @JsonProperty("company_name") String companyName,
             @JsonProperty("display_name") String displayName,
             @JsonProperty("email") String email,
-            @JsonProperty("password") String password
+            @JsonProperty("password") String password,
+            @JsonProperty("agreements") SignupAgreementsRequest agreements
     ) {
         this.companyName = stripNullable(companyName);
         this.displayName = stripNullable(displayName);
         this.email = stripNullable(email);
         this.password = password;
+        this.agreements = agreements;
     }
 
     public String getCompanyName() {
@@ -94,8 +103,12 @@ public final class SignupRequest {
         return password;
     }
 
-    public SignupCommand toCommand() {
-        return new SignupCommand(companyName, displayName, email, password);
+    public SignupAgreementsRequest getAgreements() {
+        return agreements;
+    }
+
+    public SignupCommand toCommand(String requestId) {
+        return new SignupCommand(companyName, displayName, email, password, agreements.toAgreements(), requestId);
     }
 
     private static String stripNullable(String value) {

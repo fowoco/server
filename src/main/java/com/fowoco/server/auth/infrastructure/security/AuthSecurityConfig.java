@@ -27,7 +27,13 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({JwtProperties.class, RefreshTokenProperties.class})
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        RefreshTokenProperties.class,
+        PasswordResetProperties.class,
+        PasswordResetRateLimitProperties.class,
+        AgreementPolicyProperties.class
+})
 public class AuthSecurityConfig {
 
     private static final Set<String> ALLOWED_ROLES = Arrays.stream(UserRole.values())
