@@ -24,6 +24,7 @@ Kafka나 RabbitMQ가 필요한 구조는 아닙니다. MVP는 기존 PostgreSQL�
 | --- | --- |
 | `event_publication` | 처리해야 할 이벤트와 현재 상태, 시도 횟수, 다음 시각, lease를 저장 |
 | `event_consumption` | 어느 handler가 어느 이벤트를 이미 성공했는지 저장 |
+| `outbox_manual_retry` | ADMIN의 수동 재처리 사유와 중복 방지 키 해시를 변경 불가 기록으로 저장 |
 
 `event_publication`의 상태는 다음과 같습니다.
 
@@ -128,8 +129,35 @@ ORDER BY occurred_at;
 
 `PROCESSING` lease가 만료되면 다음 poll에서 자동 복구됩니다. `RETRY_WAIT`도
 `next_attempt_at` 이후 자동 처리됩니다. `REVIEW_REQUIRED`는 원인을 수정했다고 해서
-DB를 임의로 `PENDING`으로 바꾸지 않습니다. 별도 관리 command와 감사로그가 구현되기
-전에는 담당 개발자가 원인을 확인하고 forward migration 또는 후속 Issue로 복구합니다.
+DB를 임의로 `PENDING`으로 바꾸지 않습니다.
+
+### REVIEW_REQUIRED 수동 재처리
+
+1. 안전한 `last_error_code`와 관련 handler 상태를 확인하고 원인을 먼저 해결합니다.
+2. ADMIN Access Token으로 아래 API를 호출합니다.
+3. 응답이 `202`이면 이벤트는 `PENDING`이 되고 다음 Outbox poll에서 한 번 더 시도됩니다.
+4. `event_publication`, `outbox_manual_retry`, `audit_event`를 payload 없이 확인합니다.
+
+```http
+POST /api/v1/admin/outbox-events/{eventId}/retry
+Authorization: Bearer {admin-access-token}
+Idempotency-Key: incident-20260806-event-001
+Content-Type: application/json
+
+{
+  "expected_version": 3,
+  "reason": "내부 handler 복구와 점검을 완료했습니다."
+}
+```
+
+- `expected_version`은 조회 당시 `event_publication.version`입니다. 그 사이 상태가 바뀌면
+  `409`로 거부하므로 최신 상태를 다시 확인합니다.
+- 같은 `Idempotency-Key`와 같은 요청은 재실행하지 않고 최초 접수 결과를 반환합니다.
+- 사유는 10~300자로 작성하며 이름·연락처·문서 원문·token·payload·예외 원문을
+  입력하지 않습니다.
+- 수동 재처리는 기존 `attempt_count`를 초기화하지 않습니다. 실패하면 자동 재시도를
+  새로 여러 번 반복하지 않고 다시 운영자 확인 상태로 돌아갈 수 있습니다.
+- HR·VIEWER와 다른 사업장의 ADMIN은 호출할 수 없습니다.
 
 `OUTBOX_ENABLED=false`는 자동 처리를 멈출 뿐 새 이벤트 저장을 막지 않습니다. 장애 중
 이벤트가 계속 누적될 수 있으므로 backlog를 함께 관찰하고, 수정 배포 후 다시 활성화해
@@ -143,6 +171,8 @@ DB를 임의로 `PENDING`으로 바꾸지 않습니다. 별도 관리 command와
   constraint, index
 - 기능 통합 테스트: 실제 command가 올바른 event type과 최소 payload를 발행하는지
   검증
+- 운영 API 통합 테스트: ADMIN 권한, 사업장 격리, version 충돌, Idempotency-Key,
+  동시 재처리와 감사로그 검증
 
 로컬 전체 검증:
 

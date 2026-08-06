@@ -80,6 +80,7 @@ class PostgreSqlMigrationTests {
                         "audit_event",
                         "event_publication",
                         "event_consumption",
+                        "outbox_manual_retry",
                         "document_request_draft",
                         "document_request_draft_type",
                         "ai_run",
@@ -178,6 +179,15 @@ class PostgreSqlMigrationTests {
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
                 .containsEntry("handler_name", new ColumnSpec("varchar", false))
                 .containsEntry("completed_at", new ColumnSpec("timestamptz", false));
+        assertThat(columnSpecs(connection, "outbox_manual_retry"))
+                .containsEntry("manual_retry_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("event_id", new ColumnSpec("uuid", false))
+                .containsEntry("idempotency_key_hash", new ColumnSpec("varchar", false))
+                .containsEntry("request_hash", new ColumnSpec("varchar", false))
+                .containsEntry("reason", new ColumnSpec("varchar", false))
+                .containsEntry("requested_by", new ColumnSpec("uuid", false))
+                .containsEntry("accepted_version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "document_request_draft"))
                 .containsEntry("draft_id", new ColumnSpec("uuid", false))
                 .containsEntry("task_id", new ColumnSpec("uuid", false))
@@ -315,7 +325,11 @@ class PostgreSqlMigrationTests {
                         "fk_worker_response_upload_response_company",
                         "fk_worker_response_upload_file_company",
                         "fk_worker_document_upload_idempotency_link_company",
-                        "fk_worker_document_upload_idempotency_file_company"
+                        "fk_worker_document_upload_idempotency_file_company",
+                        "pk_outbox_manual_retry",
+                        "uq_outbox_manual_retry_event_key",
+                        "fk_outbox_manual_retry_event_company",
+                        "fk_outbox_manual_retry_actor_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -344,7 +358,9 @@ class PostgreSqlMigrationTests {
                         "idx_workflow_case_company_worker",
                         "idx_worker_response_upload_company",
                         "idx_worker_document_upload_idempotency_company",
-                        "idx_worker_document_upload_idempotency_file_company"
+                        "idx_worker_document_upload_idempotency_file_company",
+                        "idx_outbox_manual_retry_company_created",
+                        "idx_outbox_manual_retry_event_created"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -363,6 +379,7 @@ class PostgreSqlMigrationTests {
                         "pl_audit_event_tenant_isolation",
                         "pl_event_publication_tenant_isolation",
                         "pl_event_consumption_tenant_isolation",
+                        "pl_outbox_manual_retry_tenant_isolation",
                         "pl_document_request_draft_tenant_isolation",
                         "pl_document_request_draft_type_tenant_isolation",
                         "pl_ai_run_tenant_isolation",
