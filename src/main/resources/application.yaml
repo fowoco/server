@@ -74,6 +74,13 @@ app:
     max-concurrent-calls: ${AI_RUNTIME_MAX_CONCURRENT_CALLS:8}
     circuit-breaker-failure-threshold: ${AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
     circuit-breaker-open-duration: ${AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION:30s}
+  ai-run:
+    sse:
+      timeout: ${AI_RUN_SSE_TIMEOUT:5m}
+      heartbeat-interval: ${AI_RUN_SSE_HEARTBEAT_INTERVAL:15s}
+      history-retention: ${AI_RUN_SSE_HISTORY_RETENTION:10m}
+      history-size: ${AI_RUN_SSE_HISTORY_SIZE:20}
+      max-connections-per-user-run: ${AI_RUN_SSE_MAX_CONNECTIONS:2}
   reliability:
     outbox:
       enabled: ${OUTBOX_ENABLED:true}
@@ -112,6 +119,17 @@ app:
         name: ${REFRESH_TOKEN_COOKIE_NAME:fowoco_refresh_token}
         path: /api/v1/auth
         same-site: ${REFRESH_TOKEN_COOKIE_SAME_SITE:Strict}
+    password-reset:
+      ttl: ${PASSWORD_RESET_TTL:30m}
+      cooldown: ${PASSWORD_RESET_COOLDOWN:1m}
+      minimum-response-time: ${PASSWORD_RESET_MINIMUM_RESPONSE_TIME:250ms}
+      rate-limit:
+        max-requests: ${PASSWORD_RESET_RATE_LIMIT_MAX_REQUESTS:10}
+        window: ${PASSWORD_RESET_RATE_LIMIT_WINDOW:10m}
+    agreements:
+      service-terms-version: ${SERVICE_TERMS_VERSION:1.0}
+      privacy-policy-version: ${PRIVACY_POLICY_VERSION:1.0}
+      marketing-version: ${MARKETING_TERMS_VERSION:1.0}
 
 logging:
   pattern:

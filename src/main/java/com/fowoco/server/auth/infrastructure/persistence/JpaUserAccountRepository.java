@@ -2,6 +2,7 @@ package com.fowoco.server.auth.infrastructure.persistence;
 
 import com.fowoco.server.auth.domain.UserAccount;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,21 @@ public class JpaUserAccountRepository
     public void insert(UserAccount userAccount) {
         Objects.requireNonNull(userAccount, "userAccount must not be null");
         entityManager.persist(UserAccountJpaEntity.fromDomain(userAccount));
+        entityManager.flush();
+    }
+
+    @Override
+    public void update(UserAccount userAccount) {
+        Objects.requireNonNull(userAccount, "userAccount must not be null");
+        UserAccountJpaEntity entity = entityManager.find(
+                UserAccountJpaEntity.class,
+                userAccount.userId(),
+                LockModeType.PESSIMISTIC_WRITE
+        );
+        if (entity == null) {
+            throw new IllegalStateException("user account to update was not found");
+        }
+        entity.applyState(userAccount);
         entityManager.flush();
     }
 
@@ -58,8 +74,40 @@ public class JpaUserAccountRepository
     }
 
     @Override
-    public Optional<UserAccount> findByUserIdAndCompanyId(UUID userId, UUID companyId) {
+    public Optional<UserAccount> findByNormalizedEmailWithLock(String normalizedEmail) {
+        Objects.requireNonNull(normalizedEmail, "normalizedEmail must not be null");
         return entityManager.createQuery(
+                        """
+                        select userAccount
+                        from UserAccountJpaEntity userAccount
+                        where userAccount.normalizedEmail = :normalizedEmail
+                        """,
+                        UserAccountJpaEntity.class
+                )
+                .setParameter("normalizedEmail", normalizedEmail)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
+                .setMaxResults(1)
+                .getResultStream()
+                .findFirst()
+                .map(UserAccountJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<UserAccount> findByUserIdAndCompanyId(UUID userId, UUID companyId) {
+        return findByUserIdAndCompanyId(userId, companyId, null);
+    }
+
+    @Override
+    public Optional<UserAccount> findByUserIdAndCompanyIdWithLock(UUID userId, UUID companyId) {
+        return findByUserIdAndCompanyId(userId, companyId, LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    private Optional<UserAccount> findByUserIdAndCompanyId(
+            UUID userId,
+            UUID companyId,
+            LockModeType lockMode
+    ) {
+        var query = entityManager.createQuery(
                         """
                         select userAccount
                         from UserAccountJpaEntity userAccount
@@ -69,7 +117,11 @@ public class JpaUserAccountRepository
                         UserAccountJpaEntity.class
                 )
                 .setParameter("userId", userId)
-                .setParameter("companyId", companyId)
+                .setParameter("companyId", companyId);
+        if (lockMode != null) {
+            query.setLockMode(lockMode);
+        }
+        return query
                 .getResultStream()
                 .findFirst()
                 .map(UserAccountJpaEntity::toDomain);

@@ -6,9 +6,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fowoco.server.common.web.RequestIdFilter;
+import com.fowoco.server.common.database.DatabaseAccessDeniedMetrics;
 import com.fowoco.server.common.database.DatabaseTimeoutMetrics;
+import com.fowoco.server.common.database.PostgreSqlAccessDeniedClassifier;
 import com.fowoco.server.common.database.PostgreSqlTimeoutClassifier;
+import com.fowoco.server.common.web.RequestIdFilter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -40,6 +42,8 @@ class GlobalExceptionHandlerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(new ValidationTestController())
                 .setControllerAdvice(new GlobalExceptionHandler(
                         fixedClock,
+                        new PostgreSqlAccessDeniedClassifier(),
+                        new DatabaseAccessDeniedMetrics(new SimpleMeterRegistry()),
                         new PostgreSqlTimeoutClassifier(),
                         new DatabaseTimeoutMetrics(new SimpleMeterRegistry())
                 ))

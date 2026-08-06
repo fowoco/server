@@ -1,7 +1,11 @@
 package com.fowoco.server.document.application;
 
 import com.fowoco.server.auth.application.ActorContext;
+import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.document.application.error.DocumentErrorCode;
+import com.fowoco.server.file.application.port.StoredFileRepository;
+import com.fowoco.server.file.domain.StoredFile;
 import com.fowoco.server.worker.application.WorkerDocumentSearchQuery;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.application.port.WorkerRepository;
@@ -21,16 +25,36 @@ public class DocumentService {
 
     private final WorkerDocumentRepository workerDocumentRepository;
     private final WorkerRepository workerRepository;
+    private final StoredFileRepository storedFileRepository;
     private final TenantDatabaseContext tenantDatabaseContext;
 
     public DocumentService(
             WorkerDocumentRepository workerDocumentRepository,
             WorkerRepository workerRepository,
+            StoredFileRepository storedFileRepository,
             TenantDatabaseContext tenantDatabaseContext
     ) {
         this.workerDocumentRepository = workerDocumentRepository;
         this.workerRepository = workerRepository;
+        this.storedFileRepository = storedFileRepository;
         this.tenantDatabaseContext = tenantDatabaseContext;
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentDetailResult findById(UUID workerDocumentId, ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+        UUID companyId = actor.companyId();
+        WorkerDocument document = workerDocumentRepository
+                .findByIdAndCompanyId(workerDocumentId, companyId)
+                .orElseThrow(() -> new ApiException(DocumentErrorCode.DOCUMENT_NOT_FOUND));
+        String displayName = workerRepository
+                .findByWorkerIdAndCompanyId(document.workerId(), companyId)
+                .map(Worker::displayName)
+                .orElse(null);
+        StoredFile storedFile = document.fileId() == null
+                ? null
+                : storedFileRepository.findByIdAndCompanyId(document.fileId(), companyId).orElse(null);
+        return new DocumentDetailResult(document, displayName, storedFile);
     }
 
     @Transactional(readOnly = true)

@@ -97,6 +97,48 @@ DDL, `TRUNCATE`, `REFERENCES` 권한을 갖지 않습니다. 실제 값은 배�
 마지막에 둡니다. 임시 table 권한 자체를 회수할지는 #9의 database-level GRANT
 정책에서 결정합니다.
 
+## CI·로컬 보안 검증 경계
+
+PostgreSQL 보안 테스트는 migration 계정으로 schema와 fixture를 준비한 뒤, 테스트
+실행 중에만 무작위 이름과 비밀번호의 임시 runtime role을 생성합니다. 이 role은
+`NOSUPERUSER`, `NOBYPASSRLS`, `NOINHERIT`이며 대상 table owner나 migration role
+member가 아닙니다. 테스트가 끝나면 애플리케이션 connection pool을 먼저 닫고 fixture,
+role 권한과 role 자체를 제거합니다.
+
+이 임시 role은 환경별 실제 runtime role을 대신하지 않습니다. 테스트에 부여한
+Login·Refresh Token·Worker Link·Worker 대표 API용 GRANT도 staging의 최종 최소 GRANT
+계약이 아닙니다. 실제 role 생성, credential 발급, Secret 주입과 환경별 GRANT 확정은
+#9 및 staging 검증에서 별도로 수행합니다.
+
+테스트는 PostgreSQL 차단 결과를 다음처럼 구분합니다.
+
+- `INSERT`의 RLS `WITH CHECK` 위반처럼 SQLSTATE `42501`이 확인된 경우만
+  `DATABASE_ACCESS_DENIED` 관측 대상입니다. 외부에는 안전한 500 계열 응답과
+  `request_id`만 제공하고 SQLSTATE, SQL, table·policy 이름과 원본 예외 메시지는
+  노출하지 않습니다.
+- RLS `USING` 조건으로 `SELECT`가 empty, `UPDATE`·`DELETE`가 0행이 되는 것은 silent
+  filtering입니다. Repository의 not-found 또는 optimistic-lock 결과가 될 수 있으며
+  이를 임의로 `42501`로 재분류하지 않습니다.
+- SQLSTATE `42501`이 없는 일반 optimistic-lock 충돌은 기존
+  `CONCURRENT_MODIFICATION` 계약을 유지하고 DB 접근 거부 metric을 증가시키지
+  않습니다.
+- 현재 production tenant DELETE API·Repository 경로는 없습니다. 삭제 기능을 새로
+  만들지 않고 test-only native DELETE로 영향 행 수 0과 tenant A/B 및 관련 row의
+  불변만 검증합니다.
+
+공유 PostgreSQL DB에서 RLS table 상태를 바꾸는 테스트는 동일한 session-level
+advisory lock key를 사용합니다. `pg_try_advisory_lock`을 제한시간 안에서 재시도하므로
+경합 시 무기한 대기하지 않습니다. 테스트 시작 전 table별
+`relrowsecurity`·`relforcerowsecurity`를 저장하고, 성공·실패와 관계없이 최초 상태로
+정확히 복원합니다. 기존에 활성화돼 있던 RLS를 cleanup에서 무조건 비활성화하지
+않습니다.
+
+제한 runtime role HTTP E2E는 실제 random port 애플리케이션에서 Login, Refresh Token,
+Worker Link 읽기·대표 쓰기, 인증된 Worker 조회·생성과 tenant A/B 격리를 검증합니다.
+test source 전용 endpoint의 unbound `INSERT`로 42501 응답·로그·metric 계약도 확인하며,
+production 진단 endpoint는 추가하지 않습니다. Signup은 새 company row를 만드는 별도
+bootstrap 문제이므로 이 E2E 범위에서 제외합니다.
+
 ## Staging 적용 순서
 
 1. 대상 table과 tenant-aware FK·UNIQUE 제약이 `main`에 병합됐는지 확인합니다.
@@ -139,6 +181,17 @@ POSTGRES_TEST_PASSWORD=...
 role을 생성합니다. 따라서 격리 테스트 DB의 계정에는 role 생성 권한이 필요합니다.
 테스트 role과 임시 비밀번호는 테스트 종료 시 제거되며 versioned migration이나
 저장소에 남지 않습니다.
+
+대표 targeted 검증은 다음과 같습니다.
+
+```powershell
+.\gradlew.bat test --tests "*PostgreSqlWorkerRepositoryRlsTest"
+.\gradlew.bat test --tests "*PostgreSqlRestrictedRoleHttpE2ETest"
+```
+
+이 테스트의 통과는 CI·로컬 fixture에서의 보안 계약만 증명합니다. 실제 runtime role,
+Secret, 환경별 최소 GRANT, staging Smoke Test와 RLS 활성화 migration은 아직 후속
+범위이며, staging 검증 전에는 Issue #34를 완료 처리하지 않습니다.
 
 ## 장애와 forward-only 복구
 

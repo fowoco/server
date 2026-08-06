@@ -15,6 +15,8 @@ public interface AiRunRepository {
 
     void insertPlan(PlanRun run);
 
+    ExecutionState startInitialAttempt(UUID aiRunId, UUID companyId, Instant startedAt);
+
     Optional<AiRunResult> findByIdAndCompanyId(UUID aiRunId, UUID companyId);
 
     Optional<ExecutionState> findExecutionState(UUID aiRunId, UUID companyId);

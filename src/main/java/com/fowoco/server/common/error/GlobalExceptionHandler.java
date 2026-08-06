@@ -1,7 +1,10 @@
 package com.fowoco.server.common.error;
 
+import com.fowoco.server.common.database.DatabaseAccessDeniedMetrics;
 import com.fowoco.server.common.database.DatabaseTimeoutMetrics;
 import com.fowoco.server.common.database.DatabaseTimeoutType;
+import com.fowoco.server.common.database.PostgreSqlAccessDeniedClassification;
+import com.fowoco.server.common.database.PostgreSqlAccessDeniedClassifier;
 import com.fowoco.server.common.database.PostgreSqlTimeoutClassification;
 import com.fowoco.server.common.database.PostgreSqlTimeoutClassifier;
 import com.fowoco.server.common.web.RequestIdFilter;
@@ -11,6 +14,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -36,15 +40,21 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     private final Clock clock;
+    private final PostgreSqlAccessDeniedClassifier accessDeniedClassifier;
+    private final DatabaseAccessDeniedMetrics accessDeniedMetrics;
     private final PostgreSqlTimeoutClassifier timeoutClassifier;
     private final DatabaseTimeoutMetrics timeoutMetrics;
 
     public GlobalExceptionHandler(
             Clock clock,
+            PostgreSqlAccessDeniedClassifier accessDeniedClassifier,
+            DatabaseAccessDeniedMetrics accessDeniedMetrics,
             PostgreSqlTimeoutClassifier timeoutClassifier,
             DatabaseTimeoutMetrics timeoutMetrics
     ) {
         this.clock = clock;
+        this.accessDeniedClassifier = accessDeniedClassifier;
+        this.accessDeniedMetrics = accessDeniedMetrics;
         this.timeoutClassifier = timeoutClassifier;
         this.timeoutMetrics = timeoutMetrics;
     }
@@ -125,7 +135,13 @@ public class GlobalExceptionHandler {
             ObjectOptimisticLockingFailureException exception,
             HttpServletRequest request
     ) {
-        return response(ErrorCode.CONCURRENT_MODIFICATION, null, List.of(), request);
+        return handleDatabaseAccessDenied(exception, request)
+                .orElseGet(() -> response(
+                        ErrorCode.CONCURRENT_MODIFICATION,
+                        null,
+                        List.of(),
+                        request
+                ));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -165,11 +181,22 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+        Optional<ResponseEntity<ApiErrorResponse>> accessDeniedResponse =
+                handleDatabaseAccessDenied(exception, request);
+        if (accessDeniedResponse.isPresent()) {
+            return accessDeniedResponse.get();
+        }
+
         PostgreSqlTimeoutClassification classification =
                 timeoutClassifier.classify(exception);
         if (isConfirmed(classification.type())) {
             timeoutMetrics.recordConfirmed(classification.type());
-            logDatabaseFailure(request, classification, confirmedLogCode(classification.type()));
+            logDatabaseFailure(
+                    request,
+                    confirmedLogCode(classification.type()),
+                    classification.sqlState(),
+                    classification.exceptionType()
+            );
             return response(
                     ErrorCode.SERVICE_TEMPORARILY_UNAVAILABLE,
                     null,
@@ -179,7 +206,12 @@ public class GlobalExceptionHandler {
             );
         }
         if (isAmbiguous(classification.type())) {
-            logDatabaseFailure(request, classification, classification.type().name());
+            logDatabaseFailure(
+                    request,
+                    classification.type().name(),
+                    classification.sqlState(),
+                    classification.exceptionType()
+            );
             return response(
                     ErrorCode.INTERNAL_SERVER_ERROR,
                     null,
@@ -201,10 +233,37 @@ public class GlobalExceptionHandler {
         return response(ErrorCode.INTERNAL_SERVER_ERROR, null, List.of(), request);
     }
 
+    private Optional<ResponseEntity<ApiErrorResponse>> handleDatabaseAccessDenied(
+            Throwable failure,
+            HttpServletRequest request
+    ) {
+        PostgreSqlAccessDeniedClassification classification =
+                accessDeniedClassifier.classify(failure);
+        if (!classification.confirmed()) {
+            return Optional.empty();
+        }
+
+        accessDeniedMetrics.recordConfirmed();
+        logDatabaseFailure(
+                request,
+                "DATABASE_ACCESS_DENIED",
+                classification.sqlState(),
+                classification.exceptionType()
+        );
+        return Optional.of(response(
+                ErrorCode.INTERNAL_SERVER_ERROR,
+                null,
+                List.of(),
+                request,
+                safeRoute(request)
+        ));
+    }
+
     private void logDatabaseFailure(
             HttpServletRequest request,
-            PostgreSqlTimeoutClassification classification,
-            String logClassification
+            String logClassification,
+            String sqlState,
+            String exceptionType
     ) {
         log.warn(
                 "Database request failure: requestId={} method={} route={} "
@@ -213,8 +272,8 @@ public class GlobalExceptionHandler {
                 request.getMethod(),
                 safeRoute(request),
                 logClassification,
-                classification.sqlState(),
-                classification.exceptionType()
+                sqlState,
+                exceptionType
         );
     }
 
