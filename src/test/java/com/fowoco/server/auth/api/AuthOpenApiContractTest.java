@@ -92,13 +92,18 @@ class AuthOpenApiContractTest {
         JsonNode responseProperties = openApi.at("/components/schemas/SignupResponse/properties");
 
         assertThat(request.path("required").toString())
-                .contains("company_name", "display_name", "email", "password");
+                .contains("company_name", "display_name", "email", "password", "agreements");
         assertThat(requestProperties.properties())
                 .extracting(java.util.Map.Entry::getKey)
-                .containsExactlyInAnyOrder("company_name", "display_name", "email", "password");
+                .containsExactlyInAnyOrder("company_name", "display_name", "email", "password", "agreements");
         assertThat(request.at("/properties/password/minLength").asInt()).isEqualTo(8);
         assertThat(request.at("/properties/password/maxLength").asInt()).isEqualTo(128);
         assertThat(request.at("/properties/password/writeOnly").asBoolean()).isTrue();
+        assertThat(request.at("/properties/agreements/$ref").asText())
+                .isEqualTo("#/components/schemas/SignupAgreementsRequest");
+        assertThat(openApi.at("/components/schemas/SignupAgreementsRequest/properties").properties())
+                .extracting(java.util.Map.Entry::getKey)
+                .containsExactlyInAnyOrder("service_terms", "privacy_policy", "marketing");
         assertThat(requestProperties.has("role")).isFalse();
         assertThat(requestProperties.has("company_id")).isFalse();
         assertThat(responseProperties.properties())
@@ -116,6 +121,35 @@ class AuthOpenApiContractTest {
         assertThat(responseProperties.has("password_hash")).isFalse();
         assertThat(responseProperties.has("access_token")).isFalse();
         assertThat(responseProperties.has("refresh_token")).isFalse();
+    }
+
+    @Test
+    void passwordResetEndpointsDocumentPublicOpaqueAndOneTimeFlow() {
+        JsonNode requestReset = openApi.at(
+                "/paths/~1api~1v1~1auth~1password-reset-requests/post"
+        );
+        JsonNode completeReset = openApi.at(
+                "/paths/~1api~1v1~1auth~1password-resets/post"
+        );
+
+        assertThat(requestReset.path("operationId").asText()).isEqualTo("requestPasswordReset");
+        assertThat(requestReset.path("description").asText())
+                .contains("계정 존재 여부", "202", "SHA-256 hash");
+        assertThat(requestReset.at("/responses/202/content").isMissingNode()).isTrue();
+        assertThat(requestReset.has("security") && !requestReset.path("security").isEmpty()).isFalse();
+
+        assertThat(completeReset.path("operationId").asText()).isEqualTo("completePasswordReset");
+        assertThat(completeReset.path("description").asText())
+                .contains("1회용", "Refresh Token", "폐기");
+        assertThat(completeReset.at("/responses/204/content").isMissingNode()).isTrue();
+        assertThat(completeReset.at("/responses/400/$ref").asText())
+                .isEqualTo("#/components/responses/InvalidPasswordResetToken");
+        assertThat(openApi.at(
+                "/components/schemas/PasswordResetCompleteRequest/properties/token/writeOnly"
+        ).asBoolean()).isTrue();
+        assertThat(openApi.at(
+                "/components/schemas/PasswordResetCompleteRequest/properties/new_password/writeOnly"
+        ).asBoolean()).isTrue();
     }
 
     @Test

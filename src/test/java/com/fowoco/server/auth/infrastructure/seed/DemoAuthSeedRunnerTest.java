@@ -233,6 +233,14 @@ class DemoAuthSeedRunnerTest {
         }
 
         @Override
+        public void update(UserAccount userAccount) {
+            if (!users.containsKey(userAccount.userId())) {
+                throw new IllegalStateException("missing user");
+            }
+            users.put(userAccount.userId(), userAccount);
+        }
+
+        @Override
         public boolean existsByNormalizedEmail(String normalizedEmail) {
             return users.values().stream()
                     .anyMatch(user -> user.normalizedEmail().equals(normalizedEmail));
@@ -243,6 +251,11 @@ class DemoAuthSeedRunnerTest {
             return users.values().stream()
                     .filter(user -> user.normalizedEmail().equals(normalizedEmail))
                     .findFirst();
+        }
+
+        @Override
+        public Optional<UserAccount> findByNormalizedEmailWithLock(String normalizedEmail) {
+            return findByNormalizedEmail(normalizedEmail);
         }
 
         @Override
