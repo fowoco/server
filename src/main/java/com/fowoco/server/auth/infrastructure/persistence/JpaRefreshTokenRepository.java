@@ -98,4 +98,25 @@ public class JpaRefreshTokenRepository implements RefreshTokenRepository {
         entityManager.clear();
         return updatedRows;
     }
+
+    @Override
+    public int revokeAllByUser(UUID userId, Instant revokedAt) {
+        Objects.requireNonNull(userId, "userId must not be null");
+        Objects.requireNonNull(revokedAt, "revokedAt must not be null");
+        int updatedRows = entityManager.createQuery(
+                        """
+                        update RefreshTokenJpaEntity refreshToken
+                        set refreshToken.revokedAt = :revokedAt,
+                            refreshToken.updatedAt = :revokedAt,
+                            refreshToken.version = refreshToken.version + 1
+                        where refreshToken.userId = :userId
+                          and refreshToken.revokedAt is null
+                        """
+                )
+                .setParameter("revokedAt", revokedAt)
+                .setParameter("userId", userId)
+                .executeUpdate();
+        entityManager.clear();
+        return updatedRows;
+    }
 }

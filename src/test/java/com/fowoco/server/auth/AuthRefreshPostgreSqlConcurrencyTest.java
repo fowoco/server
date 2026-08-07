@@ -395,6 +395,11 @@ class AuthRefreshPostgreSqlConcurrencyTest {
             return delegate.revokeFamily(tokenFamilyId, revokedAt);
         }
 
+        @Override
+        public int revokeAllByUser(UUID userId, Instant revokedAt) {
+            return delegate.revokeAllByUser(userId, revokedAt);
+        }
+
         private void awaitConcurrentLookup(CyclicBarrier barrier) {
             try {
                 barrier.await(10, TimeUnit.SECONDS);
