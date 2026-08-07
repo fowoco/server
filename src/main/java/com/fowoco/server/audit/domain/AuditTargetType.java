@@ -11,5 +11,6 @@ public enum AuditTargetType {
     AI_RUN,
     OUTBOX_EVENT,
     USER_ACCOUNT,
-    DOCUMENT_OCR_RUN
+    DOCUMENT_OCR_RUN,
+    WORKER_IMPORT
 }

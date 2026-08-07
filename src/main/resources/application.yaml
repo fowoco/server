@@ -89,6 +89,8 @@ app:
       enabled: ${DOCUMENT_OCR_ENABLED:false}
       encryption-key-base64: ${OCR_RESULT_ENCRYPTION_KEY_BASE64:}
       key-version: ${OCR_RESULT_KEY_VERSION:local-v1}
+  worker-import:
+    source-retention: ${WORKER_IMPORT_SOURCE_RETENTION:7d}
   ai-run:
     sse:
       timeout: ${AI_RUN_SSE_TIMEOUT:5m}
