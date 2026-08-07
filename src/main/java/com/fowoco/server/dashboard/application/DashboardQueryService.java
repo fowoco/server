@@ -35,14 +35,16 @@ public class DashboardQueryService {
     }
 
     @Transactional(readOnly = true)
-    public DashboardTodayResponse today(ActorContext actor) {
+    public DashboardTodayResponse today(ActorContext actor, LocalDate date, String timezone) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
         UUID companyId = actor.companyId();
+        Clock effectiveClock = timezone != null ? clock.withZone(java.time.ZoneId.of(timezone)) : clock;
+        LocalDate targetDate = date != null ? date : LocalDate.now(effectiveClock);
 
         long pendingApproval = taskRepository.countByCompanyIdAndStatus(companyId, TaskStatus.READY_FOR_REVIEW);
         long needsInfo = taskRepository.countByCompanyIdAndStatus(companyId, TaskStatus.NEEDS_INFO);
         long workerResponse = taskRepository.countByCompanyIdAndStatus(companyId, TaskStatus.WAITING_WORKER);
-        long dueToday = countDueToday(companyId);
+        long dueToday = taskRepository.countOpenTasksDueOn(companyId, targetDate);
 
         DashboardSummaryCountsResponse summaryCounts = new DashboardSummaryCountsResponse(
                 pendingApproval, dueToday, needsInfo, workerResponse
@@ -54,10 +56,5 @@ public class DashboardQueryService {
                 .toList();
 
         return new DashboardTodayResponse(summaryCounts, priorityTasks, pendingApproval, workerResponse);
-    }
-
-    private long countDueToday(UUID companyId) {
-        LocalDate today = LocalDate.now(clock);
-        return taskRepository.countOpenTasksDueOn(companyId, today);
     }
 }
