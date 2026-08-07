@@ -6,6 +6,7 @@ import com.fowoco.server.workerlink.domain.WorkerLinkStatus;
 import jakarta.persistence.EntityManager;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
@@ -94,5 +95,27 @@ public class JpaWorkerLinkRepository implements WorkerLinkRepository {
                 .getResultStream()
                 .findFirst()
                 .map(WorkerLinkJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<WorkerLink> findAllByTaskIdAndCompanyId(UUID taskId, UUID companyId) {
+        Objects.requireNonNull(taskId, "taskId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        return entityManager.createQuery(
+                        """
+                        select link
+                        from WorkerLinkJpaEntity link
+                        where link.taskId = :taskId
+                          and link.companyId = :companyId
+                        order by link.createdAt desc
+                        """,
+                        WorkerLinkJpaEntity.class
+                )
+                .setParameter("taskId", taskId)
+                .setParameter("companyId", companyId)
+                .getResultList()
+                .stream()
+                .map(WorkerLinkJpaEntity::toDomain)
+                .toList();
     }
 }

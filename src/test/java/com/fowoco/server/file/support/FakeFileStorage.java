@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -22,6 +23,12 @@ public class FakeFileStorage implements FileStorage {
             throw new UncheckedIOException(exception);
         }
     }
+    @Override
+    public Optional<InputStream> open(String storageKey) {
+        byte[] content = storedContents.get(storageKey);
+        return content == null ? Optional.empty() : Optional.of(new java.io.ByteArrayInputStream(content));
+    }
+
     public boolean contains(String storageKey) {
         return storedContents.containsKey(storageKey);
     }

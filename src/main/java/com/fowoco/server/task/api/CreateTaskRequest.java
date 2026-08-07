@@ -3,6 +3,7 @@ package com.fowoco.server.task.api;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fowoco.server.task.application.CreateTaskCommand;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -13,7 +14,8 @@ import java.util.UUID;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record CreateTaskRequest(
-        @NotNull UUID workerId,
+        TaskTargetType targetType,
+        UUID workerId,
         UUID caseId,
         @NotNull TaskType taskType,
         @NotBlank @Size(max = 100) String workflowId,
@@ -24,6 +26,9 @@ public record CreateTaskRequest(
 ) {
     CreateTaskCommand toCommand() {
         return new CreateTaskCommand(
+                targetType == null
+                        ? (workerId == null ? TaskTargetType.COMPANY : TaskTargetType.WORKER)
+                        : targetType,
                 workerId,
                 caseId,
                 taskType,

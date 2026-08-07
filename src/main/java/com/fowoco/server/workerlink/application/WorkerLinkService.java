@@ -60,6 +60,9 @@ public class WorkerLinkService {
 
         Task task = taskRepository.findByIdAndCompanyId(command.taskId(), actor.companyId())
                 .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.TASK_NOT_FOUND));
+        if (task.workerId() == null) {
+            throw new ApiException(WorkerLinkErrorCode.TASK_WORKER_TARGET_REQUIRED);
+        }
 
         ApprovalRequest approval = approvalRequestRepository
                 .findLatestApprovedByTaskIdAndCompanyId(command.taskId(), actor.companyId())

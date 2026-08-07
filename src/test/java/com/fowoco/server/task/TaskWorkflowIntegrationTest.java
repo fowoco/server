@@ -91,7 +91,7 @@ class TaskWorkflowIntegrationTest {
         assertThat(catalog.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<String>read(catalog.body(), "$.source_repository"))
                 .isEqualTo("fowoco/knowledge");
-        assertThat(JsonPath.<List<?>>read(catalog.body(), "$.workflows")).hasSize(2);
+        assertThat(JsonPath.<List<?>>read(catalog.body(), "$.workflows")).hasSize(7);
 
         HttpResponse<String> created = post("/api/v1/tasks", validCreateBody(), token);
         assertThat(created.statusCode()).isEqualTo(201);
@@ -99,6 +99,7 @@ class TaskWorkflowIntegrationTest {
         UUID taskId = UUID.fromString(JsonPath.read(created.body(), "$.task_id"));
         UUID caseId = UUID.fromString(JsonPath.read(created.body(), "$.case_id"));
         assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("DRAFT");
+        assertThat(JsonPath.<String>read(created.body(), "$.target_type")).isEqualTo("WORKER");
         assertThat(JsonPath.<String>read(created.body(), "$.workflow_catalog_version"))
                 .isEqualTo("0.2.0");
         assertThat(jdbcTemplate.queryForList(
@@ -219,6 +220,113 @@ class TaskWorkflowIntegrationTest {
         assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("NEEDS_INFO");
         assertThat(JsonPath.<List<String>>read(created.body(), "$.missing_required_slots"))
                 .containsExactly("due_at");
+    }
+
+    @Test
+    void createsACompanyOnboardingTaskWithoutWorkerOrCase() throws Exception {
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> created = post(
+                "/api/v1/tasks",
+                """
+                {
+                  "target_type":"COMPANY",
+                  "task_type":"WORKER_ONBOARDING",
+                  "workflow_id":"WF-WRK-001",
+                  "title":"신규 근로자 등록 초안",
+                  "description":"업로드 문서에서 등록 초안을 준비합니다.",
+                  "business_data":{"source_document_id":"file-demo-001"}
+                }
+                """,
+                token
+        );
+
+        assertThat(created.statusCode()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(created.body(), "$.target_type")).isEqualTo("COMPANY");
+        assertThat(JsonPath.<Object>read(created.body(), "$.worker_id")).isNull();
+        assertThat(JsonPath.<Object>read(created.body(), "$.case_id")).isNull();
+        assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("DRAFT");
+        UUID taskId = UUID.fromString(JsonPath.read(created.body(), "$.task_id"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM workflow_case",
+                Integer.class
+        )).isZero();
+
+        HttpResponse<String> filtered = get(
+                "/api/v1/tasks?target_type=COMPANY&source=MANUAL&task_type=WORKER_ONBOARDING",
+                token
+        );
+        assertThat(filtered.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(filtered.body(), "$.items[*].task_id"))
+                .containsExactly(taskId.toString());
+    }
+
+    @Test
+    void rejectsInvalidCompanyAndWorkerTargetCombinations() throws Exception {
+        String token = login(HR_A_EMAIL);
+        String companyWithWorker = validCreateBody().replace(
+                "{\n",
+                "{\n                  \"target_type\":\"COMPANY\",\n"
+        );
+        String workerWithoutWorkerId = """
+                {
+                  "target_type":"WORKER",
+                  "task_type":"WORKER_ONBOARDING",
+                  "workflow_id":"WF-WRK-001",
+                  "title":"잘못된 근로자 대상",
+                  "business_data":{"source_document_id":"file-demo-001"}
+                }
+                """;
+
+        for (String body : List.of(companyWithWorker, workerWithoutWorkerId)) {
+            HttpResponse<String> response = post("/api/v1/tasks", body, token);
+            assertThat(response.statusCode()).isEqualTo(422);
+            assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                    .isEqualTo("INVALID_TASK_TARGET");
+        }
+    }
+
+    @Test
+    void createsEveryWorkerTargetTaskTypeFromTheCanonicalCatalog() throws Exception {
+        String token = login(HR_A_EMAIL);
+        List<String> requestBodies = List.of(
+                workerTaskBody(
+                        "DOCUMENT_REQUEST",
+                        "WF-DOC-001",
+                        "서류 요청",
+                        "\"document_type\":\"PASSPORT_COPY\",\"submission_channel\":\"SECURE_LINK\""
+                ),
+                workerTaskBody(
+                        "PAYROLL_EXPLANATION",
+                        "WF-PAY-001",
+                        "급여 설명",
+                        "\"pay_period\":\"2026-07\",\"source_document_id\":\"file-pay-001\""
+                ),
+                workerTaskBody(
+                        "WORK_INSTRUCTION",
+                        "WF-INS-001",
+                        "근무 안내",
+                        "\"effective_at\":\"2026-08-10T07:00:00+09:00\",\"work_action\":\"2공장 출근\""
+                ),
+                workerTaskBody(
+                        "EMPLOYMENT_CHANGE",
+                        "WF-CHG-001",
+                        "고용변동 확인",
+                        "\"change_type\":\"RESIGNATION\",\"incident_at\":\"2026-08-05\""
+                )
+        );
+
+        for (String body : requestBodies) {
+            HttpResponse<String> created = post("/api/v1/tasks", body, token);
+            assertThat(created.statusCode()).isEqualTo(201);
+            assertThat(JsonPath.<String>read(created.body(), "$.target_type"))
+                    .isEqualTo("WORKER");
+            assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("DRAFT");
+        }
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM task", Integer.class))
+                .isEqualTo(4);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM workflow_case", Integer.class))
+                .isEqualTo(4);
     }
 
     @Test
@@ -488,6 +596,24 @@ class TaskWorkflowIntegrationTest {
                   "business_data":{"monthly_wage":2500000}
                 }
                 """.formatted(WORKER_A, caseId, title);
+    }
+
+    private String workerTaskBody(
+            String taskType,
+            String workflowId,
+            String title,
+            String additionalBusinessData
+    ) {
+        return """
+                {
+                  "worker_id":"%s",
+                  "task_type":"%s",
+                  "workflow_id":"%s",
+                  "title":"%s",
+                  "due_date":"2026-08-20",
+                  "business_data":{%s}
+                }
+                """.formatted(WORKER_A, taskType, workflowId, title, additionalBusinessData);
     }
 
     private String login(String email) throws Exception {

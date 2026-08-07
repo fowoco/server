@@ -239,7 +239,8 @@ final class DemoAuditSeedCatalog {
         return switch (source) {
             case AI_CANDIDATE -> ActorType.AI_AGENT;
             case SYSTEM_DDAY -> ActorType.SYSTEM_RULE;
-            case MANUAL -> ActorType.HR_USER;
+            case MANUAL, FILE_IMPORT -> ActorType.HR_USER;
+            case WORKER_RESPONSE -> ActorType.WORKER_LINK;
         };
     }
 

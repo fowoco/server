@@ -62,6 +62,14 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("b7000000-0000-0000-0000-000000000002");
     private static final UUID CASE_A_NEW =
             UUID.fromString("a7000000-0000-0000-0000-000000000003");
+    private static final UUID EVENT_A =
+            UUID.fromString("a9000000-0000-0000-0000-000000000001");
+    private static final UUID EVENT_B =
+            UUID.fromString("b9000000-0000-0000-0000-000000000002");
+    private static final UUID MANUAL_RETRY_A =
+            UUID.fromString("aa000000-0000-0000-0000-000000000001");
+    private static final UUID MANUAL_RETRY_B =
+            UUID.fromString("bb000000-0000-0000-0000-000000000002");
     private static final UUID CONSENT_A =
             UUID.fromString("a9000000-0000-0000-0000-000000000001");
     private static final UUID CONSENT_B =
@@ -83,6 +91,7 @@ class PostgreSqlRlsIsolationTest {
             "worker_response",
             "worker_response_upload",
             "worker_document_upload_idempotency",
+            "outbox_manual_retry",
             "user_agreement_consent",
             "password_reset_token"
     );
@@ -176,6 +185,7 @@ class PostgreSqlRlsIsolationTest {
                             + "public.worker_link, public.worker_response, "
                             + "public.worker_response_upload, "
                             + "public.worker_document_upload_idempotency, "
+                            + "public.outbox_manual_retry, "
                             + "public.user_agreement_consent, "
                             + "public.password_reset_token TO "
                             + quotedRole
@@ -339,6 +349,41 @@ class PostgreSqlRlsIsolationTest {
                     WORKER_LINK_A, COMPANY_A, STORED_FILE_A,
                     WORKER_LINK_B, COMPANY_B, STORED_FILE_B
             ));
+            statement.execute("""
+                    INSERT INTO event_publication (
+                        event_id, company_id, event_type, payload_version,
+                        aggregate_type, aggregate_id, actor_type, request_id,
+                        payload_json, status, attempt_count, last_error_code,
+                        occurred_at, created_at, updated_at, version
+                    ) VALUES
+                        ('%s', '%s', 'RlsEvent', '1', 'RlsProbe', '%s',
+                         'SYSTEM_RULE', 'rls-event-a', '{}', 'REVIEW_REQUIRED', 3,
+                         'RLS_REVIEW_REQUIRED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                         CURRENT_TIMESTAMP, 0),
+                        ('%s', '%s', 'RlsEvent', '1', 'RlsProbe', '%s',
+                         'SYSTEM_RULE', 'rls-event-b', '{}', 'REVIEW_REQUIRED', 3,
+                         'RLS_REVIEW_REQUIRED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+                         CURRENT_TIMESTAMP, 0)
+                    """.formatted(
+                    EVENT_A, COMPANY_A, UUID.randomUUID(),
+                    EVENT_B, COMPANY_B, UUID.randomUUID()
+            ));
+            statement.execute("""
+                    INSERT INTO outbox_manual_retry (
+                        manual_retry_id, company_id, event_id,
+                        idempotency_key_hash, request_hash, reason, requested_by,
+                        request_id, accepted_status, accepted_version, created_at
+                    ) VALUES
+                        ('%s', '%s', '%s', repeat('a', 64), repeat('c', 64),
+                         'Tenant A handler 복구 확인', '%s', 'rls-retry-a',
+                         'PENDING', 1, CURRENT_TIMESTAMP),
+                        ('%s', '%s', '%s', repeat('b', 64), repeat('d', 64),
+                         'Tenant B handler 복구 확인', '%s', 'rls-retry-b',
+                         'PENDING', 1, CURRENT_TIMESTAMP)
+                    """.formatted(
+                    MANUAL_RETRY_A, COMPANY_A, EVENT_A, USER_A,
+                    MANUAL_RETRY_B, COMPANY_B, EVENT_B, USER_B
+            ));
 
         }
         rlsState.enableRowLevelSecurity();
@@ -357,6 +402,7 @@ class PostgreSqlRlsIsolationTest {
             assertThat(tableCount(connection, "worker_response_upload")).isZero();
             assertThat(tableCount(connection, "worker_document_upload_idempotency")).isZero();
             assertThat(tableCount(connection, "workflow_case")).isZero();
+            assertThat(tableCount(connection, "outbox_manual_retry")).isZero();
             assertThat(tableCount(connection, "user_agreement_consent")).isZero();
             assertThat(tableCount(connection, "password_reset_token")).isZero();
 
@@ -417,6 +463,11 @@ class PostgreSqlRlsIsolationTest {
                     connection,
                     "SELECT case_id FROM public.workflow_case ORDER BY case_id"
             )).containsExactly(CASE_A);
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT manual_retry_id FROM public.outbox_manual_retry "
+                            + "ORDER BY manual_retry_id"
+            )).containsExactly(MANUAL_RETRY_A);
             assertThat(uuidValues(
                     connection,
                     "SELECT consent_id FROM public.user_agreement_consent ORDER BY consent_id"
@@ -567,6 +618,22 @@ class PostgreSqlRlsIsolationTest {
                     STORED_FILE_B_UNLINKED,
                     COMPANY_B
             ));
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO outbox_manual_retry (
+                        manual_retry_id, company_id, event_id,
+                        idempotency_key_hash, request_hash, reason, requested_by,
+                        request_id, accepted_status, accepted_version, created_at
+                    ) VALUES (
+                        'bb000000-0000-0000-0000-000000000099', '%s', '%s',
+                        repeat('e', 64), repeat('f', 64),
+                        'Forbidden tenant retry request', '%s', 'rls-forbidden-retry',
+                        'PENDING', 1, CURRENT_TIMESTAMP
+                    )
+                    """.formatted(COMPANY_B, EVENT_B, USER_B)
+            );
 
             assertThat(executeUpdate(
                     connection,
@@ -595,6 +662,11 @@ class PostgreSqlRlsIsolationTest {
             )).isZero();
             assertThat(executeUpdate(
                     connection,
+                    "DELETE FROM outbox_manual_retry WHERE manual_retry_id = ?",
+                    MANUAL_RETRY_B
+            )).isZero();
+            assertThat(executeUpdate(
+                    connection,
                     "DELETE FROM worker WHERE worker_id = ?",
                     WORKER_A_NEW
             )).isOne();
@@ -617,12 +689,17 @@ class PostgreSqlRlsIsolationTest {
 
         assertThat(workerCount(connection)).isZero();
         assertThat(tableCount(connection, "workflow_case")).isZero();
+        assertThat(tableCount(connection, "outbox_manual_retry")).isZero();
         setTenantContext(connection, COMPANY_B.toString());
         assertThat(workerIds(connection)).containsExactly(WORKER_B);
         assertThat(uuidValues(
                 connection,
                 "SELECT case_id FROM public.workflow_case ORDER BY case_id"
         )).containsExactly(CASE_B);
+        assertThat(uuidValues(
+                connection,
+                "SELECT manual_retry_id FROM public.outbox_manual_retry ORDER BY manual_retry_id"
+        )).containsExactly(MANUAL_RETRY_B);
         connection.rollback();
     }
 
@@ -665,6 +742,14 @@ class PostgreSqlRlsIsolationTest {
     }
 
     private void deleteFixtureRows(Statement statement) throws SQLException {
+        statement.execute("""
+                DELETE FROM outbox_manual_retry
+                WHERE manual_retry_id IN ('%s', '%s')
+                """.formatted(MANUAL_RETRY_A, MANUAL_RETRY_B));
+        statement.execute("""
+                DELETE FROM event_publication
+                WHERE event_id IN ('%s', '%s')
+                """.formatted(EVENT_A, EVENT_B));
         statement.execute("""
                 DELETE FROM password_reset_token
                 WHERE password_reset_token_id IN ('%s', '%s')
