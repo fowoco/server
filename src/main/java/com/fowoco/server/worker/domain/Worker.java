@@ -15,9 +15,12 @@ public final class Worker {
     private final String nationalityCode;
     private final String preferredLanguage;
     private final WorkerStatus workStatus;
+    private final String visaType;
     private final LocalDate stayExpiryDate;
     private final LocalDate contractStartDate;
     private final LocalDate contractEndDate;
+    private final LocalDate employmentPermitEndDate;
+    private final LocalDate employmentActivityEndDate;
     private final Instant createdAt;
     private final Instant updatedAt;
     private final long version;
@@ -29,9 +32,12 @@ public final class Worker {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
+            String visaType,
             LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
+            LocalDate employmentPermitEndDate,
+            LocalDate employmentActivityEndDate,
             Instant createdAt,
             Instant updatedAt,
             long version
@@ -42,9 +48,12 @@ public final class Worker {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = Objects.requireNonNull(workStatus, "workStatus must not be null");
+        this.visaType = visaType;
         this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
+        this.employmentPermitEndDate = employmentPermitEndDate;
+        this.employmentActivityEndDate = employmentActivityEndDate;
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
         if (updatedAt.isBefore(createdAt)) {
@@ -66,9 +75,12 @@ public final class Worker {
             String displayName,
             String nationalityCode,
             String preferredLanguage,
+            String visaType,
             LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
+            LocalDate employmentPermitEndDate,
+            LocalDate employmentActivityEndDate,
             Instant now
     ) {
         Objects.requireNonNull(now, "now must not be null");
@@ -79,9 +91,12 @@ public final class Worker {
                 nationalityCode,
                 preferredLanguage,
                 WorkerStatus.ACTIVE,
+                visaType,
                 stayExpiryDate,
                 contractStartDate,
                 contractEndDate,
+                employmentPermitEndDate,
+                employmentActivityEndDate,
                 now,
                 now,
                 0L
@@ -116,6 +131,10 @@ public final class Worker {
         return workStatus;
     }
 
+    public String visaType() {
+        return visaType;
+    }
+
     public LocalDate stayExpiryDate() {
         return stayExpiryDate;
     }
@@ -126,6 +145,14 @@ public final class Worker {
 
     public LocalDate contractEndDate() {
         return contractEndDate;
+    }
+
+    public LocalDate employmentPermitEndDate() {
+        return employmentPermitEndDate;
+    }
+
+    public LocalDate employmentActivityEndDate() {
+        return employmentActivityEndDate;
     }
 
     public Instant createdAt() {
