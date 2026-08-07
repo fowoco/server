@@ -235,6 +235,32 @@ class FileSecurityIntegrationTest {
     }
 
     @Test
+    void downloadExposesContentDispositionToAllowedBrowserOrigin() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        HttpResponse<String> uploadResponse = uploadFile(
+                token,
+                "근로계약서.pdf",
+                "application/pdf",
+                "browser download".getBytes(StandardCharsets.UTF_8),
+                "GENERAL"
+        );
+        UUID fileId = UUID.fromString(JsonPath.read(uploadResponse.body(), "$.file_id"));
+
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/files/" + fileId + "/content"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.ORIGIN, "http://localhost:5173")
+                .GET()
+                .build();
+        HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN))
+                .contains("http://localhost:5173");
+        assertThat(response.headers().firstValue(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS))
+                .hasValueSatisfying(value -> assertThat(value).containsIgnoringCase(HttpHeaders.CONTENT_DISPOSITION));
+    }
+
+    @Test
     void otherCompanyCannotDownloadFile() throws Exception {
         String companyAToken = accessToken(login(HR_A_EMAIL));
         HttpResponse<String> uploadResponse = uploadFile(
