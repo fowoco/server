@@ -96,15 +96,24 @@ class DemoWorkerSeedRunnerTest {
         assertThat(workerRepository.workers.values())
                 .allMatch(Worker::isCurrentlyEmployed);
         assertThat(workerRepository.workers.get(
-                UUID.fromString("92000000-0000-0000-0000-000000000001")
-        ).stayExpiryDate()).isEqualTo(LocalDate.of(2026, 8, 30));
-        assertThat(workerRepository.workers.get(
                 UUID.fromString("92000000-0000-0000-0000-000000000006")
         )).satisfies(worker -> {
             assertThat(worker.displayName()).isEqualTo("응웬반A");
             assertThat(worker.nationalityCode()).isEqualTo("VN");
             assertThat(worker.preferredLanguage()).isEqualTo("vi");
             assertThat(worker.stayExpiryDate()).isEqualTo(LocalDate.of(2026, 9, 14));
+            assertThat(worker.visaType()).isEqualTo("E-9");
+            assertThat(worker.employmentPermitEndDate()).isNull();
+            assertThat(worker.employmentActivityEndDate()).isNull();
+        });
+        assertThat(demoWorkers).allMatch(worker -> "E-9".equals(worker.visaType()));
+        assertThat(workerRepository.workers.get(
+                UUID.fromString("92000000-0000-0000-0000-000000000008")
+        )).satisfies(worker -> {
+            assertThat(worker.displayName()).isEqualTo("바트 에르덴");
+            assertThat(worker.stayExpiryDate()).isEqualTo(LocalDate.of(2026, 8, 21));
+            assertThat(worker.employmentPermitEndDate()).isEqualTo(LocalDate.of(2026, 9, 5));
+            assertThat(worker.employmentActivityEndDate()).isEqualTo(LocalDate.of(2026, 8, 21));
         });
         assertThat(workerRepository.workers.values())
                 .filteredOn(worker -> worker.companyId().equals(DEMO_COMPANY_ID))

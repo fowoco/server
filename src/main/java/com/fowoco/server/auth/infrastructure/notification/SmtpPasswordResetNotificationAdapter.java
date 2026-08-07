@@ -4,9 +4,11 @@ import com.fowoco.server.auth.application.port.PasswordResetNotificationPort;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.mail.autoconfigure.MailProperties;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Component
@@ -22,11 +24,34 @@ public final class SmtpPasswordResetNotificationAdapter implements PasswordReset
 
     public SmtpPasswordResetNotificationAdapter(
             JavaMailSender mailSender,
-            PasswordResetNotificationProperties properties
+            PasswordResetNotificationProperties properties,
+            MailProperties mailProperties
     ) {
         properties.validateForSmtp();
+        validateMailProperties(mailProperties);
         this.mailSender = mailSender;
         this.properties = properties;
+    }
+
+    private void validateMailProperties(MailProperties mailProperties) {
+        if (!StringUtils.hasText(mailProperties.getHost())) {
+            throw new IllegalStateException(
+                    "SPRING_MAIL_HOST must not be blank when the SMTP notification provider is enabled"
+            );
+        }
+        boolean authenticationRequired = Boolean.parseBoolean(
+                mailProperties.getProperties().getOrDefault("mail.smtp.auth", "false")
+        );
+        if (authenticationRequired && !StringUtils.hasText(mailProperties.getUsername())) {
+            throw new IllegalStateException(
+                    "SPRING_MAIL_USERNAME is required when SMTP authentication is enabled"
+            );
+        }
+        if (authenticationRequired && !StringUtils.hasText(mailProperties.getPassword())) {
+            throw new IllegalStateException(
+                    "SPRING_MAIL_PASSWORD is required when SMTP authentication is enabled"
+            );
+        }
     }
 
     @Override

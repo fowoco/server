@@ -10,20 +10,29 @@ public final class WorkerSearchQuery {
 
     private final WorkerStatus status;
     private final String language;
-    private final LocalDate expiryBefore;
+    private final LocalDate stayExpiryBefore;
+    private final LocalDate contractEndBefore;
+    private final LocalDate employmentPermitEndBefore;
+    private final LocalDate employmentActivityEndBefore;
     private final int page;
     private final int size;
 
     public WorkerSearchQuery(
             WorkerStatus status,
             String language,
-            LocalDate expiryBefore,
+            LocalDate stayExpiryBefore,
+            LocalDate contractEndBefore,
+            LocalDate employmentPermitEndBefore,
+            LocalDate employmentActivityEndBefore,
             Integer page,
             Integer size
     ) {
         this.status = status;
         this.language = language;
-        this.expiryBefore = expiryBefore;
+        this.stayExpiryBefore = stayExpiryBefore;
+        this.contractEndBefore = contractEndBefore;
+        this.employmentPermitEndBefore = employmentPermitEndBefore;
+        this.employmentActivityEndBefore = employmentActivityEndBefore;
         this.page = page == null ? 0 : page;
         this.size = size == null ? 20 : size;
         if (this.page < 0) {
@@ -42,8 +51,20 @@ public final class WorkerSearchQuery {
         return language;
     }
 
-    public LocalDate expiryBefore() {
-        return expiryBefore;
+    public LocalDate stayExpiryBefore() {
+        return stayExpiryBefore;
+    }
+
+    public LocalDate contractEndBefore() {
+        return contractEndBefore;
+    }
+
+    public LocalDate employmentPermitEndBefore() {
+        return employmentPermitEndBefore;
+    }
+
+    public LocalDate employmentActivityEndBefore() {
+        return employmentActivityEndBefore;
     }
 
     public int page() {
