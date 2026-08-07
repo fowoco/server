@@ -70,4 +70,15 @@ class DefaultWorkerImportFileParserTest {
                         assertThat(exception.errorCode()).isEqualTo(WorkerImportErrorCode.IMPORT_FORMULA_NOT_ALLOWED)
                 );
     }
+
+    @Test
+    void acceptsExactlyOneThousandDataRows() {
+        StringBuilder csv = new StringBuilder("이름,국적\n");
+        for (int row = 1; row <= 1_000; row++) {
+            csv.append("근로자").append(row).append(",VN\n");
+        }
+
+        assertThat(parser.parse("workers.csv", csv.toString().getBytes(StandardCharsets.UTF_8)).rows())
+                .hasSize(1_000);
+    }
 }

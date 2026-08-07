@@ -191,6 +191,39 @@ class WorkerImportApiIntegrationTest {
         )).isZero();
     }
 
+    @Test
+    void uploadRejectsEmptyFileAndRowsBeyondTheLimit() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> empty = upload(
+                token,
+                "worker-import-empty-0001",
+                "empty.csv",
+                "이름,국적\n"
+        );
+        assertThat(empty.statusCode()).as(empty.body()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(empty.body(), "$.code")).isEqualTo("IMPORT_FILE_EMPTY");
+
+        StringBuilder tooManyRows = new StringBuilder("이름,국적\n");
+        for (int row = 1; row <= 1_001; row++) {
+            tooManyRows.append("근로자").append(row).append(",VN\n");
+        }
+        HttpResponse<String> overLimit = upload(
+                token,
+                "worker-import-limit-0001",
+                "too-many-workers.csv",
+                tooManyRows.toString()
+        );
+        assertThat(overLimit.statusCode()).as(overLimit.body()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(overLimit.body(), "$.code"))
+                .isEqualTo("IMPORT_FILE_LIMIT_EXCEEDED");
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM worker_import_job", Integer.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE company_id = ?", Integer.class, COMPANY_A
+        )).isZero();
+    }
+
     private HttpResponse<String> upload(String token, String key, String fileName, String csv) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(("--" + BOUNDARY + "\r\n").getBytes(StandardCharsets.UTF_8));
