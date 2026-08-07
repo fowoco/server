@@ -47,6 +47,10 @@ public enum DocumentErrorCode implements ApiErrorCode {
     DOCUMENT_OCR_NOT_REVIEWABLE(
             HttpStatus.CONFLICT,
             "현재 상태에서는 OCR 결과를 검토할 수 없습니다."
+    ),
+    DOCUMENT_OCR_CORRECTION_INVALID(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "OCR 수정 필드가 문서 유형 또는 입력 규칙에 맞지 않습니다."
     );
 
     private final HttpStatus status;

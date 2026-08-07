@@ -16,6 +16,8 @@ CREATE TABLE document_ocr_run (
     status VARCHAR(30) NOT NULL,
     result_ciphertext TEXT,
     result_key_version VARCHAR(60),
+    corrected_fields_ciphertext TEXT,
+    corrected_fields_key_version VARCHAR(60),
     last_error_code VARCHAR(80),
     reviewed_by UUID,
     review_reason VARCHAR(300),
@@ -62,6 +64,11 @@ CREATE TABLE document_ocr_run (
         CHECK (
             (result_ciphertext IS NULL AND result_key_version IS NULL)
             OR (result_ciphertext IS NOT NULL AND result_key_version IS NOT NULL)
+        ),
+    CONSTRAINT ck_document_ocr_run_correction_pair
+        CHECK (
+            (corrected_fields_ciphertext IS NULL AND corrected_fields_key_version IS NULL)
+            OR (corrected_fields_ciphertext IS NOT NULL AND corrected_fields_key_version IS NOT NULL)
         ),
     CONSTRAINT ck_document_ocr_run_review_pair
         CHECK (
