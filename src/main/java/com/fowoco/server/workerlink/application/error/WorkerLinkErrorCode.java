@@ -9,6 +9,10 @@ public enum WorkerLinkErrorCode implements ApiErrorCode {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "승인된 업무카드에서만 근로자 링크를 발급할 수 있습니다."
     ),
+    TASK_WORKER_TARGET_REQUIRED(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "근로자 대상 업무카드에서만 근로자 링크를 발급할 수 있습니다."
+    ),
     WORKER_LINK_ISSUANCE_CONFLICT(
             HttpStatus.CONFLICT,
             "이미 유효한 근로자 링크가 있습니다. rotateExisting=true로 재발급해 주세요."

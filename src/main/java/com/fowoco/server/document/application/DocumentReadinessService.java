@@ -55,10 +55,15 @@ public class DocumentReadinessService {
         Set<DocumentType> requiredTypes = requiredDocumentTypes(taskId, companyId);
 
         LocalDate today = LocalDate.now(clock);
-        WorkerDocumentSearchQuery allDocumentsQuery = new WorkerDocumentSearchQuery(
-                task.workerId(), null, null, null, null, 0, 100
-        );
-        List<WorkerDocument> workerDocuments = workerDocumentRepository.findPage(companyId, allDocumentsQuery);
+        List<WorkerDocument> workerDocuments;
+        if (task.workerId() == null) {
+            workerDocuments = List.of();
+        } else {
+            WorkerDocumentSearchQuery allDocumentsQuery = new WorkerDocumentSearchQuery(
+                    task.workerId(), null, null, null, null, 0, 100
+            );
+            workerDocuments = workerDocumentRepository.findPage(companyId, allDocumentsQuery);
+        }
 
         Set<DocumentType> available = EnumSet.noneOf(DocumentType.class);
         Set<DocumentType> expired = EnumSet.noneOf(DocumentType.class);
