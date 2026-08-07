@@ -74,6 +74,21 @@ app:
     max-concurrent-calls: ${AI_RUNTIME_MAX_CONCURRENT_CALLS:8}
     circuit-breaker-failure-threshold: ${AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
     circuit-breaker-open-duration: ${AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION:30s}
+  ai-ocr:
+    enabled: ${AI_OCR_ENABLED:false}
+    endpoint: ${AI_OCR_ENDPOINT:http://127.0.0.1:8000/internal/v1/ocr/worker-documents}
+    service-credential: ${AI_OCR_SERVICE_CREDENTIAL:}
+    connect-timeout: ${AI_OCR_CONNECT_TIMEOUT:2s}
+    overall-timeout: ${AI_OCR_OVERALL_TIMEOUT:20s}
+    max-response-bytes: ${AI_OCR_MAX_RESPONSE_BYTES:1048576}
+    max-concurrent-calls: ${AI_OCR_MAX_CONCURRENT_CALLS:4}
+    circuit-breaker-failure-threshold: ${AI_OCR_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
+    circuit-breaker-open-duration: ${AI_OCR_CIRCUIT_BREAKER_OPEN_DURATION:30s}
+  document:
+    ocr:
+      enabled: ${DOCUMENT_OCR_ENABLED:false}
+      encryption-key-base64: ${OCR_RESULT_ENCRYPTION_KEY_BASE64:}
+      key-version: ${OCR_RESULT_KEY_VERSION:local-v1}
   ai-run:
     sse:
       timeout: ${AI_RUN_SSE_TIMEOUT:5m}
