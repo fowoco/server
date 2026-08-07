@@ -244,6 +244,24 @@ class OutboxManualRetryApiIntegrationTest {
     }
 
     @Test
+    void idempotencyKeyHeaderIsRequiredWithoutChangingEvent() throws Exception {
+        String token = login(ADMIN_A_EMAIL);
+
+        HttpResponse<String> response = retryWithoutIdempotencyKey(
+                EVENT_A,
+                token,
+                validBody(0)
+        );
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(JsonPath.<String>read(response.body(), "$.code")).isEqualTo("INVALID_REQUEST");
+        assertThat(status(EVENT_A)).isEqualTo("REVIEW_REQUIRED");
+        assertThat(attemptCount(EVENT_A)).isEqualTo(8);
+        assertThat(count("outbox_manual_retry")).isZero();
+        assertThat(count("audit_event")).isZero();
+    }
+
+    @Test
     void concurrentRequestsAllowOnlyOneRetry() throws Exception {
         String token = login(ADMIN_A_EMAIL);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -307,6 +325,18 @@ class OutboxManualRetryApiIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .header(HttpHeaders.CONTENT_TYPE, "application/json")
                         .header("Idempotency-Key", key)
+                        .POST(HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString()
+        );
+    }
+
+    private HttpResponse<String> retryWithoutIdempotencyKey(UUID eventId, String token, String body)
+            throws Exception {
+        return httpClient.send(
+                HttpRequest.newBuilder(uri("/api/v1/admin/outbox-events/" + eventId + "/retry"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header(HttpHeaders.CONTENT_TYPE, "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build(),
                 HttpResponse.BodyHandlers.ofString()
