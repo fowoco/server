@@ -10,7 +10,9 @@ import com.fowoco.server.aiintegration.application.ocr.AiOcrStatus;
 import java.math.BigDecimal;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.stereotype.Component;
 
+@Component
 public final class AiOcrContractValidator {
 
     public static final int MAX_FILE_BYTES = 20 * 1024 * 1024;
