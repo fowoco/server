@@ -158,6 +158,46 @@ class DashboardSecurityIntegrationTest {
     }
 
     @Test
+    void upcoming7DaysIncludesWorkerWithNearExpiry() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        registerWorkerWithStayExpiry(accessToken, "체류만료임박근로자", "2026-08-12");
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?date=2026-08-08", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        java.util.List<Object> upcoming = JsonPath.read(response.body(), "$.upcoming_7_days");
+        assertThat(upcoming).isNotEmpty();
+        List<String> categories = JsonPath.read(response.body(), "$.upcoming_7_days[*].category");
+        assertThat(categories).contains("STAY_EXPIRY");
+    }
+
+    @Test
+    void upcoming7DaysExcludesWorkerWithFarExpiry() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        registerWorkerWithStayExpiry(accessToken, "체류만료여유근로자", "2026-12-31");
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?date=2026-08-08", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> names = JsonPath.read(response.body(), "$.upcoming_7_days[*].display_name");
+        assertThat(names).doesNotContain("체류만료여유근로자");
+    }
+
+    private String registerWorkerWithStayExpiry(String accessToken, String displayName, String stayExpiryDate)
+            throws Exception {
+        String body = """
+                {"display_name": "%s", "stay_expiry_date": "%s"}
+                """.formatted(displayName, stayExpiryDate);
+        HttpResponse<String> response = postJson("/api/v1/workers", body, accessToken);
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
+        return JsonPath.read(response.body(), "$.worker_id");
+    }
+
+    @Test
     void invalidTimezoneReturnsClientError() throws Exception {
         String accessToken = accessToken(login(HR_A_EMAIL));
 
