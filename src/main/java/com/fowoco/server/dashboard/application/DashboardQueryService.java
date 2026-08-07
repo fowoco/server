@@ -1,15 +1,19 @@
 package com.fowoco.server.dashboard.application;
 
 import com.fowoco.server.auth.application.ActorContext;
+import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.dashboard.api.DashboardSummaryCountsResponse;
 import com.fowoco.server.dashboard.api.DashboardTaskSummaryResponse;
 import com.fowoco.server.dashboard.api.DashboardTodayResponse;
+import com.fowoco.server.dashboard.application.error.DashboardErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskStatus;
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -38,7 +42,7 @@ public class DashboardQueryService {
     public DashboardTodayResponse today(ActorContext actor, LocalDate date, String timezone) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
         UUID companyId = actor.companyId();
-        Clock effectiveClock = timezone != null ? clock.withZone(java.time.ZoneId.of(timezone)) : clock;
+        Clock effectiveClock = timezone != null ? clock.withZone(parseTimezone(timezone)) : clock;
         LocalDate targetDate = date != null ? date : LocalDate.now(effectiveClock);
 
         long pendingApproval = taskRepository.countByCompanyIdAndStatus(companyId, TaskStatus.READY_FOR_REVIEW);
@@ -56,5 +60,13 @@ public class DashboardQueryService {
                 .toList();
 
         return new DashboardTodayResponse(summaryCounts, priorityTasks, pendingApproval, workerResponse);
+    }
+
+    private ZoneId parseTimezone(String timezone) {
+        try {
+            return ZoneId.of(timezone);
+        } catch (DateTimeException exception) {
+            throw new ApiException(DashboardErrorCode.INVALID_TIMEZONE);
+        }
     }
 }

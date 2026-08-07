@@ -8,6 +8,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.UUID;
+import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -98,13 +99,18 @@ class DashboardSecurityIntegrationTest {
     void countsMatchActualTaskStatuses() throws Exception {
         String accessToken = accessToken(login(HR_A_EMAIL));
         String workerId = registerWorker(accessToken, "대시보드테스트근로자");
-        createTask(accessToken, workerId, "READY_FOR_REVIEW_후보1");
+        String taskId1 = createTask(accessToken, workerId, "READY_FOR_REVIEW_후보1");
         createTask(accessToken, workerId, "READY_FOR_REVIEW_후보2");
+        requestReview(accessToken, taskId1, workerId);
 
         HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.priority_tasks")).hasSize(2);
+        assertThat(JsonPath.<Number>read(response.body(), "$.summary_counts.pending_approval").longValue())
+                .isEqualTo(1);
+        assertThat(JsonPath.<Number>read(response.body(), "$.approval_count").longValue())
+                .isEqualTo(1);
     }
 
     @Test
@@ -140,6 +146,28 @@ class DashboardSecurityIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
     }
 
+    @Test
+    void timezoneParameterIsAccepted() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?timezone=Asia/Seoul", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void invalidTimezoneReturnsClientError() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?timezone=Not/AValidZone", accessToken
+        );
+
+        assertThat(response.statusCode()).isNotEqualTo(500);
+    }
+
     private String registerWorker(String accessToken, String displayName) throws Exception {
         String body = """
                 {"display_name": "%s"}
@@ -164,6 +192,37 @@ class DashboardSecurityIntegrationTest {
         HttpResponse<String> response = postJson("/api/v1/tasks", body, accessToken);
         assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
         return JsonPath.read(response.body(), "$.task_id");
+    }
+
+    private void requestReview(String accessToken, String taskId, String workerId) throws Exception {
+        HttpResponse<String> taskResponse = authorizedGet("/api/v1/tasks/" + taskId, accessToken);
+        List<String> checklistIds = JsonPath.read(taskResponse.body(), "$.checklist_items[*].checklist_item_id");
+        for (String checklistId : checklistIds) {
+            HttpResponse<String> checked = sendJson(
+                    "/api/v1/tasks/" + taskId + "/checklist-items/" + checklistId,
+                    """
+                    {"completed":true,"expected_version":0,"expected_task_version":0}
+                    """,
+                    accessToken,
+                    "PATCH"
+            );
+            assertThat(checked.statusCode()).as("body: %s", checked.body()).isEqualTo(200);
+        }
+        HttpResponse<String> approvalRequest = sendJson(
+                "/api/v1/tasks/" + taskId + "/approval-requests",
+                """
+                {
+                  "expected_version":0,
+                  "ai_snapshot":null,
+                  "hr_snapshot":{"worker_id":"%s"},
+                  "changed_fields":[],
+                  "source_versions":{"workflow_catalog_version":"0.2.0"}
+                }
+                """.formatted(workerId),
+                accessToken,
+                "POST"
+        );
+        assertThat(approvalRequest.statusCode()).as("body: %s", approvalRequest.body()).isEqualTo(201);
     }
 
     private void insertCompany(UUID companyId, String name) {
@@ -215,9 +274,14 @@ class DashboardSecurityIntegrationTest {
     }
 
     private HttpResponse<String> postJson(String path, String body, String accessToken) throws Exception {
+        return sendJson(path, body, accessToken, "POST");
+    }
+
+    private HttpResponse<String> sendJson(String path, String body, String accessToken, String method)
+            throws Exception {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri(path))
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body));
+                .method(method, HttpRequest.BodyPublishers.ofString(body));
         if (accessToken != null) {
             requestBuilder.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
         }
