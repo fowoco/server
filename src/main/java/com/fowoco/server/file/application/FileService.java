@@ -136,6 +136,26 @@ public class FileService {
         return storedFile;
     }
 
+    @Transactional
+    public FileDownloadResult download(UUID storedFileId, ActorContext actor, RequestMetadata metadata) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+        StoredFile storedFile = storedFileRepository.findByIdAndCompanyId(storedFileId, actor.companyId())
+                .orElseThrow(() -> new ApiException(FileErrorCode.FILE_NOT_FOUND));
+        java.io.InputStream content = fileStorage.open(storedFile.storageKey())
+                .orElseThrow(() -> new ApiException(FileErrorCode.FILE_NOT_FOUND));
+
+        appendAudit(
+                actor,
+                AuditAction.FILE_DOWNLOADED,
+                AuditTargetType.FILE,
+                storedFileId,
+                "파일 다운로드",
+                metadata,
+                clock.instant()
+        );
+        return new FileDownloadResult(storedFile, content);
+    }
+
     private void appendAudit(
             ActorContext actor,
             AuditAction action,
