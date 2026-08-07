@@ -1,5 +1,7 @@
 package com.fowoco.server.workerimport.api;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fowoco.server.workerimport.application.WorkerImportView;
 import com.fowoco.server.workerimport.domain.WorkerImportStatus;
 import java.time.Instant;
@@ -8,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record WorkerImportResponse(
         UUID importId,
         UUID sourceFileId,

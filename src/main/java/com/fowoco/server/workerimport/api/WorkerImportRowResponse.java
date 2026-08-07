@@ -1,5 +1,7 @@
 package com.fowoco.server.workerimport.api;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fowoco.server.workerimport.application.ImportValidationError;
 import com.fowoco.server.workerimport.application.WorkerImportRowRecord;
 import com.fowoco.server.workerimport.domain.WorkerImportRowStatus;
@@ -7,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record WorkerImportRowResponse(
         int rowNumber,
         Map<String, String> sourceValues,

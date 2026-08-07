@@ -8,7 +8,10 @@ import com.fowoco.server.workerimport.application.WorkerImportRowPatch;
 import com.fowoco.server.workerimport.application.WorkerImportService;
 import com.fowoco.server.workerimport.application.error.WorkerImportErrorCode;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,6 +43,14 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/v1/imports")
 @SecurityRequirement(name = "bearerAuth")
+@ApiResponses({
+        @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+        @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+        @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+        @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+        @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+        @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+})
 @Validated
 public class WorkerImportController {
 
@@ -52,6 +63,15 @@ public class WorkerImportController {
     }
 
     @Operation(summary = "근로자 명단 가져오기 생성", description = "CSV/XLSX를 파싱해 검토 작업을 만듭니다. 아직 근로자는 등록하지 않습니다.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "가져오기 작업 생성",
+                    content = @Content(schema = @Schema(implementation = WorkerImportResponse.class))
+            ),
+            @ApiResponse(responseCode = "413", description = "파일 크기 제한 초과"),
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType")
+    })
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
     public ResponseEntity<WorkerImportResponse> create(
