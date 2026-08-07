@@ -3,6 +3,7 @@ package com.fowoco.server.task.infrastructure.persistence;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskStatus;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
@@ -65,6 +66,11 @@ public class JpaTaskRepository implements TaskRepository {
     @Override
     public long countByCompanyIdAndStatus(UUID companyId, TaskStatus status) {
         return repository.countByCompanyIdAndStatus(companyId, status);
+    }
+
+    @Override
+    public long countOpenTasksDueOn(UUID companyId, LocalDate dueDate) {
+        return repository.countOpenTasksDueOn(companyId, dueDate);
     }
 
     @Override
