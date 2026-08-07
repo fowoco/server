@@ -83,8 +83,9 @@ docker compose -f compose.demo.yml up --build server
 
 두 번째 기동도 성공하고 응웬반A Worker
 `92000000-0000-0000-0000-000000000006`가 한 건 유지되며, 응웬반A의 Golden Flow
-Case·Task·WorkerDocument는 0건이어야 합니다. 다른 Showcase Seed의 수량과 고정 ID도 첫
-기동과 같아야 합니다.
+Case·Task는 0건이어야 합니다. WorkerDocument는 Task·StoredFile 연결이 없는
+`PASSPORT_COPY/VERIFIED` 1건과 `ARC/MISSING` 1건만 유지되어야 합니다. 다른 Showcase
+Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
 
 종료 시 `docker compose -f compose.demo.yml down`을 사용합니다. DB 데이터를 지우려는
 경우에만 정확한 Compose project와 전용 volume인지 확인한 뒤 별도로 volume 삭제를

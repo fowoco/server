@@ -11,7 +11,7 @@ API가 지원하는 fixture만 나열한다.
 
 | 구분 | 목적 | 응웬반A 포함 방식 |
 | --- | --- | --- |
-| Golden Flow 시작 데이터 | HR 자연어 요청부터 실제 흐름 시연 | Worker와 선행 참조만 존재 |
+| Golden Flow 시작 데이터 | HR 자연어 요청부터 실제 흐름 시연 | Worker와 최소 문서 상태·선행 참조만 존재 |
 | Showcase Seed | 목록·업무함·문서함의 상태 다양성과 화면 밀도 | 응웬반A의 진행 데이터는 포함하지 않음 |
 
 다른 27명 근로자의 기존 Showcase WorkerDocument, Case, Task, Approval, Submission,
@@ -24,6 +24,8 @@ Evidence, Audit와 고정 ID는 유지한다.
 | Company | `90000000-0000-0000-0000-000000000001` | `FOWOCO Demo Company`, `ACTIVE` | 인증·tenant 범위 |
 | HR 사용자 | `demo.hr01@example.com` | 같은 Company의 `HR` | 로그인 및 권한 기반 API |
 | Worker | `92000000-0000-0000-0000-000000000006` | 응웬반A, `VN`, `vi`, `ACTIVE`, 체류 만료 `D+45` | `GET /api/v1/workers`, `GET /api/v1/workers/{workerId}` |
+| 여권 사본 | `95000000-0000-0000-0000-000000000016` | `PASSPORT_COPY`, `VERIFIED`, 만료 `D+365` | 문서 API·AI Context |
+| 외국인등록증 사본 | `95000000-0000-0000-0000-000000000017` | `ARC`, `MISSING`, 만료일 없음 | 문서 API·AI Context |
 | Workflow Catalog | version `0.2.0` | classpath projection 사용 가능 | Workflow 및 AI 요청 흐름 |
 
 `D+45`는 현재 Worker 모델에 저장되는 상대 날짜 예시다. 정확한 E-9 취업활동기간이나
@@ -32,14 +34,19 @@ Evidence, Audit와 고정 ID는 유지한다.
 별도 Workplace, 연락처, 활성 Agent Version 또는 활성 Prompt Version Seed는 없다.
 Agent·Prompt 정보는 실제 실행 후 `AiAttempt` 메타데이터로 기록된다.
 
-## 응웬반A에게 사전 생성하지 않는 fixture
+두 문서는 Task나 StoredFile에 연결하지 않는다. `VERIFIED` 여권은 검증 상태와 유효한
+만료일만 나타내며 OCR 결과나 여권번호가 있다는 뜻이 아니다. `MISSING` ARC row는 필요한
+문서가 현재 누락된 상태임을 row 부재와 구분한다. Server는 AI Runtime이 요청한 경우에만
+이 네 가지 문서 상태·만료일 필드를 같은 tenant 범위의 Context로 제공한다.
+
+## 응웬반A의 Golden Flow 경계
 
 | 영역 | 시작 상태 |
 | --- | --- |
 | AI 실행 | `AiRun`, `AiAttempt`, Question, Candidate, Candidate Decision 0건 |
 | Case·Task | 응웬반A Case 0건, Task 0건 |
 | Task 후속 상태 | Checklist, Approval, Transition, Draft, 완료 상태 0건 |
-| 근로자 문서 | WorkerDocument 0건; 여권·ARC·계약서·OCR fixture 없음 |
+| 근로자 문서 | 여권·ARC 상태 2건; 계약서·StoredFile·OCR fixture 없음 |
 | 근로자 통신 | WorkerLink, WorkerResponse 0건 |
 | 제출·증빙 | ExternalSubmission, Evidence 0건 |
 | Activity·Audit | 대표 흐름 관련 Event 0건 |
@@ -56,7 +63,7 @@ Worker Link와 Worker Response API가 구현되어 있어도 Seed는 응웬반A�
 | --- | --- |
 | Case | `94100000-0000-0000-0000-000000000006` |
 | Task | `94000000-0000-0000-0000-000000000006` ~ `...0008` |
-| WorkerDocument | `95000000-0000-0000-0000-000000000016` ~ `...0018` |
+| WorkerDocument | `95000000-0000-0000-0000-000000000018` |
 | Checklist | `94200000-0000-0000-0000-000000000015` ~ `...0022` |
 | Approval | `94300000-0000-0000-0000-000000000002` |
 | Transition | `94400000-0000-0000-0000-000000000013` ~ `...0016` |
@@ -73,7 +80,7 @@ Worker Link와 Worker Response API가 구현되어 있어도 Seed는 응웬반A�
 | Worker | 28 | 응웬반A 1명과 Showcase 근로자 27명 |
 | Case | 21 | 다른 근로자의 Showcase Case |
 | Task | 21 | 체류연장 9, 재계약 7, 고용기간 연장 5 |
-| WorkerDocument | 81 | 여권 25, ARC 27, 계약서 21, 허가서 8 |
+| WorkerDocument | 83 | 여권 26, ARC 28, 계약서 21, 허가서 8 |
 | Checklist | 60 | Showcase Task 연결 |
 | Approval | 12 | 대기 3, 승인 7, 반려 1, 무효 1 |
 | Transition | 48 | Showcase 상태 전이 |
@@ -83,8 +90,9 @@ Worker Link와 Worker Response API가 구현되어 있어도 Seed는 응웬반A�
 | Audit Event | 88 | HR 77, AI 2, 시스템 6, Worker Link 3 |
 | StoredFile | 3 | 합성 PDF |
 
-Catalog는 구버전 전체 목록의 순번을 유지한 채 응웬반A 관련 closure만 제외한다. 따라서
-제외 지점 뒤에 있는 다른 Worker의 파생 ID와 연결 관계는 바뀌지 않는다.
+Catalog는 구버전 전체 목록의 순번을 유지한 채 응웬반A의 여권·ARC는 Task 연결을 제거해
+시작 Context로 남기고, 계약서와 나머지 진행 closure만 제외한다. 따라서 제외 지점 뒤에
+있는 다른 Worker의 파생 ID와 연결 관계는 바뀌지 않는다.
 
 ## Showcase 상태 분포
 
@@ -95,7 +103,7 @@ Catalog는 구버전 전체 목록의 순번을 유지한 채 응웬반A 관련 
 | 근로자 대기 | `WAITING_WORKER` 3건과 문서 요청 Draft·Audit 근사 |
 | 외부 처리 대기 | `WAITING_EXTERNAL` 3건 |
 | 완료·취소 | `COMPLETED` 5건, `CANCELLED` 1건과 관련 Evidence·Audit |
-| 문서 검토 | `VERIFIED` 46, `SUBMITTED` 20, `MISSING` 15 |
+| 문서 검토 | `VERIFIED` 47, `SUBMITTED` 20, `MISSING` 16 |
 
 Dashboard 수치는 별도 Seed Domain이 아니라 조회 결과를 클라이언트가 조합한다. Audit의
 `WORKER_LINK` actor 예시는 Showcase 활동 표현이며 실제 Worker Link token row를 Seed한

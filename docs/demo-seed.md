@@ -79,6 +79,8 @@ Demo Company에는 `ADMIN` 2명, `HR` 12명, `VIEWER` 6명이 있고 Test Compan
 | 국적·기본 언어 | `VN` · `vi` |
 | 근로 상태 | `ACTIVE` |
 | 현재 상대 날짜 | 체류 만료 `D+45`, 계약 시작 `D-1년`, 계약 종료 `D+180` |
+| 여권 사본 | `PASSPORT_COPY`, `VERIFIED`, 만료 `D+365` |
+| 외국인등록증 사본 | `ARC`, `MISSING`, 만료일 없음 |
 | Workflow Catalog | classpath projection, version `0.2.0` |
 
 상대 날짜는 Worker가 처음 생성되는 날을 기준으로 저장되며 재실행 시 기존 값을
@@ -95,15 +97,25 @@ Agent·Prompt 버전은 실제 AI 실행 후 `AiAttempt` 메타데이터로 기�
 
 - Demo Company와 HR 사용자·현재 역할
 - 응웬반A Worker 기본정보
+- 응웬반A의 검증된 유효 여권 사본 상태와 외국인등록증 사본 누락 상태
 - 현재 구현된 Workflow Catalog와 Workflow Version
 - 현재 구현된 Task Type, 공통 코드와 상태값
+
+응웬반A의 두 `WorkerDocument`는 Golden Flow 판단에 필요한 최소 메타데이터다. 여권은
+`VERIFIED`이며 만료일이 현재보다 미래이고, ARC는 필요한 문서지만 현재 누락된 상태를
+명시하는 `MISSING`이다. 두 문서 모두 `task_id`와 `file_id`가 없으며 여권번호,
+외국인등록번호, OCR 결과와 신분증 이미지를 포함하지 않는다.
+
+AI Runtime이 해당 필드를 요청하면 Server는 같은 `company_id` 범위에서 문서를 조회해
+`passport_copy_status`, `passport_copy_expiry_date`, `arc_status`, `arc_expiry_date`를
+구조화된 Context로 제공한다. Runtime은 이 Server 소유 값을 다른 값으로 변경할 수 없다.
 
 ### 시연 전에 존재하지 않는 데이터
 
 - 응웬반A 요청의 `AiRun`, `AiAttempt`, Question, Candidate, Candidate Decision
 - 응웬반A의 대표 Case와 Task
 - 해당 Task의 Checklist, Approval, Document Request Draft
-- 응웬반A의 `WorkerDocument`, 업로드 파일, OCR 결과
+- 응웬반A의 계약서 `WorkerDocument`, 업로드 파일, OCR 결과
 - `WorkerLink`, `WorkerResponse`
 - `ExternalSubmission`, `Evidence`
 - 대표 흐름의 Activity, Audit Event와 완료 상태
@@ -125,7 +137,7 @@ Agent·Prompt 버전은 실제 AI 실행 후 `AiAttempt` 메타데이터로 기�
 | 근로자 | 28 | `ACTIVE` 25, `ON_LEAVE` 3 |
 | Case | 21 | Showcase Task별 Case |
 | Task | 21 | 체류연장 9, 재계약 7, 고용기간 연장 5 |
-| 근로자 문서 | 81 | 여권 25, ARC 27, 계약서 21, 허가서 8 |
+| 근로자 문서 | 83 | 여권 26, ARC 28, 계약서 21, 허가서 8 |
 | 체크리스트 항목 | 60 | Showcase Task에 연결 |
 | 승인 요청 | 12 | `PENDING` 3, `APPROVED` 7, `REJECTED` 1, `INVALIDATED` 1 |
 | 상태 전이 이력 | 48 | Showcase Task 상태 이력 |
@@ -139,8 +151,8 @@ Task 상태는 `DRAFT` 2, `NEEDS_INFO` 2, `READY_FOR_REVIEW` 3,
 `APPROVED` 2, `WAITING_WORKER` 3, `WAITING_EXTERNAL` 3,
 `COMPLETED` 5, `CANCELLED` 1이다.
 
-문서 상태는 `VERIFIED` 46, `SUBMITTED` 20, `MISSING` 15다. 응웬반A는 이
-81건에 포함되지 않는다.
+문서 상태는 `VERIFIED` 47, `SUBMITTED` 20, `MISSING` 16이다. 응웬반A의 여권과
+ARC 문서 2건이 이 83건에 포함된다.
 
 ### FOWOCO Test Company
 
@@ -235,12 +247,17 @@ SELECT COUNT(*) FROM task
 WHERE worker_id = '92000000-0000-0000-0000-000000000006';
 SELECT COUNT(*) FROM worker_document
 WHERE worker_id = '92000000-0000-0000-0000-000000000006';
+
+SELECT document_type, submission_status, expiry_date, task_id, file_id
+FROM worker_document
+WHERE worker_id = '92000000-0000-0000-0000-000000000006'
+ORDER BY document_type;
 ```
 
 기대 로그의 핵심 수량은 다음과 같다.
 
 ```text
-demo_task_count=21 demo_stored_file_count=3 demo_document_count=81 demo_audit_count=88
+demo_task_count=21 demo_stored_file_count=3 demo_document_count=83 demo_audit_count=88
 test_task_count=3 test_document_count=8 test_audit_count=8
 ```
 
