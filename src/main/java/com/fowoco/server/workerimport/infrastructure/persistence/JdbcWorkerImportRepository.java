@@ -1,8 +1,10 @@
 package com.fowoco.server.workerimport.infrastructure.persistence;
 
 import com.fowoco.server.workerimport.application.ImportValidationError;
+import com.fowoco.server.workerimport.application.WorkerImportCommitRecord;
 import com.fowoco.server.workerimport.application.WorkerImportJobRecord;
 import com.fowoco.server.workerimport.application.WorkerImportRowRecord;
+import com.fowoco.server.workerimport.application.WorkerImportView;
 import com.fowoco.server.workerimport.application.port.WorkerImportRepository;
 import com.fowoco.server.workerimport.domain.WorkerImportField;
 import com.fowoco.server.workerimport.domain.WorkerImportRowStatus;
@@ -28,8 +30,7 @@ public class JdbcWorkerImportRepository implements WorkerImportRepository {
     private static final String JOB_COLUMNS = """
             import_id, company_id, source_file_id, created_by, status,
             source_headers_json, mapping_json, create_idempotency_key_hash,
-            create_request_hash, last_commit_idempotency_key_hash,
-            last_commit_request_hash, total_rows, valid_rows, invalid_rows,
+            create_request_hash, total_rows, valid_rows, invalid_rows,
             excluded_rows, committed_rows, source_file_expires_at,
             created_at, updated_at, version
             """;
@@ -104,6 +105,43 @@ public class JdbcWorkerImportRepository implements WorkerImportRepository {
     }
 
     @Override
+    public Optional<WorkerImportCommitRecord> findCommitByKey(UUID companyId, UUID importId, String keyHash) {
+        return jdbcTemplate.query(
+                """
+                SELECT company_id, import_id, idempotency_key_hash, request_hash,
+                       response_snapshot_json, created_at
+                  FROM worker_import_commit_idempotency
+                 WHERE company_id = ? AND import_id = ? AND idempotency_key_hash = ?
+                """,
+                (resultSet, ignored) -> new WorkerImportCommitRecord(
+                        uuid(resultSet, "company_id"),
+                        uuid(resultSet, "import_id"),
+                        resultSet.getString("idempotency_key_hash"),
+                        resultSet.getString("request_hash"),
+                        decode(resultSet.getString("response_snapshot_json"), WorkerImportView.class),
+                        instant(resultSet, "created_at")
+                ),
+                companyId,
+                importId,
+                keyHash
+        ).stream().findFirst();
+    }
+
+    @Override
+    public void insertCommit(WorkerImportCommitRecord record) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_import_commit_idempotency (
+                    company_id, import_id, idempotency_key_hash, request_hash,
+                    response_snapshot_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                record.companyId(), record.importId(), record.idempotencyKeyHash(), record.requestHash(),
+                encode(record.responseSnapshot()), timestamp(record.createdAt())
+        );
+    }
+
+    @Override
     public List<WorkerImportRowRecord> findRows(UUID companyId, UUID importId, int offset, int limit) {
         return jdbcTemplate.query(
                 "SELECT " + ROW_COLUMNS
@@ -150,8 +188,6 @@ public class JdbcWorkerImportRepository implements WorkerImportRepository {
             int invalidRows,
             int excludedRows,
             int committedRows,
-            String commitKeyHash,
-            String commitRequestHash,
             Instant updatedAt
     ) {
         return jdbcTemplate.update(
@@ -159,14 +195,11 @@ public class JdbcWorkerImportRepository implements WorkerImportRepository {
                 UPDATE worker_import_job
                    SET status = ?, mapping_json = ?, valid_rows = ?, invalid_rows = ?,
                        excluded_rows = ?, committed_rows = ?,
-                       last_commit_idempotency_key_hash = COALESCE(?, last_commit_idempotency_key_hash),
-                       last_commit_request_hash = COALESCE(?, last_commit_request_hash),
                        updated_at = ?, version = version + 1
                  WHERE company_id = ? AND import_id = ? AND version = ?
                 """,
                 status.name(), encodeMappings(mappings), validRows, invalidRows,
-                excludedRows, committedRows, commitKeyHash, commitRequestHash,
-                timestamp(updatedAt), companyId, importId, expectedVersion
+                excludedRows, committedRows, timestamp(updatedAt), companyId, importId, expectedVersion
         ) == 1;
     }
 
@@ -209,8 +242,6 @@ public class JdbcWorkerImportRepository implements WorkerImportRepository {
                 decodeMappings(resultSet.getString("mapping_json")),
                 resultSet.getString("create_idempotency_key_hash"),
                 resultSet.getString("create_request_hash"),
-                resultSet.getString("last_commit_idempotency_key_hash"),
-                resultSet.getString("last_commit_request_hash"),
                 resultSet.getInt("total_rows"),
                 resultSet.getInt("valid_rows"),
                 resultSet.getInt("invalid_rows"),
@@ -298,6 +329,14 @@ public class JdbcWorkerImportRepository implements WorkerImportRepository {
             return objectMapper.writeValueAsString(value);
         } catch (JacksonException exception) {
             throw new IllegalStateException("worker import data cannot be encoded", exception);
+        }
+    }
+
+    private <T> T decode(String json, Class<T> type) {
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("worker import snapshot cannot be decoded", exception);
         }
     }
 

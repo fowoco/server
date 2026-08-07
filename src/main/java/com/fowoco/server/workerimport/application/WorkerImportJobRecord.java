@@ -17,8 +17,6 @@ public record WorkerImportJobRecord(
         Map<String, WorkerImportField> mappings,
         String createIdempotencyKeyHash,
         String createRequestHash,
-        String lastCommitIdempotencyKeyHash,
-        String lastCommitRequestHash,
         int totalRows,
         int validRows,
         int invalidRows,

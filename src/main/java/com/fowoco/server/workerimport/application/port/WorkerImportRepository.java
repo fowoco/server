@@ -1,6 +1,7 @@
 package com.fowoco.server.workerimport.application.port;
 
 import com.fowoco.server.workerimport.application.ImportValidationError;
+import com.fowoco.server.workerimport.application.WorkerImportCommitRecord;
 import com.fowoco.server.workerimport.application.WorkerImportJobRecord;
 import com.fowoco.server.workerimport.application.WorkerImportRowRecord;
 import com.fowoco.server.workerimport.domain.WorkerImportField;
@@ -19,6 +20,10 @@ public interface WorkerImportRepository {
 
     Optional<WorkerImportJobRecord> findByCreateKey(UUID companyId, String keyHash);
 
+    Optional<WorkerImportCommitRecord> findCommitByKey(UUID companyId, UUID importId, String keyHash);
+
+    void insertCommit(WorkerImportCommitRecord record);
+
     List<WorkerImportRowRecord> findRows(UUID companyId, UUID importId, int offset, int limit);
 
     List<WorkerImportRowRecord> findAllRows(UUID companyId, UUID importId);
@@ -35,8 +40,6 @@ public interface WorkerImportRepository {
             int invalidRows,
             int excludedRows,
             int committedRows,
-            String commitKeyHash,
-            String commitRequestHash,
             Instant updatedAt
     );
 

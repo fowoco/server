@@ -26,7 +26,11 @@ class PostgreSqlWorkerImportRlsTest {
     private static final UUID FILE_B = UUID.fromString("e6000000-0000-0000-0000-000000000002");
     private static final UUID IMPORT_A = UUID.fromString("e7000000-0000-0000-0000-000000000001");
     private static final UUID IMPORT_B = UUID.fromString("e8000000-0000-0000-0000-000000000002");
-    private static final List<String> TABLES = List.of("worker_import_job", "worker_import_row");
+    private static final List<String> TABLES = List.of(
+            "worker_import_job",
+            "worker_import_row",
+            "worker_import_commit_idempotency"
+    );
 
     @Test
     void importTablesFailClosedAndHideOtherCompanyRows() throws Exception {
@@ -53,6 +57,7 @@ class PostgreSqlWorkerImportRlsTest {
                     bind(runtime, COMPANY_A);
                     assertThat(count(runtime, "SELECT COUNT(*) FROM worker_import_job")).isEqualTo(1);
                     assertThat(count(runtime, "SELECT COUNT(*) FROM worker_import_row")).isEqualTo(1);
+                    assertThat(count(runtime, "SELECT COUNT(*) FROM worker_import_commit_idempotency")).isEqualTo(1);
                     runtime.rollback();
 
                     bind(runtime, COMPANY_A);
@@ -90,7 +95,8 @@ class PostgreSqlWorkerImportRlsTest {
                     + " TO " + quoteIdentifier(role));
             statement.execute("GRANT USAGE ON SCHEMA public TO " + quoteIdentifier(role));
             statement.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.worker_import_job,"
-                    + " public.worker_import_row TO " + quoteIdentifier(role));
+                    + " public.worker_import_row, public.worker_import_commit_idempotency TO "
+                    + quoteIdentifier(role));
             statement.execute("INSERT INTO company (company_id, name, status) VALUES "
                     + "('" + COMPANY_A + "', 'Import RLS A', 'ACTIVE'),"
                     + "('" + COMPANY_B + "', 'Import RLS B', 'ACTIVE')");
@@ -106,6 +112,8 @@ class PostgreSqlWorkerImportRlsTest {
             insertJob(statement, IMPORT_B, COMPANY_B, FILE_B, USER_B, "b");
             insertRow(statement, "ea000000-0000-0000-0000-000000000001", IMPORT_A, COMPANY_A);
             insertRow(statement, "eb000000-0000-0000-0000-000000000002", IMPORT_B, COMPANY_B);
+            insertCommit(statement, IMPORT_A, COMPANY_A, "c");
+            insertCommit(statement, IMPORT_B, COMPANY_B, "d");
         }
     }
 
@@ -125,6 +133,13 @@ class PostgreSqlWorkerImportRlsTest {
                 + " normalized_values_json, validation_errors_json, status, created_at, updated_at) VALUES "
                 + "('" + rowId + "','" + importId + "','" + companyId
                 + "',2,'{}','{}','{}','[]','PENDING',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+    }
+
+    private void insertCommit(Statement statement, UUID importId, UUID companyId, String key) throws SQLException {
+        statement.execute("INSERT INTO worker_import_commit_idempotency "
+                + "(company_id, import_id, idempotency_key_hash, request_hash, response_snapshot_json, created_at) VALUES "
+                + "('" + companyId + "','" + importId + "',repeat('" + key + "',64),repeat('" + key
+                + "',64),'{}',CURRENT_TIMESTAMP)");
     }
 
     private void bind(Connection connection, UUID companyId) throws SQLException {
@@ -150,6 +165,8 @@ class PostgreSqlWorkerImportRlsTest {
     }
 
     private void cleanupRows(Statement statement) throws SQLException {
+        statement.execute("DELETE FROM worker_import_commit_idempotency WHERE company_id IN ('"
+                + COMPANY_A + "','" + COMPANY_B + "')");
         statement.execute("DELETE FROM worker_import_row WHERE company_id IN ('" + COMPANY_A + "','" + COMPANY_B + "')");
         statement.execute("DELETE FROM worker_import_job WHERE company_id IN ('" + COMPANY_A + "','" + COMPANY_B + "')");
         statement.execute("DELETE FROM stored_file WHERE company_id IN ('" + COMPANY_A + "','" + COMPANY_B + "')");

@@ -8,8 +8,6 @@ CREATE TABLE worker_import_job (
     mapping_json TEXT NOT NULL,
     create_idempotency_key_hash VARCHAR(64) NOT NULL,
     create_request_hash VARCHAR(64) NOT NULL,
-    last_commit_idempotency_key_hash VARCHAR(64),
-    last_commit_request_hash VARCHAR(64),
     total_rows INTEGER NOT NULL DEFAULT 0,
     valid_rows INTEGER NOT NULL DEFAULT 0,
     invalid_rows INTEGER NOT NULL DEFAULT 0,
@@ -37,13 +35,6 @@ CREATE TABLE worker_import_job (
         CHECK (CHAR_LENGTH(create_idempotency_key_hash) = 64),
     CONSTRAINT ck_worker_import_job_create_request_hash
         CHECK (CHAR_LENGTH(create_request_hash) = 64),
-    CONSTRAINT ck_worker_import_job_commit_hash_pair CHECK (
-        (last_commit_idempotency_key_hash IS NULL AND last_commit_request_hash IS NULL)
-        OR (
-            CHAR_LENGTH(last_commit_idempotency_key_hash) = 64
-            AND CHAR_LENGTH(last_commit_request_hash) = 64
-        )
-    ),
     CONSTRAINT ck_worker_import_job_counts CHECK (
         total_rows >= 0 AND valid_rows >= 0 AND invalid_rows >= 0
         AND excluded_rows >= 0 AND committed_rows >= 0
@@ -88,6 +79,24 @@ CREATE TABLE worker_import_row (
     ),
     CONSTRAINT ck_worker_import_row_version CHECK (version >= 0),
     CONSTRAINT ck_worker_import_row_time_order CHECK (updated_at >= created_at)
+);
+
+CREATE TABLE worker_import_commit_idempotency (
+    company_id UUID NOT NULL,
+    import_id UUID NOT NULL,
+    idempotency_key_hash VARCHAR(64) NOT NULL,
+    request_hash VARCHAR(64) NOT NULL,
+    response_snapshot_json TEXT NOT NULL,
+    created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL,
+    CONSTRAINT pk_worker_import_commit_idempotency
+        PRIMARY KEY (company_id, import_id, idempotency_key_hash),
+    CONSTRAINT fk_worker_import_commit_idempotency_job_company
+        FOREIGN KEY (import_id, company_id)
+        REFERENCES worker_import_job (import_id, company_id) ON DELETE CASCADE,
+    CONSTRAINT ck_worker_import_commit_idempotency_key_hash
+        CHECK (CHAR_LENGTH(idempotency_key_hash) = 64),
+    CONSTRAINT ck_worker_import_commit_request_hash
+        CHECK (CHAR_LENGTH(request_hash) = 64)
 );
 
 CREATE INDEX idx_worker_import_job_company_updated

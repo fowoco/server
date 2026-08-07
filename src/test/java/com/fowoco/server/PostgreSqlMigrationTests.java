@@ -107,7 +107,8 @@ class PostgreSqlMigrationTests {
                         "password_reset_token",
                         "document_ocr_run",
                         "worker_import_job",
-                        "worker_import_row"
+                        "worker_import_row",
+                        "worker_import_commit_idempotency"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -321,6 +322,13 @@ class PostgreSqlMigrationTests {
                 .containsEntry("validation_errors_json", new ColumnSpec("text", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker_import_commit_idempotency"))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("import_id", new ColumnSpec("uuid", false))
+                .containsEntry("idempotency_key_hash", new ColumnSpec("varchar", false))
+                .containsEntry("request_hash", new ColumnSpec("varchar", false))
+                .containsEntry("response_snapshot_json", new ColumnSpec("text", false))
+                .containsEntry("created_at", new ColumnSpec("timestamptz", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -407,7 +415,9 @@ class PostgreSqlMigrationTests {
                         "pk_worker_import_row",
                         "uq_worker_import_row_number",
                         "fk_worker_import_row_job_company",
-                        "fk_worker_import_row_worker_company"
+                        "fk_worker_import_row_worker_company",
+                        "pk_worker_import_commit_idempotency",
+                        "fk_worker_import_commit_idempotency_job_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -484,7 +494,8 @@ class PostgreSqlMigrationTests {
                         "pl_password_reset_token_tenant_isolation",
                         "pl_document_ocr_run_tenant_isolation",
                         "pl_worker_import_job_tenant_isolation",
-                        "pl_worker_import_row_tenant_isolation"
+                        "pl_worker_import_row_tenant_isolation",
+                        "pl_worker_import_commit_idempotency_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))

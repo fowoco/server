@@ -152,8 +152,6 @@ public class WorkerImportService {
                 Map.of(),
                 keyHash,
                 requestHash,
-                null,
-                null,
                 parsed.rows().size(),
                 0,
                 0,
@@ -212,7 +210,7 @@ public class WorkerImportService {
             }
         }
         Counts counts = counts(repository.findAllRows(actor.companyId(), importId));
-        updateJob(job, WorkerImportStatus.MAPPED, mappings, counts, null, null, now);
+        updateJob(job, WorkerImportStatus.MAPPED, mappings, counts, now);
         appendAudit(actor, AuditAction.WORKER_IMPORT_MAPPING_UPDATED, importId, "가져오기 열 연결 수정", metadata, now);
         return view(requireJob(actor.companyId(), importId), 0, 100);
     }
@@ -255,7 +253,7 @@ public class WorkerImportService {
             );
         }
         Counts counts = counts(repository.findAllRows(actor.companyId(), importId));
-        updateJob(job, WorkerImportStatus.MAPPED, job.mappings(), counts, null, null, now);
+        updateJob(job, WorkerImportStatus.MAPPED, job.mappings(), counts, now);
         appendAudit(actor, AuditAction.WORKER_IMPORT_ROWS_UPDATED, importId, "가져오기 행 수정", metadata, now);
         return view(requireJob(actor.companyId(), importId), 0, 100);
     }
@@ -299,7 +297,7 @@ public class WorkerImportService {
         WorkerImportStatus status = counts.invalid() > 0 || counts.valid() == 0
                 ? WorkerImportStatus.REVIEW_REQUIRED
                 : WorkerImportStatus.READY;
-        updateJob(job, status, job.mappings(), counts, null, null, now);
+        updateJob(job, status, job.mappings(), counts, now);
         appendAudit(
                 actor,
                 retry ? AuditAction.WORKER_IMPORT_RETRIED : AuditAction.WORKER_IMPORT_VALIDATED,
@@ -322,16 +320,18 @@ public class WorkerImportService {
     ) {
         bindTenant(actor);
         WorkerImportJobRecord job = requireJob(actor.companyId(), importId);
+        Set<Integer> requestedRows = selectedRows == null ? Set.of() : Set.copyOf(selectedRows);
         String keyHash = sha256(normalizeIdempotencyKey(idempotencyKey)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String requestHash = sha256(selectedRows.stream().sorted().map(String::valueOf)
+        String requestHash = sha256(requestedRows.stream().sorted().map(String::valueOf)
                 .collect(Collectors.joining(","))
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        if (keyHash.equals(job.lastCommitIdempotencyKeyHash())) {
-            if (!requestHash.equals(job.lastCommitRequestHash())) {
+        var previousCommit = repository.findCommitByKey(actor.companyId(), importId, keyHash);
+        if (previousCommit.isPresent()) {
+            if (!requestHash.equals(previousCommit.get().requestHash())) {
                 throw new ApiException(WorkerImportErrorCode.IMPORT_IDEMPOTENCY_CONFLICT);
             }
-            return view(job, 0, 100);
+            return previousCommit.get().responseSnapshot();
         }
         if (job.version() != expectedVersion) {
             throw new ApiException(WorkerImportErrorCode.IMPORT_VERSION_CONFLICT);
@@ -342,7 +342,7 @@ public class WorkerImportService {
         List<WorkerImportRowRecord> rows = repository.findAllRows(actor.companyId(), importId);
         List<WorkerImportRowRecord> candidates = rows.stream()
                 .filter(row -> row.status() == WorkerImportRowStatus.VALID)
-                .filter(row -> selectedRows.isEmpty() || selectedRows.contains(row.rowNumber()))
+                .filter(row -> requestedRows.isEmpty() || requestedRows.contains(row.rowNumber()))
                 .toList();
         if (candidates.isEmpty()) {
             throw new ApiException(WorkerImportErrorCode.IMPORT_NO_VALID_ROWS);
@@ -375,9 +375,13 @@ public class WorkerImportService {
         WorkerImportStatus status = counts.invalid() > 0
                 ? WorkerImportStatus.REVIEW_REQUIRED
                 : counts.valid() > 0 ? WorkerImportStatus.READY : WorkerImportStatus.COMMITTED;
-        updateJob(job, status, job.mappings(), counts, keyHash, requestHash, now);
+        updateJob(job, status, job.mappings(), counts, now);
+        WorkerImportView result = view(requireJob(actor.companyId(), importId), 0, 100);
+        repository.insertCommit(new WorkerImportCommitRecord(
+                actor.companyId(), importId, keyHash, requestHash, result, now
+        ));
         appendAudit(actor, AuditAction.WORKER_IMPORT_COMMITTED, importId, "정상 행 근로자 등록 확정", metadata, now);
-        return view(requireJob(actor.companyId(), importId), 0, 100);
+        return result;
     }
 
     private Map<String, WorkerImportField> validateMappings(
@@ -546,14 +550,12 @@ public class WorkerImportService {
             WorkerImportStatus status,
             Map<String, WorkerImportField> mappings,
             Counts counts,
-            String commitKeyHash,
-            String commitRequestHash,
             Instant now
     ) {
         boolean updated = repository.updateJob(
                 job.companyId(), job.importId(), job.version(), status, mappings,
                 counts.valid(), counts.invalid(), counts.excluded(), counts.committed(),
-                commitKeyHash, commitRequestHash, now
+                now
         );
         if (!updated) {
             throw new ApiException(WorkerImportErrorCode.IMPORT_VERSION_CONFLICT);

@@ -72,6 +72,7 @@ class WorkerImportApiIntegrationTest {
     @BeforeEach
     void resetImports() {
         jdbcTemplate.update("DELETE FROM audit_event WHERE target_type = 'WORKER_IMPORT'");
+        jdbcTemplate.update("DELETE FROM worker_import_commit_idempotency");
         jdbcTemplate.update("DELETE FROM worker_import_row");
         jdbcTemplate.update("DELETE FROM worker_import_job");
         jdbcTemplate.update("DELETE FROM worker WHERE company_id IN (?, ?)", COMPANY_A, COMPANY_B);
@@ -142,15 +143,6 @@ class WorkerImportApiIntegrationTest {
         assertThat(JsonPath.<Integer>read(firstCommit.body(), "$.committed_rows")).isEqualTo(1);
         assertThat(JsonPath.<String>read(firstCommit.body(), "$.status")).isEqualTo("READY");
 
-        HttpResponse<String> replay = json(
-                "POST", "/api/v1/imports/" + importId + "/commit", tokenA, "worker-import-commit-0001",
-                "{\"expected_version\":4,\"selected_row_numbers\":[2]}"
-        );
-        assertThat(replay.statusCode()).as(replay.body()).isEqualTo(200);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker WHERE company_id = ?", Integer.class, COMPANY_A
-        )).isEqualTo(1);
-
         HttpResponse<String> finalCommit = json(
                 "POST", "/api/v1/imports/" + importId + "/commit", tokenA, "worker-import-commit-0002",
                 "{\"expected_version\":5,\"selected_row_numbers\":[3]}"
@@ -160,6 +152,29 @@ class WorkerImportApiIntegrationTest {
         assertThat(JsonPath.<Integer>read(finalCommit.body(), "$.committed_rows")).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM worker WHERE company_id = ?", Integer.class, COMPANY_A
+        )).isEqualTo(2);
+
+        HttpResponse<String> replayFirstCommit = json(
+                "POST", "/api/v1/imports/" + importId + "/commit", tokenA, "worker-import-commit-0001",
+                "{\"expected_version\":4,\"selected_row_numbers\":[2]}"
+        );
+        assertThat(replayFirstCommit.statusCode()).as(replayFirstCommit.body()).isEqualTo(200);
+        assertThat(replayFirstCommit.body()).isEqualTo(firstCommit.body());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker WHERE company_id = ?", Integer.class, COMPANY_A
+        )).isEqualTo(2);
+
+        HttpResponse<String> conflictingReplay = json(
+                "POST", "/api/v1/imports/" + importId + "/commit", tokenA, "worker-import-commit-0001",
+                "{\"expected_version\":6,\"selected_row_numbers\":[3]}"
+        );
+        assertThat(conflictingReplay.statusCode()).as(conflictingReplay.body()).isEqualTo(409);
+        assertThat(JsonPath.<String>read(conflictingReplay.body(), "$.code"))
+                .isEqualTo("IMPORT_IDEMPOTENCY_CONFLICT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_import_commit_idempotency WHERE import_id = ?",
+                Integer.class,
+                importId
         )).isEqualTo(2);
 
         String tokenB = accessToken(login(HR_B_EMAIL));
@@ -309,6 +324,11 @@ class WorkerImportApiIntegrationTest {
 
     private void deleteFixtures() {
         jdbcTemplate.update("DELETE FROM audit_event WHERE company_id IN (?, ?)", COMPANY_A, COMPANY_B);
+        jdbcTemplate.update(
+                "DELETE FROM worker_import_commit_idempotency WHERE company_id IN (?, ?)",
+                COMPANY_A,
+                COMPANY_B
+        );
         jdbcTemplate.update("DELETE FROM worker_import_row WHERE company_id IN (?, ?)", COMPANY_A, COMPANY_B);
         jdbcTemplate.update("DELETE FROM worker_import_job WHERE company_id IN (?, ?)", COMPANY_A, COMPANY_B);
         jdbcTemplate.update("DELETE FROM worker WHERE company_id IN (?, ?)", COMPANY_A, COMPANY_B);
