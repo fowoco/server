@@ -176,7 +176,8 @@ src/main/java/com/fowoco/server/
 
 - 사업장 데이터는 인증 Context의 `company_id`로 격리합니다.
 - Client가 보낸 `company_id`를 신뢰하지 않습니다.
-- 외국인등록번호·여권번호·전화번호·계좌번호를 AI 입력과 일반 로그에 넣지 않습니다.
+- 일반 자연어 분석 JSON에는 외국인등록번호·여권번호·전화번호·계좌번호를 넣지 않습니다.
+- OCR은 HR이 선택한 서류 파일만 전용 내부 API로 전송하며, 추출값은 암호화 저장하고 일반 로그에 남기지 않습니다.
 - AI 결과와 요청 초안은 HR 승인 전 자동 발송하지 않습니다.
 - 중요한 변경은 actor, 시각, `request_id`와 함께 감사로그에 남깁니다.
 - Worker Link 원본 token, JWT, API Key와 비밀번호를 GitHub·로그·문서에 남기지 않습니다.
@@ -202,5 +203,5 @@ src/main/java/com/fowoco/server/
 - 외부기관 자동 로그인·자동 제출
 - AI의 법률·노무 최종 판단
 - 자체 학습 모델의 필수 서비스 탑재
-- OCR·대용량 파일 처리 전체 구현
+- 범용 OCR·대용량 일괄 파일 처리
 - 실제 Blue/Green Agent 트래픽 전환
