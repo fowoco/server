@@ -15,6 +15,7 @@ import com.fowoco.server.file.application.error.FileErrorCode;
 import com.fowoco.server.file.application.port.FileStorage;
 import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.file.application.validation.HwpSignatureValidator;
+import com.fowoco.server.file.application.validation.HwpxSignatureValidator;
 import com.fowoco.server.file.domain.StoredFile;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
@@ -42,13 +43,14 @@ public class FileService {
             "image/jpeg",
             "image/png",
             "image/webp",
-            "application/pdf",
-            "application/hwp+zip"
+            "application/pdf"
     );
     private static final String HWP_EXTENSION = ".hwp";
+    private static final String HWPX_EXTENSION = ".hwpx";
 
     private final StoredFileRepository storedFileRepository;
     private final HwpSignatureValidator hwpSignatureValidator;
+    private final HwpxSignatureValidator hwpxSignatureValidator;
     private final FileStorage fileStorage;
     private final TaskRepository taskRepository;
     private final WorkerRepository workerRepository;
@@ -60,6 +62,7 @@ public class FileService {
     public FileService(
             StoredFileRepository storedFileRepository,
             HwpSignatureValidator hwpSignatureValidator,
+            HwpxSignatureValidator hwpxSignatureValidator,
             FileStorage fileStorage,
             TaskRepository taskRepository,
             WorkerRepository workerRepository,
@@ -70,6 +73,7 @@ public class FileService {
     ) {
         this.storedFileRepository = storedFileRepository;
         this.hwpSignatureValidator = hwpSignatureValidator;
+        this.hwpxSignatureValidator = hwpxSignatureValidator;
         this.fileStorage = fileStorage;
         this.taskRepository = taskRepository;
         this.workerRepository = workerRepository;
@@ -89,6 +93,10 @@ public class FileService {
         byte[] contentBytes = readAllBytes(command.content());
         if (isHwpExtension(command.name())) {
             if (!hwpSignatureValidator.isValidHwp(contentBytes)) {
+                throw new ApiException(FileErrorCode.UNSUPPORTED_FILE_TYPE);
+            }
+        } else if (isHwpxExtension(command.name())) {
+            if (!hwpxSignatureValidator.isValidHwpx(contentBytes)) {
                 throw new ApiException(FileErrorCode.UNSUPPORTED_FILE_TYPE);
             }
         } else if (!ALLOWED_MIME_TYPES.contains(command.mimeType())) {
@@ -198,6 +206,10 @@ public class FileService {
 
     private boolean isHwpExtension(String name) {
         return name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(HWP_EXTENSION);
+    }
+
+    private boolean isHwpxExtension(String name) {
+        return name != null && name.toLowerCase(java.util.Locale.ROOT).endsWith(HWPX_EXTENSION);
     }
 
     private byte[] readAllBytes(java.io.InputStream content) {
