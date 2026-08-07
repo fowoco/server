@@ -414,8 +414,21 @@ class DemoAuthSeedIntegrationTest {
                 "demo-compound-draft-flow"
         )).isZero();
 
-        assertThat(count("ai_run", COMPANY_ID)).isZero();
+        for (String table : List.of(
+                "ai_run",
+                "ai_attempt",
+                "ai_question",
+                "ai_candidate",
+                "ai_candidate_decision_batch",
+                "ai_candidate_decision",
+                "ai_candidate_decision_task"
+        )) {
+            assertThat(count(table, COMPANY_ID))
+                    .as("%s must not be pre-seeded for the Golden Flow", table)
+                    .isZero();
+        }
         assertThat(count("worker_link", COMPANY_ID)).isZero();
+        assertThat(count("worker_response", COMPANY_ID)).isZero();
         assertThat(countWhere(
                 "external_submission",
                 "task_id IN (?, ?, ?)",
