@@ -60,6 +60,12 @@ public class DocumentOcrRunJpaEntity {
     @Column(name = "result_key_version", length = 60)
     private String resultKeyVersion;
 
+    @Column(name = "corrected_fields_ciphertext", columnDefinition = "TEXT")
+    private String correctedFieldsCiphertext;
+
+    @Column(name = "corrected_fields_key_version", length = 60)
+    private String correctedFieldsKeyVersion;
+
     @Column(name = "last_error_code", length = 80)
     private String lastErrorCode;
 
@@ -128,6 +134,8 @@ public class DocumentOcrRunJpaEntity {
         this.status = run.status();
         this.resultCiphertext = run.resultCiphertext();
         this.resultKeyVersion = run.resultKeyVersion();
+        this.correctedFieldsCiphertext = run.correctedFieldsCiphertext();
+        this.correctedFieldsKeyVersion = run.correctedFieldsKeyVersion();
         this.lastErrorCode = run.lastErrorCode();
         this.reviewedBy = run.reviewedBy();
         this.reviewReason = run.reviewReason();
@@ -141,7 +149,8 @@ public class DocumentOcrRunJpaEntity {
         return new DocumentOcrRun(
                 ocrRunId, companyId, workerDocumentId, storedFileId, requestedBy,
                 runtimeRequestId, idempotencyKeyHash, requestHash, documentType,
-                countryCode, status, resultCiphertext, resultKeyVersion, lastErrorCode,
+                countryCode, status, resultCiphertext, resultKeyVersion,
+                correctedFieldsCiphertext, correctedFieldsKeyVersion, lastErrorCode,
                 reviewedBy, reviewReason, createdAt, startedAt, completedAt, reviewedAt,
                 updatedAt, version
         );
