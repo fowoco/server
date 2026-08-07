@@ -7,6 +7,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.sql.SQLException;
 import java.util.Locale;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -86,6 +87,81 @@ public class JpaWorkerResponseRepository implements WorkerResponseRepository {
                 .setParameter(2, companyId)
                 .getSingleResult();
         return count != null && count > 0;
+    }
+
+    @Override
+    public WorkerResponsePage findAllByTaskIdAndCompanyId(
+            UUID taskId,
+            UUID companyId,
+            int page,
+            int size
+    ) {
+        Objects.requireNonNull(taskId, "taskId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        List<Object[]> rows = entityManager.createQuery(
+                        """
+                        select response, link.conversationStatus
+                        from WorkerResponseJpaEntity response, WorkerLinkJpaEntity link
+                        where response.workerLinkId = link.workerLinkId
+                          and response.companyId = :companyId
+                          and link.companyId = :companyId
+                          and link.taskId = :taskId
+                        order by response.receivedAt desc, response.responseId desc
+                        """,
+                        Object[].class
+                )
+                .setParameter("taskId", taskId)
+                .setParameter("companyId", companyId)
+                .setFirstResult(page * size)
+                .setMaxResults(size)
+                .getResultList();
+
+        long totalElements = entityManager.createQuery(
+                        """
+                        select count(response)
+                        from WorkerResponseJpaEntity response, WorkerLinkJpaEntity link
+                        where response.workerLinkId = link.workerLinkId
+                          and response.companyId = :companyId
+                          and link.companyId = :companyId
+                          and link.taskId = :taskId
+                        """,
+                        Long.class
+                )
+                .setParameter("taskId", taskId)
+                .setParameter("companyId", companyId)
+                .getSingleResult();
+
+        List<WorkerResponseItem> items = rows.stream()
+                .map(row -> {
+                    WorkerResponse response = ((WorkerResponseJpaEntity) row[0]).toDomain();
+                    return new WorkerResponseItem(
+                            response,
+                            (com.fowoco.server.workerlink.domain.ConversationStatus) row[1],
+                            findUploadIds(response.responseId(), companyId)
+                    );
+                })
+                .toList();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+        return new WorkerResponsePage(items, page, size, totalElements, totalPages);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<UUID> findUploadIds(UUID responseId, UUID companyId) {
+        return entityManager.createNativeQuery(
+                        """
+                        SELECT stored_file_id
+                          FROM worker_response_upload
+                         WHERE response_id = ?1
+                           AND company_id = ?2
+                         ORDER BY stored_file_id
+                        """
+                )
+                .setParameter(1, responseId)
+                .setParameter(2, companyId)
+                .getResultList()
+                .stream()
+                .map(value -> value instanceof UUID uuid ? uuid : UUID.fromString(value.toString()))
+                .toList();
     }
 
     static boolean isUniqueUploadFileViolation(Throwable failure) {

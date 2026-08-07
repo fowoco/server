@@ -25,7 +25,11 @@ public class CorsConfig {
                 "Idempotency-Key",
                 "Last-Event-ID"
         ));
-        configuration.setExposedHeaders(List.of("X-Request-Id", "X-Accel-Buffering"));
+        configuration.setExposedHeaders(List.of(
+                "X-Request-Id",
+                "X-Accel-Buffering",
+                "Content-Disposition"
+        ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
