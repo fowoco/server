@@ -25,6 +25,7 @@ FOWOCO는 단순 번역 서비스가 아닙니다. 해야 할 일을 업무카�
 | 패키지·모듈 경계 | [프로젝트 구조](docs/project-structure.md) | 코드를 어느 패키지에 구현해야 하는지 설명 |
 | 중요한 설계 결정 | [ADR 목록](docs/adr/README.md) | 저장소 경계, API·보안, Task·AiRun, RLS 결정 원본 |
 | Server ↔ AI 계약 | [AI Runtime 계약](docs/ai-runtime-contract.md) | Server가 AI에 보내고 받을 수 있는 값과 검증 기준 |
+| 근로자 명단 가져오기 | [Worker Import 가이드](docs/worker-import.md) | CSV/XLSX 업로드부터 검증·수정·등록까지의 API 순서 |
 | Agent DB 정보 보충 | [Slot 조회·재호출](docs/ai-slot-resolution.md) | canonical key allow-list, tenant 조회와 ANALYZE 재호출 기준 |
 | 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
 | 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
@@ -72,6 +73,7 @@ Provider SDK, Prompt와 모델 라우팅은 Server에 구현하지 않습니다.
 | --- | --- |
 | Auth·Company | 회원가입, 로그인, JWT Access Token, Refresh Token 회전·로그아웃 |
 | Worker·Document | 근로자 기본정보와 서류 메타데이터 등록·조회·수정 |
+| Worker Import | CSV/XLSX 열 연결, 행 검증·제외·수정과 선택 등록 |
 | Task·Workflow | Knowledge projection 조회, 업무카드·체크리스트·상태 전이 |
 | Approval·Audit | 승인·반려·외부 제출·증빙·완료와 감사 이벤트 |
 | AI Integration | Provider-neutral 계약, 개인정보 차단과 응답·version 검증 |
@@ -159,7 +161,7 @@ Server는 하나의 Spring Boot 애플리케이션과 PostgreSQL로 배포하는
 src/main/java/com/fowoco/server/
 ├── common
 ├── auth / company
-├── worker
+├── worker / workerimport
 ├── workflow / task
 ├── approval / audit
 ├── workerlink / file
