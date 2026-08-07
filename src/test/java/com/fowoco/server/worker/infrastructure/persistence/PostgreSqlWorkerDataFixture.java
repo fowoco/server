@@ -147,9 +147,12 @@ final class PostgreSqlWorkerDataFixture {
                 displayName,
                 "VN",
                 "ko",
+                "E-9",
                 LocalDate.of(2027, 8, 31),
                 LocalDate.of(2026, 9, 1),
                 LocalDate.of(2027, 8, 31),
+                null,
+                null,
                 FIXTURE_TIME.plusSeconds(7200)
         );
     }

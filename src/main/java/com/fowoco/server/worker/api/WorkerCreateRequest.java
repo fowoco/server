@@ -44,8 +44,17 @@ public final class WorkerCreateRequest {
     private final String preferredLanguage;
 
     @Schema(
+            name = "visa_type",
+            description = "체류자격 종류",
+            example = "E-9",
+            maxLength = 20
+    )
+    @Size(max = 20, message = "체류자격 종류는 20자 이하여야 합니다.")
+    private final String visaType;
+
+    @Schema(
             name = "stay_expiry_date",
-            description = "체류 만료일",
+            description = "체류자격이 만료되는 날",
             example = "2027-03-01",
             format = "date"
     )
@@ -61,27 +70,49 @@ public final class WorkerCreateRequest {
 
     @Schema(
             name = "contract_end_date",
-            description = "계약 종료일. contract_start_date보다 빠를 수 없습니다.",
+            description = "현재 근로계약이 끝나는 날. contract_start_date보다 빠를 수 없습니다.",
             example = "2027-12-31",
             format = "date"
     )
     private final LocalDate contractEndDate;
+
+    @Schema(
+            name = "employment_permit_end_date",
+            description = "사업장의 고용허가 관련 기준 종료일",
+            example = "2028-03-01",
+            format = "date"
+    )
+    private final LocalDate employmentPermitEndDate;
+
+    @Schema(
+            name = "employment_activity_end_date",
+            description = "E-9 근로자가 취업활동할 수 있는 기간의 종료일",
+            example = "2028-03-01",
+            format = "date"
+    )
+    private final LocalDate employmentActivityEndDate;
 
     @JsonCreator
     public WorkerCreateRequest(
             @JsonProperty("display_name") String displayName,
             @JsonProperty("nationality_code") String nationalityCode,
             @JsonProperty("preferred_language") String preferredLanguage,
+            @JsonProperty("visa_type") String visaType,
             @JsonProperty("stay_expiry_date") LocalDate stayExpiryDate,
             @JsonProperty("contract_start_date") LocalDate contractStartDate,
-            @JsonProperty("contract_end_date") LocalDate contractEndDate
+            @JsonProperty("contract_end_date") LocalDate contractEndDate,
+            @JsonProperty("employment_permit_end_date") LocalDate employmentPermitEndDate,
+            @JsonProperty("employment_activity_end_date") LocalDate employmentActivityEndDate
     ) {
         this.displayName = displayName;
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
+        this.visaType = visaType;
         this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
+        this.employmentPermitEndDate = employmentPermitEndDate;
+        this.employmentActivityEndDate = employmentActivityEndDate;
     }
 
     @AssertTrue(message = "contract_end_date는 contract_start_date보다 빠를 수 없습니다.")
@@ -105,6 +136,10 @@ public final class WorkerCreateRequest {
         return preferredLanguage;
     }
 
+    public String getVisaType() {
+        return visaType;
+    }
+
     public LocalDate getStayExpiryDate() {
         return stayExpiryDate;
     }
@@ -115,5 +150,13 @@ public final class WorkerCreateRequest {
 
     public LocalDate getContractEndDate() {
         return contractEndDate;
+    }
+
+    public LocalDate getEmploymentPermitEndDate() {
+        return employmentPermitEndDate;
+    }
+
+    public LocalDate getEmploymentActivityEndDate() {
+        return employmentActivityEndDate;
     }
 }

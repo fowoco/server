@@ -49,8 +49,17 @@ public final class WorkerPatchRequest {
     private final WorkerStatus workStatus;
 
     @Schema(
+            name = "visa_type",
+            description = "체류자격 종류. 생략 시 변경하지 않습니다.",
+            example = "E-9",
+            maxLength = 20
+    )
+    @Size(max = 20, message = "체류자격 종류는 20자 이하여야 합니다.")
+    private final String visaType;
+
+    @Schema(
             name = "stay_expiry_date",
-            description = "체류 만료일. 생략 시 변경하지 않습니다.",
+            description = "체류자격이 만료되는 날. 생략 시 변경하지 않습니다.",
             example = "2027-03-01",
             format = "date"
     )
@@ -66,11 +75,27 @@ public final class WorkerPatchRequest {
 
     @Schema(
             name = "contract_end_date",
-            description = "계약 종료일. 생략 시 변경하지 않습니다.",
+            description = "현재 근로계약이 끝나는 날. 생략 시 변경하지 않습니다.",
             example = "2027-12-31",
             format = "date"
     )
     private final LocalDate contractEndDate;
+
+    @Schema(
+            name = "employment_permit_end_date",
+            description = "사업장의 고용허가 관련 기준 종료일. 생략 시 변경하지 않습니다.",
+            example = "2028-03-01",
+            format = "date"
+    )
+    private final LocalDate employmentPermitEndDate;
+
+    @Schema(
+            name = "employment_activity_end_date",
+            description = "E-9 근로자가 취업활동할 수 있는 기간의 종료일. 생략 시 변경하지 않습니다.",
+            example = "2028-03-01",
+            format = "date"
+    )
+    private final LocalDate employmentActivityEndDate;
 
     @Schema(
             name = "expected_version",
@@ -88,18 +113,24 @@ public final class WorkerPatchRequest {
             @JsonProperty("nationality_code") String nationalityCode,
             @JsonProperty("preferred_language") String preferredLanguage,
             @JsonProperty("work_status") WorkerStatus workStatus,
+            @JsonProperty("visa_type") String visaType,
             @JsonProperty("stay_expiry_date") LocalDate stayExpiryDate,
             @JsonProperty("contract_start_date") LocalDate contractStartDate,
             @JsonProperty("contract_end_date") LocalDate contractEndDate,
+            @JsonProperty("employment_permit_end_date") LocalDate employmentPermitEndDate,
+            @JsonProperty("employment_activity_end_date") LocalDate employmentActivityEndDate,
             @JsonProperty("expected_version") Long expectedVersion
     ) {
         this.displayName = displayName;
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
+        this.visaType = visaType;
         this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
+        this.employmentPermitEndDate = employmentPermitEndDate;
+        this.employmentActivityEndDate = employmentActivityEndDate;
         this.expectedVersion = expectedVersion;
     }
 
@@ -134,6 +165,10 @@ public final class WorkerPatchRequest {
         return workStatus;
     }
 
+    public String getVisaType() {
+        return visaType;
+    }
+
     public LocalDate getStayExpiryDate() {
         return stayExpiryDate;
     }
@@ -144,6 +179,14 @@ public final class WorkerPatchRequest {
 
     public LocalDate getContractEndDate() {
         return contractEndDate;
+    }
+
+    public LocalDate getEmploymentPermitEndDate() {
+        return employmentPermitEndDate;
+    }
+
+    public LocalDate getEmploymentActivityEndDate() {
+        return employmentActivityEndDate;
     }
 
     public Long getExpectedVersion() {
