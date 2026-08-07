@@ -11,11 +11,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface TaskRepository {
-
     Optional<Task> findByIdAndCompanyId(UUID taskId, UUID companyId);
-
     TaskPage findAll(TaskSearchCriteria criteria);
-
+    List<Task> findOpenTasks(UUID companyId, int limit);
+    long countByCompanyIdAndStatus(UUID companyId, TaskStatus status);
     Task save(Task task);
 
     record TaskSearchCriteria(
