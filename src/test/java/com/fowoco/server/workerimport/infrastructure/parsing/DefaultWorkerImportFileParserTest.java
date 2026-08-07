@@ -7,6 +7,7 @@ import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.workerimport.application.error.WorkerImportErrorCode;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 
@@ -80,5 +81,38 @@ class DefaultWorkerImportFileParserTest {
 
         assertThat(parser.parse("workers.csv", csv.toString().getBytes(StandardCharsets.UTF_8)).rows())
                 .hasSize(1_000);
+    }
+
+    @Test
+    void normalizesXlsxDateCellsToIsoDateRegardlessOfDisplayFormat() throws Exception {
+        byte[] content;
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("workers");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("이름");
+            header.createCell(1).setCellValue("체류만료일");
+
+            var slashStyle = workbook.createCellStyle();
+            slashStyle.setDataFormat(workbook.createDataFormat().getFormat("m/d/yy"));
+            var first = sheet.createRow(1);
+            first.createCell(0).setCellValue("응웬반안");
+            first.createCell(1).setCellValue(LocalDate.of(2027, 1, 2));
+            first.getCell(1).setCellStyle(slashStyle);
+
+            var dottedStyle = workbook.createCellStyle();
+            dottedStyle.setDataFormat(workbook.createDataFormat().getFormat("yyyy. m. d"));
+            var second = sheet.createRow(2);
+            second.createCell(0).setCellValue("쩐티비");
+            second.createCell(1).setCellValue(LocalDate.of(2027, 12, 31));
+            second.getCell(1).setCellStyle(dottedStyle);
+
+            workbook.write(output);
+            content = output.toByteArray();
+        }
+
+        var result = parser.parse("workers.xlsx", content);
+
+        assertThat(result.rows().get(0).get("체류만료일")).isEqualTo("2027-01-02");
+        assertThat(result.rows().get(1).get("체류만료일")).isEqualTo("2027-12-31");
     }
 }

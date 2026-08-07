@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -156,6 +157,9 @@ public class DefaultWorkerImportFileParser implements WorkerImportFileParser {
                         values.add("");
                     } else if (sourceCell.getCellType() == CellType.FORMULA) {
                         throw new ApiException(WorkerImportErrorCode.IMPORT_FORMULA_NOT_ALLOWED);
+                    } else if (sourceCell.getCellType() == CellType.NUMERIC
+                            && DateUtil.isCellDateFormatted(sourceCell)) {
+                        values.add(sourceCell.getLocalDateTimeCellValue().toLocalDate().toString());
                     } else {
                         values.add(formatter.formatCellValue(sourceCell));
                     }
