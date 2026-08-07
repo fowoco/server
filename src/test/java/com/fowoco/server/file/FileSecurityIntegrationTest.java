@@ -148,15 +148,63 @@ class FileSecurityIntegrationTest {
     }
 
     @Test
-    void uploadAcceptsHwpxMimeType() throws Exception {
+    void uploadAcceptsValidHwpxStructure() throws Exception {
         String token = accessToken(login(HR_A_EMAIL));
+        byte[] hwpxContent = buildValidHwpxZip();
 
         HttpResponse<String> response = uploadFile(
-                token, "contract.hwpx", "application/hwp+zip", "hwpx content".getBytes(StandardCharsets.UTF_8), "GENERAL"
+                token, "contract.hwpx", "application/octet-stream", hwpxContent, "GENERAL"
         );
 
         assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
         assertThat(JsonPath.<String>read(response.body(), "$.name")).isEqualTo("contract.hwpx");
+    }
+
+    @Test
+    void uploadRejectsHwpxExtensionWithFakeContent() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = uploadFile(
+                token, "fake.hwpx", "application/hwp+zip",
+                "hwpx content".getBytes(StandardCharsets.UTF_8), "GENERAL"
+        );
+
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(415);
+    }
+
+    @Test
+    void uploadRejectsZipWithoutHwpxContents() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        byte[] plainZip = buildZipWithoutHwpxContents();
+
+        HttpResponse<String> response = uploadFile(
+                token, "notreally.hwpx", "application/octet-stream", plainZip, "GENERAL"
+        );
+
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(415);
+    }
+
+    private byte[] buildValidHwpxZip() throws Exception {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(out)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("mimetype"));
+            zip.write("application/hwp+zip".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+            zip.putNextEntry(new java.util.zip.ZipEntry("Contents/section0.xml"));
+            zip.write("<xml>placeholder</xml>".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        return out.toByteArray();
+    }
+
+    private byte[] buildZipWithoutHwpxContents() throws Exception {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(out)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("readme.txt"));
+            zip.write("just a plain zip file".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        return out.toByteArray();
     }
 
     @Test
