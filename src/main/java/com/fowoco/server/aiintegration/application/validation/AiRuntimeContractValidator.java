@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -24,6 +25,13 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AiRuntimeContractValidator {
+
+    private static final Set<String> SERVER_OWNED_DOCUMENT_FIELDS = Set.of(
+            "passport_copy_status",
+            "passport_copy_expiry_date",
+            "arc_status",
+            "arc_expiry_date"
+    );
 
     private static final long MIN_DEADLINE_MS = 100;
     private static final long MAX_DEADLINE_MS = 60_000;
@@ -334,6 +342,16 @@ public class AiRuntimeContractValidator {
                     AiRuntimeFailureCode.CORE_VALUE_MISMATCH,
                     "AI Runtime changed a Server-owned core value."
             );
+        }
+        for (String fieldKey : SERVER_OWNED_DOCUMENT_FIELDS) {
+            String returnedValue = candidate.extractedSlots().get(fieldKey);
+            if (returnedValue != null
+                    && !Objects.equals(worker.requestedFields().get(fieldKey), returnedValue)) {
+                reject(
+                        AiRuntimeFailureCode.CORE_VALUE_MISMATCH,
+                        "AI Runtime changed a Server-owned document value."
+                );
+            }
         }
     }
 

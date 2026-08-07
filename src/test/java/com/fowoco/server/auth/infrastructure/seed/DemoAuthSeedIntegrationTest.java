@@ -3,6 +3,9 @@ package com.fowoco.server.auth.infrastructure.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jayway.jsonpath.JsonPath;
+import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.airun.application.AiSlotResolutionTransaction;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -86,9 +89,11 @@ class DemoAuthSeedIntegrationTest {
             UUID.fromString("92000000-0000-0000-0000-000000000018");
     private static final UUID PASSPORT_REQUEST_DRAFT_ID =
             UUID.fromString("94700000-0000-0000-0000-000000000002");
-    private static final Set<UUID> REPRESENTATIVE_DOCUMENT_IDS = Set.of(
+    private static final Set<UUID> REPRESENTATIVE_CONTEXT_DOCUMENT_IDS = Set.of(
             UUID.fromString("95000000-0000-0000-0000-000000000016"),
-            UUID.fromString("95000000-0000-0000-0000-000000000017"),
+            UUID.fromString("95000000-0000-0000-0000-000000000017")
+    );
+    private static final Set<UUID> RETIRED_REPRESENTATIVE_DOCUMENT_IDS = Set.of(
             UUID.fromString("95000000-0000-0000-0000-000000000018")
     );
     private static final UUID CONTRACT_FILE_ID =
@@ -111,7 +116,7 @@ class DemoAuthSeedIntegrationTest {
             Map.entry("worker", 28),
             Map.entry("task", 21),
             Map.entry("workflow_case", 21),
-            Map.entry("worker_document", 81),
+            Map.entry("worker_document", 83),
             Map.entry("stored_file", 3),
             Map.entry("task_checklist_item", 60),
             Map.entry("approval_request", 12),
@@ -146,6 +151,9 @@ class DemoAuthSeedIntegrationTest {
     private MutableClock mutableClock;
 
     @Autowired
+    private AiSlotResolutionTransaction aiSlotResolutionTransaction;
+
+    @Autowired
     @Qualifier("demoAuthSeedRunner")
     private ApplicationRunner demoAuthSeedRunner;
 
@@ -170,6 +178,7 @@ class DemoAuthSeedIntegrationTest {
         assertExactCountsAndDistributions();
         assertRelativeDatesAndSafeData();
         assertGoldenFlowStartState();
+        assertGoldenFlowDocumentContext();
         assertShowcaseApprovalAndSubmissionFixtures();
         assertStoredFileFixtures();
         assertTaskTimelineInvariants();
@@ -253,11 +262,11 @@ class DemoAuthSeedIntegrationTest {
         );
         assertThat(distribution("worker_document", "document_type", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("PASSPORT_COPY", 25, "ARC", 27, "CONTRACT", 21, "PERMIT", 8)
+                        Map.of("PASSPORT_COPY", 26, "ARC", 28, "CONTRACT", 21, "PERMIT", 8)
                 );
         assertThat(distribution("worker_document", "submission_status", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("VERIFIED", 46, "SUBMITTED", 20, "MISSING", 15)
+                        Map.of("VERIFIED", 47, "SUBMITTED", 20, "MISSING", 16)
                 );
         assertThat(distribution("approval_request", "status", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
@@ -376,7 +385,7 @@ class DemoAuthSeedIntegrationTest {
         assertThat(countWhere("task", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
                 .isZero();
         assertThat(countWhere("worker_document", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
-                .isZero();
+                .isEqualTo(2);
         assertThat(countWhere("stored_file", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
                 .isZero();
 
@@ -403,9 +412,39 @@ class DemoAuthSeedIntegrationTest {
         )).isZero();
         assertThat(jdbcTemplate.queryForList(
                 "SELECT worker_document_id FROM worker_document "
-                        + "WHERE worker_document_id IN (?, ?, ?)",
+                        + "WHERE worker_document_id IN (?, ?)",
                 UUID.class,
-                REPRESENTATIVE_DOCUMENT_IDS.toArray()
+                REPRESENTATIVE_CONTEXT_DOCUMENT_IDS.toArray()
+        )).containsExactlyInAnyOrderElementsOf(REPRESENTATIVE_CONTEXT_DOCUMENT_IDS);
+        assertThat(jdbcTemplate.queryForList(
+                """
+                SELECT document_type, submission_status, expiry_date, task_id, file_id
+                FROM worker_document
+                WHERE worker_id = ? AND company_id = ?
+                ORDER BY document_type
+                """,
+                REPRESENTATIVE_WORKER_ID,
+                COMPANY_ID
+        )).satisfiesExactly(
+                arc -> {
+                    assertThat(arc.get("document_type")).isEqualTo("ARC");
+                    assertThat(arc.get("submission_status")).isEqualTo("MISSING");
+                    assertThat(arc.get("expiry_date")).isNull();
+                    assertThat(arc.get("task_id")).isNull();
+                    assertThat(arc.get("file_id")).isNull();
+                },
+                passport -> {
+                    assertThat(passport.get("document_type")).isEqualTo("PASSPORT_COPY");
+                    assertThat(passport.get("submission_status")).isEqualTo("VERIFIED");
+                    assertThat(passport.get("expiry_date")).isNotNull();
+                    assertThat(passport.get("task_id")).isNull();
+                    assertThat(passport.get("file_id")).isNull();
+                }
+        );
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT worker_document_id FROM worker_document WHERE worker_document_id IN (?)",
+                UUID.class,
+                RETIRED_REPRESENTATIVE_DOCUMENT_IDS.toArray()
         )).isEmpty();
         assertThat(countWhere(
                 "audit_event",
@@ -445,6 +484,33 @@ class DemoAuthSeedIntegrationTest {
                 EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID,
                 PASSPORT_REQUEST_TASK_ID
         )).isZero();
+    }
+
+    private void assertGoldenFlowDocumentContext() {
+        var resolution = aiSlotResolutionTransaction.resolve(
+                COMPANY_ID,
+                "0.2.0",
+                new AiContextRequirement(
+                        "EXPIRY_RENEWAL",
+                        BigDecimal.ONE,
+                        "응웬반A",
+                        Map.of(),
+                        List.of(
+                                "passport_copy_status",
+                                "passport_copy_expiry_date",
+                                "arc_status",
+                                "arc_expiry_date"
+                        )
+                )
+        );
+
+        assertThat(resolution.resolvedFields())
+                .containsEntry("passport_copy_status", "VERIFIED")
+                .containsEntry("arc_status", "MISSING");
+        assertThat(LocalDate.parse(
+                resolution.resolvedFields().get("passport_copy_expiry_date")
+        )).isAfter(LocalDate.now(clock));
+        assertThat(resolution.missingFieldKeys()).containsExactly("arc_expiry_date");
     }
 
     private void assertShowcaseApprovalAndSubmissionFixtures() {
@@ -861,7 +927,7 @@ class DemoAuthSeedIntegrationTest {
 
         HttpResponse<String> documents = authorizedGet("/api/v1/documents?size=100", demoToken);
         assertOk(documents);
-        assertThat(JsonPath.<Number>read(documents.body(), "$.total_elements").intValue()).isEqualTo(81);
+        assertThat(JsonPath.<Number>read(documents.body(), "$.total_elements").intValue()).isEqualTo(83);
         assertDocumentStatusHasData(demoToken, "SUBMITTED");
         assertDocumentStatusHasData(demoToken, "MISSING");
         assertDocumentStatusHasData(demoToken, "VERIFIED");

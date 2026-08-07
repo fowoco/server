@@ -36,9 +36,11 @@ final class DemoOperationalSeedCatalog {
             UUID.fromString("94000000-0000-0000-0000-000000000007"),
             UUID.fromString("94000000-0000-0000-0000-000000000008")
     );
-    static final Set<UUID> RETIRED_GOLDEN_FLOW_DOCUMENT_IDS = Set.of(
+    static final Set<UUID> GOLDEN_FLOW_CONTEXT_DOCUMENT_IDS = Set.of(
             UUID.fromString("95000000-0000-0000-0000-000000000016"),
-            UUID.fromString("95000000-0000-0000-0000-000000000017"),
+            UUID.fromString("95000000-0000-0000-0000-000000000017")
+    );
+    static final Set<UUID> RETIRED_GOLDEN_FLOW_DOCUMENT_IDS = Set.of(
             UUID.fromString("95000000-0000-0000-0000-000000000018")
     );
     static final Set<UUID> RETIRED_GOLDEN_FLOW_AUDIT_IDS = Set.of(
@@ -127,7 +129,10 @@ final class DemoOperationalSeedCatalog {
                 .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
                 .toList();
         demoDocuments = sourceDemoDocuments.stream()
-                .filter(seed -> !GOLDEN_FLOW_WORKER_ID.equals(seed.workerId()))
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_DOCUMENT_IDS.contains(seed.documentId()))
+                .map(seed -> GOLDEN_FLOW_WORKER_ID.equals(seed.workerId())
+                        ? withoutTask(seed)
+                        : seed)
                 .toList();
         demoChecklists = sourceDemoChecklists.stream()
                 .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
@@ -213,7 +218,7 @@ final class DemoOperationalSeedCatalog {
         requireSize(demoTasks, 21, "Demo Company task");
         requireSize(testTasks, 3, "Test Company task");
         requireSize(demoStoredFiles, 3, "Demo Company stored file");
-        requireSize(demoDocuments, 81, "Demo Company document");
+        requireSize(demoDocuments, 83, "Demo Company document");
         requireSize(testDocuments, 8, "Test Company document");
         requireSize(demoChecklists, 60, "Demo Company checklist item");
         requireSize(demoApprovals, 12, "Demo Company approval request");
@@ -249,9 +254,9 @@ final class DemoOperationalSeedCatalog {
         requireDistribution(
                 demoDocuments.stream().map(DocumentSeed::submissionStatus).toList(),
                 Map.of(
-                        SubmissionStatus.VERIFIED, 46L,
+                        SubmissionStatus.VERIFIED, 47L,
                         SubmissionStatus.SUBMITTED, 20L,
-                        SubmissionStatus.MISSING, 15L
+                        SubmissionStatus.MISSING, 16L
                 ),
                 "Demo Company document status"
         );
@@ -331,19 +336,48 @@ final class DemoOperationalSeedCatalog {
     private void verifyGoldenFlowBoundary() {
         boolean hasGoldenFlowTask = demoTasks.stream()
                 .anyMatch(seed -> GOLDEN_FLOW_WORKER_ID.equals(seed.workerId()));
-        boolean hasGoldenFlowDocument = demoDocuments.stream()
-                .anyMatch(seed -> GOLDEN_FLOW_WORKER_ID.equals(seed.workerId()));
+        List<DocumentSeed> goldenFlowDocuments = demoDocuments.stream()
+                .filter(seed -> GOLDEN_FLOW_WORKER_ID.equals(seed.workerId()))
+                .toList();
+        boolean invalidGoldenFlowDocuments = goldenFlowDocuments.size() != 2
+                || !goldenFlowDocuments.stream().map(DocumentSeed::documentId)
+                        .collect(Collectors.toSet()).equals(GOLDEN_FLOW_CONTEXT_DOCUMENT_IDS)
+                || goldenFlowDocuments.stream().anyMatch(seed -> seed.taskId() != null
+                        || seed.fileId() != null)
+                || goldenFlowDocuments.stream().noneMatch(seed ->
+                        seed.documentType() == DocumentType.PASSPORT_COPY
+                                && seed.submissionStatus() == SubmissionStatus.VERIFIED
+                                && seed.expiryDays() != null
+                                && seed.expiryDays() > 0)
+                || goldenFlowDocuments.stream().noneMatch(seed ->
+                        seed.documentType() == DocumentType.ARC
+                                && seed.submissionStatus() == SubmissionStatus.MISSING
+                                && seed.expiryDays() == null);
         boolean hasRetiredDraft = demoDocumentRequestDrafts.stream()
                 .anyMatch(seed -> RETIRED_GOLDEN_FLOW_DRAFT_ID.equals(seed.draftId()));
         boolean hasRetiredAudit = demoAudits.stream()
                 .anyMatch(seed -> RETIRED_GOLDEN_FLOW_AUDIT_IDS.contains(seed.auditEventId())
                         || RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.targetId())
                         || RETIRED_GOLDEN_FLOW_DRAFT_ID.equals(seed.targetId()));
-        if (hasGoldenFlowTask || hasGoldenFlowDocument || hasRetiredDraft || hasRetiredAudit) {
+        if (hasGoldenFlowTask || invalidGoldenFlowDocuments || hasRetiredDraft || hasRetiredAudit) {
             throw new IllegalStateException(
-                    "golden flow worker must start without operational demo seed data"
+                    "golden flow worker must start with only the required document context"
             );
         }
+    }
+
+    private static DocumentSeed withoutTask(DocumentSeed seed) {
+        return new DocumentSeed(
+                seed.documentId(),
+                seed.workerId(),
+                null,
+                seed.documentType(),
+                seed.submissionStatus(),
+                seed.expiryDays(),
+                seed.destination(),
+                seed.note(),
+                seed.fileId()
+        );
     }
 
     private static void requireSize(List<?> seeds, int expected, String name) {

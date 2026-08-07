@@ -3,6 +3,8 @@ package com.fowoco.server.demo.infrastructure.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
+import com.fowoco.server.worker.domain.DocumentType;
+import com.fowoco.server.worker.domain.SubmissionStatus;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -41,12 +43,21 @@ class DemoOperationalSeedCatalogTest {
                         "95000000-0000-0000-0000-000000000",
                         1,
                         84,
-                        Set.of(16, 17, 18)
+                        Set.of(18)
                 ));
         assertThat(catalog.demoDocuments())
-                .noneMatch(seed -> seed.workerId().equals(
+                .filteredOn(seed -> seed.workerId().equals(
                         DemoOperationalSeedCatalog.GOLDEN_FLOW_WORKER_ID
-                ));
+                ))
+                .hasSize(2)
+                .allMatch(seed -> seed.taskId() == null && seed.fileId() == null)
+                .anyMatch(seed -> seed.documentType() == DocumentType.PASSPORT_COPY
+                        && seed.submissionStatus() == SubmissionStatus.VERIFIED
+                        && seed.expiryDays() != null
+                        && seed.expiryDays() > 0)
+                .anyMatch(seed -> seed.documentType() == DocumentType.ARC
+                        && seed.submissionStatus() == SubmissionStatus.MISSING
+                        && seed.expiryDays() == null);
         assertThat(catalog.demoChecklists().stream().map(seed -> seed.checklistItemId()))
                 .containsExactlyInAnyOrderElementsOf(idsExcept(
                         "94200000-0000-0000-0000-000000000",

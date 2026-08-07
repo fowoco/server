@@ -33,7 +33,7 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
             Map.entry("worker", 28),
             Map.entry("workflow_case", 21),
             Map.entry("task", 21),
-            Map.entry("worker_document", 81),
+            Map.entry("worker_document", 83),
             Map.entry("stored_file", 3),
             Map.entry("task_checklist_item", 60),
             Map.entry("approval_request", 12),
@@ -151,7 +151,35 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
                 Integer.class,
                 REPRESENTATIVE_WORKER_ID,
                 COMPANY_ID
-        )).isZero();
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM worker_document
+                WHERE worker_id = ? AND company_id = ?
+                  AND document_type = 'PASSPORT_COPY'
+                  AND submission_status = 'VERIFIED'
+                  AND expiry_date > CURRENT_DATE
+                  AND task_id IS NULL AND file_id IS NULL
+                """,
+                Integer.class,
+                REPRESENTATIVE_WORKER_ID,
+                COMPANY_ID
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM worker_document
+                WHERE worker_id = ? AND company_id = ?
+                  AND document_type = 'ARC'
+                  AND submission_status = 'MISSING'
+                  AND expiry_date IS NULL
+                  AND task_id IS NULL AND file_id IS NULL
+                """,
+                Integer.class,
+                REPRESENTATIVE_WORKER_ID,
+                COMPANY_ID
+        )).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*)

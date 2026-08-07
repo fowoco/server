@@ -27,8 +27,13 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
+import com.fowoco.server.aiintegration.application.model.WorkerContext;
+import com.fowoco.server.aiintegration.application.model.WorkflowConstraint;
 import com.fowoco.server.aiintegration.support.AiRuntimeContractFixture;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -224,6 +229,54 @@ class AiRuntimeContractValidatorTest {
 
         assertFailure(
                 () -> validator.validateResponse(validRequest(), responseWithCandidate(changedDate)),
+                AiRuntimeFailureCode.CORE_VALUE_MISMATCH
+        );
+    }
+
+    @Test
+    void rejectsCandidateThatChangesServerOwnedDocumentStatus() {
+        AiAnalysisRequest baseRequest = validRequest();
+        WorkerContext baseWorker = baseRequest.analysisInput().workers().get(0);
+        Map<String, String> requestedFields = new HashMap<>(baseWorker.requestedFields());
+        requestedFields.put("arc_status", "MISSING");
+        WorkerContext worker = new WorkerContext(
+                baseWorker.workerRef(),
+                baseWorker.displayName(),
+                baseWorker.nationalityCode(),
+                baseWorker.preferredLanguage(),
+                baseWorker.workStatus(),
+                baseWorker.stayExpiryDate(),
+                baseWorker.contractStartDate(),
+                baseWorker.contractEndDate(),
+                requestedFields
+        );
+        List<String> requestedFieldKeys = new ArrayList<>(
+                baseRequest.analysisInput().requestedFieldKeys()
+        );
+        requestedFieldKeys.add("arc_status");
+        WorkflowConstraint baseConstraint =
+                baseRequest.analysisInput().workflowConstraints().get(0);
+        var allowedSlotKeys = new HashSet<>(baseConstraint.allowedSlotKeys());
+        allowedSlotKeys.add("arc_status");
+        AnalysisInput input = new AnalysisInput(
+                baseRequest.analysisInput().instruction(),
+                baseRequest.analysisInput().extractedSlots(),
+                requestedFieldKeys,
+                List.of(worker),
+                List.of(new WorkflowConstraint(baseConstraint.workflowId(), allowedSlotKeys))
+        );
+        AiAnalysisRequest request = requestWithPhase(AiAnalysisPhase.ANALYZE, input);
+        AiCandidate changedStatus = new AiCandidate(
+                "candidate-changed-document-status",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of("arc_status", "VERIFIED"),
+                List.of(),
+                BigDecimal.ONE
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(request, responseWithCandidate(changedStatus)),
                 AiRuntimeFailureCode.CORE_VALUE_MISMATCH
         );
     }
