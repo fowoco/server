@@ -107,7 +107,8 @@ class PostgreSqlMigrationTests {
                         "password_reset_token",
                         "worker_import_job",
                         "worker_import_row",
-                        "worker_import_commit_idempotency"
+                        "worker_import_commit_idempotency",
+                        "document_ocr_run"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -318,6 +319,16 @@ class PostgreSqlMigrationTests {
                 .containsEntry("request_hash", new ColumnSpec("varchar", false))
                 .containsEntry("response_snapshot_json", new ColumnSpec("text", false))
                 .containsEntry("created_at", new ColumnSpec("timestamptz", false));
+        assertThat(columnSpecs(connection, "document_ocr_run"))
+                .containsEntry("ocr_run_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("worker_document_id", new ColumnSpec("uuid", false))
+                .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("runtime_request_id", new ColumnSpec("uuid", false))
+                .containsEntry("status", new ColumnSpec("varchar", false))
+                .containsEntry("result_ciphertext", new ColumnSpec("text", true))
+                .containsEntry("result_key_version", new ColumnSpec("varchar", true))
+                .containsEntry("version", new ColumnSpec("int8", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -401,7 +412,12 @@ class PostgreSqlMigrationTests {
                         "fk_worker_import_row_job_company",
                         "fk_worker_import_row_worker_company",
                         "pk_worker_import_commit_idempotency",
-                        "fk_worker_import_commit_idempotency_job_company"
+                        "fk_worker_import_commit_idempotency_job_company",
+                        "pk_document_ocr_run",
+                        "uq_document_ocr_run_idempotency",
+                        "fk_document_ocr_run_document_company",
+                        "fk_document_ocr_run_file_company",
+                        "fk_document_ocr_run_requester_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -438,7 +454,9 @@ class PostgreSqlMigrationTests {
                         "idx_password_reset_token_company_user",
                         "idx_password_reset_token_active",
                         "idx_worker_import_job_company_updated",
-                        "idx_worker_import_row_job_status"
+                        "idx_worker_import_row_job_status",
+                        "idx_document_ocr_run_document_created",
+                        "idx_document_ocr_run_company_status"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -476,7 +494,8 @@ class PostgreSqlMigrationTests {
                         "pl_password_reset_token_tenant_isolation",
                         "pl_worker_import_job_tenant_isolation",
                         "pl_worker_import_row_tenant_isolation",
-                        "pl_worker_import_commit_idempotency_tenant_isolation"
+                        "pl_worker_import_commit_idempotency_tenant_isolation",
+                        "pl_document_ocr_run_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
