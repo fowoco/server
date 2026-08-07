@@ -11,6 +11,7 @@ public final class Task {
 
     private final UUID taskId;
     private final UUID companyId;
+    private final TaskTargetType targetType;
     private final UUID workerId;
     private final UUID caseId;
     private final TaskType taskType;
@@ -29,6 +30,56 @@ public final class Task {
     private final Instant createdAt;
     private Instant updatedAt;
     private long version;
+
+    public Task(
+            UUID taskId,
+            UUID companyId,
+            TaskTargetType targetType,
+            UUID workerId,
+            UUID caseId,
+            TaskType taskType,
+            String workflowId,
+            String workflowCatalogVersion,
+            String title,
+            String description,
+            String businessDataJson,
+            String criticalFingerprint,
+            long contentRevision,
+            TaskSource source,
+            TaskStatus status,
+            LocalDate dueDate,
+            UUID createdBy,
+            UUID updatedBy,
+            Instant createdAt,
+            Instant updatedAt,
+            long version
+    ) {
+        this.taskId = Objects.requireNonNull(taskId);
+        this.companyId = Objects.requireNonNull(companyId);
+        this.targetType = Objects.requireNonNull(targetType);
+        this.workerId = workerId;
+        this.caseId = caseId;
+        requireTarget(targetType, workerId, caseId);
+        this.taskType = Objects.requireNonNull(taskType);
+        this.workflowId = requireText(workflowId, "workflowId");
+        this.workflowCatalogVersion = requireText(workflowCatalogVersion, "workflowCatalogVersion");
+        this.title = requireText(title, "title");
+        this.description = normalizeNullable(description);
+        this.businessDataJson = requireText(businessDataJson, "businessDataJson");
+        this.criticalFingerprint = requireFingerprint(criticalFingerprint);
+        if (contentRevision < 0) {
+            throw new IllegalArgumentException("contentRevision must not be negative");
+        }
+        this.contentRevision = contentRevision;
+        this.source = Objects.requireNonNull(source);
+        this.status = Objects.requireNonNull(status);
+        this.dueDate = dueDate;
+        this.createdBy = Objects.requireNonNull(createdBy);
+        this.updatedBy = Objects.requireNonNull(updatedBy);
+        this.createdAt = Objects.requireNonNull(createdAt);
+        this.updatedAt = Objects.requireNonNull(updatedAt);
+        this.version = version;
+    }
 
     public Task(
             UUID taskId,
@@ -52,34 +103,35 @@ public final class Task {
             Instant updatedAt,
             long version
     ) {
-        this.taskId = Objects.requireNonNull(taskId);
-        this.companyId = Objects.requireNonNull(companyId);
-        this.workerId = Objects.requireNonNull(workerId);
-        this.caseId = Objects.requireNonNull(caseId);
-        this.taskType = Objects.requireNonNull(taskType);
-        this.workflowId = requireText(workflowId, "workflowId");
-        this.workflowCatalogVersion = requireText(workflowCatalogVersion, "workflowCatalogVersion");
-        this.title = requireText(title, "title");
-        this.description = normalizeNullable(description);
-        this.businessDataJson = requireText(businessDataJson, "businessDataJson");
-        this.criticalFingerprint = requireFingerprint(criticalFingerprint);
-        if (contentRevision < 0) {
-            throw new IllegalArgumentException("contentRevision must not be negative");
-        }
-        this.contentRevision = contentRevision;
-        this.source = Objects.requireNonNull(source);
-        this.status = Objects.requireNonNull(status);
-        this.dueDate = dueDate;
-        this.createdBy = Objects.requireNonNull(createdBy);
-        this.updatedBy = Objects.requireNonNull(updatedBy);
-        this.createdAt = Objects.requireNonNull(createdAt);
-        this.updatedAt = Objects.requireNonNull(updatedAt);
-        this.version = version;
+        this(
+                taskId,
+                companyId,
+                TaskTargetType.WORKER,
+                workerId,
+                caseId,
+                taskType,
+                workflowId,
+                workflowCatalogVersion,
+                title,
+                description,
+                businessDataJson,
+                criticalFingerprint,
+                contentRevision,
+                source,
+                status,
+                dueDate,
+                createdBy,
+                updatedBy,
+                createdAt,
+                updatedAt,
+                version
+        );
     }
 
     public static Task create(
             UUID taskId,
             UUID companyId,
+            TaskTargetType targetType,
             UUID workerId,
             UUID caseId,
             TaskType taskType,
@@ -101,6 +153,7 @@ public final class Task {
         return new Task(
                 taskId,
                 companyId,
+                targetType,
                 workerId,
                 caseId,
                 taskType,
@@ -119,6 +172,45 @@ public final class Task {
                 now,
                 now,
                 0
+        );
+    }
+
+    public static Task create(
+            UUID taskId,
+            UUID companyId,
+            UUID workerId,
+            UUID caseId,
+            TaskType taskType,
+            String workflowId,
+            String workflowCatalogVersion,
+            String title,
+            String description,
+            String businessDataJson,
+            String criticalFingerprint,
+            TaskSource source,
+            TaskStatus initialStatus,
+            LocalDate dueDate,
+            UUID actorId,
+            Instant now
+    ) {
+        return create(
+                taskId,
+                companyId,
+                TaskTargetType.WORKER,
+                workerId,
+                caseId,
+                taskType,
+                workflowId,
+                workflowCatalogVersion,
+                title,
+                description,
+                businessDataJson,
+                criticalFingerprint,
+                source,
+                initialStatus,
+                dueDate,
+                actorId,
+                now
         );
     }
 
@@ -299,12 +391,30 @@ public final class Task {
         return fingerprint;
     }
 
+    private static void requireTarget(
+            TaskTargetType targetType,
+            UUID workerId,
+            UUID caseId
+    ) {
+        boolean valid = switch (targetType) {
+            case WORKER -> workerId != null && caseId != null;
+            case COMPANY -> workerId == null && caseId == null;
+        };
+        if (!valid) {
+            throw new ApiException(TaskErrorCode.INVALID_TASK_TARGET);
+        }
+    }
+
     public UUID taskId() {
         return taskId;
     }
 
     public UUID companyId() {
         return companyId;
+    }
+
+    public TaskTargetType targetType() {
+        return targetType;
     }
 
     public UUID workerId() {

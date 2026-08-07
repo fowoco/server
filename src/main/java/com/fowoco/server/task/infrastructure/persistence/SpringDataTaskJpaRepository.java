@@ -3,6 +3,8 @@ package com.fowoco.server.task.infrastructure.persistence;
 import java.util.Optional;
 import java.util.UUID;
 import com.fowoco.server.task.domain.TaskStatus;
+import com.fowoco.server.task.domain.TaskSource;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import java.time.LocalDate;
 import org.springframework.data.domain.Page;
@@ -21,6 +23,8 @@ interface SpringDataTaskJpaRepository extends JpaRepository<TaskJpaEntity, UUID>
              WHERE task.companyId = :companyId
                AND (:status IS NULL OR task.status = :status)
                AND (:taskType IS NULL OR task.taskType = :taskType)
+               AND (:targetType IS NULL OR task.targetType = :targetType)
+               AND (:source IS NULL OR task.source = :source)
                AND (:workerId IS NULL OR task.workerId = :workerId)
                AND (:caseId IS NULL OR task.caseId = :caseId)
                AND (:dueFrom IS NULL OR task.dueDate >= :dueFrom)
@@ -36,6 +40,8 @@ interface SpringDataTaskJpaRepository extends JpaRepository<TaskJpaEntity, UUID>
             @Param("companyId") UUID companyId,
             @Param("status") TaskStatus status,
             @Param("taskType") TaskType taskType,
+            @Param("targetType") TaskTargetType targetType,
+            @Param("source") TaskSource source,
             @Param("workerId") UUID workerId,
             @Param("caseId") UUID caseId,
             @Param("dueFrom") LocalDate dueFrom,

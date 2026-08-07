@@ -11,6 +11,10 @@ public enum TaskErrorCode implements ApiErrorCode {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "선택한 Workflow에서 지원하지 않는 업무 유형입니다."
     ),
+    INVALID_TASK_TARGET(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "업무 대상과 근로자·Case 정보의 조합을 확인해 주세요."
+    ),
     INVALID_TASK_FILTER(HttpStatus.BAD_REQUEST, "업무카드 조회 조건을 확인해 주세요."),
     WORKER_NOT_ELIGIBLE(
             HttpStatus.UNPROCESSABLE_CONTENT,

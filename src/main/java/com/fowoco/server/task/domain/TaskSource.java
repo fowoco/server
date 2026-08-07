@@ -3,5 +3,7 @@ package com.fowoco.server.task.domain;
 public enum TaskSource {
     MANUAL,
     SYSTEM_DDAY,
-    AI_CANDIDATE
+    AI_CANDIDATE,
+    FILE_IMPORT,
+    WORKER_RESPONSE
 }

@@ -6,6 +6,7 @@ import com.fowoco.server.task.application.TaskResult;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record TaskDetailResponse(
         UUID taskId,
+        TaskTargetType targetType,
         UUID workerId,
         UUID caseId,
         TaskType taskType,
@@ -40,6 +42,7 @@ public record TaskDetailResponse(
         Task task = result.task();
         return new TaskDetailResponse(
                 task.taskId(),
+                task.targetType(),
                 task.workerId(),
                 task.caseId(),
                 task.taskType(),

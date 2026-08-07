@@ -18,6 +18,7 @@ final class TaskDomainEvents {
     private static final String AGGREGATE_TYPE = "Task";
     private static final Set<String> TASK_CREATED_FIELDS = Set.of(
             "task_type",
+            "target_type",
             "status",
             "workflow_id",
             "workflow_catalog_version",
@@ -49,6 +50,7 @@ final class TaskDomainEvents {
                         TASK_CREATED_FIELDS,
                         Map.of(
                                 "task_type", task.taskType(),
+                                "target_type", task.targetType(),
                                 "status", task.status(),
                                 "workflow_id", task.workflowId(),
                                 "workflow_catalog_version", task.workflowCatalogVersion(),

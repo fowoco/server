@@ -5,7 +5,9 @@ import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.task.application.TaskResult;
 import com.fowoco.server.task.application.TaskWorkflowService;
+import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -62,6 +64,8 @@ public class TaskController {
     public TaskPageResponse findAll(
             @RequestParam(required = false) TaskStatus status,
             @RequestParam(required = false) TaskType taskType,
+            @RequestParam(name = "target_type", required = false) TaskTargetType targetType,
+            @RequestParam(required = false) TaskSource source,
             @RequestParam(required = false) UUID workerId,
             @Parameter(description = "Case ID 필터")
             @RequestParam(name = "case_id", required = false) UUID caseId,
@@ -74,6 +78,8 @@ public class TaskController {
         return TaskPageResponse.from(taskService.findAll(
                 status,
                 taskType,
+                targetType,
+                source,
                 workerId,
                 caseId,
                 dueFrom,

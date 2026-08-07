@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
+import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public record TaskSummaryResponse(
         UUID taskId,
+        TaskTargetType targetType,
         UUID workerId,
         UUID caseId,
         TaskType taskType,
@@ -30,6 +32,7 @@ public record TaskSummaryResponse(
     static TaskSummaryResponse from(Task task) {
         return new TaskSummaryResponse(
                 task.taskId(),
+                task.targetType(),
                 task.workerId(),
                 task.caseId(),
                 task.taskType(),

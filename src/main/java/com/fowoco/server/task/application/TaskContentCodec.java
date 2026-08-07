@@ -2,6 +2,7 @@ package com.fowoco.server.task.application;
 
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.task.application.error.TaskErrorCode;
+import com.fowoco.server.task.domain.TaskTargetType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -63,6 +64,7 @@ public class TaskContentCodec {
     }
 
     public EncodedTaskContent encode(
+            TaskTargetType targetType,
             UUID workerId,
             String workflowId,
             String taskType,
@@ -77,8 +79,9 @@ public class TaskContentCodec {
         approvalTarget.put("description", normalizeNullableText(description, 2000));
         approvalTarget.put("due_date", dueDate == null ? null : dueDate.toString());
         approvalTarget.put("task_type", normalizeText(taskType, 40));
+        approvalTarget.put("target_type", targetType.name());
         approvalTarget.put("title", normalizeText(title, 160));
-        approvalTarget.put("worker_id", workerId.toString());
+        approvalTarget.put("worker_id", workerId == null ? null : workerId.toString());
         approvalTarget.put("workflow_id", normalizeText(workflowId, 100));
         try {
             String businessDataJson = objectMapper.writeValueAsString(normalizedBusinessData);
@@ -87,6 +90,27 @@ public class TaskContentCodec {
         } catch (JacksonException exception) {
             throw rejected();
         }
+    }
+
+    public EncodedTaskContent encode(
+            UUID workerId,
+            String workflowId,
+            String taskType,
+            String title,
+            String description,
+            LocalDate dueDate,
+            Map<String, Object> businessData
+    ) {
+        return encode(
+                TaskTargetType.WORKER,
+                workerId,
+                workflowId,
+                taskType,
+                title,
+                description,
+                dueDate,
+                businessData
+        );
     }
 
     @SuppressWarnings("unchecked")
