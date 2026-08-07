@@ -328,6 +328,8 @@ class PostgreSqlMigrationTests {
                 .containsEntry("status", new ColumnSpec("varchar", false))
                 .containsEntry("result_ciphertext", new ColumnSpec("text", true))
                 .containsEntry("result_key_version", new ColumnSpec("varchar", true))
+                .containsEntry("corrected_fields_ciphertext", new ColumnSpec("text", true))
+                .containsEntry("corrected_fields_key_version", new ColumnSpec("varchar", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
 
         assertThat(constraintNames(connection))
@@ -415,6 +417,7 @@ class PostgreSqlMigrationTests {
                         "fk_worker_import_commit_idempotency_job_company",
                         "pk_document_ocr_run",
                         "uq_document_ocr_run_idempotency",
+                        "ck_document_ocr_run_correction_pair",
                         "fk_document_ocr_run_document_company",
                         "fk_document_ocr_run_file_company",
                         "fk_document_ocr_run_requester_company"

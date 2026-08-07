@@ -5,12 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
-import com.fowoco.server.aiintegration.application.ocr.AiOcrDocumentSide;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrRequest;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrResponse;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrStatus;
 import com.fowoco.server.aiintegration.application.port.AiOcrClient;
 import com.fowoco.server.file.application.port.FileStorage;
+import com.fowoco.server.reliability.application.OutboxProcessor;
+import com.fowoco.server.reliability.application.OutboxClaimService;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -49,7 +50,8 @@ import org.springframework.test.context.ActiveProfiles;
         properties = {
                 "app.document.ocr.enabled=true",
                 "app.document.ocr.encryption-key-base64=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-                "app.document.ocr.key-version=test-v1"
+                "app.document.ocr.key-version=test-v1",
+                "app.reliability.outbox.enabled=false"
         }
 )
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -85,6 +87,12 @@ class DocumentOcrApiIntegrationTest {
     @Autowired
     private TestAiOcrClient aiOcrClient;
 
+    @Autowired
+    private OutboxProcessor outboxProcessor;
+
+    @Autowired
+    private OutboxClaimService outboxClaimService;
+
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(2))
             .build();
@@ -101,6 +109,8 @@ class DocumentOcrApiIntegrationTest {
 
     @BeforeEach
     void resetOcrFixture() {
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM document_ocr_run");
         jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM worker_document");
@@ -117,13 +127,46 @@ class DocumentOcrApiIntegrationTest {
     }
 
     @Test
-    void ocrRunIsQueuedThenEncryptedAndReviewedWithoutUpdatingWorker() throws Exception {
+    void ocrRunIsRecoveredAfterExpiredLeaseThenEncryptedAndReviewedWithoutUpdatingWorker() throws Exception {
         String token = accessToken(login(HR_A_EMAIL));
 
         HttpResponse<String> created = postOcr(DOCUMENT_A, "ocr-request-0001", token);
 
         assertThat(created.statusCode()).as(created.body()).isEqualTo(202);
         UUID runId = UUID.fromString(JsonPath.read(created.body(), "$.ocr_run_id"));
+        assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("QUEUED");
+        assertThat(aiOcrClient.requests()).isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM event_publication WHERE aggregate_id = ?",
+                String.class,
+                runId
+        )).isEqualTo("PENDING");
+
+        UUID eventId = jdbcTemplate.queryForObject(
+                "SELECT event_id FROM event_publication WHERE aggregate_id = ?",
+                UUID.class,
+                runId
+        );
+        assertThat(outboxClaimService.claimBatch("stopped-ocr-server"))
+                .containsExactly(new OutboxClaimService.ClaimedEvent(eventId, COMPANY_A));
+        jdbcTemplate.update(
+                """
+                UPDATE document_ocr_run
+                SET status = 'RUNNING', started_at = ?, updated_at = ?, version = version + 1
+                WHERE ocr_run_id = ?
+                """,
+                java.time.Instant.now(),
+                java.time.Instant.now(),
+                runId
+        );
+        jdbcTemplate.update(
+                "UPDATE event_publication SET lease_expires_at = ?, version = version + 1 WHERE event_id = ?",
+                java.time.Instant.now().minusSeconds(60),
+                eventId
+        );
+
+        assertThat(outboxProcessor.processAvailable()).isEqualTo(1);
+
         HttpResponse<String> completed = awaitStatus(DOCUMENT_A, runId, token, "READY_FOR_REVIEW");
         assertThat(JsonPath.<String>read(completed.body(), "$.result.fields.passport_number"))
                 .isEqualTo("M12345678");
@@ -150,9 +193,33 @@ class DocumentOcrApiIntegrationTest {
         )).isGreaterThanOrEqualTo(1);
 
         long version = JsonPath.<Number>read(completed.body(), "$.version").longValue();
-        HttpResponse<String> reviewed = review(DOCUMENT_A, runId, version, "APPROVE", null, token);
+        HttpResponse<String> reviewed = review(
+                DOCUMENT_A,
+                runId,
+                version,
+                "APPROVE",
+                null,
+                Map.of("passport_number", "M87654321"),
+                token
+        );
         assertThat(reviewed.statusCode()).as(reviewed.body()).isEqualTo(200);
         assertThat(JsonPath.<String>read(reviewed.body(), "$.status")).isEqualTo("APPROVED");
+        assertThat(JsonPath.<String>read(reviewed.body(), "$.result.fields.passport_number"))
+                .isEqualTo("M12345678");
+        assertThat(JsonPath.<String>read(reviewed.body(), "$.corrected_fields.passport_number"))
+                .isEqualTo("M87654321");
+        String correctedCiphertext = jdbcTemplate.queryForObject(
+                "SELECT corrected_fields_ciphertext FROM document_ocr_run WHERE ocr_run_id = ?",
+                String.class,
+                runId
+        );
+        assertThat(correctedCiphertext).startsWith("v1.").doesNotContain("M87654321");
+        String auditSummary = jdbcTemplate.queryForObject(
+                "SELECT change_summary FROM audit_event WHERE target_id = ? AND action = 'DOCUMENT_OCR_APPROVED'",
+                String.class,
+                runId
+        );
+        assertThat(auditSummary).contains("passport_number").doesNotContain("M87654321");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT nationality_code FROM worker WHERE worker_id = ?",
                 String.class,
@@ -165,6 +232,7 @@ class DocumentOcrApiIntegrationTest {
         String token = accessToken(login(HR_A_EMAIL));
         HttpResponse<String> first = postOcr(DOCUMENT_A, "ocr-request-0002", token);
         UUID runId = UUID.fromString(JsonPath.read(first.body(), "$.ocr_run_id"));
+        assertThat(outboxProcessor.processAvailable()).isEqualTo(1);
         awaitStatus(DOCUMENT_A, runId, token, "READY_FOR_REVIEW");
 
         HttpResponse<String> replay = postOcr(DOCUMENT_A, "ocr-request-0002", token);
@@ -202,12 +270,14 @@ class DocumentOcrApiIntegrationTest {
         aiOcrClient.failNext();
         HttpResponse<String> first = postOcr(DOCUMENT_A, "ocr-request-0004", token);
         UUID failedRunId = UUID.fromString(JsonPath.read(first.body(), "$.ocr_run_id"));
+        assertThat(outboxProcessor.processAvailable()).isEqualTo(1);
         HttpResponse<String> failed = awaitStatus(DOCUMENT_A, failedRunId, token, "FAILED");
         assertThat(JsonPath.<String>read(failed.body(), "$.error_code"))
                 .isEqualTo("RUNTIME_UNAVAILABLE");
 
         HttpResponse<String> retry = postOcr(DOCUMENT_A, "ocr-request-0005", token);
         UUID retryRunId = UUID.fromString(JsonPath.read(retry.body(), "$.ocr_run_id"));
+        assertThat(outboxProcessor.processAvailable()).isEqualTo(1);
         awaitStatus(DOCUMENT_A, retryRunId, token, "READY_FOR_REVIEW");
 
         assertThat(retryRunId).isNotEqualTo(failedRunId);
@@ -221,6 +291,38 @@ class DocumentOcrApiIntegrationTest {
                 Integer.class,
                 failedRunId
         )).isEqualTo(1);
+    }
+
+    @Test
+    void unknownCorrectionFieldIsRejectedWithoutChangingReviewState() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        HttpResponse<String> created = postOcr(DOCUMENT_A, "ocr-request-0006", token);
+        UUID runId = UUID.fromString(JsonPath.read(created.body(), "$.ocr_run_id"));
+        assertThat(outboxProcessor.processAvailable()).isEqualTo(1);
+        HttpResponse<String> completed = awaitStatus(DOCUMENT_A, runId, token, "READY_FOR_REVIEW");
+        long version = JsonPath.<Number>read(completed.body(), "$.version").longValue();
+
+        HttpResponse<String> rejected = review(
+                DOCUMENT_A,
+                runId,
+                version,
+                "APPROVE",
+                null,
+                Map.of("raw_provider_response", "노출되면 안 되는 값"),
+                token
+        );
+
+        assertThat(rejected.statusCode()).as(rejected.body()).isEqualTo(422);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM document_ocr_run WHERE ocr_run_id = ?",
+                String.class,
+                runId
+        )).isEqualTo("READY_FOR_REVIEW");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT corrected_fields_ciphertext FROM document_ocr_run WHERE ocr_run_id = ?",
+                String.class,
+                runId
+        )).isNull();
     }
 
     private HttpResponse<String> awaitStatus(
@@ -252,12 +354,16 @@ class DocumentOcrApiIntegrationTest {
             long version,
             String decision,
             String reason,
+            Map<String, String> correctedFields,
             String token
     ) throws Exception {
-        String body = reason == null
-                ? "{\"expected_version\":" + version + ",\"decision\":\"" + decision + "\"}"
-                : "{\"expected_version\":" + version + ",\"decision\":\"" + decision
-                + "\",\"reason\":\"" + reason + "\"}";
+        String fieldsJson = correctedFields.entrySet().stream()
+                .map(entry -> "\"" + entry.getKey() + "\":\"" + entry.getValue() + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "{", "}"));
+        String body = "{\"expected_version\":" + version
+                + ",\"decision\":\"" + decision + "\""
+                + (reason == null ? "" : ",\"reason\":\"" + reason + "\"")
+                + ",\"corrected_fields\":" + fieldsJson + "}";
         HttpRequest request = HttpRequest.newBuilder(uri(
                         "/api/v1/documents/" + documentId + "/ocr-runs/" + runId + "/review"
                 ))
@@ -377,6 +483,8 @@ class DocumentOcrApiIntegrationTest {
     }
 
     private void deleteFixture() {
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM document_ocr_run");
         jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM worker_document");
@@ -453,12 +561,21 @@ class DocumentOcrApiIntegrationTest {
                     request.requestId(),
                     request.workerDocumentId(),
                     AiOcrStatus.SUCCEEDED,
-                    1L,
-                    AiOcrDocumentSide.FRONT,
-                    Map.of("passport_number", "M12345678", "surname", "NGUYEN"),
+                    43038L,
+                    null,
+                    Map.of(
+                            "passport_number", "M12345678",
+                            "surname", "NGUYEN",
+                            "given_names", "VAN AN",
+                            "date_of_birth", "1995-03-01",
+                            "passport_expiry_date", "2028-03-01"
+                    ),
                     Map.of(
                             "passport_number", new BigDecimal("0.99"),
-                            "surname", new BigDecimal("0.98")
+                            "surname", new BigDecimal("0.98"),
+                            "given_names", new BigDecimal("0.97"),
+                            "date_of_birth", new BigDecimal("0.99"),
+                            "passport_expiry_date", new BigDecimal("0.96")
                     ),
                     List.of()
             );

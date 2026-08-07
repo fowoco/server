@@ -28,9 +28,11 @@ import com.fowoco.server.document.application.port.DocumentOcrRunRepository;
 import com.fowoco.server.document.application.port.OcrResultCipher;
 import com.fowoco.server.document.domain.DocumentOcrReviewDecision;
 import com.fowoco.server.document.domain.DocumentOcrRun;
+import com.fowoco.server.document.domain.DocumentOcrRunStatus;
 import com.fowoco.server.file.application.port.FileStorage;
 import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.file.domain.StoredFile;
+import com.fowoco.server.reliability.application.port.DomainEventPublisher;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.DocumentType;
@@ -43,13 +45,15 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -62,6 +66,16 @@ public class DocumentOcrService {
     private static final Logger log = LoggerFactory.getLogger(DocumentOcrService.class);
     private static final int MAX_FILE_BYTES = 20 * 1024 * 1024;
     private static final String AUDIT_EVENT_VERSION = "1.0";
+    private static final Set<String> PASSPORT_CORRECTABLE_FIELDS = Set.of(
+            "passport_number", "surname", "given_names", "date_of_birth", "sex",
+            "passport_issue_date", "passport_expiry_date"
+    );
+    private static final Set<String> ARC_CORRECTABLE_FIELDS = Set.of(
+            "alien_registration_number", "visa_type", "stay_expiration_date", "residence_address_1"
+    );
+    private static final Set<String> DATE_FIELDS = Set.of(
+            "date_of_birth", "passport_issue_date", "passport_expiry_date", "stay_expiration_date"
+    );
 
     private final ActorAuthorizer actorAuthorizer;
     private final TenantDatabaseContext tenantDatabaseContext;
@@ -77,7 +91,7 @@ public class DocumentOcrService {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
-    private final Executor taskExecutor;
+    private final DomainEventPublisher eventPublisher;
     private final AiOcrPassportCountryCodeResolver countryCodeResolver =
             new AiOcrPassportCountryCodeResolver();
 
@@ -96,7 +110,7 @@ public class DocumentOcrService {
             Clock clock,
             ObjectMapper objectMapper,
             TransactionTemplate transactionTemplate,
-            @Qualifier("documentOcrTaskExecutor") Executor taskExecutor
+            DomainEventPublisher eventPublisher
     ) {
         this.actorAuthorizer = actorAuthorizer;
         this.tenantDatabaseContext = tenantDatabaseContext;
@@ -112,7 +126,7 @@ public class DocumentOcrService {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.transactionTemplate = transactionTemplate;
-        this.taskExecutor = taskExecutor;
+        this.eventPublisher = eventPublisher;
     }
 
     public DocumentOcrRunResult create(
@@ -137,9 +151,6 @@ public class DocumentOcrService {
         }
         if (creation == null) {
             throw new IllegalStateException("OCR creation transaction returned no result");
-        }
-        if (creation.newlyCreated()) {
-            schedule(creation.run().ocrRunId(), creation.run().companyId());
         }
         return result(creation.run(), !creation.newlyCreated());
     }
@@ -205,8 +216,18 @@ public class DocumentOcrService {
                 throw new ApiException(DocumentErrorCode.DOCUMENT_OCR_NOT_REVIEWABLE);
             }
             String reason = normalizeReviewReason(command.decision(), command.reason());
+            Map<String, String> correctedFields = normalizeCorrectedFields(
+                    current.documentType(), command.decision(), command.correctedFields()
+            );
+            String correctedCiphertext = correctedFields.isEmpty()
+                    ? null
+                    : resultCipher.encrypt(serializeCorrections(correctedFields), actor.companyId(), ocrRunId);
+            String correctedKeyVersion = correctedFields.isEmpty() ? null : resultCipher.keyVersion();
             DocumentOcrRun saved = ocrRunRepository.update(
-                    current.review(command.decision(), actor.actorId(), reason, clock.instant())
+                    current.review(
+                            command.decision(), actor.actorId(), reason,
+                            correctedCiphertext, correctedKeyVersion, clock.instant()
+                    )
             );
             appendHumanAudit(
                     saved,
@@ -215,7 +236,7 @@ public class DocumentOcrService {
                             ? AuditAction.DOCUMENT_OCR_APPROVED
                             : AuditAction.DOCUMENT_OCR_REJECTED,
                     metadata,
-                    "OCR 결과 " + (command.decision() == DocumentOcrReviewDecision.APPROVE ? "승인" : "반려")
+                    reviewAuditSummary(command.decision(), correctedFields)
             );
             return result(saved, false);
         });
@@ -269,6 +290,9 @@ public class DocumentOcrService {
         );
         ocrRunRepository.insert(run);
         appendHumanAudit(run, actor, AuditAction.DOCUMENT_OCR_REQUESTED, metadata, "문서 OCR 실행 요청");
+        eventPublisher.publish(DocumentOcrDomainEvents.executionRequested(
+                uuidGenerator.generate(), run, actor, metadata, now
+        ));
         return new Creation(run, true);
     }
 
@@ -287,18 +311,13 @@ public class DocumentOcrService {
         return new Creation(existing, false);
     }
 
-    private void schedule(UUID ocrRunId, UUID companyId) {
-        try {
-            taskExecutor.execute(() -> execute(ocrRunId, companyId));
-        } catch (RuntimeException exception) {
-            markFailed(ocrRunId, companyId, AiRuntimeFailureCode.RUNTIME_UNAVAILABLE);
-        }
-    }
-
-    private void execute(UUID ocrRunId, UUID companyId) {
+    void executeFromOutbox(UUID ocrRunId, UUID companyId) {
         ExecutionInput input;
         try {
             input = requiredTransaction(() -> prepareExecution(ocrRunId, companyId));
+            if (input == null) {
+                return;
+            }
             byte[] content = readFile(input.file());
             AiOcrRequest request = new AiOcrRequest(
                     input.run().runtimeRequestId(),
@@ -329,27 +348,29 @@ public class DocumentOcrService {
     private ExecutionInput prepareExecution(UUID ocrRunId, UUID companyId) {
         bindTenant(companyId);
         DocumentOcrRun current = requireRun(ocrRunId, companyId);
-        DocumentOcrRun running = ocrRunRepository.update(current.start(clock.instant()));
+        if (current.status().hasResult() || current.status() == DocumentOcrRunStatus.FAILED) {
+            return null;
+        }
+        DocumentOcrRun running = current.status() == DocumentOcrRunStatus.QUEUED
+                ? ocrRunRepository.update(current.start(clock.instant()))
+                : current;
         StoredFile file = storedFileRepository.findByIdAndCompanyId(running.storedFileId(), companyId)
                 .orElseThrow(() -> new ApiException(DocumentErrorCode.DOCUMENT_OCR_FILE_REQUIRED));
         return new ExecutionInput(running, file);
     }
 
     private void markFailed(UUID ocrRunId, UUID companyId, AiRuntimeFailureCode failureCode) {
-        try {
-            requiredTransaction(() -> {
-                bindTenant(companyId);
-                DocumentOcrRun current = requireRun(ocrRunId, companyId);
-                if (current.status().hasResult() || current.status() == com.fowoco.server.document.domain.DocumentOcrRunStatus.FAILED) {
-                    return null;
-                }
-                DocumentOcrRun saved = ocrRunRepository.update(current.fail(failureCode.name(), clock.instant()));
-                appendSystemAudit(saved, AuditAction.DOCUMENT_OCR_FAILED, "문서 OCR 실행 실패: " + failureCode.name());
+        requiredTransaction(() -> {
+            bindTenant(companyId);
+            DocumentOcrRun current = requireRun(ocrRunId, companyId);
+            if (current.status().hasResult()
+                    || current.status() == DocumentOcrRunStatus.FAILED) {
                 return null;
-            });
-        } catch (RuntimeException persistenceFailure) {
-            log.error("Failed to persist OCR failure state. ocrRunId={}", ocrRunId, persistenceFailure);
-        }
+            }
+            DocumentOcrRun saved = ocrRunRepository.update(current.fail(failureCode.name(), clock.instant()));
+            appendSystemAudit(saved, AuditAction.DOCUMENT_OCR_FAILED, "문서 OCR 실행 실패: " + failureCode.name());
+            return null;
+        });
     }
 
     private DocumentOcrRunResult result(DocumentOcrRun run, boolean alreadyRequested) {
@@ -362,7 +383,21 @@ public class DocumentOcrService {
                 throw new IllegalStateException("stored OCR result is invalid", exception);
             }
         }
-        return new DocumentOcrRunResult(run, payload, alreadyRequested);
+        return new DocumentOcrRunResult(run, payload, decryptCorrections(run), alreadyRequested);
+    }
+
+    private Map<String, String> decryptCorrections(DocumentOcrRun run) {
+        if (run.correctedFieldsCiphertext() == null) {
+            return Map.of();
+        }
+        byte[] plaintext = resultCipher.decrypt(
+                run.correctedFieldsCiphertext(), run.companyId(), run.ocrRunId()
+        );
+        try {
+            return objectMapper.readValue(plaintext, DocumentOcrCorrectedFieldsPayload.class).fields();
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("stored OCR corrections are invalid", exception);
+        }
     }
 
     private byte[] serializePayload(AiOcrResponse response) {
@@ -377,6 +412,14 @@ public class DocumentOcrService {
             return objectMapper.writeValueAsBytes(payload);
         } catch (JacksonException exception) {
             throw new IllegalStateException("OCR result serialization failed", exception);
+        }
+    }
+
+    private byte[] serializeCorrections(Map<String, String> correctedFields) {
+        try {
+            return objectMapper.writeValueAsBytes(new DocumentOcrCorrectedFieldsPayload(correctedFields));
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("OCR corrections serialization failed", exception);
         }
     }
 
@@ -450,6 +493,56 @@ public class DocumentOcrService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED);
         }
         return normalized;
+    }
+
+    private Map<String, String> normalizeCorrectedFields(
+            DocumentType documentType,
+            DocumentOcrReviewDecision decision,
+            Map<String, String> rawFields
+    ) {
+        Map<String, String> fields = rawFields == null ? Map.of() : rawFields;
+        if (fields.size() > 20 || (decision == DocumentOcrReviewDecision.REJECT && !fields.isEmpty())) {
+            throw new ApiException(DocumentErrorCode.DOCUMENT_OCR_CORRECTION_INVALID);
+        }
+        Set<String> allowedFields = switch (documentType) {
+            case PASSPORT_COPY -> PASSPORT_CORRECTABLE_FIELDS;
+            case ARC -> ARC_CORRECTABLE_FIELDS;
+            case CONTRACT, PERMIT -> Set.of();
+        };
+        Map<String, String> normalized = new LinkedHashMap<>();
+        fields.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> {
+                    String key = entry.getKey();
+                    String value = entry.getValue() == null ? null : entry.getValue().strip();
+                    if (!allowedFields.contains(key)
+                            || value == null || value.isEmpty() || value.length() > 500
+                            || (DATE_FIELDS.contains(key) && !isIsoDate(value))) {
+                        throw new ApiException(DocumentErrorCode.DOCUMENT_OCR_CORRECTION_INVALID);
+                    }
+                    normalized.put(key, value);
+                });
+        return Map.copyOf(normalized);
+    }
+
+    private boolean isIsoDate(String value) {
+        try {
+            LocalDate.parse(value);
+            return true;
+        } catch (java.time.format.DateTimeParseException exception) {
+            return false;
+        }
+    }
+
+    private String reviewAuditSummary(
+            DocumentOcrReviewDecision decision,
+            Map<String, String> correctedFields
+    ) {
+        String summary = "OCR 결과 검토 완료: " + decision.name();
+        if (!correctedFields.isEmpty()) {
+            summary += ", 수정 필드=" + correctedFields.keySet().stream().sorted().toList();
+        }
+        return summary;
     }
 
     private void requireFeatureEnabled() {

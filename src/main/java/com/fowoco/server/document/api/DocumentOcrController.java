@@ -116,8 +116,8 @@ public class DocumentOcrController {
 
     @Operation(
             operationId = "reviewDocumentOcrRun",
-            summary = "OCR 결과 승인·반려",
-            description = "OCR 결과를 검토 상태로만 확정합니다. Worker·민감정보 테이블은 자동 수정하지 않습니다."
+            summary = "OCR 결과 검토 완료·반려",
+            description = "OCR 원본과 HR 수정값을 분리해 검토 상태만 확정합니다. Worker·Document·Agent slot은 자동 수정하지 않습니다."
     )
     @PostMapping(
             path = "/{ocrRunId}/review",
@@ -137,7 +137,8 @@ public class DocumentOcrController {
                 new DocumentOcrReviewCommand(
                         request.expectedVersion(),
                         request.decision(),
-                        request.reason()
+                        request.reason(),
+                        request.correctedFields()
                 ),
                 actorContextProvider.requireCurrentActor(),
                 RequestMetadata.from(servletRequest)

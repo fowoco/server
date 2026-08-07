@@ -21,6 +21,8 @@ public final class DocumentOcrRun {
     private final DocumentOcrRunStatus status;
     private final String resultCiphertext;
     private final String resultKeyVersion;
+    private final String correctedFieldsCiphertext;
+    private final String correctedFieldsKeyVersion;
     private final String lastErrorCode;
     private final UUID reviewedBy;
     private final String reviewReason;
@@ -45,6 +47,8 @@ public final class DocumentOcrRun {
             DocumentOcrRunStatus status,
             String resultCiphertext,
             String resultKeyVersion,
+            String correctedFieldsCiphertext,
+            String correctedFieldsKeyVersion,
             String lastErrorCode,
             UUID reviewedBy,
             String reviewReason,
@@ -68,6 +72,14 @@ public final class DocumentOcrRun {
         this.status = Objects.requireNonNull(status, "status must not be null");
         this.resultCiphertext = normalize(resultCiphertext);
         this.resultKeyVersion = normalize(resultKeyVersion);
+        this.correctedFieldsCiphertext = normalize(correctedFieldsCiphertext);
+        this.correctedFieldsKeyVersion = normalize(correctedFieldsKeyVersion);
+        if ((this.resultCiphertext == null) != (this.resultKeyVersion == null)) {
+            throw new IllegalArgumentException("OCR result ciphertext and key version must be paired");
+        }
+        if ((this.correctedFieldsCiphertext == null) != (this.correctedFieldsKeyVersion == null)) {
+            throw new IllegalArgumentException("OCR corrected fields and key version must be paired");
+        }
         this.lastErrorCode = normalize(lastErrorCode);
         this.reviewedBy = reviewedBy;
         this.reviewReason = normalize(reviewReason);
@@ -98,14 +110,15 @@ public final class DocumentOcrRun {
         return new DocumentOcrRun(
                 ocrRunId, companyId, workerDocumentId, storedFileId, requestedBy,
                 runtimeRequestId, idempotencyKeyHash, requestHash, documentType,
-                countryCode, DocumentOcrRunStatus.QUEUED, null, null, null,
-                null, null, now, null, null, null, now, 0L
+                countryCode, DocumentOcrRunStatus.QUEUED, null, null, null, null,
+                null, null, null, now, null, null, null, now, 0L
         );
     }
 
     public DocumentOcrRun start(Instant now) {
         requireStatus(DocumentOcrRunStatus.QUEUED);
-        return copy(DocumentOcrRunStatus.RUNNING, null, null, null, null, null, now, null, null, now);
+        return copy(DocumentOcrRunStatus.RUNNING, null, null, null, null, null,
+                null, null, now, null, null, now);
     }
 
     public DocumentOcrRun complete(
@@ -119,21 +132,23 @@ public final class DocumentOcrRun {
                 ? DocumentOcrRunStatus.READY_FOR_REVIEW
                 : DocumentOcrRunStatus.REVIEW_REQUIRED;
         return copy(next, requireText(ciphertext, "ciphertext"), requireText(keyVersion, "keyVersion"),
-                null, null, null, startedAt, now, null, now);
+                null, null, null, null, null, startedAt, now, null, now);
     }
 
     public DocumentOcrRun fail(String errorCode, Instant now) {
         if (status != DocumentOcrRunStatus.QUEUED && status != DocumentOcrRunStatus.RUNNING) {
             throw new IllegalStateException("only queued or running OCR can fail");
         }
-        return copy(DocumentOcrRunStatus.FAILED, null, null, requireText(errorCode, "errorCode"),
-                null, null, startedAt, now, null, now);
+        return copy(DocumentOcrRunStatus.FAILED, null, null, null, null,
+                requireText(errorCode, "errorCode"), null, null, startedAt, now, null, now);
     }
 
     public DocumentOcrRun review(
             DocumentOcrReviewDecision decision,
             UUID reviewerId,
             String reason,
+            String correctedCiphertext,
+            String correctedKeyVersion,
             Instant now
     ) {
         if (!status.isReviewable()) {
@@ -142,7 +157,8 @@ public final class DocumentOcrRun {
         DocumentOcrRunStatus next = decision == DocumentOcrReviewDecision.APPROVE
                 ? DocumentOcrRunStatus.APPROVED
                 : DocumentOcrRunStatus.REJECTED;
-        return copy(next, resultCiphertext, resultKeyVersion, null,
+        return copy(next, resultCiphertext, resultKeyVersion,
+                normalize(correctedCiphertext), normalize(correctedKeyVersion), null,
                 Objects.requireNonNull(reviewerId, "reviewerId must not be null"), normalize(reason),
                 startedAt, completedAt, now, now);
     }
@@ -151,6 +167,8 @@ public final class DocumentOcrRun {
             DocumentOcrRunStatus nextStatus,
             String nextCiphertext,
             String nextKeyVersion,
+            String nextCorrectedCiphertext,
+            String nextCorrectedKeyVersion,
             String nextErrorCode,
             UUID nextReviewedBy,
             String nextReviewReason,
@@ -162,7 +180,8 @@ public final class DocumentOcrRun {
         return new DocumentOcrRun(
                 ocrRunId, companyId, workerDocumentId, storedFileId, requestedBy,
                 runtimeRequestId, idempotencyKeyHash, requestHash, documentType, countryCode,
-                nextStatus, nextCiphertext, nextKeyVersion, nextErrorCode, nextReviewedBy,
+                nextStatus, nextCiphertext, nextKeyVersion,
+                nextCorrectedCiphertext, nextCorrectedKeyVersion, nextErrorCode, nextReviewedBy,
                 nextReviewReason, createdAt, nextStartedAt, nextCompletedAt,
                 nextReviewedAt, nextUpdatedAt, version
         );
@@ -199,6 +218,8 @@ public final class DocumentOcrRun {
     public DocumentOcrRunStatus status() { return status; }
     public String resultCiphertext() { return resultCiphertext; }
     public String resultKeyVersion() { return resultKeyVersion; }
+    public String correctedFieldsCiphertext() { return correctedFieldsCiphertext; }
+    public String correctedFieldsKeyVersion() { return correctedFieldsKeyVersion; }
     public String lastErrorCode() { return lastErrorCode; }
     public UUID reviewedBy() { return reviewedBy; }
     public String reviewReason() { return reviewReason; }
