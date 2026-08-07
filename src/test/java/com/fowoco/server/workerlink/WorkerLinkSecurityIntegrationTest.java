@@ -136,10 +136,97 @@ class WorkerLinkSecurityIntegrationTest {
         );
         assertThat(responseSubmit.statusCode()).isEqualTo(201);
         assertThat(JsonPath.<String>read(responseSubmit.body(), "$.response_id")).isNotBlank();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT conversation_status FROM worker_link WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).isEqualTo("NEEDS_FOLLOWUP");
 
         HttpResponse<String> activitiesResponse = getJson("/api/v1/tasks/" + taskId + "/activities", hrToken);
         assertThat(activitiesResponse.statusCode()).isEqualTo(200);
         assertThat(activitiesResponse.body()).contains("WORKER_LINK_RESPONSE_SUBMITTED");
+    }
+
+    @Test
+    void hrCanListAndMarkWorkerResponsesReviewed() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "응답조회테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String workerUrl = issueWorkerLink(hrToken, taskId, "response-management-key");
+
+        HttpResponse<String> submitResponse = postJson(
+                "/public/worker-links/" + workerUrl + "/responses",
+                """
+                {"response_type":"QUESTION","message":"여권의 어느 면을 제출하나요?","idempotency_key":"question-key"}
+                """,
+                null
+        );
+        assertThat(submitResponse.statusCode()).isEqualTo(201);
+
+        HttpResponse<String> listResponse = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses?page=0&size=20",
+                hrToken
+        );
+        assertThat(listResponse.statusCode()).as("body: %s", listResponse.body()).isEqualTo(200);
+        assertThat(JsonPath.<Integer>read(listResponse.body(), "$.total_elements")).isEqualTo(1);
+        assertThat(JsonPath.<String>read(listResponse.body(), "$.items[0].response_type"))
+                .isEqualTo("QUESTION");
+        assertThat(JsonPath.<String>read(listResponse.body(), "$.items[0].message"))
+                .isEqualTo("여권의 어느 면을 제출하나요?");
+        assertThat(JsonPath.<Boolean>read(listResponse.body(), "$.items[0].unread")).isTrue();
+
+        HttpResponse<String> readResponse = postWithoutBody(
+                "/api/v1/tasks/" + taskId + "/worker-responses/read",
+                hrToken
+        );
+        assertThat(readResponse.statusCode()).isEqualTo(204);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT conversation_status FROM worker_link WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).isEqualTo("REOPENED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'WORKER_LINK_RESPONSES_REVIEWED'",
+                Integer.class,
+                UUID.fromString(taskId)
+        )).isEqualTo(1);
+
+        HttpResponse<String> reviewedListResponse = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrToken
+        );
+        assertThat(JsonPath.<Boolean>read(reviewedListResponse.body(), "$.items[0].unread")).isFalse();
+
+        HttpResponse<String> repeatedReadResponse = postWithoutBody(
+                "/api/v1/tasks/" + taskId + "/worker-responses/read",
+                hrToken
+        );
+        assertThat(repeatedReadResponse.statusCode()).isEqualTo(204);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'WORKER_LINK_RESPONSES_REVIEWED'",
+                Integer.class,
+                UUID.fromString(taskId)
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void workerResponsesAreHiddenFromOtherCompany() throws Exception {
+        String hrTokenA = accessToken(login(HR_A_EMAIL));
+        String hrTokenB = accessToken(login(HR_B_EMAIL));
+        String workerId = registerWorker(hrTokenA, "응답격리테스트근로자");
+        String taskId = createApprovedTask(hrTokenA, workerId);
+
+        HttpResponse<String> listResponse = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrTokenB
+        );
+        assertThat(listResponse.statusCode()).isEqualTo(404);
+
+        HttpResponse<String> readResponse = postWithoutBody(
+                "/api/v1/tasks/" + taskId + "/worker-responses/read",
+                hrTokenB
+        );
+        assertThat(readResponse.statusCode()).isEqualTo(404);
     }
 
     @Test
@@ -235,6 +322,19 @@ class WorkerLinkSecurityIntegrationTest {
         );
         assertThat(approve.statusCode()).as("approve response body: %s", approve.body()).isEqualTo(200);
         return taskId;
+    }
+
+    private String issueWorkerLink(String token, String taskId, String idempotencyKey) throws Exception {
+        HttpResponse<String> response = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                token,
+                idempotencyKey
+        );
+        assertThat(response.statusCode()).as("issue response body: %s", response.body()).isEqualTo(201);
+        return JsonPath.read(response.body(), "$.worker_url");
     }
 
     private void completeRequiredChecklistItems(String taskId, String token) throws Exception {
@@ -383,6 +483,15 @@ class WorkerLinkSecurityIntegrationTest {
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
                 .header("Idempotency-Key", idempotencyKey)
                 .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (token != null) {
+            builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> postWithoutBody(String path, String token) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
+                .POST(HttpRequest.BodyPublishers.noBody());
         if (token != null) {
             builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
         }

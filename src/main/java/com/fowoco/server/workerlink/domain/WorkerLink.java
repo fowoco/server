@@ -104,6 +104,17 @@ public final class WorkerLink {
         );
     }
 
+    public WorkerLink markReviewed(Instant now) {
+        if (conversationStatus != ConversationStatus.NEEDS_FOLLOWUP) {
+            return this;
+        }
+        return new WorkerLink(
+                workerLinkId, taskId, companyId, tokenHash, expiresAt,
+                status, ConversationStatus.REOPENED, assigneeId, issuedBy,
+                replacesLinkId, idempotencyKey, createdAt, now, version
+        );
+    }
+
     public boolean isUsable(Instant now) {
         return status == WorkerLinkStatus.ACTIVE && expiresAt.isAfter(now);
     }
