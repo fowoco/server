@@ -2,11 +2,18 @@ package com.fowoco.server.auth.infrastructure.notification;
 
 import com.fowoco.server.auth.application.port.PasswordResetNotificationPort;
 import java.time.Instant;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(
+        prefix = "app.auth.password-reset.notification",
+        name = "provider",
+        havingValue = "none",
+        matchIfMissing = true
+)
 public final class NoOpPasswordResetNotificationAdapter implements PasswordResetNotificationPort {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NoOpPasswordResetNotificationAdapter.class);
