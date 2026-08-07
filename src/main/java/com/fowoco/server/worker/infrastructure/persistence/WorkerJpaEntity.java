@@ -38,6 +38,9 @@ public class WorkerJpaEntity {
     @Column(name = "work_status", nullable = false, length = 20)
     private WorkerStatus workStatus;
 
+    @Column(name = "visa_type", length = 20)
+    private String visaType;
+
     @Column(name = "stay_expiry_date")
     private LocalDate stayExpiryDate;
 
@@ -46,6 +49,12 @@ public class WorkerJpaEntity {
 
     @Column(name = "contract_end_date")
     private LocalDate contractEndDate;
+
+    @Column(name = "employment_permit_end_date")
+    private LocalDate employmentPermitEndDate;
+
+    @Column(name = "employment_activity_end_date")
+    private LocalDate employmentActivityEndDate;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -67,9 +76,12 @@ public class WorkerJpaEntity {
             String nationalityCode,
             String preferredLanguage,
             WorkerStatus workStatus,
+            String visaType,
             LocalDate stayExpiryDate,
             LocalDate contractStartDate,
             LocalDate contractEndDate,
+            LocalDate employmentPermitEndDate,
+            LocalDate employmentActivityEndDate,
             Instant createdAt,
             Instant updatedAt,
             long version
@@ -80,9 +92,12 @@ public class WorkerJpaEntity {
         this.nationalityCode = nationalityCode;
         this.preferredLanguage = preferredLanguage;
         this.workStatus = workStatus;
+        this.visaType = visaType;
         this.stayExpiryDate = stayExpiryDate;
         this.contractStartDate = contractStartDate;
         this.contractEndDate = contractEndDate;
+        this.employmentPermitEndDate = employmentPermitEndDate;
+        this.employmentActivityEndDate = employmentActivityEndDate;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
@@ -97,9 +112,12 @@ public class WorkerJpaEntity {
                 worker.nationalityCode(),
                 worker.preferredLanguage(),
                 worker.workStatus(),
+                worker.visaType(),
                 worker.stayExpiryDate(),
                 worker.contractStartDate(),
                 worker.contractEndDate(),
+                worker.employmentPermitEndDate(),
+                worker.employmentActivityEndDate(),
                 worker.createdAt(),
                 worker.updatedAt(),
                 worker.version()
@@ -114,9 +132,12 @@ public class WorkerJpaEntity {
                 nationalityCode,
                 preferredLanguage,
                 workStatus,
+                visaType,
                 stayExpiryDate,
                 contractStartDate,
                 contractEndDate,
+                employmentPermitEndDate,
+                employmentActivityEndDate,
                 createdAt,
                 updatedAt,
                 version
@@ -137,9 +158,12 @@ public class WorkerJpaEntity {
         this.nationalityCode = worker.nationalityCode();
         this.preferredLanguage = worker.preferredLanguage();
         this.workStatus = worker.workStatus();
+        this.visaType = worker.visaType();
         this.stayExpiryDate = worker.stayExpiryDate();
         this.contractStartDate = worker.contractStartDate();
         this.contractEndDate = worker.contractEndDate();
+        this.employmentPermitEndDate = worker.employmentPermitEndDate();
+        this.employmentActivityEndDate = worker.employmentActivityEndDate();
         this.updatedAt = worker.updatedAt();
     }
 }

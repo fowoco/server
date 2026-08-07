@@ -172,7 +172,9 @@ class PostgreSqlMigrationTests {
         assertThat(columnSpecs(connection, "task"))
                 .containsEntry("task_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
-                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("target_type", new ColumnSpec("varchar", false))
+                .containsEntry("worker_id", new ColumnSpec("uuid", true))
+                .containsEntry("case_id", new ColumnSpec("uuid", true))
                 .containsEntry("content_revision", new ColumnSpec("int8", false))
                 .containsEntry("critical_fingerprint", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false));
@@ -305,6 +307,7 @@ class PostgreSqlMigrationTests {
                         "pk_stored_file",
                         "fk_stored_file_company",
                         "fk_task_worker_company",
+                        "ck_task_target",
                         "fk_task_created_by_company",
                         "fk_approval_request_task_company",
                         "fk_approval_request_requester_company",
@@ -373,6 +376,7 @@ class PostgreSqlMigrationTests {
                         "idx_worker_document_company_status",
                         "idx_stored_file_company",
                         "idx_task_company_status_due",
+                        "idx_task_company_target_source",
                         "idx_approval_request_task_status",
                         "idx_audit_event_company_time",
                         "idx_event_publication_claim",
@@ -533,6 +537,19 @@ class PostgreSqlMigrationTests {
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """.formatted(TASK_A, COMPANY_A, WORKER_A, "f".repeat(64), USER_A, USER_A));
+        execute(connection, """
+                INSERT INTO task (
+                    task_id, company_id, target_type, worker_id, case_id, task_type,
+                    workflow_id, workflow_catalog_version, title,
+                    business_data_json, critical_fingerprint, content_revision,
+                    source, status, created_by, updated_by, created_at, updated_at
+                ) VALUES (
+                    '13000000-0000-0000-0000-000000000002', '%s', 'COMPANY', NULL, NULL,
+                    'WORKER_ONBOARDING', 'WF-WRK-001', '0.2.0', 'Onboarding draft',
+                    '{}', '%s', 0, 'FILE_IMPORT', 'DRAFT', '%s', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, "e".repeat(64), USER_A, USER_A));
         execute(connection, """
                 INSERT INTO worker_link (
                     worker_link_id, task_id, company_id, token_hash, expires_at,
@@ -751,6 +768,32 @@ class PostgreSqlMigrationTests {
                 "23503",
                 "DELETE FROM company WHERE company_id = '%s'".formatted(COMPANY_A)
         );
+        assertSqlState(connection, "23514", """
+                INSERT INTO task (
+                    task_id, company_id, target_type, worker_id, case_id, task_type,
+                    workflow_id, workflow_catalog_version, title,
+                    business_data_json, critical_fingerprint, source, status,
+                    created_by, updated_by, created_at, updated_at
+                ) VALUES (
+                    '13000000-0000-0000-0000-000000000003', '%s', 'COMPANY', '%s', NULL,
+                    'WORKER_ONBOARDING', 'WF-WRK-001', '0.2.0', 'Invalid company target',
+                    '{}', '%s', 'MANUAL', 'DRAFT', '%s', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, WORKER_A, "d".repeat(64), USER_A, USER_A));
+        assertSqlState(connection, "23514", """
+                INSERT INTO task (
+                    task_id, company_id, target_type, worker_id, case_id, task_type,
+                    workflow_id, workflow_catalog_version, title,
+                    business_data_json, critical_fingerprint, source, status,
+                    created_by, updated_by, created_at, updated_at
+                ) VALUES (
+                    '13000000-0000-0000-0000-000000000004', '%s', 'WORKER', NULL, NULL,
+                    'WORKER_ONBOARDING', 'WF-WRK-001', '0.2.0', 'Invalid worker target',
+                    '{}', '%s', 'MANUAL', 'DRAFT', '%s', '%s',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """.formatted(COMPANY_A, "c".repeat(64), USER_A, USER_A));
         assertSqlState(connection, "23503", """
                 INSERT INTO workflow_case (
                     case_id, company_id, worker_id, title, lifecycle_status,

@@ -23,6 +23,7 @@ import com.fowoco.server.worker.domain.WorkerDocument;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -167,7 +168,7 @@ public class WorkerDocumentService {
         }
         Task task = taskRepository.findByIdAndCompanyId(command.taskId(), companyId)
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
-        if (!task.workerId().equals(command.workerId())) {
+        if (!Objects.equals(task.workerId(), command.workerId())) {
             throw new ApiException(WorkerErrorCode.WORKER_DOCUMENT_TASK_WORKER_MISMATCH);
         }
     }

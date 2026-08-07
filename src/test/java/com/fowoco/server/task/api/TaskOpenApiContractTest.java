@@ -106,6 +106,7 @@ class TaskOpenApiContractTest {
         );
 
         assertThat(task.has("workflow_catalog_version")).isTrue();
+        assertThat(task.has("target_type")).isTrue();
         assertThat(task.has("content_revision")).isTrue();
         assertThat(task.has("missing_required_slots")).isTrue();
         assertThat(workflow.has("supported_task_types")).isTrue();
@@ -123,6 +124,18 @@ class TaskOpenApiContractTest {
                     assertThat(parameter.path("required").asBoolean()).isFalse();
                     assertThat(parameter.at("/schema/format").asText()).isEqualTo("uuid");
                 });
+    }
+
+    @Test
+    void taskListPublishesTargetAndSourceFilters() {
+        JsonNode parameters = openApi.at("/paths/~1api~1v1~1tasks/get/parameters");
+
+        assertThat(parameters).anySatisfy(parameter ->
+                assertThat(parameter.path("name").asText()).isEqualTo("target_type")
+        );
+        assertThat(parameters).anySatisfy(parameter ->
+                assertThat(parameter.path("name").asText()).isEqualTo("source")
+        );
     }
 
     private String operationId(String pointer) {

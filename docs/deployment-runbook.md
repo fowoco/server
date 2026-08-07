@@ -45,6 +45,22 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | AI | `AI_RUNTIME_ENDPOINT` | 예: `http://ai:8000/internal/v1/analyses` |
 | AI | `AI_RUNTIME_SERVICE_CREDENTIAL` | Server↔AI 내부 Bearer credential |
 
+비밀번호 재설정 메일을 실제로 발송할 때만 다음 값을 `server-env`에 추가합니다. 기본
+`PASSWORD_RESET_NOTIFICATION_PROVIDER=none`에서는 메일을 발송하지 않습니다.
+
+| 분류 | 환경변수 | 설명 |
+| --- | --- | --- |
+| Mail | `PASSWORD_RESET_NOTIFICATION_PROVIDER=smtp` | SMTP Adapter 활성화 |
+| Mail | `PASSWORD_RESET_CLIENT_URL` | 예: `https://demo.example.com/reset-password` |
+| Mail | `PASSWORD_RESET_MAIL_FROM` | 검증된 발신자 주소 |
+| Mail | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT` | SMTP Endpoint |
+| Mail | `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | SMTP credential |
+| Mail | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true` | SMTP 인증 사용 |
+| Mail | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true` | STARTTLS 사용 |
+
+SMTP 비밀번호와 재설정 원본 token은 Git, Issue, 일반 로그에 기록하지 않습니다. Provider 장애가
+비밀번호 재설정 요청의 외부 응답을 바꾸지 않도록 발송은 비동기로 격리되어 있습니다.
+
 DB pool은 기본 최대 10개입니다. 클러스터 규모에 따라 `DB_MAX_POOL_SIZE`, `DB_MIN_IDLE`,
 `DB_CONNECTION_TIMEOUT_MS`, `DB_VALIDATION_TIMEOUT_MS`로 제한합니다.
 
@@ -101,6 +117,7 @@ Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
 5. `POST /api/v1/ai-runs`의 실제 Server→AI 왕복 확인
 6. 후보 채택 후 Case·Task 조회 확인
 7. Worker Link 대표 흐름 확인
+8. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
 
 Runtime 장애 테스트에서는 가짜 AI 결과를 만들지 않고 안전한 오류 또는 수동 처리 상태로
 남아야 합니다.

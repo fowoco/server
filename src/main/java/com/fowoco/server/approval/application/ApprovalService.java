@@ -433,7 +433,11 @@ public class ApprovalService implements ApprovalControlPort {
         );
 
         Map<String, Object> hrSnapshot = new LinkedHashMap<>();
-        hrSnapshot.put("worker_id", savedTask.workerId().toString());
+        hrSnapshot.put(
+                "worker_id",
+                savedTask.workerId() == null ? null : savedTask.workerId().toString()
+        );
+        hrSnapshot.put("target_type", savedTask.targetType().name());
         hrSnapshot.put("task_type", savedTask.taskType().name());
         hrSnapshot.put("workflow_id", savedTask.workflowId());
         hrSnapshot.put("title", savedTask.title());

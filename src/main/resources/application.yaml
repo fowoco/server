@@ -123,6 +123,11 @@ app:
       ttl: ${PASSWORD_RESET_TTL:30m}
       cooldown: ${PASSWORD_RESET_COOLDOWN:1m}
       minimum-response-time: ${PASSWORD_RESET_MINIMUM_RESPONSE_TIME:250ms}
+      notification:
+        provider: ${PASSWORD_RESET_NOTIFICATION_PROVIDER:none}
+        from: ${PASSWORD_RESET_MAIL_FROM:}
+        reset-url: ${PASSWORD_RESET_CLIENT_URL:http://localhost:5173/reset-password}
+        subject: ${PASSWORD_RESET_MAIL_SUBJECT:FOWOCO 비밀번호 재설정}
       rate-limit:
         max-requests: ${PASSWORD_RESET_RATE_LIMIT_MAX_REQUESTS:10}
         window: ${PASSWORD_RESET_RATE_LIMIT_WINDOW:10m}

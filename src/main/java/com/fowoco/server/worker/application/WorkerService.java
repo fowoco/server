@@ -43,9 +43,12 @@ public class WorkerService {
                 command.displayName(),
                 command.nationalityCode(),
                 command.preferredLanguage(),
+                command.visaType(),
                 command.stayExpiryDate(),
                 command.contractStartDate(),
                 command.contractEndDate(),
+                command.employmentPermitEndDate(),
+                command.employmentActivityEndDate(),
                 DatabaseTimestamp.now(clock)
         );
         workerRepository.insert(worker);
@@ -82,9 +85,12 @@ public class WorkerService {
                 orElseKeep(command.nationalityCode(), existing.nationalityCode()),
                 orElseKeep(command.preferredLanguage(), existing.preferredLanguage()),
                 orElseKeep(command.workStatus(), existing.workStatus()),
+                orElseKeep(command.visaType(), existing.visaType()),
                 orElseKeep(command.stayExpiryDate(), existing.stayExpiryDate()),
                 orElseKeep(command.contractStartDate(), existing.contractStartDate()),
                 orElseKeep(command.contractEndDate(), existing.contractEndDate()),
+                orElseKeep(command.employmentPermitEndDate(), existing.employmentPermitEndDate()),
+                orElseKeep(command.employmentActivityEndDate(), existing.employmentActivityEndDate()),
                 existing.createdAt(),
                 DatabaseTimestamp.nowNotBefore(clock, existing.createdAt()),
                 existing.version()
