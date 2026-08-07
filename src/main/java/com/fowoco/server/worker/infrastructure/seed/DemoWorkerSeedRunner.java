@@ -92,8 +92,8 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
                 relativeDate(today, workerSeed.stayExpiryDays()),
                 today.minusYears(1),
                 today.plusDays(workerSeed.contractEndDays()),
-                null,
-                null,
+                relativeDate(today, workerSeed.employmentPermitEndDays()),
+                relativeDate(today, workerSeed.employmentActivityEndDays()),
                 now,
                 now,
                 0L
