@@ -262,10 +262,9 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(beforeSent.body(), "$.delivery_status"))
                 .isEqualTo("NOT_SENT");
 
-        HttpResponse<String> sent = postWithoutBodyWithIdempotencyKey(
+        HttpResponse<String> sent = postWithoutBody(
                 "/api/v1/worker-links/" + workerLinkId + "/sent",
-                hrToken,
-                "delivery-sent-key"
+                hrToken
         );
         assertThat(sent.statusCode()).as("sent response body: %s", sent.body()).isEqualTo(200);
         assertThat(JsonPath.<String>read(sent.body(), "$.delivery_status")).isEqualTo("SENT");
@@ -276,19 +275,17 @@ class WorkerLinkSecurityIntegrationTest {
                 UUID.fromString(workerLinkId)
         )).isEqualTo(HR_A);
 
-        HttpResponse<String> sameKeyRetry = postWithoutBodyWithIdempotencyKey(
+        HttpResponse<String> firstRetry = postWithoutBody(
                 "/api/v1/worker-links/" + workerLinkId + "/sent",
-                hrToken,
-                "delivery-sent-key"
+                hrToken
         );
-        HttpResponse<String> differentKeyRetry = postWithoutBodyWithIdempotencyKey(
+        HttpResponse<String> secondRetry = postWithoutBody(
                 "/api/v1/worker-links/" + workerLinkId + "/sent",
-                hrToken,
-                "delivery-sent-key-2"
+                hrToken
         );
-        assertThat(sameKeyRetry.statusCode()).isEqualTo(200);
-        assertThat(differentKeyRetry.statusCode()).isEqualTo(200);
-        assertThat(JsonPath.<String>read(sameKeyRetry.body(), "$.sent_at"))
+        assertThat(firstRetry.statusCode()).isEqualTo(200);
+        assertThat(secondRetry.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(firstRetry.body(), "$.sent_at"))
                 .isEqualTo(JsonPath.read(sent.body(), "$.sent_at"));
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'WORKER_LINK_SENT'",
@@ -316,51 +313,16 @@ class WorkerLinkSecurityIntegrationTest {
 
         assertThat(getJson("/api/v1/tasks/" + taskId + "/worker-link", hrTokenB).statusCode())
                 .isEqualTo(404);
-        assertThat(postWithoutBodyWithIdempotencyKey(
+        assertThat(postWithoutBody(
                 "/api/v1/worker-links/" + workerLinkId + "/sent",
-                hrTokenB,
-                "delivery-other-company-key"
+                hrTokenB
         ).statusCode()).isEqualTo(404);
         assertThat(getJson("/api/v1/tasks/" + taskId + "/worker-link", viewerTokenA).statusCode())
                 .isEqualTo(403);
-        assertThat(postWithoutBodyWithIdempotencyKey(
+        assertThat(postWithoutBody(
                 "/api/v1/worker-links/" + workerLinkId + "/sent",
-                viewerTokenA,
-                "delivery-viewer-key"
+                viewerTokenA
         ).statusCode()).isEqualTo(403);
-    }
-
-    @Test
-    void missingIdempotencyKeyDoesNotMarkWorkerLinkSent() throws Exception {
-        String hrToken = accessToken(login(HR_A_EMAIL));
-        String workerId = registerWorker(hrToken, "링크헤더테스트근로자");
-        String taskId = createApprovedTask(hrToken, workerId);
-        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
-                "/api/v1/tasks/" + taskId + "/worker-link",
-                """
-                {"expires_in_hours":72,"rotate_existing":false}
-                """,
-                hrToken,
-                "delivery-header-issue-key"
-        );
-        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
-
-        HttpResponse<String> response = postWithoutBody(
-                "/api/v1/worker-links/" + workerLinkId + "/sent",
-                hrToken
-        );
-
-        assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?",
-                String.class,
-                UUID.fromString(workerLinkId)
-        )).isEqualTo("NOT_SENT");
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'WORKER_LINK_SENT'",
-                Integer.class,
-                UUID.fromString(workerLinkId)
-        )).isZero();
     }
 
     @Test
@@ -646,20 +608,6 @@ class WorkerLinkSecurityIntegrationTest {
 
     private HttpResponse<String> postWithoutBody(String path, String token) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
-                .POST(HttpRequest.BodyPublishers.noBody());
-        if (token != null) {
-            builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
-        }
-        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> postWithoutBodyWithIdempotencyKey(
-            String path,
-            String token,
-            String idempotencyKey
-    ) throws Exception {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
-                .header("Idempotency-Key", idempotencyKey)
                 .POST(HttpRequest.BodyPublishers.noBody());
         if (token != null) {
             builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);

@@ -11,19 +11,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Worker Link", description = "근로자 보안 링크 발급과 전달 상태")
-@Validated
 @RestController
 @SecurityRequirement(name = "bearerAuth")
 public class WorkerLinkDeliveryController {
@@ -68,7 +64,6 @@ public class WorkerLinkDeliveryController {
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "전달 완료 기록 성공 또는 기존 결과 반환"),
-            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
@@ -82,7 +77,6 @@ public class WorkerLinkDeliveryController {
     )
     public WorkerLinkDeliveryResponse markSent(
             @Parameter(description = "근로자 링크 ID") @PathVariable UUID workerLinkId,
-            @RequestHeader("Idempotency-Key") @Size(min = 8, max = 100) String idempotencyKey,
             HttpServletRequest servletRequest
     ) {
         return WorkerLinkDeliveryResponse.from(service.markSent(
