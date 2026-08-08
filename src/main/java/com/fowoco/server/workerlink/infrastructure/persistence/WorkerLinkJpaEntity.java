@@ -2,6 +2,7 @@ package com.fowoco.server.workerlink.infrastructure.persistence;
 
 import com.fowoco.server.workerlink.domain.ConversationStatus;
 import com.fowoco.server.workerlink.domain.WorkerLink;
+import com.fowoco.server.workerlink.domain.WorkerLinkDeliveryStatus;
 import com.fowoco.server.workerlink.domain.WorkerLinkStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -42,6 +43,16 @@ public class WorkerLinkJpaEntity {
     @Column(name = "conversation_status", nullable = false, length = 20)
     private ConversationStatus conversationStatus;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_status", nullable = false, length = 20)
+    private WorkerLinkDeliveryStatus deliveryStatus;
+
+    @Column(name = "sent_at")
+    private Instant sentAt;
+
+    @Column(name = "sent_by")
+    private UUID sentBy;
+
     @Column(name = "assignee_id")
     private UUID assigneeId;
 
@@ -75,6 +86,9 @@ public class WorkerLinkJpaEntity {
             Instant expiresAt,
             WorkerLinkStatus status,
             ConversationStatus conversationStatus,
+            WorkerLinkDeliveryStatus deliveryStatus,
+            Instant sentAt,
+            UUID sentBy,
             UUID assigneeId,
             UUID issuedBy,
             UUID replacesLinkId,
@@ -90,6 +104,9 @@ public class WorkerLinkJpaEntity {
         this.expiresAt = expiresAt;
         this.status = status;
         this.conversationStatus = conversationStatus;
+        this.deliveryStatus = deliveryStatus;
+        this.sentAt = sentAt;
+        this.sentBy = sentBy;
         this.assigneeId = assigneeId;
         this.issuedBy = issuedBy;
         this.replacesLinkId = replacesLinkId;
@@ -109,6 +126,9 @@ public class WorkerLinkJpaEntity {
                 workerLink.expiresAt(),
                 workerLink.status(),
                 workerLink.conversationStatus(),
+                workerLink.deliveryStatus(),
+                workerLink.sentAt(),
+                workerLink.sentBy(),
                 workerLink.assigneeId(),
                 workerLink.issuedBy(),
                 workerLink.replacesLinkId(),
@@ -128,6 +148,9 @@ public class WorkerLinkJpaEntity {
                 expiresAt,
                 status,
                 conversationStatus,
+                deliveryStatus,
+                sentAt,
+                sentBy,
                 assigneeId,
                 issuedBy,
                 replacesLinkId,
@@ -152,6 +175,9 @@ public class WorkerLinkJpaEntity {
         }
         this.status = workerLink.status();
         this.conversationStatus = workerLink.conversationStatus();
+        this.deliveryStatus = workerLink.deliveryStatus();
+        this.sentAt = workerLink.sentAt();
+        this.sentBy = workerLink.sentBy();
         this.assigneeId = workerLink.assigneeId();
         this.updatedAt = workerLink.updatedAt();
     }
