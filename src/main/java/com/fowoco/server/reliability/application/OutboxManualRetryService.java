@@ -12,6 +12,7 @@ import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.error.ErrorCode;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.reliability.application.error.OutboxErrorCode;
 import com.fowoco.server.reliability.application.port.EventPublicationRepository;
@@ -100,7 +101,7 @@ public class OutboxManualRetryService {
             throw new ApiException(OutboxErrorCode.OUTBOX_EVENT_NOT_REVIEW_REQUIRED);
         }
 
-        Instant now = clock.instant();
+        Instant now = DatabaseTimestamp.nowNotBefore(clock, publication.updatedAt());
         int previousAttemptCount = publication.attemptCount();
         publication.requestManualRetry(expectedVersion, now);
         EventPublication saved = publicationRepository.save(publication);

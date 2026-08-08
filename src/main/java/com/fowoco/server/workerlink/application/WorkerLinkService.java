@@ -6,6 +6,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.settings.application.port.CompanySettingsRepository;
 import com.fowoco.server.settings.domain.CompanySettings;
 import com.fowoco.server.task.application.port.TaskRepository;
@@ -90,7 +91,7 @@ public class WorkerLinkService {
             );
         }
 
-        Instant now = clock.instant();
+        Instant now = DatabaseTimestamp.now(clock);
         Optional<WorkerLink> existingActive = workerLinkRepository
                 .findActiveByTaskIdAndCompanyId(command.taskId(), actor.companyId());
 
