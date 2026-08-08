@@ -44,6 +44,7 @@ public class WorkerLinkViewController {
                             schema = @Schema(implementation = WorkerLinkViewResponse.class)
                     )
             ),
+            @ApiResponse(responseCode = "409", description = "근로자 안내 초안이 아직 준비되지 않음"),
             @ApiResponse(responseCode = "410", description = "링크를 찾을 수 없거나 더 이상 사용할 수 없음"),
             @ApiResponse(responseCode = "429", description = "요청 과다")
     })
