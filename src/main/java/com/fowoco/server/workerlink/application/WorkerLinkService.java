@@ -77,7 +77,14 @@ public class WorkerLinkService {
                 .findByTaskIdAndIdempotencyKey(command.taskId(), idempotencyKeyHash);
         if (existingByIdempotency.isPresent()) {
             WorkerLink previous = existingByIdempotency.get();
-            return new WorkerLinkIssueResult(null, previous.expiresAt(), true);
+            return new WorkerLinkIssueResult(
+                    previous.workerLinkId(),
+                    null,
+                    previous.expiresAt(),
+                    previous.deliveryStatus(),
+                    previous.sentAt(),
+                    true
+            );
         }
 
         Instant now = clock.instant();
@@ -111,6 +118,13 @@ public class WorkerLinkService {
         );
         workerLinkRepository.insert(workerLink);
 
-        return new WorkerLinkIssueResult(generated.rawValue(), expiresAt, false);
+        return new WorkerLinkIssueResult(
+                workerLink.workerLinkId(),
+                generated.rawValue(),
+                expiresAt,
+                workerLink.deliveryStatus(),
+                workerLink.sentAt(),
+                false
+        );
     }
 }
