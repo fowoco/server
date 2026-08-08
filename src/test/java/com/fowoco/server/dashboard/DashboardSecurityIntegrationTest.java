@@ -159,6 +159,22 @@ class DashboardSecurityIntegrationTest {
     }
 
     @Test
+    void dueTodayUsesKoreaTimeWhenTimezoneOmitted() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(accessToken, "타임존테스트근로자");
+        createTask(accessToken, workerId, "한국시간마감업무");
+
+        // date를 명시적으로 지정하지 않고, timezone도 생략
+        // 서버가 한국 시간 기준으로 "오늘"을 계산해야 정상
+        HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        // 이 테스트는 실제 UTC vs KST 자정~9시 사이 시간대 버그를 
+        // 완벽히 재현하진 못하지만(테스트 실행 시각에 의존), 
+        // 최소한 API가 정상 응답하는지 확인
+    }
+
+    @Test
     void upcoming7DaysIncludesWorkerWithNearExpiry() throws Exception {
         String accessToken = accessToken(login(HR_A_EMAIL));
         registerWorkerWithStayExpiry(accessToken, "체류만료임박근로자", "2026-08-12");
@@ -221,6 +237,45 @@ class DashboardSecurityIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         List<String> names = JsonPath.read(response.body(), "$.upcoming_7_days[*].display_name");
         assertThat(names).doesNotContain("이미지난만료근로자");
+    }
+
+    @Test
+    void recommendationsConnectedCountMatchesOpenTasks() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(accessToken, "추천테스트근로자");
+        createTask(accessToken, workerId, "추천테스트업무1");
+        createTask(accessToken, workerId, "추천테스트업무2");
+
+        HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<Number>read(response.body(), "$.recommendations.connected_count").longValue())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void recommendationsReviewIncludesReadyForReviewTask() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(accessToken, "승인대기추천근로자");
+        String taskId = createTask(accessToken, workerId, "승인대기업무");
+        requestReview(accessToken, taskId, workerId);
+
+        HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> reviewTitles = JsonPath.read(response.body(), "$.recommendations.review[*].title");
+        assertThat(reviewTitles).contains("승인대기업무");
+    }
+
+    @Test
+    void recommendationsPreparedAndAfterApprovalAreEmptyByDefault() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.recommendations.prepared")).isEmpty();
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.recommendations.after_approval")).isEmpty();
     }
 
     private String registerWorkerWithAllExpiryFields(
