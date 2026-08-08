@@ -20,6 +20,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -104,6 +105,15 @@ public class DocumentRequestDraftService {
         );
 
         return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentRequestDraft find(UUID taskId, ActorContext actor) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
+        taskRepository.findByIdAndCompanyId(taskId, actor.companyId())
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+        return documentRequestDraftRepository.findByTaskIdAndCompanyId(taskId, actor.companyId())
+                .orElseThrow(() -> new ApiException(DocumentErrorCode.DOCUMENT_REQUEST_DRAFT_NOT_FOUND));
     }
 
     private void appendAudit(

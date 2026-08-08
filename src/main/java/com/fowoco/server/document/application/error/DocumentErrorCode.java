@@ -8,6 +8,10 @@ public enum DocumentErrorCode implements ApiErrorCode {
             HttpStatus.CONFLICT,
             "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도해 주세요."
     ),
+    DOCUMENT_REQUEST_DRAFT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "문서 요청 초안을 찾을 수 없습니다."
+    ),
     DOCUMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "문서를 찾을 수 없습니다."
