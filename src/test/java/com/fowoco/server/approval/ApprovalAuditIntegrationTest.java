@@ -514,6 +514,16 @@ class ApprovalAuditIntegrationTest {
                 """,
                 hrToken
         ).statusCode()).isEqualTo(200);
+        HttpResponse<String> withoutEvidence = authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        );
+        assertThat(withoutEvidence.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(withoutEvidence.body(), "$.code"))
+                .isEqualTo("EVIDENCE_REQUIRED");
         assertThat(authorizedPost(
                 taskPath("/evidence"),
                 """
@@ -534,6 +544,66 @@ class ApprovalAuditIntegrationTest {
         assertThat(JsonPath.<String>read(complete.body(), "$.task_status"))
                 .isEqualTo("COMPLETED");
         assertThat(count("external_submission")).isZero();
+    }
+
+    @Test
+    void companyEvidenceRulesAddRequiredTypesWithoutRemovingBaseline() throws Exception {
+        setEvidenceRules("{\"RECONTRACT\":[\"DOCUMENT\",\"RECEIPT\"]}");
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/approve"),
+                """
+                {"expected_version":1}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(200);
+        HttpResponse<String> withoutEvidence = authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        );
+        assertThat(withoutEvidence.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(withoutEvidence.body(), "$.code"))
+                .isEqualTo("EVIDENCE_REQUIRED");
+        assertThat(authorizedPost(
+                taskPath("/evidence"),
+                """
+                {"evidence_type":"DOCUMENT","file_reference":"document-ref"}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> missingReceipt = authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        );
+
+        assertThat(missingReceipt.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(missingReceipt.body(), "$.code"))
+                .isEqualTo("EVIDENCE_REQUIRED");
+        assertThat(taskStatus()).isEqualTo("APPROVED");
+
+        assertThat(authorizedPost(
+                taskPath("/evidence"),
+                """
+                {"evidence_type":"RECEIPT","file_reference":"receipt-ref"}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(200);
+        assertThat(taskStatus()).isEqualTo("COMPLETED");
     }
 
     private HttpResponse<String> requestApproval(String token, String body) throws Exception {
@@ -642,6 +712,14 @@ class ApprovalAuditIntegrationTest {
         jdbcTemplate.update(
                 "UPDATE company_settings SET approval_policy = ? WHERE company_id = ?",
                 approvalPolicy,
+                COMPANY_A
+        );
+    }
+
+    private void setEvidenceRules(String evidenceRulesJson) {
+        jdbcTemplate.update(
+                "UPDATE company_settings SET evidence_rules_json = ? WHERE company_id = ?",
+                evidenceRulesJson,
                 COMPANY_A
         );
     }

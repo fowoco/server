@@ -6,6 +6,7 @@ import com.fowoco.server.approval.application.port.EvidenceRepository;
 import com.fowoco.server.approval.application.port.ExternalSubmissionRepository;
 import com.fowoco.server.approval.domain.ApprovalRequest;
 import com.fowoco.server.approval.domain.Evidence;
+import com.fowoco.server.approval.domain.EvidenceType;
 import com.fowoco.server.approval.domain.ExternalSubmission;
 import com.fowoco.server.audit.application.port.AuditEventRepository;
 import com.fowoco.server.audit.domain.ActorType;
@@ -34,6 +35,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -327,7 +329,7 @@ public class ApprovalService implements ApprovalControlPort {
                 task.contentRevision(),
                 task.criticalFingerprint()
         );
-        boolean evidencePresent = evidenceRepository.existsByTaskIdAndCompanyId(taskId, actor.companyId());
+        boolean evidencePresent = hasRequiredEvidence(task);
         Instant now = Instant.now(clock);
         TaskStatus previous = task.complete(
                 approved,
@@ -512,6 +514,25 @@ public class ApprovalService implements ApprovalControlPort {
         if (actor.roles().stream().noneMatch(approvalPolicy::permits)) {
             throw new ApiException(ErrorCode.ACCESS_DENIED);
         }
+    }
+
+    private boolean hasRequiredEvidence(Task task) {
+        Set<EvidenceType> recordedTypes = evidenceRepository.findTypesByTaskIdAndCompanyId(
+                task.taskId(),
+                task.companyId()
+        );
+        if (recordedTypes.isEmpty()) {
+            return false;
+        }
+        Set<EvidenceType> additionalRequiredTypes = companySettingsRepository
+                .findByCompanyId(task.companyId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Persisted company settings are missing for company "
+                                + task.companyId()
+                ))
+                .evidenceRules()
+                .getOrDefault(task.taskType(), Set.of());
+        return recordedTypes.containsAll(additionalRequiredTypes);
     }
 
     private Task requireTask(UUID taskId, UUID companyId) {
