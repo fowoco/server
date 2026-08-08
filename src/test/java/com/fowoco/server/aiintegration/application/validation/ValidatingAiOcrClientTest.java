@@ -38,8 +38,8 @@ class ValidatingAiOcrClientTest {
         AiOcrRequest request = passportRequest();
         AiOcrResponse response = passportResponse(
                 REQUEST_ID,
-                Map.of("passport_number", "M12345678"),
-                Map.of("passport_number", new BigDecimal("0.98"))
+                validPassportFields(),
+                validPassportConfidences()
         );
         fake.enqueueResponse(response);
 
@@ -106,8 +106,8 @@ class ValidatingAiOcrClientTest {
         FakeAiOcrClient fake = new FakeAiOcrClient();
         fake.enqueueResponse(passportResponse(
                 UUID.fromString("10000000-0000-0000-0000-000000000002"),
-                Map.of("passport_number", "M12345678"),
-                Map.of("passport_number", new BigDecimal("0.98"))
+                validPassportFields(),
+                validPassportConfidences()
         ));
 
         assertFailureCode(
@@ -154,6 +154,81 @@ class ValidatingAiOcrClientTest {
         );
     }
 
+    @Test
+    void successfulResponseCannotHaveEmptyFields() {
+        FakeAiOcrClient fake = new FakeAiOcrClient();
+        fake.enqueueResponse(passportResponse(REQUEST_ID, Map.of(), Map.of()));
+
+        assertFailureCode(
+                () -> new ValidatingAiOcrClient(fake, validator)
+                        .recognize(passportRequest(), AiRuntimeCallContext.withoutTrace()),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
+    }
+
+    @Test
+    void invalidIsoDateIsRejected() {
+        FakeAiOcrClient fake = new FakeAiOcrClient();
+        Map<String, String> fields = new java.util.HashMap<>(validPassportFields());
+        fields.put("date_of_birth", "잘못된날짜");
+        fake.enqueueResponse(passportResponse(REQUEST_ID, fields, validPassportConfidences()));
+
+        assertFailureCode(
+                () -> new ValidatingAiOcrClient(fake, validator)
+                        .recognize(passportRequest(), AiRuntimeCallContext.withoutTrace()),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
+    }
+
+    @Test
+    void passportTemplateMustMatchRequestedCountry() {
+        FakeAiOcrClient fake = new FakeAiOcrClient();
+        fake.enqueueResponse(new AiOcrResponse(
+                REQUEST_ID,
+                DOCUMENT_ID,
+                AiOcrStatus.SUCCEEDED,
+                43021L,
+                null,
+                validPassportFields(),
+                validPassportConfidences(),
+                List.of()
+        ));
+
+        assertFailureCode(
+                () -> new ValidatingAiOcrClient(fake, validator)
+                        .recognize(passportRequest(), AiRuntimeCallContext.withoutTrace()),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
+    }
+
+    @Test
+    void arcTemplateMustMatchDocumentSide() {
+        FakeAiOcrClient fake = new FakeAiOcrClient();
+        AiOcrRequest request = new AiOcrRequest(
+                REQUEST_ID,
+                DOCUMENT_ID,
+                AiOcrDocumentType.ARC,
+                null,
+                new AiOcrFile("arc.png", "image/png", new byte[]{1})
+        );
+        fake.enqueueResponse(new AiOcrResponse(
+                REQUEST_ID,
+                DOCUMENT_ID,
+                AiOcrStatus.SUCCEEDED,
+                43024L,
+                AiOcrDocumentSide.BACK,
+                Map.of("alien_registration_number", "000000-0000000"),
+                Map.of("alien_registration_number", new BigDecimal("0.99")),
+                List.of()
+        ));
+
+        assertFailureCode(
+                () -> new ValidatingAiOcrClient(fake, validator)
+                        .recognize(request, AiRuntimeCallContext.withoutTrace()),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
+    }
+
     private AiOcrRequest passportRequest() {
         return new AiOcrRequest(
                 REQUEST_ID,
@@ -173,11 +248,31 @@ class ValidatingAiOcrClientTest {
                 requestId,
                 DOCUMENT_ID,
                 AiOcrStatus.SUCCEEDED,
-                43019L,
+                43038L,
                 null,
                 fields,
                 confidences,
                 List.of()
+        );
+    }
+
+    private Map<String, String> validPassportFields() {
+        return Map.of(
+                "passport_number", "M12345678",
+                "surname", "NGUYEN",
+                "given_names", "VAN AN",
+                "date_of_birth", "1995-03-01",
+                "passport_expiry_date", "2028-03-01"
+        );
+    }
+
+    private Map<String, BigDecimal> validPassportConfidences() {
+        return Map.of(
+                "passport_number", new BigDecimal("0.98"),
+                "surname", new BigDecimal("0.97"),
+                "given_names", new BigDecimal("0.96"),
+                "date_of_birth", new BigDecimal("0.99"),
+                "passport_expiry_date", new BigDecimal("0.95")
         );
     }
 

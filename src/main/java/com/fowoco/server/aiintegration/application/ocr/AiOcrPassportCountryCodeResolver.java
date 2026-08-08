@@ -22,8 +22,14 @@ public final class AiOcrPassportCountryCodeResolver {
             "CN", "CHN",
             "VN", "VNM"
     );
-    private static final Set<String> SUPPORTED_OCR_COUNTRIES =
-            Set.copyOf(WORKER_TO_OCR_COUNTRY.values());
+    private static final Map<String, Long> OCR_TEMPLATE_IDS = Map.of(
+            "KOR", 43019L,
+            "PHL", 43021L,
+            "JPN", 43022L,
+            "CHN", 43023L,
+            "VNM", 43038L
+    );
+    private static final Set<String> SUPPORTED_OCR_COUNTRIES = OCR_TEMPLATE_IDS.keySet();
 
     public String fromWorkerNationalityCode(String workerNationalityCode) {
         if (workerNationalityCode == null) {
@@ -44,6 +50,10 @@ public final class AiOcrPassportCountryCodeResolver {
         return countryCode != null
                 && ALPHA_3.matcher(countryCode).matches()
                 && SUPPORTED_OCR_COUNTRIES.contains(countryCode);
+    }
+
+    public Long expectedTemplateId(String countryCode) {
+        return OCR_TEMPLATE_IDS.get(countryCode);
     }
 
     private void reject(AiRuntimeFailureCode code, String safeMessage) {
