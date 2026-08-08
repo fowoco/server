@@ -62,7 +62,8 @@ public class DashboardQueryService {
     public DashboardTodayResponse today(ActorContext actor, LocalDate date, String timezone) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
         UUID companyId = actor.companyId();
-        Clock effectiveClock = timezone != null ? clock.withZone(parseTimezone(timezone)) : clock;
+        ZoneId effectiveZone = timezone != null ? parseTimezone(timezone) : ZoneId.of("Asia/Seoul");
+        Clock effectiveClock = clock.withZone(effectiveZone);
         LocalDate targetDate = date != null ? date : LocalDate.now(effectiveClock);
         LocalDate windowEnd = targetDate.plusDays(UPCOMING_DAYS + 1);
 
