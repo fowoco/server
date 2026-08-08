@@ -16,9 +16,12 @@ import com.fowoco.server.auth.application.ActorAuthorizer;
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
+import com.fowoco.server.common.error.ErrorCode;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
+import com.fowoco.server.settings.application.port.CompanySettingsRepository;
+import com.fowoco.server.settings.domain.ApprovalPolicy;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.TaskReadinessChecker;
 import com.fowoco.server.task.application.port.TaskRepository;
@@ -46,6 +49,7 @@ public class ApprovalService implements ApprovalControlPort {
     private final TaskTransitionRecorder transitionRecorder;
     private final TaskReadinessChecker taskReadinessChecker;
     private final ApprovalRequestRepository approvalRepository;
+    private final CompanySettingsRepository companySettingsRepository;
     private final ExternalSubmissionRepository externalSubmissionRepository;
     private final EvidenceRepository evidenceRepository;
     private final AuditEventRepository auditRepository;
@@ -60,6 +64,7 @@ public class ApprovalService implements ApprovalControlPort {
             TaskTransitionRecorder transitionRecorder,
             TaskReadinessChecker taskReadinessChecker,
             ApprovalRequestRepository approvalRepository,
+            CompanySettingsRepository companySettingsRepository,
             ExternalSubmissionRepository externalSubmissionRepository,
             EvidenceRepository evidenceRepository,
             AuditEventRepository auditRepository,
@@ -73,6 +78,7 @@ public class ApprovalService implements ApprovalControlPort {
         this.transitionRecorder = transitionRecorder;
         this.taskReadinessChecker = taskReadinessChecker;
         this.approvalRepository = approvalRepository;
+        this.companySettingsRepository = companySettingsRepository;
         this.externalSubmissionRepository = externalSubmissionRepository;
         this.evidenceRepository = evidenceRepository;
         this.auditRepository = auditRepository;
@@ -147,7 +153,7 @@ public class ApprovalService implements ApprovalControlPort {
             RequestMetadata metadata
     ) {
         bindTenant(actor);
-        actorAuthorizer.requireHrWrite(actor);
+        requireApprovalDecisionPermission(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
         ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
@@ -185,7 +191,7 @@ public class ApprovalService implements ApprovalControlPort {
             RequestMetadata metadata
     ) {
         bindTenant(actor);
-        actorAuthorizer.requireHrWrite(actor);
+        requireApprovalDecisionPermission(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
         ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
@@ -492,6 +498,20 @@ public class ApprovalService implements ApprovalControlPort {
             approvalRepository.save(approval);
         });
         return active;
+    }
+
+    private void requireApprovalDecisionPermission(ActorContext actor) {
+        actorAuthorizer.requireHrWrite(actor);
+        ApprovalPolicy approvalPolicy = companySettingsRepository
+                .findByCompanyId(actor.companyId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Persisted company settings are missing for company "
+                                + actor.companyId()
+                ))
+                .approvalPolicy();
+        if (actor.roles().stream().noneMatch(approvalPolicy::permits)) {
+            throw new ApiException(ErrorCode.ACCESS_DENIED);
+        }
     }
 
     private Task requireTask(UUID taskId, UUID companyId) {
