@@ -44,6 +44,10 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | AI | `AI_RUNTIME_ENABLED=true` | 실제 Runtime 연동 활성화 |
 | AI | `AI_RUNTIME_ENDPOINT` | 예: `http://ai:8000/internal/v1/analyses` |
 | AI | `AI_RUNTIME_SERVICE_CREDENTIAL` | Server↔AI 내부 Bearer credential |
+| OCR | `AI_OCR_ENABLED=true`, `DOCUMENT_OCR_ENABLED=true` | AI OCR 호출과 Server 저장 기능 활성화 |
+| OCR | `AI_OCR_ENDPOINT`, `AI_OCR_SERVICE_CREDENTIAL` | OCR 내부 endpoint와 Bearer credential |
+| OCR | `OCR_RESULT_ENCRYPTION_KEY_BASE64` | 32바이트 OCR 결과 암호화 키의 Base64 |
+| OCR | `OCR_RESULT_KEY_VERSION` | 암호화 키 식별 version |
 
 비밀번호 재설정 메일을 실제로 발송할 때만 다음 값을 `server-env`에 추가합니다. 기본
 `PASSWORD_RESET_NOTIFICATION_PROVIDER=none`에서는 메일을 발송하지 않습니다.

@@ -78,6 +78,14 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("aa000000-0000-0000-0000-000000000001");
     private static final UUID PASSWORD_RESET_B =
             UUID.fromString("ba000000-0000-0000-0000-000000000002");
+    private static final UUID WORKER_DOCUMENT_A =
+            UUID.fromString("ac000000-0000-0000-0000-000000000001");
+    private static final UUID WORKER_DOCUMENT_B =
+            UUID.fromString("bc000000-0000-0000-0000-000000000002");
+    private static final UUID OCR_RUN_A =
+            UUID.fromString("ad000000-0000-0000-0000-000000000001");
+    private static final UUID OCR_RUN_B =
+            UUID.fromString("bd000000-0000-0000-0000-000000000002");
     private static final List<String> RLS_TABLES = List.of(
             "company",
             "user_account",
@@ -93,7 +101,8 @@ class PostgreSqlRlsIsolationTest {
             "worker_document_upload_idempotency",
             "outbox_manual_retry",
             "user_agreement_consent",
-            "password_reset_token"
+            "password_reset_token",
+            "document_ocr_run"
     );
 
     @Test
@@ -186,6 +195,7 @@ class PostgreSqlRlsIsolationTest {
                             + "public.worker_response_upload, "
                             + "public.worker_document_upload_idempotency, "
                             + "public.outbox_manual_retry, "
+                            + "public.document_ocr_run, "
                             + "public.user_agreement_consent, "
                             + "public.password_reset_token TO "
                             + quotedRole
@@ -289,6 +299,38 @@ class PostgreSqlRlsIsolationTest {
                     STORED_FILE_A, COMPANY_A,
                     STORED_FILE_B, COMPANY_B,
                     STORED_FILE_B_UNLINKED, COMPANY_B
+            ));
+            statement.execute("""
+                    INSERT INTO worker_document (
+                        worker_document_id, worker_id, company_id, document_type,
+                        submission_status, file_id, created_at, updated_at
+                    ) VALUES
+                        ('%s', '%s', '%s', 'PASSPORT_COPY', 'SUBMITTED', '%s',
+                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                        ('%s', '%s', '%s', 'PASSPORT_COPY', 'SUBMITTED', '%s',
+                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """.formatted(
+                    WORKER_DOCUMENT_A, WORKER_A, COMPANY_A, STORED_FILE_A,
+                    WORKER_DOCUMENT_B, WORKER_B, COMPANY_B, STORED_FILE_B
+            ));
+            statement.execute("""
+                    INSERT INTO document_ocr_run (
+                        ocr_run_id, company_id, worker_document_id, stored_file_id,
+                        requested_by, runtime_request_id, idempotency_key_hash,
+                        request_hash, document_type, country_code, status,
+                        created_at, updated_at
+                    ) VALUES
+                        ('%s', '%s', '%s', '%s', '%s',
+                         'ae000000-0000-0000-0000-000000000001', repeat('1', 64),
+                         repeat('2', 64), 'PASSPORT_COPY', 'VNM', 'QUEUED',
+                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                        ('%s', '%s', '%s', '%s', '%s',
+                         'be000000-0000-0000-0000-000000000002', repeat('3', 64),
+                         repeat('4', 64), 'PASSPORT_COPY', 'PHL', 'QUEUED',
+                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """.formatted(
+                    OCR_RUN_A, COMPANY_A, WORKER_DOCUMENT_A, STORED_FILE_A, USER_A,
+                    OCR_RUN_B, COMPANY_B, WORKER_DOCUMENT_B, STORED_FILE_B, USER_B
             ));
             statement.execute("""
                     INSERT INTO document_request_draft (
@@ -405,6 +447,7 @@ class PostgreSqlRlsIsolationTest {
             assertThat(tableCount(connection, "outbox_manual_retry")).isZero();
             assertThat(tableCount(connection, "user_agreement_consent")).isZero();
             assertThat(tableCount(connection, "password_reset_token")).isZero();
+            assertThat(tableCount(connection, "document_ocr_run")).isZero();
 
             setTenantContext(connection, "");
             assertThat(workerCount(connection)).isZero();
@@ -477,6 +520,10 @@ class PostgreSqlRlsIsolationTest {
                     "SELECT password_reset_token_id FROM public.password_reset_token "
                             + "ORDER BY password_reset_token_id"
             )).containsExactly(PASSWORD_RESET_A);
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT ocr_run_id FROM public.document_ocr_run ORDER BY ocr_run_id"
+            )).containsExactly(OCR_RUN_A);
 
             assertThat(executeUpdate(
                     connection,
@@ -514,6 +561,23 @@ class PostgreSqlRlsIsolationTest {
                     WORKER_A_NEW
             )).isOne();
 
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO document_ocr_run (
+                        ocr_run_id, company_id, worker_document_id, stored_file_id,
+                        requested_by, runtime_request_id, idempotency_key_hash,
+                        request_hash, document_type, country_code, status,
+                        created_at, updated_at
+                    ) VALUES (
+                        'bd000000-0000-0000-0000-000000000099', '%s', '%s', '%s', '%s',
+                        'be000000-0000-0000-0000-000000000099', repeat('5', 64),
+                        repeat('6', 64), 'PASSPORT_COPY', 'PHL', 'QUEUED',
+                        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    """.formatted(COMPANY_B, WORKER_DOCUMENT_B, STORED_FILE_B, USER_B)
+            );
             assertSqlState(
                     connection,
                     "42501",
@@ -647,6 +711,11 @@ class PostgreSqlRlsIsolationTest {
             )).isZero();
             assertThat(executeUpdate(
                     connection,
+                    "DELETE FROM document_ocr_run WHERE ocr_run_id = ?",
+                    OCR_RUN_B
+            )).isZero();
+            assertThat(executeUpdate(
+                    connection,
                     "DELETE FROM workflow_case WHERE case_id = ?",
                     CASE_B
             )).isZero();
@@ -690,6 +759,7 @@ class PostgreSqlRlsIsolationTest {
         assertThat(workerCount(connection)).isZero();
         assertThat(tableCount(connection, "workflow_case")).isZero();
         assertThat(tableCount(connection, "outbox_manual_retry")).isZero();
+        assertThat(tableCount(connection, "document_ocr_run")).isZero();
         setTenantContext(connection, COMPANY_B.toString());
         assertThat(workerIds(connection)).containsExactly(WORKER_B);
         assertThat(uuidValues(
@@ -700,6 +770,10 @@ class PostgreSqlRlsIsolationTest {
                 connection,
                 "SELECT manual_retry_id FROM public.outbox_manual_retry ORDER BY manual_retry_id"
         )).containsExactly(MANUAL_RETRY_B);
+        assertThat(uuidValues(
+                connection,
+                "SELECT ocr_run_id FROM public.document_ocr_run ORDER BY ocr_run_id"
+        )).containsExactly(OCR_RUN_B);
         connection.rollback();
     }
 
@@ -743,6 +817,11 @@ class PostgreSqlRlsIsolationTest {
 
     private void deleteFixtureRows(Statement statement) throws SQLException {
         statement.execute("""
+                DELETE FROM document_ocr_run
+                WHERE ocr_run_id IN ('%s', '%s')
+                   OR ocr_run_id = 'bd000000-0000-0000-0000-000000000099'
+                """.formatted(OCR_RUN_A, OCR_RUN_B));
+        statement.execute("""
                 DELETE FROM outbox_manual_retry
                 WHERE manual_retry_id IN ('%s', '%s')
                 """.formatted(MANUAL_RETRY_A, MANUAL_RETRY_B));
@@ -782,6 +861,10 @@ class PostgreSqlRlsIsolationTest {
                 DELETE FROM document_request_draft
                 WHERE draft_id IN ('%s', '%s')
                 """.formatted(DRAFT_A, DRAFT_B));
+        statement.execute("""
+                DELETE FROM worker_document
+                WHERE worker_document_id IN ('%s', '%s')
+                """.formatted(WORKER_DOCUMENT_A, WORKER_DOCUMENT_B));
         statement.execute("""
                 DELETE FROM stored_file
                 WHERE stored_file_id IN ('%s', '%s', '%s')
