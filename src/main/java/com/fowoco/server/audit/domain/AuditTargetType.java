@@ -13,5 +13,6 @@ public enum AuditTargetType {
     WORKER_LINK,
     USER_ACCOUNT,
     WORKER_IMPORT,
-    COMPANY_SETTINGS
+    COMPANY_SETTINGS,
+    DOCUMENT_OCR_RUN
 }

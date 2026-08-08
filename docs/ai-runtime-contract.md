@@ -206,6 +206,40 @@ Template을 고를 수 있도록 alpha-3 코드(`VNM`, `PHL`)로 변환합니다
 AI를 호출하지 않습니다. 국가를 추가할 때는 AI Template 배포, Server 변환표와 양쪽 계약
 테스트를 함께 변경합니다. 외국인등록증(`ARC`) 요청에는 국가 코드를 보내지 않습니다.
 
+## OCR 실행·저장 경계
+
+HR 화면은 AI를 직접 호출하지 않고 다음 Server API를 사용합니다.
+
+| API | 역할 |
+| --- | --- |
+| `POST /api/v1/documents/{documentId}/ocr-runs` | 실행 이력을 `QUEUED`로 먼저 저장하고 202 반환 |
+| `GET /api/v1/documents/{documentId}/ocr-runs/{ocrRunId}` | 실행 상태와 HR 검토용 결과 조회 |
+| `GET /api/v1/documents/{documentId}/ocr-runs/latest` | 해당 문서의 최신 실행 조회 |
+| `POST /api/v1/documents/{documentId}/ocr-runs/{ocrRunId}/review` | HR의 수정값과 검토 완료·반려 기록 |
+
+Server는 연결된 `stored_file`을 읽어 AI의
+`POST /internal/v1/ocr/worker-documents/{workerDocumentId}`로 multipart 전송합니다.
+AI는 DB에 접근하거나 결과를 저장하지 않습니다. OCR 요청은 실행 이력과 같은 트랜잭션에서
+Outbox 이벤트로 저장됩니다. 서버가 중단되면 메모리 작업 대신 DB에 남은 이벤트 lease를
+다른 인스턴스가 회수해 다시 실행합니다. 실행 중 중단된 트랜잭션은 `QUEUED`로 롤백되므로
+영구적인 `RUNNING` 상태를 만들지 않습니다.
+
+Server는 계약 검증을 통과한 `fields`, `field_confidences`, `review_reasons`를 하나의
+AES-256-GCM 암호문으로 저장합니다. HR의 `corrected_fields`는 OCR 원본을 덮어쓰지 않고
+별도 암호문으로 저장합니다. 감사로그에는 수정한 field key만 기록하며 여권번호 같은 실제
+값은 일반 컬럼·감사로그·오류 메시지에 남기지 않습니다.
+
+`READY_FOR_REVIEW`와 `REVIEW_REQUIRED` 모두 HR 확인 대상입니다. `APPROVE`는 OCR 검토를
+완료했다는 뜻이며, Worker·Document·Agent slot을 자동 수정하지 않습니다. 확정값 반영은
+별도 command와 권한 정책이 합의된 뒤 연결합니다.
+
+Server는 AI 응답의 허용 field와 confidence뿐 아니라 다음도 다시 검증합니다.
+
+- `SUCCEEDED` 결과의 문서 종류별 필수 field와 ISO `YYYY-MM-DD` 날짜
+- 여권 국가와 Template ID의 일치
+- ARC Template ID(`43024`, `43025`)와 `FRONT`·`BACK`의 일치
+- 빈 `SUCCEEDED` 결과와 모순된 Template·면 정보 거부
+
 ## Server가 거부하는 응답
 
 - 요청과 다른 `requestId`
@@ -274,6 +308,23 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 Server 내부 요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧은 값을 HTTP
 timeout으로 사용합니다. `deadlineMs` 자체는 Runtime JSON에 전송하지 않습니다. 따라서
 상위 AiRun이 허용한 시간보다 오래 기다리지 않습니다.
+
+OCR까지 활성화하려면 별도 Secret과 결과 암호화 키를 함께 설정합니다.
+
+```dotenv
+AI_OCR_ENABLED=true
+AI_OCR_ENDPOINT=https://ai.example.com/internal/v1/ocr/worker-documents
+AI_OCR_SERVICE_CREDENTIAL=<배포 환경 Secret>
+DOCUMENT_OCR_ENABLED=true
+OCR_RESULT_ENCRYPTION_KEY_BASE64=<32바이트 난수의 Base64>
+OCR_RESULT_KEY_VERSION=demo-v1
+```
+
+`AI_OCR_ENABLED`만 켜거나 암호화 키 없이 `DOCUMENT_OCR_ENABLED`를 켜지 않습니다. 암호화
+키는 Git에 저장하지 않고 배포 Secret으로 주입합니다. key version은 암호문과 함께 남겨
+향후 KMS/Vault Adapter로 교체할 때 어떤 키로 생성했는지 추적합니다. AI #20의 Stateless
+OCR 구현이 CI를 통과해 병합되고 실제 파일 smoke test까지 끝나기 전에는 두 기능 스위치를
+운영에서 `false`로 유지합니다.
 
 ## 장애가 발생하면
 
