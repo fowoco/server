@@ -26,8 +26,11 @@ final class PostgreSqlRestrictedRoleHttpEnvironment implements AutoCloseable {
             "user_account", "SELECT",
             "refresh_token", "SELECT, INSERT, UPDATE",
             "worker", "SELECT, INSERT, UPDATE",
+            "task", "SELECT",
             "worker_link", "SELECT",
             "worker_response", "SELECT, INSERT",
+            "document_request_draft", "SELECT",
+            "document_request_draft_type", "SELECT",
             "audit_event", "SELECT, INSERT"
     );
     private static final String[] BOOTSTRAP_FUNCTIONS = {
