@@ -37,7 +37,10 @@ public class JdbcCaseQueryRepository implements CaseQueryRepository {
                           AND link.company_id = linked_task.company_id
                         WHERE linked_task.case_id = c.case_id
                           AND linked_task.company_id = c.company_id
-                   ) AS link_issued,
+                          AND link.status = 'ACTIVE'
+                          AND link.expires_at > CURRENT_TIMESTAMP
+                          AND link.delivery_status = 'SENT'
+                   ) AS link_sent,
                    (
                        EXISTS (
                            SELECT 1 FROM task review_task
@@ -247,7 +250,7 @@ public class JdbcCaseQueryRepository implements CaseQueryRepository {
                 CasePriority.valueOf(resultSet.getString("priority")),
                 resultSet.getString("workflow_catalog_version"),
                 resultSet.getString("workflow_snapshot_json"),
-                resultSet.getBoolean("link_issued"),
+                resultSet.getBoolean("link_sent"),
                 resultSet.getBoolean("review_required"),
                 resultSet.getBoolean("unread_response"),
                 resultSet.getInt("completed_checklist_items"),

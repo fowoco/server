@@ -116,7 +116,7 @@ public class CaseQueryService {
         CaseDisplayState displayState = displayStatusResolver.resolve(new CaseDisplayFacts(
                 completed,
                 record.lifecycleStatus() == CaseLifecycleStatus.CANCELLED,
-                record.linkIssued(),
+                record.linkSent(),
                 record.reviewRequired(),
                 record.unreadResponse()
         ));

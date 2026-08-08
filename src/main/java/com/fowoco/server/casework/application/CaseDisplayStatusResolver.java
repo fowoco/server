@@ -23,7 +23,7 @@ public final class CaseDisplayStatusResolver {
                     facts.unreadResponse()
             );
         }
-        if (facts.linkIssued()) {
+        if (facts.linkSent()) {
             return new CaseDisplayState(CaseDisplayStatus.REQUEST_SENT, false);
         }
         return new CaseDisplayState(CaseDisplayStatus.DOCUMENT_PENDING, false);
