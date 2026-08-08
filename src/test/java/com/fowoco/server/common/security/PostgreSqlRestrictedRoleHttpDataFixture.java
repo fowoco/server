@@ -62,6 +62,8 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
             UUID.fromString("a9850000-0000-0000-0000-000000000002");
     private static final UUID REVOKED_LINK =
             UUID.fromString("a9850000-0000-0000-0000-000000000003");
+    private static final UUID DOCUMENT_REQUEST_DRAFT_A =
+            UUID.fromString("a9890000-0000-0000-0000-000000000001");
     static final UUID UNBOUND_INSERT_WORKER =
             UUID.fromString("a9860000-0000-0000-0000-000000000001");
     private static final Instant FIXTURE_TIME = Instant.parse("2026-08-06T02:00:00Z");
@@ -73,6 +75,8 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
             "task",
             "worker_link",
             "worker_response",
+            "document_request_draft",
+            "document_request_draft_type",
             "audit_event"
     );
 
@@ -117,6 +121,7 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
             insertWorker(WORKER_B, COMPANY_B, "Restricted Worker B");
             insertTask(TASK_A, CASE_A, COMPANY_A, WORKER_A, USER_A);
             insertTask(TASK_B, CASE_B, COMPANY_B, WORKER_B, USER_B);
+            insertDocumentRequestDraft();
             insertWorkerLink(
                     ACTIVE_LINK,
                     TASK_A,
@@ -176,6 +181,14 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
                     "DELETE FROM public.worker_link WHERE company_id IN (?, ?)",
                     COMPANY_A,
                     COMPANY_B
+            );
+            jdbc.update(
+                    "DELETE FROM public.document_request_draft_type WHERE draft_id = ?",
+                    DOCUMENT_REQUEST_DRAFT_A
+            );
+            jdbc.update(
+                    "DELETE FROM public.document_request_draft WHERE draft_id = ?",
+                    DOCUMENT_REQUEST_DRAFT_A
             );
             jdbc.update("DELETE FROM public.task WHERE task_id IN (?, ?)", TASK_A, TASK_B);
             jdbc.update(
@@ -249,6 +262,7 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
                      WHERE refresh_token_id IN (?, ?) OR token_hash IN (?, ?))
                   + (SELECT COUNT(*) FROM public.worker WHERE worker_id IN (?, ?, ?))
                   + (SELECT COUNT(*) FROM public.task WHERE task_id IN (?, ?))
+                  + (SELECT COUNT(*) FROM public.document_request_draft WHERE draft_id = ?)
                   + (SELECT COUNT(*) FROM public.worker_link
                      WHERE worker_link_id IN (?, ?, ?) OR token_hash IN (?, ?, ?))
                 """,
@@ -266,6 +280,7 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
                 UNBOUND_INSERT_WORKER,
                 TASK_A,
                 TASK_B,
+                DOCUMENT_REQUEST_DRAFT_A,
                 ACTIVE_LINK,
                 EXPIRED_LINK,
                 REVOKED_LINK,
@@ -430,6 +445,29 @@ final class PostgreSqlRestrictedRoleHttpDataFixture {
                 "restricted-http-" + workerLinkId,
                 Timestamp.from(createdAt),
                 Timestamp.from(createdAt)
+        );
+    }
+
+    private void insertDocumentRequestDraft() {
+        jdbc.update(
+                """
+                INSERT INTO public.document_request_draft (
+                    draft_id, task_id, company_id, language, message,
+                    review_status, created_at, updated_at, version
+                ) VALUES (?, ?, ?, 'ko', '여권 사본을 제출해 주세요.', 'DRAFT', ?, ?, 0)
+                """,
+                DOCUMENT_REQUEST_DRAFT_A,
+                TASK_A,
+                COMPANY_A,
+                Timestamp.from(FIXTURE_TIME),
+                Timestamp.from(FIXTURE_TIME)
+        );
+        jdbc.update(
+                """
+                INSERT INTO public.document_request_draft_type (draft_id, document_type)
+                VALUES (?, 'PASSPORT_COPY')
+                """,
+                DOCUMENT_REQUEST_DRAFT_A
         );
     }
 

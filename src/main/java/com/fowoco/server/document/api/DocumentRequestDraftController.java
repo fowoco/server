@@ -19,6 +19,7 @@ import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -87,5 +88,32 @@ public class DocumentRequestDraftController {
                 RequestMetadata.from(servletRequest)
         );
         return DocumentRequestDraftResponse.from(draft);
+    }
+
+    @Operation(
+            operationId = "getDocumentRequestDraft",
+            summary = "문서 요청 초안 조회",
+            description = "저장된 요청 안내문과 최신 version을 조회하여 화면을 복구합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "조회 성공",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = DocumentRequestDraftResponse.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound")
+    })
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    public DocumentRequestDraftResponse find(
+            @Parameter(description = "업무 ID") @PathVariable UUID taskId
+    ) {
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        return DocumentRequestDraftResponse.from(documentRequestDraftService.find(taskId, actor));
     }
 }

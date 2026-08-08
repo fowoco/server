@@ -9,6 +9,10 @@ import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
+import com.fowoco.server.document.application.port.DocumentRequestDraftRepository;
+import com.fowoco.server.document.domain.DocumentRequestDraft;
+import com.fowoco.server.task.application.port.TaskRepository;
+import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
 import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
 import com.fowoco.server.workerlink.application.port.WorkerLinkTenantBootstrap;
@@ -30,6 +34,8 @@ public class WorkerLinkViewService {
     private final WorkerLinkTenantBootstrap workerLinkTenantBootstrap;
     private final TenantDatabaseContext tenantDatabaseContext;
     private final WorkerLinkRepository workerLinkRepository;
+    private final TaskRepository taskRepository;
+    private final DocumentRequestDraftRepository documentRequestDraftRepository;
     private final WorkerLinkHasher workerLinkHasher;
     private final AuditEventRepository auditRepository;
     private final UuidGenerator uuidGenerator;
@@ -39,6 +45,8 @@ public class WorkerLinkViewService {
             WorkerLinkTenantBootstrap workerLinkTenantBootstrap,
             TenantDatabaseContext tenantDatabaseContext,
             WorkerLinkRepository workerLinkRepository,
+            TaskRepository taskRepository,
+            DocumentRequestDraftRepository documentRequestDraftRepository,
             WorkerLinkHasher workerLinkHasher,
             AuditEventRepository auditRepository,
             UuidGenerator uuidGenerator,
@@ -47,6 +55,8 @@ public class WorkerLinkViewService {
         this.workerLinkTenantBootstrap = workerLinkTenantBootstrap;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.workerLinkRepository = workerLinkRepository;
+        this.taskRepository = taskRepository;
+        this.documentRequestDraftRepository = documentRequestDraftRepository;
         this.workerLinkHasher = workerLinkHasher;
         this.auditRepository = auditRepository;
         this.uuidGenerator = uuidGenerator;
@@ -71,6 +81,13 @@ public class WorkerLinkViewService {
             throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND);
         }
 
+        Task task = taskRepository.findByIdAndCompanyId(link.taskId(), companyId)
+                .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND));
+        DocumentRequestDraft draft = documentRequestDraftRepository
+                .findByTaskIdAndCompanyId(link.taskId(), companyId)
+                .filter(value -> value.message() != null && !value.message().isBlank())
+                .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.WORKER_LINK_CONTENT_NOT_READY));
+
         auditRepository.append(new AuditEvent(
                 uuidGenerator.generate(),
                 companyId,
@@ -87,11 +104,11 @@ public class WorkerLinkViewService {
                 now
         ));
 
-        // document-request-draft 연동해서 guidance/dueDate 실제 값 채우기.
-        // AI Agent(Language Agent) 다음에 다시 확인
         return new WorkerLinkViewResult(
-                "document-request-draft 연동 전",
-                null,
+                draft.message(),
+                draft.language(),
+                task.dueDate(),
+                draft.documentTypes(),
                 List.of(WorkerResponseType.values())
         );
     }

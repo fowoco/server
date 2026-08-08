@@ -85,7 +85,7 @@ public class DashboardQueryService {
                 .toList();
 
         List<UpcomingExpiryItemResponse> upcoming7Days = collectUpcomingExpiry(companyId, targetDate, windowEnd);
-        DashboardRecommendationsResponse recommendations = collectRecommendations(companyId);
+       DashboardRecommendationsResponse recommendations = collectRecommendations(companyId);
 
         return new DashboardTodayResponse(
                 summaryCounts, priorityTasks, upcoming7Days, recommendations, pendingApproval, workerResponse
