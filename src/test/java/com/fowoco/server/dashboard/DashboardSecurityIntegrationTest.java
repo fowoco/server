@@ -223,6 +223,45 @@ class DashboardSecurityIntegrationTest {
         assertThat(names).doesNotContain("이미지난만료근로자");
     }
 
+    @Test
+    void recommendationsConnectedCountMatchesOpenTasks() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(accessToken, "추천테스트근로자");
+        createTask(accessToken, workerId, "추천테스트업무1");
+        createTask(accessToken, workerId, "추천테스트업무2");
+
+        HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<Number>read(response.body(), "$.recommendations.connected_count").longValue())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void recommendationsReviewIncludesReadyForReviewTask() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(accessToken, "승인대기추천근로자");
+        String taskId = createTask(accessToken, workerId, "승인대기업무");
+        requestReview(accessToken, taskId, workerId);
+
+        HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> reviewTitles = JsonPath.read(response.body(), "$.recommendations.review[*].title");
+        assertThat(reviewTitles).contains("승인대기업무");
+    }
+
+    @Test
+    void recommendationsPreparedAndAfterApprovalAreEmptyByDefault() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.recommendations.prepared")).isEmpty();
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.recommendations.after_approval")).isEmpty();
+    }
+
     private String registerWorkerWithAllExpiryFields(
             String accessToken,
             String displayName,
