@@ -17,6 +17,11 @@ public enum WorkerLinkErrorCode implements ApiErrorCode {
             HttpStatus.CONFLICT,
             "이미 유효한 근로자 링크가 있습니다. rotateExisting=true로 재발급해 주세요."
     ),
+    WORKER_LINK_RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "근로자 링크를 찾을 수 없습니다."),
+    WORKER_LINK_NOT_ACTIVE(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "현재 사용할 수 있는 근로자 링크만 전달 완료로 기록할 수 있습니다."
+    ),
 
     WORKER_LINK_NOT_FOUND(HttpStatus.GONE, "링크를 찾을 수 없거나 더 이상 사용할 수 없습니다."),
     UPLOAD_NOT_AVAILABLE(

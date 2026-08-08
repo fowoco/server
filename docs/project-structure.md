@@ -28,6 +28,7 @@ server/
     │   │   ├── auth/
     │   │   ├── company/
     │   │   ├── worker/
+    │   │   ├── workerimport/        # CSV/XLSX 명단 검증·검토·등록
     │   │   ├── document/
     │   │   ├── file/
     │   │   ├── workflow/

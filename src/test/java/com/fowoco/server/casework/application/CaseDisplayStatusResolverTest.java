@@ -14,7 +14,7 @@ class CaseDisplayStatusResolverTest {
     private final CaseDisplayStatusResolver resolver = new CaseDisplayStatusResolver();
 
     @Test
-    void showsDocumentPendingBeforeWorkerLinkIsIssued() {
+    void showsDocumentPendingBeforeWorkerLinkIsSent() {
         CaseDisplayState result = resolver.resolve(facts(false, false, false, false));
 
         assertThat(result.status()).isEqualTo(DOCUMENT_PENDING);
@@ -22,7 +22,7 @@ class CaseDisplayStatusResolverTest {
     }
 
     @Test
-    void showsRequestSentAfterWorkerLinkIsIssuedWithoutResponse() {
+    void showsRequestSentAfterWorkerLinkIsSentWithoutResponse() {
         CaseDisplayState result = resolver.resolve(facts(false, true, false, false));
 
         assertThat(result.status()).isEqualTo(REQUEST_SENT);
@@ -63,24 +63,24 @@ class CaseDisplayStatusResolverTest {
 
     private CaseDisplayFacts facts(
             boolean completed,
-            boolean linkIssued,
+            boolean linkSent,
             boolean reviewRequired,
             boolean unreadResponse
     ) {
-        return facts(completed, false, linkIssued, reviewRequired, unreadResponse);
+        return facts(completed, false, linkSent, reviewRequired, unreadResponse);
     }
 
     private CaseDisplayFacts facts(
             boolean completed,
             boolean cancelled,
-            boolean linkIssued,
+            boolean linkSent,
             boolean reviewRequired,
             boolean unreadResponse
     ) {
         return new CaseDisplayFacts(
                 completed,
                 cancelled,
-                linkIssued,
+                linkSent,
                 reviewRequired,
                 unreadResponse
         );
