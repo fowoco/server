@@ -62,7 +62,7 @@ public class DashboardQueryService {
         UUID companyId = actor.companyId();
         Clock effectiveClock = timezone != null ? clock.withZone(parseTimezone(timezone)) : clock;
         LocalDate targetDate = date != null ? date : LocalDate.now(effectiveClock);
-        LocalDate windowEnd = targetDate.plusDays(UPCOMING_DAYS);
+        LocalDate windowEnd = targetDate.plusDays(UPCOMING_DAYS + 1);
 
         long pendingApproval = taskRepository.countByCompanyIdAndStatus(companyId, TaskStatus.READY_FOR_REVIEW);
         long needsInfo = taskRepository.countByCompanyIdAndStatus(companyId, TaskStatus.NEEDS_INFO);
@@ -78,12 +78,12 @@ public class DashboardQueryService {
                 .map(DashboardTaskSummaryResponse::from)
                 .toList();
 
-        List<UpcomingExpiryItemResponse> upcoming7Days = collectUpcomingExpiry(companyId, windowEnd);
+        List<UpcomingExpiryItemResponse> upcoming7Days = collectUpcomingExpiry(companyId, targetDate, windowEnd);
 
         return new DashboardTodayResponse(summaryCounts, priorityTasks, upcoming7Days, pendingApproval, workerResponse);
     }
 
-    private List<UpcomingExpiryItemResponse> collectUpcomingExpiry(UUID companyId, LocalDate windowEnd) {
+    private List<UpcomingExpiryItemResponse> collectUpcomingExpiry(UUID companyId, LocalDate windowStart, LocalDate windowEnd) {
         List<UpcomingExpiryItemResponse> result = new ArrayList<>();
 
         List<Worker> stayExpiringWorkers = workerRepository.findPage(
@@ -129,7 +129,9 @@ public class DashboardQueryService {
             ));
         }
 
-        return result;
+        return result.stream()
+                .filter(item -> !item.getExpiryDate().isBefore(windowStart))
+                .toList();
     }
 
     private void addWorkerExpiry(
