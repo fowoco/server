@@ -142,5 +142,21 @@ class CompanySettingsOpenApiContractTest {
                 );
         assertThat(properties.path("link_expiry_hours").path("minimum").asLong()).isEqualTo(1L);
         assertThat(properties.path("link_expiry_hours").path("maximum").asLong()).isEqualTo(168L);
+
+        JsonNode requestExample = operation.at(
+                "/requestBody/content/application~1json/examples/partialUpdate/value"
+        );
+        assertThat(requestExample.path("expected_version").asLong()).isEqualTo(4L);
+        assertThat(requestExample.path("approval_policy").asText()).isEqualTo("ADMIN_ONLY");
+        assertThat(requestExample.path("link_expiry_hours").asLong()).isEqualTo(48L);
+        assertThat(requestExample.path("audit_visibility").asText()).isEqualTo("ADMIN_AND_HR");
+
+        JsonNode responseExample = operation.at(
+                "/responses/200/content/application~1json/examples/updatedSettings/value"
+        );
+        assertThat(responseExample.path("version").asLong()).isEqualTo(5L);
+        assertThat(responseExample.path("approval_policy").asText()).isEqualTo("ADMIN_ONLY");
+        assertThat(responseExample.at("/evidence_rules/RECONTRACT/0").asText())
+                .isEqualTo("DOCUMENT");
     }
 }

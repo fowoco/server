@@ -92,7 +92,23 @@ public class CompanySettingsController {
                     description = "수정 후 전체 회사 설정. no-op이면 version을 유지합니다.",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = CompanySettingsResponse.class)
+                            schema = @Schema(implementation = CompanySettingsResponse.class),
+                            examples = @ExampleObject(
+                                    name = "updatedSettings",
+                                    value = """
+                                            {
+                                              "approval_policy": "ADMIN_ONLY",
+                                              "link_expiry_hours": 48,
+                                              "evidence_rules": {
+                                                "RECONTRACT": ["DOCUMENT"]
+                                              },
+                                              "file_retention_days": 365,
+                                              "ai_log_retention_days": 90,
+                                              "audit_visibility": "ADMIN_AND_HR",
+                                              "version": 5
+                                            }
+                                            """
+                            )
                     )
             ),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
@@ -107,6 +123,25 @@ public class CompanySettingsController {
             produces = MediaType.APPLICATION_JSON_VALUE
     )
     public CompanySettingsResponse update(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = CompanySettingsPatchRequest.class),
+                            examples = @ExampleObject(
+                                    name = "partialUpdate",
+                                    summary = "일부 설정과 낙관적 잠금 version 수정",
+                                    value = """
+                                            {
+                                              "expected_version": 4,
+                                              "approval_policy": "ADMIN_ONLY",
+                                              "link_expiry_hours": 48,
+                                              "audit_visibility": "ADMIN_AND_HR"
+                                            }
+                                            """
+                            )
+                    )
+            )
             @Valid @RequestBody CompanySettingsPatchRequest request,
             HttpServletRequest servletRequest
     ) {
