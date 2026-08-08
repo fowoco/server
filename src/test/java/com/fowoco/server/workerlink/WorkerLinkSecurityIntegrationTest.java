@@ -34,8 +34,10 @@ class WorkerLinkSecurityIntegrationTest {
     private static final UUID COMPANY_B = UUID.fromString("B0000000-0000-0000-0000-000000000002");
     private static final UUID HR_A = UUID.fromString("A1000000-0000-0000-0000-000000000001");
     private static final UUID HR_B = UUID.fromString("B1000000-0000-0000-0000-000000000002");
+    private static final UUID VIEWER_A = UUID.fromString("A1000000-0000-0000-0000-000000000003");
     private static final String HR_A_EMAIL = "hr.link.a@example.com";
     private static final String HR_B_EMAIL = "hr.link.b@example.com";
+    private static final String VIEWER_A_EMAIL = "viewer.link.a@example.com";
     private static final String PASSWORD = "Test-password-1!";
     private static final String BOUNDARY = "FowocoLinkTestBoundary1234";
 
@@ -56,8 +58,9 @@ class WorkerLinkSecurityIntegrationTest {
         insertCompany(COMPANY_A, "사업장 A");
         insertCompany(COMPANY_B, "사업장 B");
         String passwordHash = passwordEncoder.encode(PASSWORD);
-        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash);
-        insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash);
+        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash, "HR");
+        insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash, "HR");
+        insertUser(VIEWER_A, COMPANY_A, VIEWER_A_EMAIL, passwordHash, "VIEWER");
     }
 
     @BeforeEach
@@ -227,6 +230,114 @@ class WorkerLinkSecurityIntegrationTest {
                 hrTokenB
         );
         assertThat(readResponse.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void hrCanQueryAndMarkWorkerLinkSentIdempotently() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "링크전달테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                hrToken,
+                "delivery-issue-key"
+        );
+        assertThat(issueResponse.statusCode()).isEqualTo(201);
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+        assertThat(JsonPath.<String>read(issueResponse.body(), "$.delivery_status"))
+                .isEqualTo("NOT_SENT");
+        assertThat(JsonPath.<Object>read(issueResponse.body(), "$.sent_at")).isNull();
+
+        HttpResponse<String> beforeSent = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                hrToken
+        );
+        assertThat(beforeSent.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(beforeSent.body(), "$.worker_link_id"))
+                .isEqualTo(workerLinkId);
+        assertThat(JsonPath.<String>read(beforeSent.body(), "$.delivery_status"))
+                .isEqualTo("NOT_SENT");
+
+        HttpResponse<String> sent = postWithoutBody(
+                "/api/v1/worker-links/" + workerLinkId + "/sent",
+                hrToken
+        );
+        assertThat(sent.statusCode()).as("sent response body: %s", sent.body()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(sent.body(), "$.delivery_status")).isEqualTo("SENT");
+        assertThat(JsonPath.<String>read(sent.body(), "$.sent_at")).isNotBlank();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT sent_by FROM worker_link WHERE worker_link_id = ?",
+                UUID.class,
+                UUID.fromString(workerLinkId)
+        )).isEqualTo(HR_A);
+
+        HttpResponse<String> firstRetry = postWithoutBody(
+                "/api/v1/worker-links/" + workerLinkId + "/sent",
+                hrToken
+        );
+        HttpResponse<String> secondRetry = postWithoutBody(
+                "/api/v1/worker-links/" + workerLinkId + "/sent",
+                hrToken
+        );
+        assertThat(firstRetry.statusCode()).isEqualTo(200);
+        assertThat(secondRetry.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(firstRetry.body(), "$.sent_at"))
+                .isEqualTo(JsonPath.read(sent.body(), "$.sent_at"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'WORKER_LINK_SENT'",
+                Integer.class,
+                UUID.fromString(workerLinkId)
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void deliveryEndpointsHideOtherCompanyAndRejectViewer() throws Exception {
+        String hrTokenA = accessToken(login(HR_A_EMAIL));
+        String hrTokenB = accessToken(login(HR_B_EMAIL));
+        String viewerTokenA = accessToken(login(VIEWER_A_EMAIL));
+        String workerId = registerWorker(hrTokenA, "링크권한테스트근로자");
+        String taskId = createApprovedTask(hrTokenA, workerId);
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                hrTokenA,
+                "delivery-security-issue-key"
+        );
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+
+        assertThat(getJson("/api/v1/tasks/" + taskId + "/worker-link", hrTokenB).statusCode())
+                .isEqualTo(404);
+        assertThat(postWithoutBody(
+                "/api/v1/worker-links/" + workerLinkId + "/sent",
+                hrTokenB
+        ).statusCode()).isEqualTo(404);
+        assertThat(getJson("/api/v1/tasks/" + taskId + "/worker-link", viewerTokenA).statusCode())
+                .isEqualTo(403);
+        assertThat(postWithoutBody(
+                "/api/v1/worker-links/" + workerLinkId + "/sent",
+                viewerTokenA
+        ).statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void documentsWorkerLinkDeliveryEndpointsInOpenApi() throws Exception {
+        HttpResponse<String> response = getJson("/v3/api-docs", null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(
+                response.body(),
+                "$.paths['/api/v1/tasks/{taskId}/worker-link'].get.operationId"
+        )).isEqualTo("getTaskWorkerLinkDelivery");
+        assertThat(JsonPath.<String>read(
+                response.body(),
+                "$.paths['/api/v1/worker-links/{workerLinkId}/sent'].post.operationId"
+        )).isEqualTo("markWorkerLinkSent");
     }
 
     @Test
@@ -436,15 +547,21 @@ class WorkerLinkSecurityIntegrationTest {
         );
     }
 
-    private void insertUser(UUID userId, UUID companyId, String email, String passwordHash) {
+    private void insertUser(
+            UUID userId,
+            UUID companyId,
+            String email,
+            String passwordHash,
+            String role
+    ) {
         jdbcTemplate.update(
                 """
                 INSERT INTO user_account (
                     user_id, company_id, email, normalized_email, password_hash,
                     role, status, created_at, updated_at, version
-                ) VALUES (?, ?, ?, ?, ?, 'HR', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                ) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
                 """,
-                userId, companyId, email, email, passwordHash
+                userId, companyId, email, email, passwordHash, role
         );
     }
 

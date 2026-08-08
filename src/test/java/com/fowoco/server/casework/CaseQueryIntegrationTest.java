@@ -184,6 +184,46 @@ class CaseQueryIntegrationTest {
                 .containsExactly(CASE_ORDER_SECOND.toString(), CASE_CANCELLED.toString());
     }
 
+    @Test
+    void distinguishesIssuedLinkFromHrSentLink() throws Exception {
+        jdbcTemplate.update("DELETE FROM worker_response");
+        jdbcTemplate.update(
+                """
+                UPDATE worker_link
+                   SET conversation_status = 'WAITING_WORKER',
+                       delivery_status = 'NOT_SENT',
+                       sent_at = NULL,
+                       sent_by = NULL
+                 WHERE task_id = ?
+                """,
+                TASK_A_WAITING
+        );
+        String token = login();
+
+        HttpResponse<String> issuedOnly = get("/api/v1/cases/" + CASE_A + "/projection", token);
+        assertThat(JsonPath.<String>read(issuedOnly.body(), "$.display_status"))
+                .isEqualTo("DOCUMENT_PENDING");
+
+        jdbcTemplate.update(
+                """
+                UPDATE worker_link
+                   SET delivery_status = 'SENT', sent_at = CURRENT_TIMESTAMP, sent_by = ?
+                 WHERE task_id = ?
+                """,
+                HR_A,
+                TASK_A_WAITING
+        );
+
+        HttpResponse<String> sent = get("/api/v1/cases/" + CASE_A + "/projection", token);
+        assertThat(JsonPath.<String>read(sent.body(), "$.display_status"))
+                .isEqualTo("REQUEST_SENT");
+
+        jdbcTemplate.update("UPDATE worker_link SET status = 'REVOKED' WHERE task_id = ?", TASK_A_WAITING);
+        HttpResponse<String> revoked = get("/api/v1/cases/" + CASE_A + "/projection", token);
+        assertThat(JsonPath.<String>read(revoked.body(), "$.display_status"))
+                .isEqualTo("DOCUMENT_PENDING");
+    }
+
     private String login() throws Exception {
         HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/auth/login"))
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")

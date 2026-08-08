@@ -13,6 +13,9 @@ public final class WorkerLink {
     private final Instant expiresAt;
     private final WorkerLinkStatus status;
     private final ConversationStatus conversationStatus;
+    private final WorkerLinkDeliveryStatus deliveryStatus;
+    private final Instant sentAt;
+    private final UUID sentBy;
     private final UUID assigneeId;
     private final UUID issuedBy;
     private final UUID replacesLinkId;
@@ -29,6 +32,9 @@ public final class WorkerLink {
             Instant expiresAt,
             WorkerLinkStatus status,
             ConversationStatus conversationStatus,
+            WorkerLinkDeliveryStatus deliveryStatus,
+            Instant sentAt,
+            UUID sentBy,
             UUID assigneeId,
             UUID issuedBy,
             UUID replacesLinkId,
@@ -44,6 +50,10 @@ public final class WorkerLink {
         this.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt must not be null");
         this.status = Objects.requireNonNull(status, "status must not be null");
         this.conversationStatus = Objects.requireNonNull(conversationStatus, "conversationStatus must not be null");
+        this.deliveryStatus = Objects.requireNonNull(deliveryStatus, "deliveryStatus must not be null");
+        validateDelivery(deliveryStatus, sentAt, sentBy, createdAt);
+        this.sentAt = sentAt;
+        this.sentBy = sentBy;
         this.assigneeId = assigneeId;
         this.issuedBy = Objects.requireNonNull(issuedBy, "issuedBy must not be null");
         this.replacesLinkId = replacesLinkId;
@@ -78,6 +88,9 @@ public final class WorkerLink {
                 expiresAt,
                 WorkerLinkStatus.ACTIVE,
                 ConversationStatus.WAITING_WORKER,
+                WorkerLinkDeliveryStatus.NOT_SENT,
+                null,
+                null,
                 null,
                 issuedBy,
                 replacesLinkId,
@@ -91,7 +104,8 @@ public final class WorkerLink {
     public WorkerLink revoke(Instant now) {
         return new WorkerLink(
                 workerLinkId, taskId, companyId, tokenHash, expiresAt,
-                WorkerLinkStatus.REVOKED, conversationStatus, assigneeId, issuedBy,
+                WorkerLinkStatus.REVOKED, conversationStatus, deliveryStatus, sentAt, sentBy,
+                assigneeId, issuedBy,
                 replacesLinkId, idempotencyKey, createdAt, now, version
         );
     }
@@ -99,7 +113,8 @@ public final class WorkerLink {
     public WorkerLink markNeedsFollowup(Instant now) {
         return new WorkerLink(
                 workerLinkId, taskId, companyId, tokenHash, expiresAt,
-                status, ConversationStatus.NEEDS_FOLLOWUP, assigneeId, issuedBy,
+                status, ConversationStatus.NEEDS_FOLLOWUP, deliveryStatus, sentAt, sentBy,
+                assigneeId, issuedBy,
                 replacesLinkId, idempotencyKey, createdAt, now, version
         );
     }
@@ -110,8 +125,22 @@ public final class WorkerLink {
         }
         return new WorkerLink(
                 workerLinkId, taskId, companyId, tokenHash, expiresAt,
-                status, ConversationStatus.REOPENED, assigneeId, issuedBy,
+                status, ConversationStatus.REOPENED, deliveryStatus, sentAt, sentBy,
+                assigneeId, issuedBy,
                 replacesLinkId, idempotencyKey, createdAt, now, version
+        );
+    }
+
+    public WorkerLink markSent(UUID actorId, Instant now) {
+        Objects.requireNonNull(actorId, "actorId must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+        if (deliveryStatus == WorkerLinkDeliveryStatus.SENT) {
+            return this;
+        }
+        return new WorkerLink(
+                workerLinkId, taskId, companyId, tokenHash, expiresAt,
+                status, conversationStatus, WorkerLinkDeliveryStatus.SENT, now, actorId,
+                assigneeId, issuedBy, replacesLinkId, idempotencyKey, createdAt, now, version
         );
     }
 
@@ -124,6 +153,22 @@ public final class WorkerLink {
             throw new IllegalArgumentException(fieldName + " must not be blank");
         }
         return value;
+    }
+
+    private static void validateDelivery(
+            WorkerLinkDeliveryStatus deliveryStatus,
+            Instant sentAt,
+            UUID sentBy,
+            Instant createdAt
+    ) {
+        Objects.requireNonNull(createdAt, "createdAt must not be null");
+        boolean sent = deliveryStatus == WorkerLinkDeliveryStatus.SENT;
+        if (sent != (sentAt != null && sentBy != null)) {
+            throw new IllegalArgumentException("sentAt and sentBy must match deliveryStatus");
+        }
+        if (sentAt != null && sentAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("sentAt must not be before createdAt");
+        }
     }
 
     public UUID workerLinkId() {
@@ -152,6 +197,18 @@ public final class WorkerLink {
 
     public ConversationStatus conversationStatus() {
         return conversationStatus;
+    }
+
+    public WorkerLinkDeliveryStatus deliveryStatus() {
+        return deliveryStatus;
+    }
+
+    public Instant sentAt() {
+        return sentAt;
+    }
+
+    public UUID sentBy() {
+        return sentBy;
     }
 
     public UUID assigneeId() {

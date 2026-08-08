@@ -56,6 +56,26 @@ public class JpaWorkerLinkRepository implements WorkerLinkRepository {
     }
 
     @Override
+    public Optional<WorkerLink> findByIdAndCompanyId(UUID workerLinkId, UUID companyId) {
+        Objects.requireNonNull(workerLinkId, "workerLinkId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        return entityManager.createQuery(
+                        """
+                        select link
+                        from WorkerLinkJpaEntity link
+                        where link.workerLinkId = :workerLinkId
+                          and link.companyId = :companyId
+                        """,
+                        WorkerLinkJpaEntity.class
+                )
+                .setParameter("workerLinkId", workerLinkId)
+                .setParameter("companyId", companyId)
+                .getResultStream()
+                .findFirst()
+                .map(WorkerLinkJpaEntity::toDomain);
+    }
+
+    @Override
     public Optional<WorkerLink> findActiveByTaskIdAndCompanyId(UUID taskId, UUID companyId) {
         Objects.requireNonNull(taskId, "taskId must not be null");
         Objects.requireNonNull(companyId, "companyId must not be null");
