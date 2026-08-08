@@ -16,10 +16,14 @@ import com.fowoco.server.settings.domain.CompanySettings;
 import com.fowoco.server.task.domain.TaskType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
+import java.util.EnumMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -51,8 +55,12 @@ public final class CompanySettingsPatchRequest {
     private boolean linkExpiryHoursPresent;
 
     @Valid
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = false)
-    private Map<@NotNull TaskType, @NotNull Set<@NotNull EvidenceType>> evidenceRules;
+    @Schema(
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            nullable = false,
+            description = "TaskType별 추가 필수 EvidenceType 목록이며 배열 내 중복은 허용하지 않습니다."
+    )
+    private Map<@NotNull TaskType, @NotNull List<@NotNull EvidenceType>> evidenceRules;
     @JsonIgnore
     @Schema(hidden = true)
     private boolean evidenceRulesPresent;
@@ -104,10 +112,27 @@ public final class CompanySettingsPatchRequest {
 
     @JsonSetter(value = "evidence_rules", nulls = Nulls.FAIL)
     @JsonProperty("evidence_rules")
-    @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = false)
-    public void setEvidenceRules(Map<TaskType, Set<EvidenceType>> evidenceRules) {
+    @Schema(
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+            nullable = false,
+            description = "TaskType별 추가 필수 EvidenceType 목록이며 배열 내 중복은 허용하지 않습니다."
+    )
+    public void setEvidenceRules(Map<TaskType, List<EvidenceType>> evidenceRules) {
         this.evidenceRulesPresent = true;
         this.evidenceRules = evidenceRules;
+    }
+
+    @AssertTrue(message = "evidence_rules 배열에는 같은 evidence type을 중복 지정할 수 없습니다.")
+    @JsonIgnore
+    @Schema(hidden = true)
+    public boolean isEvidenceRulesUnique() {
+        if (!evidenceRulesPresent || evidenceRules == null) {
+            return true;
+        }
+        return evidenceRules.values().stream()
+                .filter(evidenceTypes -> evidenceTypes != null)
+                .allMatch(evidenceTypes -> evidenceTypes.size()
+                        == new HashSet<>(evidenceTypes).size());
     }
 
     @JsonSetter(value = "file_retention_days", nulls = Nulls.FAIL)
@@ -145,11 +170,22 @@ public final class CompanySettingsPatchRequest {
                 expectedVersion,
                 field(approvalPolicyPresent, approvalPolicy),
                 field(linkExpiryHoursPresent, linkExpiryHours),
-                field(evidenceRulesPresent, evidenceRules),
+                evidenceRulesField(),
                 field(fileRetentionDaysPresent, fileRetentionDays),
                 field(aiLogRetentionDaysPresent, aiLogRetentionDays),
                 field(auditVisibilityPresent, auditVisibility)
         );
+    }
+
+    private PatchField<Map<TaskType, Set<EvidenceType>>> evidenceRulesField() {
+        if (!evidenceRulesPresent) {
+            return PatchField.absent();
+        }
+        EnumMap<TaskType, Set<EvidenceType>> converted = new EnumMap<>(TaskType.class);
+        evidenceRules.forEach((taskType, evidenceTypes) ->
+                converted.put(taskType, Set.copyOf(evidenceTypes))
+        );
+        return PatchField.of(converted);
     }
 
     private <T> PatchField<T> field(boolean present, T value) {

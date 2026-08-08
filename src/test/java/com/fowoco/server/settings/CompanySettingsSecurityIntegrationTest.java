@@ -244,6 +244,9 @@ class CompanySettingsSecurityIntegrationTest {
         assertThat(patch(token, "{}").statusCode()).isEqualTo(400);
         assertThat(patch(token, "{\"expected_version\":4,\"link_expiry_hours\":169}")
                 .statusCode()).isEqualTo(400);
+        assertThat(patch(token, """
+                {"expected_version":4,"evidence_rules":{"RECONTRACT":["DOCUMENT","DOCUMENT"]}}
+                """).statusCode()).isEqualTo(400);
     }
 
     @Test
