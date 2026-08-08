@@ -12,6 +12,8 @@ import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.error.ErrorCode;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.settings.application.port.CompanySettingsRepository;
+import com.fowoco.server.settings.domain.AuditVisibility;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
 import java.time.Instant;
@@ -29,6 +31,7 @@ public class AuditQueryService {
     private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
     private final AuditEventRepository auditRepository;
+    private final CompanySettingsRepository companySettingsRepository;
     private final AuditCursorCodec cursorCodec;
 
     public AuditQueryService(
@@ -36,12 +39,14 @@ public class AuditQueryService {
             TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
             AuditEventRepository auditRepository,
+            CompanySettingsRepository companySettingsRepository,
             AuditCursorCodec cursorCodec
     ) {
         this.actorAuthorizer = actorAuthorizer;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
         this.auditRepository = auditRepository;
+        this.companySettingsRepository = companySettingsRepository;
         this.cursorCodec = cursorCodec;
     }
 
@@ -70,7 +75,7 @@ public class AuditQueryService {
             ActorContext actor
     ) {
         bindTenant(actor);
-        actorAuthorizer.requireAnyRole(actor, UserRole.ADMIN);
+        requireAuditSearchPermission(actor);
         if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
             throw new ApiException(ErrorCode.INVALID_REQUEST);
         }
@@ -100,6 +105,20 @@ public class AuditQueryService {
 
     private String normalizeTraceId(String traceId) {
         return traceId == null || traceId.isBlank() ? null : traceId.trim();
+    }
+
+    private void requireAuditSearchPermission(ActorContext actor) {
+        actorAuthorizer.requireAnyRole(actor, UserRole.ADMIN, UserRole.HR);
+        AuditVisibility visibility = companySettingsRepository
+                .findByCompanyId(actor.companyId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Persisted company settings are missing for company "
+                                + actor.companyId()
+                ))
+                .auditVisibility();
+        if (actor.roles().stream().noneMatch(visibility::permits)) {
+            throw new ApiException(ErrorCode.ACCESS_DENIED);
+        }
     }
 
     private void bindTenant(ActorContext actor) {

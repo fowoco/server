@@ -6,6 +6,7 @@ import com.fowoco.server.approval.application.port.EvidenceRepository;
 import com.fowoco.server.approval.application.port.ExternalSubmissionRepository;
 import com.fowoco.server.approval.domain.ApprovalRequest;
 import com.fowoco.server.approval.domain.Evidence;
+import com.fowoco.server.approval.domain.EvidenceType;
 import com.fowoco.server.approval.domain.ExternalSubmission;
 import com.fowoco.server.audit.application.port.AuditEventRepository;
 import com.fowoco.server.audit.domain.ActorType;
@@ -16,9 +17,12 @@ import com.fowoco.server.auth.application.ActorAuthorizer;
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
+import com.fowoco.server.common.error.ErrorCode;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
+import com.fowoco.server.settings.application.port.CompanySettingsRepository;
+import com.fowoco.server.settings.domain.ApprovalPolicy;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.TaskReadinessChecker;
 import com.fowoco.server.task.application.port.TaskRepository;
@@ -31,6 +35,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +51,7 @@ public class ApprovalService implements ApprovalControlPort {
     private final TaskTransitionRecorder transitionRecorder;
     private final TaskReadinessChecker taskReadinessChecker;
     private final ApprovalRequestRepository approvalRepository;
+    private final CompanySettingsRepository companySettingsRepository;
     private final ExternalSubmissionRepository externalSubmissionRepository;
     private final EvidenceRepository evidenceRepository;
     private final AuditEventRepository auditRepository;
@@ -60,6 +66,7 @@ public class ApprovalService implements ApprovalControlPort {
             TaskTransitionRecorder transitionRecorder,
             TaskReadinessChecker taskReadinessChecker,
             ApprovalRequestRepository approvalRepository,
+            CompanySettingsRepository companySettingsRepository,
             ExternalSubmissionRepository externalSubmissionRepository,
             EvidenceRepository evidenceRepository,
             AuditEventRepository auditRepository,
@@ -73,6 +80,7 @@ public class ApprovalService implements ApprovalControlPort {
         this.transitionRecorder = transitionRecorder;
         this.taskReadinessChecker = taskReadinessChecker;
         this.approvalRepository = approvalRepository;
+        this.companySettingsRepository = companySettingsRepository;
         this.externalSubmissionRepository = externalSubmissionRepository;
         this.evidenceRepository = evidenceRepository;
         this.auditRepository = auditRepository;
@@ -147,7 +155,7 @@ public class ApprovalService implements ApprovalControlPort {
             RequestMetadata metadata
     ) {
         bindTenant(actor);
-        actorAuthorizer.requireHrWrite(actor);
+        requireApprovalDecisionPermission(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
         ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
@@ -185,7 +193,7 @@ public class ApprovalService implements ApprovalControlPort {
             RequestMetadata metadata
     ) {
         bindTenant(actor);
-        actorAuthorizer.requireHrWrite(actor);
+        requireApprovalDecisionPermission(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
         ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
@@ -321,7 +329,7 @@ public class ApprovalService implements ApprovalControlPort {
                 task.contentRevision(),
                 task.criticalFingerprint()
         );
-        boolean evidencePresent = evidenceRepository.existsByTaskIdAndCompanyId(taskId, actor.companyId());
+        boolean evidencePresent = hasRequiredEvidence(task);
         Instant now = Instant.now(clock);
         TaskStatus previous = task.complete(
                 approved,
@@ -492,6 +500,39 @@ public class ApprovalService implements ApprovalControlPort {
             approvalRepository.save(approval);
         });
         return active;
+    }
+
+    private void requireApprovalDecisionPermission(ActorContext actor) {
+        actorAuthorizer.requireHrWrite(actor);
+        ApprovalPolicy approvalPolicy = companySettingsRepository
+                .findByCompanyId(actor.companyId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Persisted company settings are missing for company "
+                                + actor.companyId()
+                ))
+                .approvalPolicy();
+        if (actor.roles().stream().noneMatch(approvalPolicy::permits)) {
+            throw new ApiException(ErrorCode.ACCESS_DENIED);
+        }
+    }
+
+    private boolean hasRequiredEvidence(Task task) {
+        Set<EvidenceType> recordedTypes = evidenceRepository.findTypesByTaskIdAndCompanyId(
+                task.taskId(),
+                task.companyId()
+        );
+        if (recordedTypes.isEmpty()) {
+            return false;
+        }
+        Set<EvidenceType> additionalRequiredTypes = companySettingsRepository
+                .findByCompanyId(task.companyId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Persisted company settings are missing for company "
+                                + task.companyId()
+                ))
+                .evidenceRules()
+                .getOrDefault(task.taskType(), Set.of());
+        return recordedTypes.containsAll(additionalRequiredTypes);
     }
 
     private Task requireTask(UUID taskId, UUID companyId) {

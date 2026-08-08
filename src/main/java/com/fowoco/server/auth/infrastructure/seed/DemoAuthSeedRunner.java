@@ -4,6 +4,7 @@ import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.company.application.port.CompanyRepository;
+import com.fowoco.server.company.application.port.CompanySettingsProvisioner;
 import com.fowoco.server.company.domain.Company;
 import java.time.Clock;
 import java.time.Instant;
@@ -53,6 +54,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
 
     private final DemoAuthSeedProperties properties;
     private final CompanyRepository companyRepository;
+    private final CompanySettingsProvisioner companySettingsProvisioner;
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
@@ -60,6 +62,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
     DemoAuthSeedRunner(
             DemoAuthSeedProperties properties,
             CompanyRepository companyRepository,
+            CompanySettingsProvisioner companySettingsProvisioner,
             UserAccountRepository userAccountRepository,
             PasswordEncoder passwordEncoder,
             Clock clock
@@ -68,6 +71,10 @@ class DemoAuthSeedRunner implements ApplicationRunner {
         this.companyRepository = Objects.requireNonNull(
                 companyRepository,
                 "companyRepository must not be null"
+        );
+        this.companySettingsProvisioner = Objects.requireNonNull(
+                companySettingsProvisioner,
+                "companySettingsProvisioner must not be null"
         );
         this.userAccountRepository = Objects.requireNonNull(
                 userAccountRepository,
@@ -137,6 +144,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
                     companyName,
                     now
             ));
+            companySettingsProvisioner.provisionDefaults(companyId, now);
             return;
         }
         if (!existingCompany.orElseThrow().isActive()) {
