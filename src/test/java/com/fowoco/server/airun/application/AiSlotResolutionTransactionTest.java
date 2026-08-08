@@ -8,7 +8,10 @@ import com.fowoco.server.airun.application.error.AiContextResolutionException;
 import com.fowoco.server.airun.application.error.AiContextResolutionFailureCode;
 import com.fowoco.server.task.domain.TaskType;
 import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
+import com.fowoco.server.worker.application.WorkerDocumentAiContextSnapshot;
 import com.fowoco.server.worker.application.port.WorkerAiContextReader;
+import com.fowoco.server.worker.domain.DocumentType;
+import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.workflow.application.WorkflowCatalogService;
 import com.fowoco.server.workflow.domain.WorkflowCatalog;
 import com.fowoco.server.workflow.domain.WorkflowDefinition;
@@ -37,16 +40,27 @@ class AiSlotResolutionTransactionTest {
         AiSlotResolution result = transaction.resolve(
                 COMPANY_A,
                 "0.2.0",
-                requirement(List.of("worker_id", "stay_expiry_date", "due_at"))
+                requirement(List.of(
+                        "worker_id",
+                        "stay_expiry_date",
+                        "passport_copy_status",
+                        "passport_copy_expiry_date",
+                        "arc_status",
+                        "arc_expiry_date",
+                        "due_at"
+                ))
         );
 
         assertThat(boundCompany.get()).isEqualTo(COMPANY_A);
         assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
         assertThat(result.resolvedFields()).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "worker_id", WORKER_A.toString(),
-                "stay_expiry_date", "2026-09-30"
+                "stay_expiry_date", "2026-09-30",
+                "passport_copy_status", "VERIFIED",
+                "passport_copy_expiry_date", "2027-09-30",
+                "arc_status", "MISSING"
         ));
-        assertThat(result.missingFieldKeys()).containsExactly("due_at");
+        assertThat(result.missingFieldKeys()).containsExactly("arc_expiry_date", "due_at");
         assertThat(result.workflowConstraints())
                 .extracting(constraint -> constraint.workflowId())
                 .containsExactly("WF-CON-001", "WF-STY-001");
@@ -132,7 +146,15 @@ class AiSlotResolutionTransactionTest {
                 List.of(
                         workflow(
                                 "WF-STY-001",
-                                Set.of("worker_id", "due_at", "stay_expiry_date")
+                                Set.of(
+                                        "worker_id",
+                                        "due_at",
+                                        "stay_expiry_date",
+                                        "passport_copy_status",
+                                        "passport_copy_expiry_date",
+                                        "arc_status",
+                                        "arc_expiry_date"
+                                )
                         ),
                         workflow(
                                 "WF-CON-001",
@@ -178,7 +200,21 @@ class AiSlotResolutionTransactionTest {
                 "ACTIVE",
                 LocalDate.of(2026, 9, 30),
                 LocalDate.of(2026, 1, 1),
-                LocalDate.of(2026, 8, 31)
+                LocalDate.of(2026, 8, 31),
+                Map.of(
+                        DocumentType.PASSPORT_COPY,
+                        new WorkerDocumentAiContextSnapshot(
+                                DocumentType.PASSPORT_COPY,
+                                SubmissionStatus.VERIFIED,
+                                LocalDate.of(2027, 9, 30)
+                        ),
+                        DocumentType.ARC,
+                        new WorkerDocumentAiContextSnapshot(
+                                DocumentType.ARC,
+                                SubmissionStatus.MISSING,
+                                null
+                        )
+                )
         );
     }
 

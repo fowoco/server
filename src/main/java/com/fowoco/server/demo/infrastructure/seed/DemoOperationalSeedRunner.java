@@ -31,6 +31,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     private final DemoAuthSeedProperties properties;
     private final Clock clock;
     private final DemoOperationalSeedCatalog catalog;
+    private final DemoGoldenFlowSeedStateGuard goldenFlowStateGuard;
     private final DemoCaseSeeder caseSeeder;
     private final DemoTaskSeeder taskSeeder;
     private final DemoWorkerDocumentSeeder documentSeeder;
@@ -48,6 +49,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             DemoAuthSeedProperties properties,
             Clock clock,
             DemoOperationalSeedCatalog catalog,
+            DemoGoldenFlowSeedStateGuard goldenFlowStateGuard,
             DemoCaseSeeder caseSeeder,
             DemoTaskSeeder taskSeeder,
             DemoWorkerDocumentSeeder documentSeeder,
@@ -64,6 +66,10 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.catalog = Objects.requireNonNull(catalog, "catalog must not be null");
+        this.goldenFlowStateGuard = Objects.requireNonNull(
+                goldenFlowStateGuard,
+                "goldenFlowStateGuard must not be null"
+        );
         this.caseSeeder = Objects.requireNonNull(caseSeeder, "caseSeeder must not be null");
         this.taskSeeder = Objects.requireNonNull(taskSeeder, "taskSeeder must not be null");
         this.documentSeeder = Objects.requireNonNull(documentSeeder, "documentSeeder must not be null");
@@ -97,6 +103,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         LocalDate today = LocalDate.now(clock);
         DemoOperationalSeedContext demoContext = DemoOperationalSeedContext.demo(properties, today, now);
         DemoOperationalSeedContext testContext = DemoOperationalSeedContext.test(properties, today, now);
+        goldenFlowStateGuard.verifyNoLegacyRows(demoContext);
         seedDataset(
                 catalog.demoTasks(),
                 catalog.demoStoredFiles(),

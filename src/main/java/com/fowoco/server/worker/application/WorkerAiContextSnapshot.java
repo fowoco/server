@@ -1,6 +1,8 @@
 package com.fowoco.server.worker.application;
 
+import com.fowoco.server.worker.domain.DocumentType;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -16,7 +18,8 @@ public record WorkerAiContextSnapshot(
         String workStatus,
         LocalDate stayExpiryDate,
         LocalDate contractStartDate,
-        LocalDate contractEndDate
+        LocalDate contractEndDate,
+        Map<DocumentType, WorkerDocumentAiContextSnapshot> documents
 ) {
 
     public WorkerAiContextSnapshot {
@@ -24,5 +27,7 @@ public record WorkerAiContextSnapshot(
         Objects.requireNonNull(companyId, "companyId must not be null");
         Objects.requireNonNull(displayName, "displayName must not be null");
         Objects.requireNonNull(workStatus, "workStatus must not be null");
+        Objects.requireNonNull(documents, "documents must not be null");
+        documents = Map.copyOf(documents);
     }
 }

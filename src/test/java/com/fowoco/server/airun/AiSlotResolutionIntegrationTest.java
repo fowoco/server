@@ -29,6 +29,9 @@ class AiSlotResolutionIntegrationTest {
     private static final UUID WORKER_A = UUID.fromString("72000000-0000-0000-0000-000000000001");
     private static final UUID WORKER_B = UUID.fromString("72000000-0000-0000-0000-000000000002");
     private static final UUID WORKER_A_DUPLICATE = UUID.fromString("72000000-0000-0000-0000-000000000003");
+    private static final UUID PASSPORT_A = UUID.fromString("73000000-0000-0000-0000-000000000001");
+    private static final UUID ARC_A = UUID.fromString("73000000-0000-0000-0000-000000000002");
+    private static final UUID PASSPORT_B = UUID.fromString("73000000-0000-0000-0000-000000000003");
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -42,6 +45,9 @@ class AiSlotResolutionIntegrationTest {
         insertCompany(COMPANY_B, "사업장 B");
         insertWorker(WORKER_A, COMPANY_A, "같은이름", "2026-09-30");
         insertWorker(WORKER_B, COMPANY_B, "같은이름", "2099-12-31");
+        insertDocument(PASSPORT_A, WORKER_A, COMPANY_A, "PASSPORT_COPY", "VERIFIED", "2027-09-30");
+        insertDocument(ARC_A, WORKER_A, COMPANY_A, "ARC", "MISSING", null);
+        insertDocument(PASSPORT_B, WORKER_B, COMPANY_B, "PASSPORT_COPY", "MISSING", null);
 
         AiSlotResolution result = resolutionTransaction.resolve(
                 COMPANY_A,
@@ -50,7 +56,14 @@ class AiSlotResolutionIntegrationTest {
         );
 
         assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
-        assertThat(result.resolvedFields()).containsEntry("stay_expiry_date", "2026-09-30");
+        assertThat(result.resolvedFields()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "worker_id", WORKER_A.toString(),
+                "stay_expiry_date", "2026-09-30",
+                "passport_copy_status", "VERIFIED",
+                "passport_copy_expiry_date", "2027-09-30",
+                "arc_status", "MISSING"
+        ));
+        assertThat(result.missingFieldKeys()).containsExactly("arc_expiry_date");
         assertThat(result.resolvedFields()).doesNotContainValue("2099-12-31");
     }
 
@@ -78,7 +91,14 @@ class AiSlotResolutionIntegrationTest {
                 new BigDecimal("0.94"),
                 displayName,
                 Map.of(),
-                List.of("worker_id", "stay_expiry_date")
+                List.of(
+                        "worker_id",
+                        "stay_expiry_date",
+                        "passport_copy_status",
+                        "passport_copy_expiry_date",
+                        "arc_status",
+                        "arc_expiry_date"
+                )
         );
     }
 
@@ -100,6 +120,30 @@ class AiSlotResolutionIntegrationTest {
                 workerId,
                 companyId,
                 displayName,
+                expiryDate
+        );
+    }
+
+    private void insertDocument(
+            UUID documentId,
+            UUID workerId,
+            UUID companyId,
+            String documentType,
+            String submissionStatus,
+            String expiryDate
+    ) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_document (
+                    worker_document_id, worker_id, company_id,
+                    document_type, submission_status, expiry_date
+                ) VALUES (?, ?, ?, ?, ?, CAST(? AS DATE))
+                """,
+                documentId,
+                workerId,
+                companyId,
+                documentType,
+                submissionStatus,
                 expiryDate
         );
     }

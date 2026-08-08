@@ -8,6 +8,7 @@ import com.fowoco.server.airun.application.error.AiContextResolutionFailureCode;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
 import com.fowoco.server.worker.application.port.WorkerAiContextReader;
+import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.workflow.application.WorkflowCatalogService;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -144,8 +145,25 @@ public class AiSlotResolutionTransaction {
             case "worker_id" -> worker.workerId().toString();
             case "stay_expiry_date" -> formatDate(worker.stayExpiryDate());
             case "contract_end_date" -> formatDate(worker.contractEndDate());
+            case "passport_copy_status" -> documentStatus(worker, DocumentType.PASSPORT_COPY);
+            case "passport_copy_expiry_date" -> documentExpiryDate(
+                    worker,
+                    DocumentType.PASSPORT_COPY
+            );
+            case "arc_status" -> documentStatus(worker, DocumentType.ARC);
+            case "arc_expiry_date" -> documentExpiryDate(worker, DocumentType.ARC);
             default -> null;
         };
+    }
+
+    private String documentStatus(WorkerAiContextSnapshot worker, DocumentType documentType) {
+        var document = worker.documents().get(documentType);
+        return document == null ? null : document.submissionStatus().name();
+    }
+
+    private String documentExpiryDate(WorkerAiContextSnapshot worker, DocumentType documentType) {
+        var document = worker.documents().get(documentType);
+        return document == null ? null : formatDate(document.expiryDate());
     }
 
     private String formatDate(java.time.LocalDate date) {

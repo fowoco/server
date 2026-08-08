@@ -3,6 +3,9 @@ package com.fowoco.server.auth.infrastructure.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jayway.jsonpath.JsonPath;
+import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.airun.application.AiSlotResolutionTransaction;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -86,6 +89,13 @@ class DemoAuthSeedIntegrationTest {
             UUID.fromString("92000000-0000-0000-0000-000000000018");
     private static final UUID PASSPORT_REQUEST_DRAFT_ID =
             UUID.fromString("94700000-0000-0000-0000-000000000002");
+    private static final Set<UUID> REPRESENTATIVE_CONTEXT_DOCUMENT_IDS = Set.of(
+            UUID.fromString("95000000-0000-0000-0000-000000000016"),
+            UUID.fromString("95000000-0000-0000-0000-000000000017")
+    );
+    private static final Set<UUID> RETIRED_REPRESENTATIVE_DOCUMENT_IDS = Set.of(
+            UUID.fromString("95000000-0000-0000-0000-000000000018")
+    );
     private static final UUID CONTRACT_FILE_ID =
             UUID.fromString("94800000-0000-0000-0000-000000000001");
     private static final UUID STAY_RECEIPT_FILE_ID =
@@ -104,17 +114,17 @@ class DemoAuthSeedIntegrationTest {
     private static final Map<String, Integer> EXPECTED_DEMO_COUNTS = Map.ofEntries(
             Map.entry("user_account", 20),
             Map.entry("worker", 28),
-            Map.entry("task", 24),
-            Map.entry("workflow_case", 22),
-            Map.entry("worker_document", 84),
+            Map.entry("task", 21),
+            Map.entry("workflow_case", 21),
+            Map.entry("worker_document", 83),
             Map.entry("stored_file", 3),
-            Map.entry("task_checklist_item", 68),
-            Map.entry("approval_request", 13),
-            Map.entry("task_transition_history", 52),
+            Map.entry("task_checklist_item", 60),
+            Map.entry("approval_request", 12),
+            Map.entry("task_transition_history", 48),
             Map.entry("external_submission", 6),
             Map.entry("task_evidence", 10),
-            Map.entry("document_request_draft", 5),
-            Map.entry("audit_event", 96)
+            Map.entry("document_request_draft", 4),
+            Map.entry("audit_event", 88)
     );
     private static final Map<String, Integer> EXPECTED_TEST_COUNTS = Map.of(
             "user_account", 3,
@@ -141,6 +151,9 @@ class DemoAuthSeedIntegrationTest {
     private MutableClock mutableClock;
 
     @Autowired
+    private AiSlotResolutionTransaction aiSlotResolutionTransaction;
+
+    @Autowired
     @Qualifier("demoAuthSeedRunner")
     private ApplicationRunner demoAuthSeedRunner;
 
@@ -164,8 +177,9 @@ class DemoAuthSeedIntegrationTest {
         assertAccountsAndPasswords();
         assertExactCountsAndDistributions();
         assertRelativeDatesAndSafeData();
-        assertCompoundDraftScenario();
-        assertReviewApprovalAndSubmissionFixtures();
+        assertGoldenFlowStartState();
+        assertGoldenFlowDocumentContext();
+        assertShowcaseApprovalAndSubmissionFixtures();
         assertStoredFileFixtures();
         assertTaskTimelineInvariants();
         assertRepairsPartialStoredFileState();
@@ -232,15 +246,15 @@ class DemoAuthSeedIntegrationTest {
                 .containsExactlyInAnyOrderEntriesOf(EXPECTED_TEST_COUNTS);
 
         assertThat(distribution("task", "task_type", COMPANY_ID)).containsExactlyInAnyOrderEntriesOf(
-                Map.of("STAY_PERIOD_EXTENSION", 10, "RECONTRACT", 8, "EMPLOYMENT_PERIOD_EXTENSION", 6)
+                Map.of("STAY_PERIOD_EXTENSION", 9, "RECONTRACT", 7, "EMPLOYMENT_PERIOD_EXTENSION", 5)
         );
         assertThat(distribution("task", "status", COMPANY_ID)).containsExactlyInAnyOrderEntriesOf(
                 Map.of(
-                        "DRAFT", 3,
+                        "DRAFT", 2,
                         "NEEDS_INFO", 2,
-                        "READY_FOR_REVIEW", 4,
+                        "READY_FOR_REVIEW", 3,
                         "APPROVED", 2,
-                        "WAITING_WORKER", 4,
+                        "WAITING_WORKER", 3,
                         "WAITING_EXTERNAL", 3,
                         "COMPLETED", 5,
                         "CANCELLED", 1
@@ -248,19 +262,19 @@ class DemoAuthSeedIntegrationTest {
         );
         assertThat(distribution("worker_document", "document_type", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("PASSPORT_COPY", 26, "ARC", 28, "CONTRACT", 22, "PERMIT", 8)
+                        Map.of("PASSPORT_COPY", 26, "ARC", 28, "CONTRACT", 21, "PERMIT", 8)
                 );
         assertThat(distribution("worker_document", "submission_status", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("VERIFIED", 48, "SUBMITTED", 20, "MISSING", 16)
+                        Map.of("VERIFIED", 47, "SUBMITTED", 20, "MISSING", 16)
                 );
         assertThat(distribution("approval_request", "status", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("PENDING", 4, "APPROVED", 7, "REJECTED", 1, "INVALIDATED", 1)
+                        Map.of("PENDING", 3, "APPROVED", 7, "REJECTED", 1, "INVALIDATED", 1)
                 );
         assertThat(distribution("audit_event", "actor_type", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("HR_USER", 79, "AI_AGENT", 7, "SYSTEM_RULE", 6, "WORKER_LINK", 4)
+                        Map.of("HR_USER", 77, "AI_AGENT", 2, "SYSTEM_RULE", 6, "WORKER_LINK", 3)
                 );
 
         assertThat(jdbcTemplate.queryForObject(
@@ -273,12 +287,12 @@ class DemoAuthSeedIntegrationTest {
                 Integer.class,
                 COMPANY_ID,
                 COMPANY_ID
-        )).isEqualTo(68);
+        )).isEqualTo(60);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(DISTINCT task_id) FROM task_checklist_item WHERE company_id = ?",
                 Integer.class,
                 COMPANY_ID
-        )).isEqualTo(24);
+        )).isEqualTo(21);
     }
 
     private void assertRelativeDatesAndSafeData() {
@@ -363,127 +377,143 @@ class DemoAuthSeedIntegrationTest {
         ).stream().noneMatch(json::contains));
     }
 
-    private void assertCompoundDraftScenario() {
-        List<Map<String, Object>> tasks = jdbcTemplate.queryForList(
-                "SELECT task_id, case_id, worker_id, task_type, workflow_id, source, status, "
-                        + "business_data_json "
-                        + "FROM task WHERE task_id IN (?, ?, ?) ORDER BY task_id",
+    private void assertGoldenFlowStartState() {
+        assertThat(countWhere("worker", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
+                .isEqualTo(1);
+        assertThat(countWhere("workflow_case", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
+                .isZero();
+        assertThat(countWhere("task", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
+                .isZero();
+        assertThat(countWhere("worker_document", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
+                .isEqualTo(2);
+        assertThat(countWhere("stored_file", "worker_id = ?", COMPANY_ID, REPRESENTATIVE_WORKER_ID))
+                .isZero();
+
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT task_id FROM task WHERE task_id IN (?, ?, ?) ORDER BY task_id",
+                UUID.class,
                 RECONTRACT_CANDIDATE_TASK_ID,
                 EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID,
                 PASSPORT_REQUEST_TASK_ID
-        );
-        assertThat(tasks).hasSize(3).allSatisfy(task -> {
-            assertThat(task.get("case_id")).isEqualTo(COMPOUND_CASE_ID);
-            assertThat(task.get("worker_id")).isEqualTo(REPRESENTATIVE_WORKER_ID);
-            String businessData = (String) task.get("business_data_json");
-            assertThat(JsonPath.<String>read(businessData, "$.demo_scenario"))
-                    .isEqualTo("compound-draft-flow-v1");
-            assertThat(JsonPath.<String>read(businessData, "$.stay_qualification"))
-                    .isEqualTo("E-9");
-            assertThat(JsonPath.<Integer>read(businessData, "$.input_summary.required_count"))
-                    .isEqualTo(9);
-            assertThat(JsonPath.<Integer>read(businessData, "$.input_summary.available_count"))
-                    .isEqualTo(7);
-        });
-
-        assertThat(tasks.get(0))
-                .containsEntry("task_type", "RECONTRACT")
-                .containsEntry("workflow_id", "WF-CON-001")
-                .containsEntry("source", "AI_CANDIDATE")
-                .containsEntry("status", "READY_FOR_REVIEW");
-        assertThat(tasks.get(1))
-                .containsEntry("task_type", "EMPLOYMENT_PERIOD_EXTENSION")
-                .containsEntry("workflow_id", "WF-CON-001")
-                .containsEntry("source", "AI_CANDIDATE")
-                .containsEntry("status", "DRAFT");
-        assertThat(tasks.get(2))
-                .containsEntry("task_type", "STAY_PERIOD_EXTENSION")
-                .containsEntry("workflow_id", "WF-STY-001")
-                .containsEntry("source", "AI_CANDIDATE")
-                .containsEntry("status", "WAITING_WORKER");
-        assertThat(tasks.stream()
-                .map(task -> JsonPath.<Integer>read((String) task.get("business_data_json"), "$.candidate_order"))
-                .toList()).containsExactly(1, 3, 2);
-        assertThat(JsonPath.<String>read(
-                (String) tasks.get(1).get("business_data_json"),
-                "$.depends_on_task_id"
-        )).isEqualTo(RECONTRACT_CANDIDATE_TASK_ID.toString());
-        assertThat(JsonPath.<Integer>read(
-                (String) tasks.get(2).get("business_data_json"),
-                "$.submission_due_offset_days"
-        )).isEqualTo(7);
-
-        Map<String, Map<String, Object>> documentsByType = jdbcTemplate.query(
-                "SELECT document_type, task_id, submission_status, expiry_date, destination, note "
-                        + "FROM worker_document WHERE worker_id = ? AND company_id = ?",
-                resultSet -> {
-                    Map<String, Map<String, Object>> result = new LinkedHashMap<>();
-                    while (resultSet.next()) {
-                        Map<String, Object> document = new LinkedHashMap<>();
-                        document.put("task_id", resultSet.getObject("task_id", UUID.class));
-                        document.put("submission_status", resultSet.getString("submission_status"));
-                        document.put("expiry_date", resultSet.getObject("expiry_date", LocalDate.class));
-                        document.put("destination", resultSet.getString("destination"));
-                        document.put("note", resultSet.getString("note"));
-                        result.put(resultSet.getString("document_type"), document);
-                    }
-                    return result;
-                },
+        )).isEmpty();
+        assertThat(countWhere("workflow_case", "case_id = ?", COMPANY_ID, COMPOUND_CASE_ID))
+                .isZero();
+        assertThat(countWhere(
+                "approval_request",
+                "approval_request_id = ?",
+                COMPANY_ID,
+                REPRESENTATIVE_APPROVAL_ID
+        )).isZero();
+        assertThat(countWhere(
+                "document_request_draft",
+                "draft_id = ?",
+                COMPANY_ID,
+                PASSPORT_REQUEST_DRAFT_ID
+        )).isZero();
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT worker_document_id FROM worker_document "
+                        + "WHERE worker_document_id IN (?, ?)",
+                UUID.class,
+                REPRESENTATIVE_CONTEXT_DOCUMENT_IDS.toArray()
+        )).containsExactlyInAnyOrderElementsOf(REPRESENTATIVE_CONTEXT_DOCUMENT_IDS);
+        assertThat(jdbcTemplate.queryForList(
+                """
+                SELECT document_type, submission_status, expiry_date, task_id, file_id
+                FROM worker_document
+                WHERE worker_id = ? AND company_id = ?
+                ORDER BY document_type
+                """,
                 REPRESENTATIVE_WORKER_ID,
                 COMPANY_ID
+        )).satisfiesExactly(
+                arc -> {
+                    assertThat(arc.get("document_type")).isEqualTo("ARC");
+                    assertThat(arc.get("submission_status")).isEqualTo("MISSING");
+                    assertThat(arc.get("expiry_date")).isNull();
+                    assertThat(arc.get("task_id")).isNull();
+                    assertThat(arc.get("file_id")).isNull();
+                },
+                passport -> {
+                    assertThat(passport.get("document_type")).isEqualTo("PASSPORT_COPY");
+                    assertThat(passport.get("submission_status")).isEqualTo("VERIFIED");
+                    assertThat(passport.get("expiry_date")).isNotNull();
+                    assertThat(passport.get("task_id")).isNull();
+                    assertThat(passport.get("file_id")).isNull();
+                }
         );
-        assertThat(documentsByType).containsOnlyKeys("PASSPORT_COPY", "ARC", "CONTRACT");
-        assertThat(documentsByType.get("PASSPORT_COPY"))
-                .containsEntry("task_id", PASSPORT_REQUEST_TASK_ID)
-                .containsEntry("submission_status", "MISSING")
-                .containsEntry("destination", "근로자 문서 요청");
-        assertThat(documentsByType.get("PASSPORT_COPY").get("expiry_date")).isNull();
-        assertThat(documentsByType.get("ARC"))
-                .containsEntry("task_id", PASSPORT_REQUEST_TASK_ID)
-                .containsEntry("submission_status", "VERIFIED");
-        assertThat(documentsByType.get("CONTRACT"))
-                .containsEntry("task_id", RECONTRACT_CANDIDATE_TASK_ID)
-                .containsEntry("submission_status", "VERIFIED");
+        assertThat(jdbcTemplate.queryForList(
+                "SELECT worker_document_id FROM worker_document WHERE worker_document_id IN (?)",
+                UUID.class,
+                RETIRED_REPRESENTATIVE_DOCUMENT_IDS.toArray()
+        )).isEmpty();
+        assertThat(countWhere(
+                "audit_event",
+                "trace_id = ?",
+                COMPANY_ID,
+                "demo-compound-draft-flow"
+        )).isZero();
+
+        for (String table : List.of(
+                "ai_run",
+                "ai_attempt",
+                "ai_question",
+                "ai_candidate",
+                "ai_candidate_decision_batch",
+                "ai_candidate_decision",
+                "ai_candidate_decision_task"
+        )) {
+            assertThat(count(table, COMPANY_ID))
+                    .as("%s must not be pre-seeded for the Golden Flow", table)
+                    .isZero();
+        }
+        assertThat(count("worker_link", COMPANY_ID)).isZero();
+        assertThat(count("worker_response", COMPANY_ID)).isZero();
+        assertThat(countWhere(
+                "external_submission",
+                "task_id IN (?, ?, ?)",
+                COMPANY_ID,
+                RECONTRACT_CANDIDATE_TASK_ID,
+                EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID,
+                PASSPORT_REQUEST_TASK_ID
+        )).isZero();
+        assertThat(countWhere(
+                "task_evidence",
+                "task_id IN (?, ?, ?)",
+                COMPANY_ID,
+                RECONTRACT_CANDIDATE_TASK_ID,
+                EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID,
+                PASSPORT_REQUEST_TASK_ID
+        )).isZero();
     }
 
-    private void assertReviewApprovalAndSubmissionFixtures() {
-        Map<String, Object> approval = jdbcTemplate.queryForMap(
-                "SELECT status, ai_snapshot_json, hr_snapshot_json, changed_fields_json, "
-                        + "source_versions_json FROM approval_request "
-                        + "WHERE approval_request_id = ? AND company_id = ?",
-                REPRESENTATIVE_APPROVAL_ID,
-                COMPANY_ID
+    private void assertGoldenFlowDocumentContext() {
+        var resolution = aiSlotResolutionTransaction.resolve(
+                COMPANY_ID,
+                "0.2.0",
+                new AiContextRequirement(
+                        "EXPIRY_RENEWAL",
+                        BigDecimal.ONE,
+                        "응웬반A",
+                        Map.of(),
+                        List.of(
+                                "passport_copy_status",
+                                "passport_copy_expiry_date",
+                                "arc_status",
+                                "arc_expiry_date"
+                        )
+                )
         );
-        String aiSnapshot = (String) approval.get("ai_snapshot_json");
-        String hrSnapshot = (String) approval.get("hr_snapshot_json");
-        String changedFields = (String) approval.get("changed_fields_json");
-        String sourceVersions = (String) approval.get("source_versions_json");
-        assertThat(approval.get("status")).isEqualTo("PENDING");
-        assertThat(JsonPath.<String>read(aiSnapshot, "$.summary")).isEqualTo("재계약 조건 확인");
-        assertThat(JsonPath.<Integer>read(aiSnapshot, "$.input_summary.required_count")).isEqualTo(9);
-        assertThat(JsonPath.<Integer>read(hrSnapshot, "$.validation_summary.warning_count")).isEqualTo(1);
-        assertThat(JsonPath.<String>read(hrSnapshot, "$.warning_fields[0]"))
-                .isEqualTo("passport_expiry_date");
-        assertThat(JsonPath.<String>read(changedFields, "$[0].field"))
-                .isEqualTo("continued_employment_intent");
-        assertThat(JsonPath.<String>read(sourceVersions, "$.workflow_catalog")).isEqualTo("0.2.0");
 
-        Map<String, Object> requestDraft = jdbcTemplate.queryForMap(
-                "SELECT language, message, review_status FROM document_request_draft "
-                        + "WHERE draft_id = ? AND company_id = ?",
-                PASSPORT_REQUEST_DRAFT_ID,
-                COMPANY_ID
-        );
-        assertThat(requestDraft)
-                .containsEntry("language", "vi")
-                .containsEntry("review_status", "DRAFT");
-        assertThat((String) requestDraft.get("message")).contains("7 ngày");
-        assertThat(jdbcTemplate.queryForList(
-                "SELECT document_type FROM document_request_draft_type WHERE draft_id = ?",
-                String.class,
-                PASSPORT_REQUEST_DRAFT_ID
-        )).containsExactly("PASSPORT_COPY");
+        assertThat(resolution.resolvedFields())
+                .containsEntry("passport_copy_status", "VERIFIED")
+                .containsEntry("arc_status", "MISSING");
+        assertThat(LocalDate.parse(
+                resolution.resolvedFields().get("passport_copy_expiry_date")
+        )).isAfter(LocalDate.now(clock));
+        assertThat(resolution.missingFieldKeys()).containsExactly("arc_expiry_date");
+    }
 
+    private void assertShowcaseApprovalAndSubmissionFixtures() {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM approval_request WHERE task_id = ? "
                         + "AND company_id = ? AND status = 'APPROVED'",
@@ -517,20 +547,6 @@ class DemoAuthSeedIntegrationTest {
                 COMPANY_ID
         )).containsExactly(STAY_RESULT_FILE_ID.toString(), STAY_RECEIPT_FILE_ID.toString());
 
-        List<Map<String, Object>> aiTrace = jdbcTemplate.queryForList(
-                "SELECT actor_type, action, target_id, change_summary FROM audit_event "
-                        + "WHERE company_id = ? AND trace_id = ? ORDER BY created_at DESC",
-                COMPANY_ID,
-                "demo-compound-draft-flow"
-        );
-        assertThat(aiTrace).hasSize(5)
-                .allMatch(event -> "AI_AGENT".equals(event.get("actor_type")));
-        assertThat(aiTrace.stream().map(event -> (String) event.get("change_summary")).toList())
-                .contains(
-                        "복합 요청의 대상 근로자와 Case 맥락을 확인함",
-                        "보유 문서를 비교하고 여권 사본 누락을 확인함",
-                        "선행 재계약 결과를 기다리는 연장 후보를 준비함"
-                );
     }
 
     private void assertStoredFileFixtures() throws Exception {
@@ -654,7 +670,7 @@ class DemoAuthSeedIntegrationTest {
                 COMPANY_ID
         );
 
-        assertThat(tasks).hasSize(24);
+        assertThat(tasks).hasSize(21);
         tasks.values().forEach(task -> {
             List<TransitionTimeline> transitions = transitionsByTask.getOrDefault(task.taskId(), List.of());
             String expectedFrom = "DRAFT";
@@ -883,36 +899,16 @@ class DemoAuthSeedIntegrationTest {
 
         HttpResponse<String> tasks = authorizedGet("/api/v1/tasks?size=100", demoToken);
         assertOk(tasks);
-        assertThat(JsonPath.<Number>read(tasks.body(), "$.total_elements").intValue()).isEqualTo(24);
+        assertThat(JsonPath.<Number>read(tasks.body(), "$.total_elements").intValue()).isEqualTo(21);
         List<Map<String, Object>> taskItems = JsonPath.read(tasks.body(), "$.items");
-        assertThat(taskItems).hasSize(24);
+        assertThat(taskItems).hasSize(21);
         HttpResponse<String> compoundCase = authorizedGet(
                 "/api/v1/cases/" + COMPOUND_CASE_ID + "/projection",
                 demoToken
         );
-        assertOk(compoundCase);
-        assertThat(JsonPath.<String>read(compoundCase.body(), "$.display_status"))
-                .isEqualTo("REVIEW_REQUIRED");
-        assertThat(JsonPath.<String>read(compoundCase.body(), "$.current_task.task_id"))
-                .isEqualTo(RECONTRACT_CANDIDATE_TASK_ID.toString());
-        assertThat(JsonPath.<Number>read(
-                compoundCase.body(),
-                "$.readiness.verified_documents"
-        ).intValue()).isEqualTo(2);
-        assertThat(JsonPath.<Number>read(
-                compoundCase.body(),
-                "$.readiness.total_documents"
-        ).intValue()).isEqualTo(3);
-        assertThat(JsonPath.<List<String>>read(
-                compoundCase.body(),
-                "$.tasks[*].task_id"
-        )).containsExactly(
-                RECONTRACT_CANDIDATE_TASK_ID.toString(),
-                PASSPORT_REQUEST_TASK_ID.toString(),
-                EMPLOYMENT_EXTENSION_CANDIDATE_TASK_ID.toString()
-        );
-        assertStatusApiCount(demoToken, "READY_FOR_REVIEW", 4);
-        assertStatusApiCount(demoToken, "DRAFT", 3);
+        assertThat(compoundCase.statusCode()).isEqualTo(404);
+        assertStatusApiCount(demoToken, "READY_FOR_REVIEW", 3);
+        assertStatusApiCount(demoToken, "DRAFT", 2);
         assertThat(taskItems).anyMatch(task -> today.toString().equals(task.get("due_date")));
 
         HttpResponse<String> dueSoon = authorizedGet(
@@ -931,7 +927,7 @@ class DemoAuthSeedIntegrationTest {
 
         HttpResponse<String> documents = authorizedGet("/api/v1/documents?size=100", demoToken);
         assertOk(documents);
-        assertThat(JsonPath.<Number>read(documents.body(), "$.total_elements").intValue()).isEqualTo(84);
+        assertThat(JsonPath.<Number>read(documents.body(), "$.total_elements").intValue()).isEqualTo(83);
         assertDocumentStatusHasData(demoToken, "SUBMITTED");
         assertDocumentStatusHasData(demoToken, "MISSING");
         assertDocumentStatusHasData(demoToken, "VERIFIED");
@@ -956,7 +952,7 @@ class DemoAuthSeedIntegrationTest {
         HttpResponse<String> testAudits = authorizedGet("/api/v1/audit-events?limit=100", testToken);
         assertOk(demoAudits);
         assertOk(testAudits);
-        assertThat(JsonPath.<List<?>>read(demoAudits.body(), "$.items")).hasSize(96);
+        assertThat(JsonPath.<List<?>>read(demoAudits.body(), "$.items")).hasSize(88);
         assertThat(JsonPath.<List<?>>read(testAudits.body(), "$.items")).hasSize(8);
 
         assertTenantApiCount(testToken, "/api/v1/workers?size=100", 5);

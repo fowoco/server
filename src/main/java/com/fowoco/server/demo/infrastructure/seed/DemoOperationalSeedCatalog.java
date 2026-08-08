@@ -27,26 +27,50 @@ final class DemoOperationalSeedCatalog {
             UUID.fromString("94000000-0000-0000-0000-000000000002");
     static final UUID TEST_ADMIN_USER_ID =
             UUID.fromString("91000000-0000-0000-0000-000000000002");
+    static final UUID GOLDEN_FLOW_WORKER_ID =
+            UUID.fromString("92000000-0000-0000-0000-000000000006");
+    static final UUID RETIRED_GOLDEN_FLOW_CASE_ID =
+            UUID.fromString("94100000-0000-0000-0000-000000000006");
+    static final Set<UUID> RETIRED_GOLDEN_FLOW_TASK_IDS = Set.of(
+            UUID.fromString("94000000-0000-0000-0000-000000000006"),
+            UUID.fromString("94000000-0000-0000-0000-000000000007"),
+            UUID.fromString("94000000-0000-0000-0000-000000000008")
+    );
+    static final Set<UUID> GOLDEN_FLOW_CONTEXT_DOCUMENT_IDS = Set.of(
+            UUID.fromString("95000000-0000-0000-0000-000000000016"),
+            UUID.fromString("95000000-0000-0000-0000-000000000017")
+    );
+    static final Set<UUID> RETIRED_GOLDEN_FLOW_DOCUMENT_IDS = Set.of(
+            UUID.fromString("95000000-0000-0000-0000-000000000018")
+    );
+    static final Set<UUID> RETIRED_GOLDEN_FLOW_AUDIT_IDS = Set.of(
+            UUID.fromString("96000000-0000-0000-0000-000000000024"),
+            UUID.fromString("96000000-0000-0000-0000-000000000025"),
+            UUID.fromString("96000000-0000-0000-0000-000000000026"),
+            UUID.fromString("96000000-0000-0000-0000-000000000027"),
+            UUID.fromString("96000000-0000-0000-0000-000000000028"),
+            UUID.fromString("96000000-0000-0000-0000-000000000045"),
+            UUID.fromString("96000000-0000-0000-0000-000000000083"),
+            UUID.fromString("96000000-0000-0000-0000-000000000094")
+    );
+    private static final UUID RETIRED_GOLDEN_FLOW_DRAFT_ID =
+            UUID.fromString("94700000-0000-0000-0000-000000000002");
 
-    private final List<TaskSeed> demoTasks = DemoTaskSeedCatalog.demoTasks();
-    private final List<TaskSeed> testTasks = DemoTaskSeedCatalog.testTasks();
-    private final List<StoredFileSeed> demoStoredFiles =
-            DemoStoredFileSeedCatalog.demoStoredFiles(demoTasks);
-    private final List<DocumentSeed> demoDocuments = DemoDocumentSeedCatalog.demoDocuments(demoTasks);
-    private final List<DocumentSeed> testDocuments = DemoDocumentSeedCatalog.testDocuments(testTasks);
-    private final List<ChecklistSeed> demoChecklists =
-            DemoTaskWorkflowSeedCatalog.demoChecklists(demoTasks);
-    private final List<ApprovalSeed> demoApprovals =
-            DemoTaskWorkflowSeedCatalog.demoApprovals(demoTasks);
-    private final List<TransitionSeed> demoTransitions =
-            DemoTaskWorkflowSeedCatalog.demoTransitions(demoTasks);
-    private final List<ExternalSubmissionSeed> demoExternalSubmissions =
-            DemoTaskArtifactSeedCatalog.demoExternalSubmissions(demoTasks);
-    private final List<EvidenceSeed> demoEvidence =
-            DemoTaskArtifactSeedCatalog.demoEvidence(demoTasks);
-    private final List<DocumentRequestDraftSeed> demoDocumentRequestDrafts =
-            DemoTaskArtifactSeedCatalog.demoDocumentRequestDrafts(demoTasks);
-    private final List<AuditSeed> legacyDemoAudits = List.of(
+    private final List<TaskSeed> demoTasks;
+    private final List<TaskSeed> testTasks;
+    private final List<StoredFileSeed> demoStoredFiles;
+    private final List<DocumentSeed> demoDocuments;
+    private final List<DocumentSeed> testDocuments;
+    private final List<ChecklistSeed> demoChecklists;
+    private final List<ApprovalSeed> demoApprovals;
+    private final List<TransitionSeed> demoTransitions;
+    private final List<ExternalSubmissionSeed> demoExternalSubmissions;
+    private final List<EvidenceSeed> demoEvidence;
+    private final List<DocumentRequestDraftSeed> demoDocumentRequestDrafts;
+    private final List<AuditSeed> demoAudits;
+    private final List<AuditSeed> testAudits;
+
+    private static final List<AuditSeed> BASE_DEMO_AUDITS = List.of(
             audit(
                     "96000000-0000-0000-0000-000000000001",
                     AuditAction.TASK_CREATED,
@@ -69,19 +93,72 @@ final class DemoOperationalSeedCatalog {
                     6
             )
     );
-    private final List<AuditSeed> demoAudits = Stream.concat(
-            legacyDemoAudits.stream(),
-            DemoAuditSeedCatalog.additionalDemoAudits(
-                    demoTasks,
-                    demoApprovals,
-                    demoExternalSubmissions,
-                    demoEvidence,
-                    demoDocumentRequestDrafts
-            ).stream()
-    ).toList();
-    private final List<AuditSeed> testAudits = DemoAuditSeedCatalog.testAudits(testTasks);
-
     DemoOperationalSeedCatalog() {
+        List<TaskSeed> sourceDemoTasks = DemoTaskSeedCatalog.demoTasks();
+        List<StoredFileSeed> sourceDemoStoredFiles =
+                DemoStoredFileSeedCatalog.demoStoredFiles(sourceDemoTasks);
+        List<DocumentSeed> sourceDemoDocuments =
+                DemoDocumentSeedCatalog.demoDocuments(sourceDemoTasks);
+        List<ChecklistSeed> sourceDemoChecklists =
+                DemoTaskWorkflowSeedCatalog.demoChecklists(sourceDemoTasks);
+        List<ApprovalSeed> sourceDemoApprovals =
+                DemoTaskWorkflowSeedCatalog.demoApprovals(sourceDemoTasks);
+        List<TransitionSeed> sourceDemoTransitions =
+                DemoTaskWorkflowSeedCatalog.demoTransitions(sourceDemoTasks);
+        List<ExternalSubmissionSeed> sourceDemoExternalSubmissions =
+                DemoTaskArtifactSeedCatalog.demoExternalSubmissions(sourceDemoTasks);
+        List<EvidenceSeed> sourceDemoEvidence =
+                DemoTaskArtifactSeedCatalog.demoEvidence(sourceDemoTasks);
+        List<DocumentRequestDraftSeed> sourceDemoDocumentRequestDrafts =
+                DemoTaskArtifactSeedCatalog.demoDocumentRequestDrafts(sourceDemoTasks);
+        List<AuditSeed> sourceDemoAudits = Stream.concat(
+                BASE_DEMO_AUDITS.stream(),
+                DemoAuditSeedCatalog.additionalDemoAudits(
+                        sourceDemoTasks,
+                        sourceDemoApprovals,
+                        sourceDemoExternalSubmissions,
+                        sourceDemoEvidence,
+                        sourceDemoDocumentRequestDrafts
+                ).stream()
+        ).toList();
+
+        demoTasks = sourceDemoTasks.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoStoredFiles = sourceDemoStoredFiles.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoDocuments = sourceDemoDocuments.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_DOCUMENT_IDS.contains(seed.documentId()))
+                .map(seed -> GOLDEN_FLOW_WORKER_ID.equals(seed.workerId())
+                        ? withoutTask(seed)
+                        : seed)
+                .toList();
+        demoChecklists = sourceDemoChecklists.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoApprovals = sourceDemoApprovals.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoTransitions = sourceDemoTransitions.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoExternalSubmissions = sourceDemoExternalSubmissions.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoEvidence = sourceDemoEvidence.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoDocumentRequestDrafts = sourceDemoDocumentRequestDrafts.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.taskId()))
+                .toList();
+        demoAudits = sourceDemoAudits.stream()
+                .filter(seed -> !RETIRED_GOLDEN_FLOW_AUDIT_IDS.contains(seed.auditEventId()))
+                .toList();
+
+        testTasks = DemoTaskSeedCatalog.testTasks();
+        testDocuments = DemoDocumentSeedCatalog.testDocuments(testTasks);
+        testAudits = DemoAuditSeedCatalog.testAudits(testTasks);
         verifyDefinitions();
     }
 
@@ -138,36 +215,36 @@ final class DemoOperationalSeedCatalog {
     }
 
     private void verifyDefinitions() {
-        requireSize(demoTasks, 24, "Demo Company task");
+        requireSize(demoTasks, 21, "Demo Company task");
         requireSize(testTasks, 3, "Test Company task");
         requireSize(demoStoredFiles, 3, "Demo Company stored file");
-        requireSize(demoDocuments, 84, "Demo Company document");
+        requireSize(demoDocuments, 83, "Demo Company document");
         requireSize(testDocuments, 8, "Test Company document");
-        requireSize(demoChecklists, 68, "Demo Company checklist item");
-        requireSize(demoApprovals, 13, "Demo Company approval request");
-        requireSize(demoTransitions, 52, "Demo Company task transition");
+        requireSize(demoChecklists, 60, "Demo Company checklist item");
+        requireSize(demoApprovals, 12, "Demo Company approval request");
+        requireSize(demoTransitions, 48, "Demo Company task transition");
         requireSize(demoExternalSubmissions, 6, "Demo Company external submission");
         requireSize(demoEvidence, 10, "Demo Company completion evidence");
-        requireSize(demoDocumentRequestDrafts, 5, "Demo Company document request draft");
-        requireSize(demoAudits, 96, "Demo Company audit event");
+        requireSize(demoDocumentRequestDrafts, 4, "Demo Company document request draft");
+        requireSize(demoAudits, 88, "Demo Company audit event");
         requireSize(testAudits, 8, "Test Company audit event");
         requireDistribution(
                 demoTasks.stream().map(TaskSeed::taskType).toList(),
                 Map.of(
-                        TaskType.STAY_PERIOD_EXTENSION, 10L,
-                        TaskType.RECONTRACT, 8L,
-                        TaskType.EMPLOYMENT_PERIOD_EXTENSION, 6L
+                        TaskType.STAY_PERIOD_EXTENSION, 9L,
+                        TaskType.RECONTRACT, 7L,
+                        TaskType.EMPLOYMENT_PERIOD_EXTENSION, 5L
                 ),
                 "Demo Company task type"
         );
         requireDistribution(
                 demoTasks.stream().map(TaskSeed::status).toList(),
                 Map.of(
-                        TaskStatus.DRAFT, 3L,
+                        TaskStatus.DRAFT, 2L,
                         TaskStatus.NEEDS_INFO, 2L,
-                        TaskStatus.READY_FOR_REVIEW, 4L,
+                        TaskStatus.READY_FOR_REVIEW, 3L,
                         TaskStatus.APPROVED, 2L,
-                        TaskStatus.WAITING_WORKER, 4L,
+                        TaskStatus.WAITING_WORKER, 3L,
                         TaskStatus.WAITING_EXTERNAL, 3L,
                         TaskStatus.COMPLETED, 5L,
                         TaskStatus.CANCELLED, 1L
@@ -177,7 +254,7 @@ final class DemoOperationalSeedCatalog {
         requireDistribution(
                 demoDocuments.stream().map(DocumentSeed::submissionStatus).toList(),
                 Map.of(
-                        SubmissionStatus.VERIFIED, 48L,
+                        SubmissionStatus.VERIFIED, 47L,
                         SubmissionStatus.SUBMITTED, 20L,
                         SubmissionStatus.MISSING, 16L
                 ),
@@ -186,7 +263,7 @@ final class DemoOperationalSeedCatalog {
         requireDistribution(
                 demoApprovals.stream().map(ApprovalSeed::status).toList(),
                 Map.of(
-                        ApprovalStatus.PENDING, 4L,
+                        ApprovalStatus.PENDING, 3L,
                         ApprovalStatus.APPROVED, 7L,
                         ApprovalStatus.REJECTED, 1L,
                         ApprovalStatus.INVALIDATED, 1L
@@ -206,10 +283,10 @@ final class DemoOperationalSeedCatalog {
         requireDistribution(
                 demoAudits.stream().map(AuditSeed::actorType).toList(),
                 Map.of(
-                        ActorType.HR_USER, 79L,
-                        ActorType.AI_AGENT, 7L,
+                        ActorType.HR_USER, 77L,
+                        ActorType.AI_AGENT, 2L,
                         ActorType.SYSTEM_RULE, 6L,
-                        ActorType.WORKER_LINK, 4L
+                        ActorType.WORKER_LINK, 3L
                 ),
                 "Demo Company audit actor type"
         );
@@ -251,8 +328,56 @@ final class DemoOperationalSeedCatalog {
                 "completion evidence");
         requireTaskReferences(demoDocumentRequestDrafts.stream()
                 .map(DocumentRequestDraftSeed::taskId).toList(), "document request draft");
+        verifyGoldenFlowBoundary();
         verifyArtifactScenarios();
         verifyTemporalScenarios();
+    }
+
+    private void verifyGoldenFlowBoundary() {
+        boolean hasGoldenFlowTask = demoTasks.stream()
+                .anyMatch(seed -> GOLDEN_FLOW_WORKER_ID.equals(seed.workerId()));
+        List<DocumentSeed> goldenFlowDocuments = demoDocuments.stream()
+                .filter(seed -> GOLDEN_FLOW_WORKER_ID.equals(seed.workerId()))
+                .toList();
+        boolean invalidGoldenFlowDocuments = goldenFlowDocuments.size() != 2
+                || !goldenFlowDocuments.stream().map(DocumentSeed::documentId)
+                        .collect(Collectors.toSet()).equals(GOLDEN_FLOW_CONTEXT_DOCUMENT_IDS)
+                || goldenFlowDocuments.stream().anyMatch(seed -> seed.taskId() != null
+                        || seed.fileId() != null)
+                || goldenFlowDocuments.stream().noneMatch(seed ->
+                        seed.documentType() == DocumentType.PASSPORT_COPY
+                                && seed.submissionStatus() == SubmissionStatus.VERIFIED
+                                && seed.expiryDays() != null
+                                && seed.expiryDays() > 0)
+                || goldenFlowDocuments.stream().noneMatch(seed ->
+                        seed.documentType() == DocumentType.ARC
+                                && seed.submissionStatus() == SubmissionStatus.MISSING
+                                && seed.expiryDays() == null);
+        boolean hasRetiredDraft = demoDocumentRequestDrafts.stream()
+                .anyMatch(seed -> RETIRED_GOLDEN_FLOW_DRAFT_ID.equals(seed.draftId()));
+        boolean hasRetiredAudit = demoAudits.stream()
+                .anyMatch(seed -> RETIRED_GOLDEN_FLOW_AUDIT_IDS.contains(seed.auditEventId())
+                        || RETIRED_GOLDEN_FLOW_TASK_IDS.contains(seed.targetId())
+                        || RETIRED_GOLDEN_FLOW_DRAFT_ID.equals(seed.targetId()));
+        if (hasGoldenFlowTask || invalidGoldenFlowDocuments || hasRetiredDraft || hasRetiredAudit) {
+            throw new IllegalStateException(
+                    "golden flow worker must start with only the required document context"
+            );
+        }
+    }
+
+    private static DocumentSeed withoutTask(DocumentSeed seed) {
+        return new DocumentSeed(
+                seed.documentId(),
+                seed.workerId(),
+                null,
+                seed.documentType(),
+                seed.submissionStatus(),
+                seed.expiryDays(),
+                seed.destination(),
+                seed.note(),
+                seed.fileId()
+        );
     }
 
     private static void requireSize(List<?> seeds, int expected, String name) {

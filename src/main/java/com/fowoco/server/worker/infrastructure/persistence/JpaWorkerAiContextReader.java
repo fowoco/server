@@ -1,9 +1,13 @@
 package com.fowoco.server.worker.infrastructure.persistence;
 
 import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
+import com.fowoco.server.worker.application.WorkerDocumentAiContextSnapshot;
 import com.fowoco.server.worker.application.port.WorkerAiContextReader;
+import com.fowoco.server.worker.domain.DocumentType;
 import jakarta.persistence.EntityManager;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
@@ -23,7 +27,7 @@ public class JpaWorkerAiContextReader implements WorkerAiContextReader {
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName must not be blank");
         }
-        return entityManager.createQuery(
+        List<WorkerJpaEntity> workers = entityManager.createQuery(
                         """
                         select worker
                         from WorkerJpaEntity worker
@@ -36,13 +40,58 @@ public class JpaWorkerAiContextReader implements WorkerAiContextReader {
                 .setParameter("companyId", companyId)
                 .setParameter("displayName", displayName.strip())
                 .setMaxResults(2)
+                .getResultList();
+        if (workers.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> workerIds = workers.stream()
+                .map(entity -> entity.toDomain().workerId())
+                .toList();
+        Map<UUID, Map<DocumentType, WorkerDocumentAiContextSnapshot>> documentsByWorker =
+                new LinkedHashMap<>();
+        entityManager.createQuery(
+                        """
+                        select document
+                        from WorkerDocumentJpaEntity document
+                        where document.companyId = :companyId
+                          and document.workerId in :workerIds
+                          and document.documentType in :documentTypes
+                        order by document.updatedAt desc, document.workerDocumentId
+                        """,
+                        WorkerDocumentJpaEntity.class
+                )
+                .setParameter("companyId", companyId)
+                .setParameter("workerIds", workerIds)
+                .setParameter(
+                        "documentTypes",
+                        List.of(DocumentType.PASSPORT_COPY, DocumentType.ARC)
+                )
                 .getResultList()
-                .stream()
-                .map(this::toSnapshot)
+                .forEach(entity -> {
+                    var document = entity.toDomain();
+                    documentsByWorker
+                            .computeIfAbsent(document.workerId(), ignored -> new LinkedHashMap<>())
+                            .putIfAbsent(
+                                    document.documentType(),
+                                    new WorkerDocumentAiContextSnapshot(
+                                            document.documentType(),
+                                            document.submissionStatus(),
+                                            document.expiryDate()
+                                    )
+                            );
+                });
+        return workers.stream()
+                .map(worker -> toSnapshot(
+                        worker,
+                        documentsByWorker.getOrDefault(worker.toDomain().workerId(), Map.of())
+                ))
                 .toList();
     }
 
-    private WorkerAiContextSnapshot toSnapshot(WorkerJpaEntity entity) {
+    private WorkerAiContextSnapshot toSnapshot(
+            WorkerJpaEntity entity,
+            Map<DocumentType, WorkerDocumentAiContextSnapshot> documents
+    ) {
         var worker = entity.toDomain();
         return new WorkerAiContextSnapshot(
                 worker.workerId(),
@@ -53,7 +102,8 @@ public class JpaWorkerAiContextReader implements WorkerAiContextReader {
                 worker.workStatus().name(),
                 worker.stayExpiryDate(),
                 worker.contractStartDate(),
-                worker.contractEndDate()
+                worker.contractEndDate(),
+                documents
         );
     }
 }
