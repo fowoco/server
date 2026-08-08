@@ -174,7 +174,7 @@ class CompanySettingsSecurityIntegrationTest {
                   "link_expiry_hours":72,
                   "evidence_rules":{"RECONTRACT":["DOCUMENT","RECEIPT"]}
                 }
-                """);
+                """, "settings-patch-audit-test");
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<String>read(response.body(), "$.approval_policy"))
@@ -185,26 +185,31 @@ class CompanySettingsSecurityIntegrationTest {
                 .isEqualTo(730);
         assertThat(JsonPath.<Number>read(response.body(), "$.version").longValue()).isEqualTo(5L);
 
-        Map<String, Object> audit = jdbcTemplate.queryForMap(
+        List<Map<String, Object>> audits = jdbcTemplate.queryForList(
                 """
                 SELECT action, target_type, target_id, actor_id, user_role,
-                       event_version, change_summary
+                       request_id, event_version, change_summary
                 FROM audit_event
                 WHERE company_id = ?
+                ORDER BY audit_event_id
                 """,
                 COMPANY_A
         );
-        assertThat(audit)
-                .containsEntry("action", "COMPANY_SETTINGS_UPDATED")
+        assertThat(audits).hasSize(4).allSatisfy(audit -> assertThat(audit)
+                .containsEntry("action", "SETTINGS_UPDATED")
                 .containsEntry("target_type", "COMPANY_SETTINGS")
                 .containsEntry("target_id", COMPANY_A)
                 .containsEntry("actor_id", ADMIN_A)
                 .containsEntry("user_role", "ADMIN")
-                .containsEntry("event_version", "1");
-        assertThat(audit.get("change_summary").toString())
-                .isEqualTo("{\"approval_policy\":[\"ADMIN_OR_HR\",\"ADMIN_ONLY\"],"
-                        + "\"link_expiry_hours\":[48,72],"
-                        + "\"evidence_rules\":[\"REC=D;SPE=O\",\"REC=DR\"]}");
+                .containsEntry("request_id", "settings-patch-audit-test")
+                .containsEntry("event_version", "1"));
+        assertThat(audits.stream().map(audit -> audit.get("change_summary").toString()))
+                .containsExactlyInAnyOrder(
+                        "approval_policy:ADMIN_OR_HR->ADMIN_ONLY,version:4->5",
+                        "link_expiry_hours:48->72,version:4->5",
+                        "evidence_rules.RECONTRACT:[DOCUMENT]->[DOCUMENT,RECEIPT],version:4->5",
+                        "evidence_rules.STAY_PERIOD_EXTENSION:[OFFICIAL_RESULT]->[],version:4->5"
+                );
     }
 
     @Test
@@ -293,10 +298,18 @@ class CompanySettingsSecurityIntegrationTest {
     }
 
     private HttpResponse<String> patch(String token, String body) throws Exception {
+        return patch(token, body, null);
+    }
+
+    private HttpResponse<String> patch(String token, String body, String requestId) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri("/api/v1/settings"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.CONTENT_TYPE, MediaTypeValues.APPLICATION_JSON);
+        if (requestId != null) {
+            request.header("X-Request-Id", requestId);
+        }
         return httpClient.send(
-                HttpRequest.newBuilder(uri("/api/v1/settings"))
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                        .header(HttpHeaders.CONTENT_TYPE, MediaTypeValues.APPLICATION_JSON)
+                request
                         .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
                         .build(),
                 HttpResponse.BodyHandlers.ofString()

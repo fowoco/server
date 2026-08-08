@@ -88,23 +88,24 @@ public class CompanySettingsService {
             return current;
         }
 
-        String summary = CompanySettingsAuditSummary.changedFields(current, requested);
         CompanySettings saved = companySettingsRepository.update(requested);
-        auditEventRepository.append(new AuditEvent(
-                uuidGenerator.generate(),
-                actor.companyId(),
-                ActorType.HR_USER,
-                actor.actorId(),
-                UserRole.ADMIN,
-                AuditAction.COMPANY_SETTINGS_UPDATED,
-                AuditTargetType.COMPANY_SETTINGS,
-                actor.companyId(),
-                metadata.requestId(),
-                metadata.traceId(),
-                AUDIT_EVENT_VERSION,
-                summary,
-                now
-        ));
+        CompanySettingsAuditSummary.changedFields(current, saved).forEach(summary ->
+                auditEventRepository.append(new AuditEvent(
+                        uuidGenerator.generate(),
+                        actor.companyId(),
+                        ActorType.HR_USER,
+                        actor.actorId(),
+                        UserRole.ADMIN,
+                        AuditAction.SETTINGS_UPDATED,
+                        AuditTargetType.COMPANY_SETTINGS,
+                        actor.companyId(),
+                        metadata.requestId(),
+                        metadata.traceId(),
+                        AUDIT_EVENT_VERSION,
+                        summary,
+                        now
+                ))
+        );
         return saved;
     }
 

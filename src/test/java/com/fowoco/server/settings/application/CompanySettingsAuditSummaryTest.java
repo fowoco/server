@@ -26,11 +26,17 @@ class CompanySettingsAuditSummaryTest {
         CompanySettings before = settings(Map.of());
         CompanySettings after = settings(allEvidence);
 
-        String summary = CompanySettingsAuditSummary.changedFields(before, after);
+        var summaries = CompanySettingsAuditSummary.changedFields(before, after);
 
-        assertThat(summary).startsWith("{\"evidence_rules\":[\"-\",");
-        assertThat(summary).contains("REC=DROH", "SPE=DROH", "WI=DROH");
-        assertThat(summary.length()).isLessThanOrEqualTo(500);
+        assertThat(summaries).hasSize(TaskType.values().length);
+        assertThat(summaries).contains(
+                "evidence_rules.RECONTRACT:[]->[DOCUMENT,RECEIPT,OFFICIAL_RESULT,HR_CONFIRMATION],version:0->0",
+                "evidence_rules.STAY_PERIOD_EXTENSION:[]->[DOCUMENT,RECEIPT,OFFICIAL_RESULT,HR_CONFIRMATION],version:0->0",
+                "evidence_rules.WORK_INSTRUCTION:[]->[DOCUMENT,RECEIPT,OFFICIAL_RESULT,HR_CONFIRMATION],version:0->0"
+        );
+        assertThat(summaries).allSatisfy(summary ->
+                assertThat(summary.length()).isLessThanOrEqualTo(500)
+        );
     }
 
     private CompanySettings settings(Map<TaskType, Set<EvidenceType>> evidenceRules) {
