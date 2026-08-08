@@ -74,6 +74,7 @@ class DashboardSecurityIntegrationTest {
 
     @BeforeEach
     void resetTaskState() {
+        jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM task_checklist_item");
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM approval_request");
@@ -155,6 +156,115 @@ class DashboardSecurityIntegrationTest {
         );
 
         assertThat(response.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void upcoming7DaysIncludesWorkerWithNearExpiry() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        registerWorkerWithStayExpiry(accessToken, "체류만료임박근로자", "2026-08-12");
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?date=2026-08-08", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        java.util.List<Object> upcoming = JsonPath.read(response.body(), "$.upcoming_7_days");
+        assertThat(upcoming).isNotEmpty();
+        List<String> categories = JsonPath.read(response.body(), "$.upcoming_7_days[*].category");
+        assertThat(categories).contains("STAY_EXPIRY");
+    }
+
+    @Test
+    void upcoming7DaysExcludesWorkerWithFarExpiry() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        registerWorkerWithStayExpiry(accessToken, "체류만료여유근로자", "2026-12-31");
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?date=2026-08-08", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> names = JsonPath.read(response.body(), "$.upcoming_7_days[*].display_name");
+        assertThat(names).doesNotContain("체류만료여유근로자");
+    }
+
+    @Test
+    void upcoming7DaysIncludesAllExpiryCategories() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        registerWorkerWithAllExpiryFields(
+                accessToken, "전체만료임박근로자",
+                "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-11"
+        );
+        String workerId = registerWorker(accessToken, "서류만료임박근로자");
+        registerDocumentWithExpiry(accessToken, workerId, "2026-08-10");
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?date=2026-08-08", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> categories = JsonPath.read(response.body(), "$.upcoming_7_days[*].category");
+        assertThat(categories)
+                .contains("STAY_EXPIRY", "CONTRACT_END", "EMPLOYMENT_PERMIT_END",
+                        "EMPLOYMENT_ACTIVITY_END", "DOCUMENT_EXPIRY");
+    }
+
+    @Test
+    void upcoming7DaysExcludesAlreadyPastExpiry() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        registerWorkerWithStayExpiry(accessToken, "이미지난만료근로자", "2026-07-01");
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/dashboard/today?date=2026-08-08", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> names = JsonPath.read(response.body(), "$.upcoming_7_days[*].display_name");
+        assertThat(names).doesNotContain("이미지난만료근로자");
+    }
+
+    private String registerWorkerWithAllExpiryFields(
+            String accessToken,
+            String displayName,
+            String stayExpiryDate,
+            String contractEndDate,
+            String employmentPermitEndDate,
+            String employmentActivityEndDate
+    ) throws Exception {
+        String body = """
+                {
+                  "display_name": "%s",
+                  "stay_expiry_date": "%s",
+                  "contract_end_date": "%s",
+                  "employment_permit_end_date": "%s",
+                  "employment_activity_end_date": "%s"
+                }
+                """.formatted(displayName, stayExpiryDate, contractEndDate,
+                employmentPermitEndDate, employmentActivityEndDate);
+        HttpResponse<String> response = postJson("/api/v1/workers", body, accessToken);
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
+        return JsonPath.read(response.body(), "$.worker_id");
+    }
+
+    private void registerDocumentWithExpiry(String accessToken, String workerId, String expiryDate)
+            throws Exception {
+        String body = """
+                {"document_type": "PASSPORT_COPY", "submission_status": "SUBMITTED", "expiry_date": "%s"}
+                """.formatted(expiryDate);
+        HttpResponse<String> response = postJson(
+                "/api/v1/workers/" + workerId + "/documents", body, accessToken
+        );
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
+    }
+
+    private String registerWorkerWithStayExpiry(String accessToken, String displayName, String stayExpiryDate)
+            throws Exception {
+        String body = """
+                {"display_name": "%s", "stay_expiry_date": "%s"}
+                """.formatted(displayName, stayExpiryDate);
+        HttpResponse<String> response = postJson("/api/v1/workers", body, accessToken);
+        assertThat(response.statusCode()).as("body: %s", response.body()).isEqualTo(201);
+        return JsonPath.read(response.body(), "$.worker_id");
     }
 
     @Test
