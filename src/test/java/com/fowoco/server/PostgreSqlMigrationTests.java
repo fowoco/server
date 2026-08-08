@@ -274,6 +274,9 @@ class PostgreSqlMigrationTests {
                 .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
                 .containsEntry("task_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("delivery_status", new ColumnSpec("varchar", false))
+                .containsEntry("sent_at", new ColumnSpec("timestamptz", true))
+                .containsEntry("sent_by", new ColumnSpec("uuid", true))
                 .containsEntry("replaces_link_id", new ColumnSpec("uuid", true));
         assertThat(columnSpecs(connection, "worker_response"))
                 .containsEntry("response_id", new ColumnSpec("uuid", false))
@@ -375,6 +378,9 @@ class PostgreSqlMigrationTests {
                         "fk_worker_document_task_worker_company",
                         "uq_worker_link_id_company",
                         "fk_worker_link_replaces_company",
+                        "fk_worker_link_sent_by_company",
+                        "ck_worker_link_delivery_status",
+                        "ck_worker_link_delivery_state",
                         "uq_worker_response_id_company",
                         "fk_worker_response_link_company",
                         "uq_stored_file_id_company",
@@ -622,6 +628,26 @@ class PostgreSqlMigrationTests {
                 TASK_A, COMPANY_A, REVOKED_WORKER_LINK_TOKEN_HASH, USER_A,
                 TASK_A, COMPANY_A, EXPIRED_WORKER_LINK_TOKEN_HASH, USER_A
         ));
+        assertThat(queryNullableString(
+                connection,
+                "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?::uuid",
+                "21000000-0000-0000-0000-000000000001"
+        )).isEqualTo("NOT_SENT");
+        assertSqlState(connection, "23514", """
+                UPDATE worker_link
+                   SET delivery_status = 'SENT'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """);
+        assertSqlState(connection, "23503", """
+                UPDATE worker_link
+                   SET delivery_status = 'SENT', sent_at = CURRENT_TIMESTAMP, sent_by = '%s'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """.formatted(USER_B));
+        execute(connection, """
+                UPDATE worker_link
+                   SET delivery_status = 'SENT', sent_at = CURRENT_TIMESTAMP, sent_by = '%s'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """.formatted(USER_A));
         execute(connection, """
                 INSERT INTO approval_request (
                     approval_request_id, task_id, company_id,
