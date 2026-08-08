@@ -74,6 +74,8 @@ app:
     max-concurrent-calls: ${AI_RUNTIME_MAX_CONCURRENT_CALLS:8}
     circuit-breaker-failure-threshold: ${AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
     circuit-breaker-open-duration: ${AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION:30s}
+  worker-import:
+    source-retention: ${WORKER_IMPORT_SOURCE_RETENTION:7d}
   ai-run:
     sse:
       timeout: ${AI_RUN_SSE_TIMEOUT:5m}
