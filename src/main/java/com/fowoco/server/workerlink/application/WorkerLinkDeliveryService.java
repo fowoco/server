@@ -19,6 +19,7 @@ import com.fowoco.server.workerlink.domain.WorkerLink;
 import com.fowoco.server.workerlink.domain.WorkerLinkDeliveryStatus;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -71,7 +72,9 @@ public class WorkerLinkDeliveryService {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
         WorkerLink link = workerLinkRepository.findByIdAndCompanyId(workerLinkId, actor.companyId())
                 .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.WORKER_LINK_RESOURCE_NOT_FOUND));
-        Instant now = clock.instant();
+        // PostgreSQL TIMESTAMPTZ stores microseconds. Normalize before returning the
+        // first response so a later DB round-trip preserves the exact same sentAt.
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
         if (!link.isUsable(now)) {
             throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_ACTIVE);
         }
