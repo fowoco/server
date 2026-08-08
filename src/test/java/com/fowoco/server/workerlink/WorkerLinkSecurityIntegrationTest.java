@@ -68,6 +68,8 @@ class WorkerLinkSecurityIntegrationTest {
         jdbcTemplate.update("DELETE FROM worker_response_upload");
         jdbcTemplate.update("DELETE FROM worker_response");
         jdbcTemplate.update("DELETE FROM worker_link");
+        jdbcTemplate.update("DELETE FROM document_request_draft_type");
+        jdbcTemplate.update("DELETE FROM document_request_draft");
         jdbcTemplate.update("DELETE FROM stored_file");
         jdbcTemplate.update("DELETE FROM event_consumption");
         jdbcTemplate.update("DELETE FROM event_publication");
@@ -94,6 +96,7 @@ class WorkerLinkSecurityIntegrationTest {
         String hrToken = accessToken(login(HR_A_EMAIL));
         String workerId = registerWorker(hrToken, "전체흐름테스트근로자");
         String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
 
         HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
                 "/api/v1/tasks/" + taskId + "/worker-link",
@@ -110,6 +113,12 @@ class WorkerLinkSecurityIntegrationTest {
         HttpResponse<String> viewResponse = getJson("/public/worker-links/" + workerUrl, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
         assertThat(viewResponse.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(JsonPath.<String>read(viewResponse.body(), "$.guidance"))
+                .isEqualTo("여권 사본과 근로계약서를 제출해 주세요.");
+        assertThat(JsonPath.<String>read(viewResponse.body(), "$.language")).isEqualTo("vi");
+        assertThat(JsonPath.<String>read(viewResponse.body(), "$.due_date")).isEqualTo("2026-08-20");
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_document_types"))
+                .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
 
         HttpResponse<String> uploadResponse = uploadFile(workerUrl, "passport.pdf", "application/pdf", "content".getBytes(StandardCharsets.UTF_8));
         assertThat(uploadResponse.statusCode()).isEqualTo(201);
@@ -148,6 +157,20 @@ class WorkerLinkSecurityIntegrationTest {
         HttpResponse<String> activitiesResponse = getJson("/api/v1/tasks/" + taskId + "/activities", hrToken);
         assertThat(activitiesResponse.statusCode()).isEqualTo(200);
         assertThat(activitiesResponse.body()).contains("WORKER_LINK_RESPONSE_SUBMITTED");
+    }
+
+    @Test
+    void activeWorkerLinkWithoutDraftReturnsContentNotReady() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "초안없는링크근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String workerUrl = issueWorkerLink(hrToken, taskId, "content-not-ready-key");
+
+        HttpResponse<String> response = getJson("/public/worker-links/" + workerUrl, null);
+
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("WORKER_LINK_CONTENT_NOT_READY");
     }
 
     @Test
@@ -448,6 +471,22 @@ class WorkerLinkSecurityIntegrationTest {
         return JsonPath.read(response.body(), "$.worker_url");
     }
 
+    private void saveDocumentRequestDraft(String token, String taskId) throws Exception {
+        HttpResponse<String> response = putJson(
+                "/api/v1/tasks/" + taskId + "/document-request-draft",
+                """
+                {
+                  "language":"vi",
+                  "document_types":["PASSPORT_COPY","CONTRACT"],
+                  "message":"여권 사본과 근로계약서를 제출해 주세요.",
+                  "expected_version":0
+                }
+                """,
+                token
+        );
+        assertThat(response.statusCode()).as("draft response body: %s", response.body()).isEqualTo(200);
+    }
+
     private void completeRequiredChecklistItems(String taskId, String token) throws Exception {
         HttpResponse<String> detail = getJson("/api/v1/tasks/" + taskId, token);
         assertThat(detail.statusCode()).isEqualTo(200);
@@ -619,6 +658,16 @@ class WorkerLinkSecurityIntegrationTest {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
                 .method("PATCH", HttpRequest.BodyPublishers.ofString(body));
+        if (token != null) {
+            builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> putJson(String path, String body, String token) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(body));
         if (token != null) {
             builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
         }
