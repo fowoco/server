@@ -31,7 +31,7 @@ public interface CaseQueryRepository {
             CasePriority priority,
             String workflowCatalogVersion,
             String workflowSnapshotJson,
-            boolean linkIssued,
+            boolean linkSent,
             boolean reviewRequired,
             boolean unreadResponse,
             int completedChecklistItems,
