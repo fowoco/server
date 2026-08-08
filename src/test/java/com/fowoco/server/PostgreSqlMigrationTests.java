@@ -104,7 +104,10 @@ class PostgreSqlMigrationTests {
                         "worker_response_upload",
                         "worker_document_upload_idempotency",
                         "user_agreement_consent",
-                        "password_reset_token"
+                        "password_reset_token",
+                        "worker_import_job",
+                        "worker_import_row",
+                        "worker_import_commit_idempotency"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -291,6 +294,30 @@ class PostgreSqlMigrationTests {
                 .containsEntry("lifecycle_status", new ColumnSpec("varchar", false))
                 .containsEntry("workflow_snapshot_json", new ColumnSpec("text", false))
                 .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker_import_job"))
+                .containsEntry("import_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("source_file_id", new ColumnSpec("uuid", false))
+                .containsEntry("status", new ColumnSpec("varchar", false))
+                .containsEntry("mapping_json", new ColumnSpec("text", false))
+                .containsEntry("source_file_expires_at", new ColumnSpec("timestamptz", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker_import_row"))
+                .containsEntry("import_row_id", new ColumnSpec("uuid", false))
+                .containsEntry("import_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("row_number", new ColumnSpec("int4", false))
+                .containsEntry("source_values_json", new ColumnSpec("text", false))
+                .containsEntry("validation_errors_json", new ColumnSpec("text", false))
+                .containsEntry("worker_id", new ColumnSpec("uuid", true))
+                .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker_import_commit_idempotency"))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("import_id", new ColumnSpec("uuid", false))
+                .containsEntry("idempotency_key_hash", new ColumnSpec("varchar", false))
+                .containsEntry("request_hash", new ColumnSpec("varchar", false))
+                .containsEntry("response_snapshot_json", new ColumnSpec("text", false))
+                .containsEntry("created_at", new ColumnSpec("timestamptz", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -364,7 +391,17 @@ class PostgreSqlMigrationTests {
                         "fk_user_agreement_consent_user_company",
                         "pk_password_reset_token",
                         "uq_password_reset_token_hash",
-                        "fk_password_reset_token_user_company"
+                        "fk_password_reset_token_user_company",
+                        "pk_worker_import_job",
+                        "uq_worker_import_job_create_key",
+                        "fk_worker_import_job_source_file_company",
+                        "fk_worker_import_job_creator_company",
+                        "pk_worker_import_row",
+                        "uq_worker_import_row_number",
+                        "fk_worker_import_row_job_company",
+                        "fk_worker_import_row_worker_company",
+                        "pk_worker_import_commit_idempotency",
+                        "fk_worker_import_commit_idempotency_job_company"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -399,7 +436,9 @@ class PostgreSqlMigrationTests {
                         "idx_outbox_manual_retry_event_created",
                         "idx_user_agreement_consent_user_time",
                         "idx_password_reset_token_company_user",
-                        "idx_password_reset_token_active"
+                        "idx_password_reset_token_active",
+                        "idx_worker_import_job_company_updated",
+                        "idx_worker_import_row_job_status"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -434,7 +473,10 @@ class PostgreSqlMigrationTests {
                         "pl_worker_response_upload_tenant_isolation",
                         "pl_worker_document_upload_idempotency_tenant_isolation",
                         "pl_user_agreement_consent_tenant_isolation",
-                        "pl_password_reset_token_tenant_isolation"
+                        "pl_password_reset_token_tenant_isolation",
+                        "pl_worker_import_job_tenant_isolation",
+                        "pl_worker_import_row_tenant_isolation",
+                        "pl_worker_import_commit_idempotency_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
