@@ -70,7 +70,7 @@ public class AuditController {
     @Operation(
             operationId = "searchAuditEvents",
             summary = "사업장 감사 이벤트 검색",
-            description = "ADMIN만 자신의 사업장 범위에서 필터와 불투명 cursor로 검색할 수 있습니다."
+            description = "회사 audit_visibility 정책이 허용하는 ADMIN 또는 HR이 자신의 사업장 범위에서 검색합니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "감사 이벤트 페이지"),
@@ -78,7 +78,7 @@ public class AuditController {
             @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden")
     })
     @GetMapping(path = "/audit-events", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
     public AuditPageResponse search(
             @RequestParam(name = "actor_type", required = false) ActorType actorType,
             @RequestParam(required = false) AuditAction action,

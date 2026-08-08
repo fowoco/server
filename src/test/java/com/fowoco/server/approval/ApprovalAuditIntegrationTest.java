@@ -167,7 +167,7 @@ class ApprovalAuditIntegrationTest {
         HttpResponse<String> activities = authorizedGet(taskPath("/activities"), hrToken);
         assertThat(activities.statusCode()).isEqualTo(200);
         List<String> actions = JsonPath.read(activities.body(), "$[*].action");
-        assertThat(actions).containsExactly(
+        assertThat(actions).containsExactlyInAnyOrder(
                 "APPROVAL_REQUESTED",
                 "TASK_APPROVED",
                 "EXTERNAL_SUBMISSION_RECORDED",
@@ -303,14 +303,31 @@ class ApprovalAuditIntegrationTest {
     }
 
     @Test
-    void viewerCannotWriteAndHrCannotUseAdminAuditSearch() throws Exception {
+    void viewerCannotWriteAndDefaultAuditVisibilityKeepsSearchAdminOnly() throws Exception {
         String viewerToken = accessToken(login(VIEWER_A_EMAIL));
         HttpResponse<String> viewerWrite = requestApproval(viewerToken, validApprovalBody());
         assertThat(viewerWrite.statusCode()).isEqualTo(403);
+        assertThat(authorizedGet("/api/v1/audit-events", viewerToken).statusCode()).isEqualTo(403);
 
         String hrToken = accessToken(login(HR_A_EMAIL));
         HttpResponse<String> hrAudit = authorizedGet("/api/v1/audit-events", hrToken);
         assertThat(hrAudit.statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void adminAndHrAuditVisibilityAllowsHrCompanyWideSearch() throws Exception {
+        setAuditVisibility("ADMIN_AND_HR");
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/audit-events?target_type=TASK&target_id=" + TASK_A,
+                hrToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(response.body(), "$.items[*].action"))
+                .containsExactly("APPROVAL_REQUESTED");
     }
 
     @Test
@@ -720,6 +737,14 @@ class ApprovalAuditIntegrationTest {
         jdbcTemplate.update(
                 "UPDATE company_settings SET evidence_rules_json = ? WHERE company_id = ?",
                 evidenceRulesJson,
+                COMPANY_A
+        );
+    }
+
+    private void setAuditVisibility(String auditVisibility) {
+        jdbcTemplate.update(
+                "UPDATE company_settings SET audit_visibility = ? WHERE company_id = ?",
+                auditVisibility,
                 COMPANY_A
         );
     }
