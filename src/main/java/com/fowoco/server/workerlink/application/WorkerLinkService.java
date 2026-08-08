@@ -6,6 +6,8 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.settings.application.port.CompanySettingsRepository;
+import com.fowoco.server.settings.domain.CompanySettings;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
@@ -23,10 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WorkerLinkService {
 
-    private static final long DEFAULT_EXPIRES_IN_HOURS = 72L;
-
     private final TaskRepository taskRepository;
     private final ApprovalRequestRepository approvalRequestRepository;
+    private final CompanySettingsRepository companySettingsRepository;
     private final WorkerLinkRepository workerLinkRepository;
     private final WorkerLinkGenerator workerLinkGenerator;
     private final WorkerLinkHasher workerLinkHasher;
@@ -37,6 +38,7 @@ public class WorkerLinkService {
     public WorkerLinkService(
             TaskRepository taskRepository,
             ApprovalRequestRepository approvalRequestRepository,
+            CompanySettingsRepository companySettingsRepository,
             WorkerLinkRepository workerLinkRepository,
             WorkerLinkGenerator workerLinkGenerator,
             WorkerLinkHasher workerLinkHasher,
@@ -46,6 +48,7 @@ public class WorkerLinkService {
     ) {
         this.taskRepository = taskRepository;
         this.approvalRequestRepository = approvalRequestRepository;
+        this.companySettingsRepository = companySettingsRepository;
         this.workerLinkRepository = workerLinkRepository;
         this.workerLinkGenerator = workerLinkGenerator;
         this.workerLinkHasher = workerLinkHasher;
@@ -100,7 +103,7 @@ public class WorkerLinkService {
             workerLinkRepository.update(previousLink.revoke(now));
         }
 
-        long hours = command.expiresInHours() != null ? command.expiresInHours() : DEFAULT_EXPIRES_IN_HOURS;
+        long hours = resolveExpiryHours(command, actor);
         Instant expiresAt = now.plus(Duration.ofHours(hours));
 
         WorkerLinkGenerator.GeneratedWorkerLinkToken generated = workerLinkGenerator.generate();
@@ -126,5 +129,21 @@ public class WorkerLinkService {
                 workerLink.sentAt(),
                 false
         );
+    }
+
+    private long resolveExpiryHours(WorkerLinkIssueCommand command, ActorContext actor) {
+        long hours = command.expiresInHours() != null
+                ? command.expiresInHours()
+                : companySettingsRepository.findByCompanyId(actor.companyId())
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Persisted company settings are missing for company "
+                                        + actor.companyId()
+                        ))
+                        .linkExpiryHours();
+        if (hours < CompanySettings.MIN_LINK_EXPIRY_HOURS
+                || hours > CompanySettings.MAX_LINK_EXPIRY_HOURS) {
+            throw new IllegalArgumentException("expiresInHours must be between 1 and 168");
+        }
+        return hours;
     }
 }
