@@ -2,15 +2,21 @@ package com.fowoco.server.aiintegration.application.validation;
 
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
+import com.fowoco.server.aiintegration.application.ocr.AiOcrDocumentSide;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrDocumentType;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrPassportCountryCodeResolver;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrRequest;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrResponse;
 import com.fowoco.server.aiintegration.application.ocr.AiOcrStatus;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.stereotype.Component;
 
+@Component
 public final class AiOcrContractValidator {
 
     public static final int MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -34,6 +40,16 @@ public final class AiOcrContractValidator {
             "visa_type",
             "stay_expiration_date",
             "residence_address_1"
+    );
+    private static final Set<String> PASSPORT_REQUIRED_FIELDS = Set.of(
+            "passport_number", "surname", "given_names", "date_of_birth", "passport_expiry_date"
+    );
+    private static final Set<String> DATE_FIELDS = Set.of(
+            "date_of_birth", "passport_issue_date", "passport_expiry_date", "stay_expiration_date"
+    );
+    private static final Map<Long, AiOcrDocumentSide> ARC_TEMPLATE_SIDES = Map.of(
+            43024L, AiOcrDocumentSide.FRONT,
+            43025L, AiOcrDocumentSide.BACK
     );
     private static final Pattern SAFE_REASON = Pattern.compile("[a-z0-9_:-]{1,120}");
 
@@ -90,6 +106,9 @@ public final class AiOcrContractValidator {
             if (value == null || value.isBlank() || value.length() > 500) {
                 reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OCR response field value is invalid.");
             }
+            if (DATE_FIELDS.contains(key)) {
+                validateIsoDate(value);
+            }
         });
         response.fieldConfidences().forEach(this::validateConfidence);
         response.reviewReasons().forEach(reason -> {
@@ -97,7 +116,7 @@ public final class AiOcrContractValidator {
                 reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OCR review reason is invalid.");
             }
         });
-        validateOutcome(response);
+        validateOutcome(request, response);
     }
 
     private void validateConfidence(String key, BigDecimal confidence) {
@@ -108,7 +127,7 @@ public final class AiOcrContractValidator {
         }
     }
 
-    private void validateOutcome(AiOcrResponse response) {
+    private void validateOutcome(AiOcrRequest request, AiOcrResponse response) {
         if (response.status() == AiOcrStatus.SUCCEEDED && !response.reviewReasons().isEmpty()) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Successful OCR cannot require review.");
         }
@@ -117,6 +136,80 @@ public final class AiOcrContractValidator {
         }
         if (response.matchedTemplateId() != null && response.matchedTemplateId() < 1) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OCR template id is invalid.");
+        }
+        validateTemplate(request, response);
+        if (response.status() == AiOcrStatus.SUCCEEDED) {
+            validateSuccessfulFields(request, response);
+        }
+    }
+
+    private void validateTemplate(AiOcrRequest request, AiOcrResponse response) {
+        Long templateId = response.matchedTemplateId();
+        if (templateId == null) {
+            if (response.status() == AiOcrStatus.SUCCEEDED
+                    || response.documentSide() != null
+                    || !response.fields().isEmpty()) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OCR template result is inconsistent.");
+            }
+            return;
+        }
+        if (request.documentType() == AiOcrDocumentType.PASSPORT_COPY) {
+            Long expected = passportCountryCodeResolver.expectedTemplateId(request.countryCode());
+            if (!templateId.equals(expected)) {
+                requireUnexpectedTemplateReview(response);
+                return;
+            }
+            if (response.documentSide() != null) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Passport OCR side must be omitted.");
+            }
+            return;
+        }
+        AiOcrDocumentSide expectedSide = ARC_TEMPLATE_SIDES.get(templateId);
+        if (expectedSide == null) {
+            requireUnexpectedTemplateReview(response);
+            return;
+        }
+        if (response.documentSide() != expectedSide) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "ARC OCR template side does not match.");
+        }
+    }
+
+    private void requireUnexpectedTemplateReview(AiOcrResponse response) {
+        if (response.status() != AiOcrStatus.REVIEW_REQUIRED
+                || !response.reviewReasons().contains("unexpected_template")
+                || response.documentSide() != null
+                || !response.fields().isEmpty()) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OCR template does not match the request.");
+        }
+    }
+
+    private void validateSuccessfulFields(AiOcrRequest request, AiOcrResponse response) {
+        if (response.fields().isEmpty()) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Successful OCR fields are empty.");
+        }
+        if (request.documentType() == AiOcrDocumentType.PASSPORT_COPY) {
+            if (!response.fields().keySet().containsAll(PASSPORT_REQUIRED_FIELDS)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Passport OCR required fields are missing.");
+            }
+            return;
+        }
+        if (response.documentSide() == AiOcrDocumentSide.FRONT
+                && !response.fields().containsKey("alien_registration_number")) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "ARC front required field is missing.");
+        }
+        if (response.documentSide() == AiOcrDocumentSide.BACK
+                && response.fields().keySet().stream().noneMatch(
+                        key -> key.startsWith("stay_") || key.startsWith("residence_")
+                )) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "ARC back required field is missing.");
+        }
+    }
+
+    private void validateIsoDate(String value) {
+        try {
+            LocalDate.parse(value);
+        } catch (DateTimeParseException exception) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OCR date field is invalid.");
         }
     }
 
