@@ -20,6 +20,7 @@ import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.company.application.port.CompanyRepository;
+import com.fowoco.server.company.application.port.CompanySettingsProvisioner;
 import com.fowoco.server.company.domain.Company;
 import java.time.Clock;
 import java.time.Instant;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SignupService {
 
     private final CompanyRepository companyRepository;
+    private final CompanySettingsProvisioner companySettingsProvisioner;
     private final UserAccountRepository userAccountRepository;
     private final UserAgreementConsentRepository consentRepository;
     private final AuthTenantBootstrap authTenantBootstrap;
@@ -45,6 +47,7 @@ public class SignupService {
 
     public SignupService(
             CompanyRepository companyRepository,
+            CompanySettingsProvisioner companySettingsProvisioner,
             UserAccountRepository userAccountRepository,
             UserAgreementConsentRepository consentRepository,
             AuthTenantBootstrap authTenantBootstrap,
@@ -57,6 +60,7 @@ public class SignupService {
             Clock clock
     ) {
         this.companyRepository = companyRepository;
+        this.companySettingsProvisioner = companySettingsProvisioner;
         this.userAccountRepository = userAccountRepository;
         this.consentRepository = consentRepository;
         this.authTenantBootstrap = authTenantBootstrap;
@@ -95,6 +99,7 @@ public class SignupService {
         );
 
         companyRepository.insert(company);
+        companySettingsProvisioner.provisionDefaults(company.companyId(), now);
         try {
             userAccountRepository.insert(initialAdmin);
         } catch (DataIntegrityViolationException exception) {

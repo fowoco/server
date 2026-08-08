@@ -2,6 +2,7 @@ package com.fowoco.server.auth.infrastructure.seed;
 
 import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.company.application.port.CompanyRepository;
+import com.fowoco.server.company.application.port.CompanySettingsProvisioner;
 import java.time.Clock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -18,6 +19,7 @@ public class DemoAuthSeedConfiguration {
     DemoAuthSeedRunner demoAuthSeedRunner(
             DemoAuthSeedProperties properties,
             CompanyRepository companyRepository,
+            CompanySettingsProvisioner companySettingsProvisioner,
             UserAccountRepository userAccountRepository,
             PasswordEncoder passwordEncoder,
             Clock clock
@@ -25,6 +27,7 @@ public class DemoAuthSeedConfiguration {
         return new DemoAuthSeedRunner(
                 properties,
                 companyRepository,
+                companySettingsProvisioner,
                 userAccountRepository,
                 passwordEncoder,
                 clock

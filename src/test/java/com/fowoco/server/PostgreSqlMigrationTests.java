@@ -74,6 +74,7 @@ class PostgreSqlMigrationTests {
         assertThat(tableNames(connection))
                 .contains(
                         "company",
+                        "company_settings",
                         "user_account",
                         "refresh_token",
                         "worker",
@@ -115,6 +116,15 @@ class PostgreSqlMigrationTests {
                 .containsEntry("status", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false))
                 .doesNotContainKey("company_name");
+        assertThat(columnSpecs(connection, "company_settings"))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("approval_policy", new ColumnSpec("varchar", false))
+                .containsEntry("link_expiry_hours", new ColumnSpec("int8", false))
+                .containsEntry("evidence_rules_json", new ColumnSpec("text", false))
+                .containsEntry("file_retention_days", new ColumnSpec("int4", false))
+                .containsEntry("ai_log_retention_days", new ColumnSpec("int4", false))
+                .containsEntry("audit_visibility", new ColumnSpec("varchar", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "user_account"))
                 .containsEntry("user_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
@@ -325,6 +335,16 @@ class PostgreSqlMigrationTests {
         assertThat(constraintNames(connection))
                 .contains(
                         "pk_company",
+                        "pk_company_settings",
+                        "fk_company_settings_company",
+                        "ck_company_settings_approval_policy",
+                        "ck_company_settings_link_expiry_hours",
+                        "ck_company_settings_evidence_rules_json_not_blank",
+                        "ck_company_settings_file_retention_days",
+                        "ck_company_settings_ai_log_retention_days",
+                        "ck_company_settings_audit_visibility",
+                        "ck_company_settings_version",
+                        "ck_company_settings_time_order",
                         "pk_user_account",
                         "fk_user_account_company",
                         "uq_user_account_normalized_email",
@@ -449,6 +469,7 @@ class PostgreSqlMigrationTests {
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
                         "pl_company_tenant_isolation",
+                        "pl_company_settings_tenant_isolation",
                         "pl_user_account_tenant_isolation",
                         "pl_refresh_token_tenant_isolation",
                         "pl_worker_tenant_isolation",
