@@ -2,8 +2,11 @@ package com.fowoco.server.task.infrastructure.persistence;
 
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
+import com.fowoco.server.task.domain.TaskStatus;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -49,6 +52,25 @@ public class JpaTaskRepository implements TaskRepository {
                 page.getTotalElements(),
                 page.getTotalPages()
         );
+    }
+
+    @Override
+    public List<Task> findOpenTasks(UUID companyId, int limit) {
+        Page<TaskJpaEntity> page = repository.findOpenTasksByCompanyId(
+                companyId,
+                PageRequest.of(0, limit, Sort.by(Sort.Order.asc("dueDate"), Sort.Order.desc("createdAt")))
+        );
+        return page.getContent().stream().map(TaskJpaEntity::toDomain).toList();
+    }
+
+    @Override
+    public long countByCompanyIdAndStatus(UUID companyId, TaskStatus status) {
+        return repository.countByCompanyIdAndStatus(companyId, status);
+    }
+
+    @Override
+    public long countOpenTasksDueOn(UUID companyId, LocalDate dueDate) {
+        return repository.countOpenTasksDueOn(companyId, dueDate);
     }
 
     @Override

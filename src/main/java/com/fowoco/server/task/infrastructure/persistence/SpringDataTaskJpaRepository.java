@@ -49,4 +49,28 @@ interface SpringDataTaskJpaRepository extends JpaRepository<TaskJpaEntity, UUID>
             @Param("keyword") String keyword,
             Pageable pageable
     );
+
+    @Query("""
+            SELECT task
+              FROM TaskJpaEntity task
+             WHERE task.companyId = :companyId
+               AND task.status <> com.fowoco.server.task.domain.TaskStatus.COMPLETED
+               AND task.status <> com.fowoco.server.task.domain.TaskStatus.CANCELLED
+            """)
+    Page<TaskJpaEntity> findOpenTasksByCompanyId(
+            @Param("companyId") UUID companyId,
+            Pageable pageable
+    );
+
+    long countByCompanyIdAndStatus(UUID companyId, TaskStatus status);
+
+    @Query("""
+            SELECT COUNT(task)
+              FROM TaskJpaEntity task
+             WHERE task.companyId = :companyId
+               AND task.dueDate = :dueDate
+               AND task.status <> com.fowoco.server.task.domain.TaskStatus.COMPLETED
+               AND task.status <> com.fowoco.server.task.domain.TaskStatus.CANCELLED
+            """)
+    long countOpenTasksDueOn(@Param("companyId") UUID companyId, @Param("dueDate") LocalDate dueDate);
 }
