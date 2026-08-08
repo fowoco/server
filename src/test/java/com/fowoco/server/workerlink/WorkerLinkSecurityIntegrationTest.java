@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -189,7 +190,8 @@ class WorkerLinkSecurityIntegrationTest {
                 JsonPath.read(defaultResponse.body(), "$.expires_at")
         );
         assertThat(defaultExpiresAt)
-                .isBetween(beforeDefaultIssue.plusSeconds(24L * 60L * 60L),
+                .isBetween(beforeDefaultIssue.plusSeconds(24L * 60L * 60L)
+                                .truncatedTo(ChronoUnit.MICROS),
                         afterDefaultIssue.plusSeconds(24L * 60L * 60L));
 
         String explicitWorkerId = registerWorker(hrToken, "요청만료시간근로자");
@@ -212,7 +214,8 @@ class WorkerLinkSecurityIntegrationTest {
                 JsonPath.read(explicitResponse.body(), "$.expires_at")
         );
         assertThat(explicitExpiresAt)
-                .isBetween(beforeExplicitIssue.plusSeconds(12L * 60L * 60L),
+                .isBetween(beforeExplicitIssue.plusSeconds(12L * 60L * 60L)
+                                .truncatedTo(ChronoUnit.MICROS),
                         afterExplicitIssue.plusSeconds(12L * 60L * 60L));
     }
 
