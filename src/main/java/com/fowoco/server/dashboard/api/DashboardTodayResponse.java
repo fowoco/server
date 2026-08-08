@@ -19,6 +19,10 @@ public final class DashboardTodayResponse {
     @Schema(name = "upcoming_7_days", description = "향후 7일 체류·계약·서류 만료 요약")
     private final List<UpcomingExpiryItemResponse> upcoming7Days;
 
+    @JsonProperty("recommendations")
+    @Schema(name = "recommendations", description = "Agent가 준비한 내용 (실행 전 초안)")
+    private final DashboardRecommendationsResponse recommendations;
+
     @JsonProperty("approval_count")
     @Schema(name = "approval_count", description = "승인 대기 개수 (summary_counts.pending_approval과 동일)")
     private final long approvalCount;
@@ -31,12 +35,14 @@ public final class DashboardTodayResponse {
             DashboardSummaryCountsResponse summaryCounts,
             List<DashboardTaskSummaryResponse> priorityTasks,
             List<UpcomingExpiryItemResponse> upcoming7Days,
+            DashboardRecommendationsResponse recommendations,
             long approvalCount,
             long workerResponseCount
     ) {
         this.summaryCounts = summaryCounts;
         this.priorityTasks = priorityTasks;
         this.upcoming7Days = upcoming7Days;
+        this.recommendations = recommendations;
         this.approvalCount = approvalCount;
         this.workerResponseCount = workerResponseCount;
     }
@@ -51,6 +57,10 @@ public final class DashboardTodayResponse {
 
     public List<UpcomingExpiryItemResponse> getUpcoming7Days() {
         return upcoming7Days;
+    }
+
+    public DashboardRecommendationsResponse getRecommendations() {
+        return recommendations;
     }
 
     public long getApprovalCount() {
