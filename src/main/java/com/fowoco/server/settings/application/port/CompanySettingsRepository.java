@@ -10,5 +10,5 @@ public interface CompanySettingsRepository {
 
     void insert(CompanySettings companySettings);
 
-    void update(CompanySettings companySettings);
+    CompanySettings update(CompanySettings companySettings);
 }

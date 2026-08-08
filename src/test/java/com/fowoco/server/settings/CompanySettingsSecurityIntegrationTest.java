@@ -7,8 +7,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +62,7 @@ class CompanySettingsSecurityIntegrationTest {
     @BeforeEach
     void resetAndSeed() {
         jdbcTemplate.update("DELETE FROM refresh_token");
+        jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM user_account");
         jdbcTemplate.update("DELETE FROM company");
 
@@ -160,6 +163,111 @@ class CompanySettingsSecurityIntegrationTest {
         assertThat(response.body()).doesNotContain(COMPANY_A.toString(), "Persisted company settings");
     }
 
+    @Test
+    void adminPartiallyUpdatesSettingsAndRecordsCompactBeforeAfterAudit() throws Exception {
+        String token = login("settings.admin.a@example.com");
+
+        HttpResponse<String> response = patch(token, """
+                {
+                  "expected_version":4,
+                  "approval_policy":"ADMIN_ONLY",
+                  "link_expiry_hours":72,
+                  "evidence_rules":{"RECONTRACT":["DOCUMENT","RECEIPT"]}
+                }
+                """);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.approval_policy"))
+                .isEqualTo("ADMIN_ONLY");
+        assertThat(JsonPath.<Number>read(response.body(), "$.link_expiry_hours").longValue())
+                .isEqualTo(72L);
+        assertThat(JsonPath.<Number>read(response.body(), "$.file_retention_days").intValue())
+                .isEqualTo(730);
+        assertThat(JsonPath.<Number>read(response.body(), "$.version").longValue()).isEqualTo(5L);
+
+        Map<String, Object> audit = jdbcTemplate.queryForMap(
+                """
+                SELECT action, target_type, target_id, actor_id, user_role,
+                       event_version, change_summary
+                FROM audit_event
+                WHERE company_id = ?
+                """,
+                COMPANY_A
+        );
+        assertThat(audit)
+                .containsEntry("action", "COMPANY_SETTINGS_UPDATED")
+                .containsEntry("target_type", "COMPANY_SETTINGS")
+                .containsEntry("target_id", COMPANY_A)
+                .containsEntry("actor_id", ADMIN_A)
+                .containsEntry("user_role", "ADMIN")
+                .containsEntry("event_version", "1");
+        assertThat(audit.get("change_summary").toString())
+                .isEqualTo("{\"approval_policy\":[\"ADMIN_OR_HR\",\"ADMIN_ONLY\"],"
+                        + "\"link_expiry_hours\":[48,72],"
+                        + "\"evidence_rules\":[\"REC=D;SPE=O\",\"REC=DR\"]}");
+    }
+
+    @Test
+    void noOpKeepsVersionWithoutAuditAndStaleVersionReturnsConflict() throws Exception {
+        String token = login("settings.admin.a@example.com");
+
+        HttpResponse<String> noOp = patch(token, "{\"expected_version\":4}");
+        HttpResponse<String> stale = patch(token, """
+                {"expected_version":3,"link_expiry_hours":72}
+                """);
+
+        assertThat(noOp.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<Number>read(noOp.body(), "$.version").longValue()).isEqualTo(4L);
+        assertThat(stale.statusCode()).isEqualTo(409);
+        assertThat(JsonPath.<String>read(stale.body(), "$.code"))
+                .isEqualTo("CONCURRENT_MODIFICATION");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE company_id = ?",
+                Integer.class,
+                COMPANY_A
+        )).isZero();
+    }
+
+    @Test
+    void patchRejectsExplicitNullUnknownFieldsMissingVersionAndOutOfRangeValues() throws Exception {
+        String token = login("settings.admin.a@example.com");
+
+        assertThat(patch(token, "{\"expected_version\":4,\"approval_policy\":null}").statusCode())
+                .isEqualTo(400);
+        assertThat(patch(token, "{\"expected_version\":4,\"company_id\":\"" + COMPANY_B
+                + "\"}").statusCode()).isEqualTo(400);
+        assertThat(patch(token, "{}").statusCode()).isEqualTo(400);
+        assertThat(patch(token, "{\"expected_version\":4,\"link_expiry_hours\":169}")
+                .statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void hrAndViewerCannotPatchSettings() throws Exception {
+        String body = "{\"expected_version\":4,\"link_expiry_hours\":72}";
+
+        assertThat(patch(login("settings.hr.a@example.com"), body).statusCode()).isEqualTo(403);
+        assertThat(patch(login("settings.viewer.a@example.com"), body).statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void concurrentPatchAllowsOnlyOneWriterForTheExpectedVersion() throws Exception {
+        String token = login("settings.admin.a@example.com");
+        CompletableFuture<HttpResponse<String>> first = CompletableFuture.supplyAsync(
+                () -> patchUnchecked(token, "{\"expected_version\":4,\"link_expiry_hours\":72}")
+        );
+        CompletableFuture<HttpResponse<String>> second = CompletableFuture.supplyAsync(
+                () -> patchUnchecked(token, "{\"expected_version\":4,\"link_expiry_hours\":96}")
+        );
+
+        assertThat(List.of(first.join().statusCode(), second.join().statusCode()))
+                .containsExactlyInAnyOrder(200, 409);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE company_id = ?",
+                Integer.class,
+                COMPANY_A
+        )).isEqualTo(1);
+    }
+
     private String login(String email) throws Exception {
         HttpResponse<String> response = httpClient.send(
                 HttpRequest.newBuilder(uri("/api/v1/auth/login"))
@@ -182,6 +290,25 @@ class CompanySettingsSecurityIntegrationTest {
                         .build(),
                 HttpResponse.BodyHandlers.ofString()
         );
+    }
+
+    private HttpResponse<String> patch(String token, String body) throws Exception {
+        return httpClient.send(
+                HttpRequest.newBuilder(uri("/api/v1/settings"))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .header(HttpHeaders.CONTENT_TYPE, MediaTypeValues.APPLICATION_JSON)
+                        .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString()
+        );
+    }
+
+    private HttpResponse<String> patchUnchecked(String token, String body) {
+        try {
+            return patch(token, body);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private URI uri(String path) {

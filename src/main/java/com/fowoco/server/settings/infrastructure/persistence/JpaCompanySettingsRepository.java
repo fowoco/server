@@ -37,9 +37,12 @@ public class JpaCompanySettingsRepository implements CompanySettingsRepository {
     }
 
     @Override
-    public void update(CompanySettings companySettings) {
+    public CompanySettings update(CompanySettings companySettings) {
         Objects.requireNonNull(companySettings, "companySettings must not be null");
-        entityManager.merge(CompanySettingsJpaEntity.fromDomain(companySettings, jsonCodec));
+        CompanySettingsJpaEntity merged = entityManager.merge(
+                CompanySettingsJpaEntity.fromDomain(companySettings, jsonCodec)
+        );
         entityManager.flush();
+        return merged.toDomain(jsonCodec);
     }
 }

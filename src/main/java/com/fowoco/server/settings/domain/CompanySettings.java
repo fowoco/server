@@ -138,6 +138,31 @@ public final class CompanySettings {
         return version;
     }
 
+    public CompanySettings update(
+            ApprovalPolicy approvalPolicy,
+            long linkExpiryHours,
+            Map<TaskType, Set<EvidenceType>> evidenceRules,
+            int fileRetentionDays,
+            int aiLogRetentionDays,
+            AuditVisibility auditVisibility,
+            Instant now
+    ) {
+        Objects.requireNonNull(now, "now must not be null");
+        Instant effectiveUpdatedAt = now.isBefore(updatedAt) ? updatedAt : now;
+        return new CompanySettings(
+                companyId,
+                approvalPolicy,
+                linkExpiryHours,
+                evidenceRules,
+                fileRetentionDays,
+                aiLogRetentionDays,
+                auditVisibility,
+                createdAt,
+                effectiveUpdatedAt,
+                version
+        );
+    }
+
     private static long requireRange(long value, long min, long max, String fieldName) {
         if (value < min || value > max) {
             throw new IllegalArgumentException(

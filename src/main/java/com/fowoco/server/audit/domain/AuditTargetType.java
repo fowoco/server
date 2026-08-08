@@ -12,5 +12,6 @@ public enum AuditTargetType {
     OUTBOX_EVENT,
     WORKER_LINK,
     USER_ACCOUNT,
-    WORKER_IMPORT
+    WORKER_IMPORT,
+    COMPANY_SETTINGS
 }

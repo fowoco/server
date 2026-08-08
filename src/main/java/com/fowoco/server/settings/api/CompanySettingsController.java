@@ -11,9 +11,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import com.fowoco.server.common.web.RequestMetadata;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -74,5 +79,42 @@ public class CompanySettingsController {
     public CompanySettingsResponse get() {
         ActorContext actor = actorContextProvider.requireCurrentActor();
         return CompanySettingsResponse.from(companySettingsService.get(actor));
+    }
+
+    @Operation(
+            operationId = "updateCompanySettings",
+            summary = "회사 설정 수정",
+            description = "ADMIN만 설정을 부분 수정할 수 있으며 expected_version으로 동시성을 제어합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "수정 후 전체 회사 설정. no-op이면 version을 유지합니다.",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = CompanySettingsResponse.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "500", ref = "#/components/responses/InternalServerError")
+    })
+    @PreAuthorize("hasRole('ADMIN')")
+    @PatchMapping(
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public CompanySettingsResponse update(
+            @Valid @RequestBody CompanySettingsPatchRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        return CompanySettingsResponse.from(companySettingsService.update(
+                actor,
+                request.toCommand(),
+                RequestMetadata.from(servletRequest)
+        ));
     }
 }

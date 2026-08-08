@@ -105,4 +105,42 @@ class CompanySettingsOpenApiContractTest {
         assertThat(example.at("/evidence_rules/RECONTRACT/0").asText()).isEqualTo("DOCUMENT");
         assertThat(example.path("audit_visibility").asText()).isEqualTo("ADMIN_ONLY");
     }
+
+    @Test
+    void settingsPatchPublishesFrozenRequestAndErrorContract() {
+        JsonNode operation = openApi.at("/paths/~1api~1v1~1settings/patch");
+        JsonNode schema = openApi.at("/components/schemas/CompanySettingsPatchRequest");
+        JsonNode properties = schema.path("properties");
+
+        assertThat(operation.path("operationId").asText()).isEqualTo("updateCompanySettings");
+        assertThat(operation.at("/security/0/bearerAuth").isArray()).isTrue();
+        assertThat(operation.at("/responses/400/$ref").asText())
+                .isEqualTo("#/components/responses/BadRequest");
+        assertThat(operation.at("/responses/409/$ref").asText())
+                .isEqualTo("#/components/responses/Conflict");
+        assertThat(operation.at(
+                "/requestBody/content/application~1json/schema/$ref"
+        ).asText()).isEqualTo("#/components/schemas/CompanySettingsPatchRequest");
+        assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
+        assertThat(schema.path("required"))
+                .extracting(JsonNode::asText)
+                .containsExactly("expected_version");
+        Set<String> patchPropertyNames = StreamSupport.stream(
+                        ((Iterable<String>) properties::fieldNames).spliterator(),
+                        false
+                )
+                .collect(Collectors.toSet());
+        assertThat(patchPropertyNames)
+                .containsExactlyInAnyOrder(
+                        "expected_version",
+                        "approval_policy",
+                        "link_expiry_hours",
+                        "evidence_rules",
+                        "file_retention_days",
+                        "ai_log_retention_days",
+                        "audit_visibility"
+                );
+        assertThat(properties.path("link_expiry_hours").path("minimum").asLong()).isEqualTo(1L);
+        assertThat(properties.path("link_expiry_hours").path("maximum").asLong()).isEqualTo(168L);
+    }
 }
