@@ -37,6 +37,9 @@ public class DashboardQueryService {
 
     private static final int PRIORITY_TASK_LIMIT = 5;
     private static final int UPCOMING_DAYS = 7;
+    private static final java.util.Comparator<Task> PRIORITY_ORDER = java.util.Comparator
+            .comparing(Task::dueDate, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+            .thenComparing(Task::createdAt, java.util.Comparator.reverseOrder());
 
     private final TaskRepository taskRepository;
     private final WorkerRepository workerRepository;
@@ -82,7 +85,7 @@ public class DashboardQueryService {
                 .toList();
 
         List<UpcomingExpiryItemResponse> upcoming7Days = collectUpcomingExpiry(companyId, targetDate, windowEnd);
-        DashboardRecommendationsResponse recommendations = collectRecommendations(companyId);
+       DashboardRecommendationsResponse recommendations = collectRecommendations(companyId);
 
         return new DashboardTodayResponse(
                 summaryCounts, priorityTasks, upcoming7Days, recommendations, pendingApproval, workerResponse
@@ -104,6 +107,7 @@ public class DashboardQueryService {
         List<Task> reviewTasks = new ArrayList<>();
         reviewTasks.addAll(needsInfoTasks);
         reviewTasks.addAll(readyTasks);
+        reviewTasks.sort(PRIORITY_ORDER);
 
         List<Task> waitingWorkerTasks = taskRepository.findAll(new TaskRepository.TaskSearchCriteria(
                 companyId, TaskStatus.WAITING_WORKER, null, null, null, null, null, null, null, null, 0, 100
@@ -114,6 +118,7 @@ public class DashboardQueryService {
         List<Task> afterApprovalTasks = new ArrayList<>();
         afterApprovalTasks.addAll(waitingWorkerTasks);
         afterApprovalTasks.addAll(waitingExternalTasks);
+        afterApprovalTasks.sort(PRIORITY_ORDER);
 
         long connectedCount = taskRepository.countOpenTasksByCompanyId(companyId);
 
