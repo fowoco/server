@@ -63,9 +63,9 @@ public final class NotificationEventHandler implements DomainEventHandler {
         Notification notification = Notification.create(
                 uuidGenerator.generate(),
                 task.companyId(),
+                event.actorId(),
                 NotificationTargetType.TASK,
                 task.taskId(),
-                "/tasks/" + task.taskId(),
                 "Agent 분석이 완료됐습니다: " + task.title(),
                 event.occurredAt(),
                 clock.instant()
