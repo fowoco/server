@@ -14,7 +14,7 @@ public interface NotificationRepository {
 
     Optional<Notification> findByIdAndCompanyId(UUID notificationId, UUID companyId);
 
-    List<Notification> findPage(UUID companyId, boolean unreadOnly, Instant cursor, int size);
+    List<Notification> findPage(UUID companyId, UUID userId, boolean unreadOnly, Instant cursor, int size);
 
-    long countUnread(UUID companyId);
+    long countUnread(UUID companyId, UUID userId);
 }

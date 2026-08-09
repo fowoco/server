@@ -144,15 +144,21 @@ class NotificationSecurityIntegrationTest {
     }
 
     private UUID insertNotification(UUID companyId, String targetType, boolean read, Instant occurredAt) {
+        return insertNotification(companyId, HR_A, targetType, read, occurredAt);
+    }
+
+    private UUID insertNotification(
+            UUID companyId, UUID userId, String targetType, boolean read, Instant occurredAt
+    ) {
         UUID notificationId = UUID.randomUUID();
         jdbcTemplate.update(
                 """
                 INSERT INTO notification (
-                    notification_id, company_id, target_type, target_id, route,
+                    notification_id, company_id, user_id, target_type, target_id, route,
                     title, is_read, occurred_at, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                notificationId, companyId, targetType, UUID.randomUUID(), "/tasks/" + UUID.randomUUID(),
+                notificationId, companyId, userId, targetType, UUID.randomUUID(), "/tasks/" + UUID.randomUUID(),
                 "테스트 알림", read, java.sql.Timestamp.from(occurredAt), java.sql.Timestamp.from(Instant.now())
         );
         return notificationId;
