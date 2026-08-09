@@ -8,6 +8,7 @@ import com.fowoco.server.audit.domain.AuditTargetType;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.file.domain.StoredFile;
@@ -78,7 +79,7 @@ public class WorkerResponseService {
         WorkerLink link = workerLinkRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND));
 
-        Instant now = clock.instant();
+        Instant now = DatabaseTimestamp.nowNotBefore(clock, link.createdAt());
         if (!link.isUsable(now)) {
             throw new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND);
         }

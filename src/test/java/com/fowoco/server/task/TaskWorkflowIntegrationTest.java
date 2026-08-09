@@ -684,6 +684,10 @@ class TaskWorkflowIntegrationTest {
                 companyId,
                 name
         );
+        jdbcTemplate.update(
+                "INSERT INTO company_settings (company_id) VALUES (?)",
+                companyId
+        );
     }
 
     private void insertUser(

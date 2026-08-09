@@ -7,6 +7,7 @@ import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.company.application.port.CompanyRepository;
+import com.fowoco.server.company.application.port.CompanySettingsProvisioner;
 import com.fowoco.server.company.domain.Company;
 import com.fowoco.server.company.domain.CompanyStatus;
 import java.time.Clock;
@@ -36,10 +37,13 @@ class DemoAuthSeedRunnerTest {
     void createsAnIdempotentAdminSeedAndStoresOnlyThePasswordHash() throws Exception {
         InMemoryCompanyRepository companyRepository = new InMemoryCompanyRepository();
         InMemoryUserAccountRepository userAccountRepository = new InMemoryUserAccountRepository();
+        RecordingCompanySettingsProvisioner settingsProvisioner =
+                new RecordingCompanySettingsProvisioner();
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
         DemoAuthSeedRunner runner = runner(
                 properties(ADMIN_PASSWORD),
                 companyRepository,
+                settingsProvisioner,
                 userAccountRepository,
                 passwordEncoder
         );
@@ -48,6 +52,8 @@ class DemoAuthSeedRunnerTest {
         runner.run(new DefaultApplicationArguments(new String[0]));
 
         assertThat(companyRepository.companies).hasSize(2);
+        assertThat(settingsProvisioner.companyIds)
+                .containsExactly(COMPANY_ID, TEST_COMPANY_ID);
         assertThat(companyRepository.companies.get(TEST_COMPANY_ID).name())
                 .isEqualTo("FOWOCO Test Company");
         assertThat(userAccountRepository.users).hasSize(23);
@@ -181,13 +187,42 @@ class DemoAuthSeedRunnerTest {
             UserAccountRepository userAccountRepository,
             PasswordEncoder passwordEncoder
     ) {
+        return runner(
+                properties,
+                companyRepository,
+                (companyId, now) -> {
+                },
+                userAccountRepository,
+                passwordEncoder
+        );
+    }
+
+    private DemoAuthSeedRunner runner(
+            DemoAuthSeedProperties properties,
+            CompanyRepository companyRepository,
+            CompanySettingsProvisioner companySettingsProvisioner,
+            UserAccountRepository userAccountRepository,
+            PasswordEncoder passwordEncoder
+    ) {
         return new DemoAuthSeedRunner(
                 properties,
                 companyRepository,
+                companySettingsProvisioner,
                 userAccountRepository,
                 passwordEncoder,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
+    }
+
+    private static final class RecordingCompanySettingsProvisioner
+            implements CompanySettingsProvisioner {
+
+        private final java.util.List<UUID> companyIds = new java.util.ArrayList<>();
+
+        @Override
+        public void provisionDefaults(UUID companyId, Instant now) {
+            companyIds.add(companyId);
+        }
     }
 
     private DemoAuthSeedProperties properties(String password) {
