@@ -17,7 +17,6 @@ import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
-import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
 import java.time.Clock;
 import java.time.Instant;
@@ -26,11 +25,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class NotificationEventHandlerTest {
 
     private static final UUID COMPANY_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
     private static final UUID TASK_ID = UUID.fromString("94000000-0000-0000-0000-000000000001");
+    private static final UUID ACTOR_ID = UUID.fromString("51000000-0000-0000-0000-000000000001");
     private static final UUID NEW_ID = UUID.fromString("99000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-08-09T00:00:00Z");
 
@@ -45,8 +46,9 @@ class NotificationEventHandlerTest {
     );
 
     @Test
-    void supportsOnlyTaskCreated() {
+    void supportsTaskCreatedAndApprovalRequested() {
         assertThat(handler.supports("TaskCreated")).isTrue();
+        assertThat(handler.supports("ApprovalRequested")).isTrue();
         assertThat(handler.supports("TaskCancelled")).isFalse();
         assertThat(handler.supports("SomethingElse")).isFalse();
     }
@@ -72,6 +74,19 @@ class NotificationEventHandlerTest {
         verify(notificationRepository, never()).insert(org.mockito.ArgumentMatchers.any(Notification.class));
     }
 
+    @Test
+    void createsNotificationForApprovalRequestedAndSendsToRequester() {
+        when(uuidGenerator.generate()).thenReturn(NEW_ID);
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+
+        handler.handle(approvalRequestedEvent());
+
+        verify(notificationRepository).insert(captor.capture());
+        Notification notification = captor.getValue();
+        assertThat(notification.userId()).isEqualTo(ACTOR_ID);
+        assertThat(notification.title()).contains("재계약 준비");
+    }
+
     private DomainEventEnvelope taskCreatedEvent() {
         return new DomainEventEnvelope(
                 UUID.randomUUID(),
@@ -86,6 +101,26 @@ class NotificationEventHandlerTest {
                 "12345678901234567890123456789012",
                 NOW,
                 SafeEventPayload.of(Set.of("source"), Map.of("source", TaskSource.AI_CANDIDATE))
+        );
+    }
+
+    private DomainEventEnvelope approvalRequestedEvent() {
+        return new DomainEventEnvelope(
+                UUID.randomUUID(),
+                "ApprovalRequested",
+                "1",
+                "Task",
+                TASK_ID,
+                COMPANY_ID,
+                EventActorType.HR_USER,
+                ACTOR_ID,
+                "req-2",
+                "12345678901234567890123456789012",
+                NOW,
+                SafeEventPayload.of(
+                        Set.of("task_title", "task_type"),
+                        Map.of("task_title", "재계약 준비", "task_type", TaskType.RECONTRACT)
+                )
         );
     }
 

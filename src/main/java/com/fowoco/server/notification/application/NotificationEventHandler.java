@@ -11,14 +11,16 @@ import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskSource;
 import java.time.Clock;
-import java.util.UUID;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 @Component
 public final class NotificationEventHandler implements DomainEventHandler {
 
-    private static final String HANDLER_NAME = "notificationFromTaskCreated";
+    private static final String HANDLER_NAME = "notificationFromTaskEvents";
     private static final String TASK_CREATED = "TaskCreated";
+    private static final String APPROVAL_REQUESTED = "ApprovalRequested";
+    private static final Set<String> SUPPORTED_EVENTS = Set.of(TASK_CREATED, APPROVAL_REQUESTED);
 
     private final TaskRepository taskRepository;
     private final NotificationRepository notificationRepository;
@@ -47,11 +49,19 @@ public final class NotificationEventHandler implements DomainEventHandler {
 
     @Override
     public boolean supports(String eventType) {
-        return TASK_CREATED.equals(eventType);
+        return SUPPORTED_EVENTS.contains(eventType);
     }
 
     @Override
     public void handle(DomainEventEnvelope event) {
+        if (TASK_CREATED.equals(event.eventType())) {
+            handleTaskCreated(event);
+        } else if (APPROVAL_REQUESTED.equals(event.eventType())) {
+            handleApprovalRequested(event);
+        }
+    }
+
+    private void handleTaskCreated(DomainEventEnvelope event) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(event.companyId());
         Task task = taskRepository.findByIdAndCompanyId(event.aggregateId(), event.companyId())
                 .orElseThrow(() -> new IllegalStateException("task not found for TaskCreated event"));
@@ -67,6 +77,23 @@ public final class NotificationEventHandler implements DomainEventHandler {
                 NotificationTargetType.TASK,
                 task.taskId(),
                 "Agent 분석이 완료됐습니다: " + task.title(),
+                event.occurredAt(),
+                clock.instant()
+        );
+        notificationRepository.insert(notification);
+    }
+
+    private void handleApprovalRequested(DomainEventEnvelope event) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(event.companyId());
+        Object taskTitle = event.payload().values().get("task_title");
+
+        Notification notification = Notification.create(
+                uuidGenerator.generate(),
+                event.companyId(),
+                event.actorId(),
+                NotificationTargetType.TASK,
+                event.aggregateId(),
+                "승인 요청이 도착했습니다: " + taskTitle,
                 event.occurredAt(),
                 clock.instant()
         );
