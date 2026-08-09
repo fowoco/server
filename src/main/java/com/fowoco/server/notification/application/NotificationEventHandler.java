@@ -20,7 +20,9 @@ public final class NotificationEventHandler implements DomainEventHandler {
     private static final String HANDLER_NAME = "notificationFromTaskEvents";
     private static final String TASK_CREATED = "TaskCreated";
     private static final String APPROVAL_REQUESTED = "ApprovalRequested";
-    private static final Set<String> SUPPORTED_EVENTS = Set.of(TASK_CREATED, APPROVAL_REQUESTED);
+    private static final String WORKER_RESPONSE_SUBMITTED = "WorkerResponseSubmitted";
+    private static final Set<String> SUPPORTED_EVENTS =
+            Set.of(TASK_CREATED, APPROVAL_REQUESTED, WORKER_RESPONSE_SUBMITTED);
 
     private final TaskRepository taskRepository;
     private final NotificationRepository notificationRepository;
@@ -58,6 +60,8 @@ public final class NotificationEventHandler implements DomainEventHandler {
             handleTaskCreated(event);
         } else if (APPROVAL_REQUESTED.equals(event.eventType())) {
             handleApprovalRequested(event);
+        } else if (WORKER_RESPONSE_SUBMITTED.equals(event.eventType())) {
+            handleWorkerResponseSubmitted(event);
         }
     }
 
@@ -94,6 +98,23 @@ public final class NotificationEventHandler implements DomainEventHandler {
                 NotificationTargetType.TASK,
                 event.aggregateId(),
                 "승인 요청이 도착했습니다: " + taskTitle,
+                event.occurredAt(),
+                clock.instant()
+        );
+        notificationRepository.insert(notification);
+    }
+
+    private void handleWorkerResponseSubmitted(DomainEventEnvelope event) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(event.companyId());
+        Object taskTitle = event.payload().values().get("task_title");
+
+        Notification notification = Notification.create(
+                uuidGenerator.generate(),
+                event.companyId(),
+                event.actorId(),
+                NotificationTargetType.TASK,
+                event.aggregateId(),
+                "문서 제출이 완료됐습니다: " + taskTitle,
                 event.occurredAt(),
                 clock.instant()
         );

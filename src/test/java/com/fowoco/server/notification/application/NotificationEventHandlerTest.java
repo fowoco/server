@@ -49,6 +49,7 @@ class NotificationEventHandlerTest {
     void supportsTaskCreatedAndApprovalRequested() {
         assertThat(handler.supports("TaskCreated")).isTrue();
         assertThat(handler.supports("ApprovalRequested")).isTrue();
+        assertThat(handler.supports("WorkerResponseSubmitted")).isTrue();
         assertThat(handler.supports("TaskCancelled")).isFalse();
         assertThat(handler.supports("SomethingElse")).isFalse();
     }
@@ -87,6 +88,20 @@ class NotificationEventHandlerTest {
         assertThat(notification.title()).contains("재계약 준비");
     }
 
+    @Test
+    void createsNotificationForWorkerResponseSubmitted() {
+        when(uuidGenerator.generate()).thenReturn(NEW_ID);
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+
+        handler.handle(workerResponseSubmittedEvent());
+
+        verify(notificationRepository).insert(captor.capture());
+        Notification notification = captor.getValue();
+        assertThat(notification.userId()).isEqualTo(ACTOR_ID);
+        assertThat(notification.title()).contains("문서 제출이 완료됐습니다");
+        assertThat(notification.title()).contains("재계약 준비");
+    }
+
     private DomainEventEnvelope taskCreatedEvent() {
         return new DomainEventEnvelope(
                 UUID.randomUUID(),
@@ -115,6 +130,26 @@ class NotificationEventHandlerTest {
                 EventActorType.HR_USER,
                 ACTOR_ID,
                 "req-2",
+                "12345678901234567890123456789012",
+                NOW,
+                SafeEventPayload.of(
+                        Set.of("task_title", "task_type"),
+                        Map.of("task_title", "재계약 준비", "task_type", TaskType.RECONTRACT)
+                )
+        );
+    }
+
+    private DomainEventEnvelope workerResponseSubmittedEvent() {
+        return new DomainEventEnvelope(
+                UUID.randomUUID(),
+                "WorkerResponseSubmitted",
+                "1",
+                "Task",
+                TASK_ID,
+                COMPANY_ID,
+                EventActorType.WORKER_LINK,
+                ACTOR_ID,
+                "worker-response-submit",
                 "12345678901234567890123456789012",
                 NOW,
                 SafeEventPayload.of(

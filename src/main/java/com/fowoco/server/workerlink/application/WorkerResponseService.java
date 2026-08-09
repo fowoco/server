@@ -148,15 +148,17 @@ public class WorkerResponseService {
                 now
         ));
         if (command.responseType() == WorkerResponseType.DOCUMENT_SUBMITTED) {
-            publishResponseSubmittedEvent(link, companyId, now);
+            publishResponseSubmittedEvent(link, responseId, companyId, now);
         }
         return new WorkerResponseSubmitResult(responseId, now);
     }
 
-    private void publishResponseSubmittedEvent(WorkerLink link, UUID companyId, Instant now) {
+    private void publishResponseSubmittedEvent(
+            WorkerLink link, UUID responseId, UUID companyId, Instant now
+    ) {
         taskRepository.findByIdAndCompanyId(link.taskId(), companyId).ifPresent(task ->
                 eventPublisher.publish(WorkerResponseDomainEvents.responseSubmitted(
-                        uuidGenerator.generate(), task, companyId, now
+                        uuidGenerator.generate(), responseId, task, companyId, now
                 ))
         );
     }

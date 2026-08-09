@@ -23,6 +23,7 @@ final class WorkerResponseDomainEvents {
 
     static DomainEventEnvelope responseSubmitted(
             UUID eventId,
+            UUID responseId,
             Task task,
             UUID companyId,
             Instant occurredAt
@@ -36,7 +37,7 @@ final class WorkerResponseDomainEvents {
                 companyId,
                 EventActorType.WORKER_LINK,
                 task.createdBy(),
-                null,
+                responseId.toString(),
                 null,
                 occurredAt,
                 SafeEventPayload.of(
