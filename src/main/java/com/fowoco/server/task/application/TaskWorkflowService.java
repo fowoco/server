@@ -386,6 +386,9 @@ public class TaskWorkflowService {
                     now,
                     metadata
             );
+            eventPublisher.publish(TaskDomainEvents.taskNeedsInfo(
+                    uuidGenerator.generate(), savedTask, actor, metadata, now
+            ));
         }
         recordTransitionIfChanged(
                 savedTask,
