@@ -47,13 +47,13 @@ public final class Notification {
             UUID userId,
             NotificationTargetType targetType,
             UUID targetId,
-            String route,
             String title,
             Instant occurredAt,
             Instant now
     ) {
         return new Notification(
-                notificationId, companyId, userId, targetType, targetId, route, title, false, occurredAt, now
+                notificationId, companyId, userId, targetType, targetId,
+                buildRoute(targetType, targetId), title, false, occurredAt, now
         );
     }
 
@@ -104,6 +104,16 @@ public final class Notification {
 
     public Instant createdAt() {
         return createdAt;
+    }
+
+    private static String buildRoute(NotificationTargetType targetType, UUID targetId) {
+        Objects.requireNonNull(targetType, "targetType must not be null");
+        Objects.requireNonNull(targetId, "targetId must not be null");
+        return switch (targetType) {
+            case TASK -> "/tasks/" + targetId;
+            case WORKER -> "/workers/" + targetId + "/detail";
+            case DOCUMENT -> "/documents/" + targetId;
+        };
     }
 
     private static String requireNonBlank(String value, String fieldName) {
