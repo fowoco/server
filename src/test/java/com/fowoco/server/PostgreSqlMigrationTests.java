@@ -525,7 +525,8 @@ class PostgreSqlMigrationTests {
                         "pl_worker_import_job_tenant_isolation",
                         "pl_worker_import_row_tenant_isolation",
                         "pl_worker_import_commit_idempotency_tenant_isolation",
-                        "pl_document_ocr_run_tenant_isolation"
+                        "pl_document_ocr_run_tenant_isolation",
+                        "pl_notification_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
