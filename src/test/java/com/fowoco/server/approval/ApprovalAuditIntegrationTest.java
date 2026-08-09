@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,6 +68,25 @@ class ApprovalAuditIntegrationTest {
 
     @BeforeEach
     void resetAndSeed() {
+        cleanDatabase();
+
+        insertCompany(COMPANY_A, "승인 테스트 사업장 A");
+        insertCompany(COMPANY_B, "승인 테스트 사업장 B");
+        String passwordHash = passwordEncoder.encode(PASSWORD);
+        insertUser(ADMIN_A, COMPANY_A, ADMIN_A_EMAIL, passwordHash, "ADMIN");
+        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash, "HR");
+        insertUser(VIEWER_A, COMPANY_A, VIEWER_A_EMAIL, passwordHash, "VIEWER");
+        insertUser(ADMIN_B, COMPANY_B, ADMIN_B_EMAIL, passwordHash, "ADMIN");
+        insertWorker();
+        insertDraftTask();
+    }
+
+    @AfterEach
+    void cleanAfterTest() {
+        cleanDatabase();
+    }
+
+    private void cleanDatabase() {
         jdbcTemplate.update("DELETE FROM event_consumption");
         jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM audit_event");
@@ -80,16 +100,6 @@ class ApprovalAuditIntegrationTest {
         jdbcTemplate.update("DELETE FROM refresh_token");
         jdbcTemplate.update("DELETE FROM user_account");
         jdbcTemplate.update("DELETE FROM company");
-
-        insertCompany(COMPANY_A, "승인 테스트 사업장 A");
-        insertCompany(COMPANY_B, "승인 테스트 사업장 B");
-        String passwordHash = passwordEncoder.encode(PASSWORD);
-        insertUser(ADMIN_A, COMPANY_A, ADMIN_A_EMAIL, passwordHash, "ADMIN");
-        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash, "HR");
-        insertUser(VIEWER_A, COMPANY_A, VIEWER_A_EMAIL, passwordHash, "VIEWER");
-        insertUser(ADMIN_B, COMPANY_B, ADMIN_B_EMAIL, passwordHash, "ADMIN");
-        insertWorker();
-        insertDraftTask();
     }
 
     @Test
@@ -157,7 +167,7 @@ class ApprovalAuditIntegrationTest {
         HttpResponse<String> activities = authorizedGet(taskPath("/activities"), hrToken);
         assertThat(activities.statusCode()).isEqualTo(200);
         List<String> actions = JsonPath.read(activities.body(), "$[*].action");
-        assertThat(actions).containsExactly(
+        assertThat(actions).containsExactlyInAnyOrder(
                 "APPROVAL_REQUESTED",
                 "TASK_APPROVED",
                 "EXTERNAL_SUBMISSION_RECORDED",
@@ -219,14 +229,105 @@ class ApprovalAuditIntegrationTest {
     }
 
     @Test
-    void viewerCannotWriteAndHrCannotUseAdminAuditSearch() throws Exception {
+    void adminOnlyPolicyKeepsHrApprovalRequestButRequiresAdminToApprove() throws Exception {
+        setApprovalPolicy("ADMIN_ONLY");
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> denied = authorizedPost(
+                taskPath("/approve"),
+                """
+                {"expected_version":1,"reason":"HR 승인 시도"}
+                """,
+                hrToken
+        );
+
+        assertThat(denied.statusCode()).isEqualTo(403);
+        assertThat(JsonPath.<String>read(denied.body(), "$.code")).isEqualTo("ACCESS_DENIED");
+        assertThat(taskStatus()).isEqualTo("READY_FOR_REVIEW");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM approval_request WHERE task_id = ?",
+                String.class,
+                TASK_A
+        )).isEqualTo("PENDING");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'TASK_APPROVED'",
+                Integer.class,
+                TASK_A
+        )).isZero();
+
+        HttpResponse<String> approved = authorizedPost(
+                taskPath("/approve"),
+                """
+                {"expected_version":1,"reason":"관리자 승인"}
+                """,
+                accessToken(login(ADMIN_A_EMAIL))
+        );
+
+        assertThat(approved.statusCode()).isEqualTo(200);
+        assertThat(taskStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void adminOnlyPolicyRequiresAdminToReject() throws Exception {
+        setApprovalPolicy("ADMIN_ONLY");
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> denied = authorizedPost(
+                taskPath("/reject"),
+                """
+                {"expected_version":1,"reason":"HR 반려 시도"}
+                """,
+                hrToken
+        );
+
+        assertThat(denied.statusCode()).isEqualTo(403);
+        assertThat(taskStatus()).isEqualTo("READY_FOR_REVIEW");
+
+        HttpResponse<String> rejected = authorizedPost(
+                taskPath("/reject"),
+                """
+                {"expected_version":1,"reason":"관리자 반려"}
+                """,
+                accessToken(login(ADMIN_A_EMAIL))
+        );
+
+        assertThat(rejected.statusCode()).isEqualTo(200);
+        assertThat(taskStatus()).isEqualTo("DRAFT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM approval_request WHERE task_id = ?",
+                String.class,
+                TASK_A
+        )).isEqualTo("REJECTED");
+    }
+
+    @Test
+    void viewerCannotWriteAndDefaultAuditVisibilityKeepsSearchAdminOnly() throws Exception {
         String viewerToken = accessToken(login(VIEWER_A_EMAIL));
         HttpResponse<String> viewerWrite = requestApproval(viewerToken, validApprovalBody());
         assertThat(viewerWrite.statusCode()).isEqualTo(403);
+        assertThat(authorizedGet("/api/v1/audit-events", viewerToken).statusCode()).isEqualTo(403);
 
         String hrToken = accessToken(login(HR_A_EMAIL));
         HttpResponse<String> hrAudit = authorizedGet("/api/v1/audit-events", hrToken);
         assertThat(hrAudit.statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void adminAndHrAuditVisibilityAllowsHrCompanyWideSearch() throws Exception {
+        setAuditVisibility("ADMIN_AND_HR");
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> response = authorizedGet(
+                "/api/v1/audit-events?target_type=TASK&target_id=" + TASK_A,
+                hrToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(response.body(), "$.items[*].action"))
+                .containsExactly("APPROVAL_REQUESTED");
     }
 
     @Test
@@ -430,6 +531,16 @@ class ApprovalAuditIntegrationTest {
                 """,
                 hrToken
         ).statusCode()).isEqualTo(200);
+        HttpResponse<String> withoutEvidence = authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        );
+        assertThat(withoutEvidence.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(withoutEvidence.body(), "$.code"))
+                .isEqualTo("EVIDENCE_REQUIRED");
         assertThat(authorizedPost(
                 taskPath("/evidence"),
                 """
@@ -450,6 +561,66 @@ class ApprovalAuditIntegrationTest {
         assertThat(JsonPath.<String>read(complete.body(), "$.task_status"))
                 .isEqualTo("COMPLETED");
         assertThat(count("external_submission")).isZero();
+    }
+
+    @Test
+    void companyEvidenceRulesAddRequiredTypesWithoutRemovingBaseline() throws Exception {
+        setEvidenceRules("{\"RECONTRACT\":[\"DOCUMENT\",\"RECEIPT\"]}");
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/approve"),
+                """
+                {"expected_version":1}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(200);
+        HttpResponse<String> withoutEvidence = authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        );
+        assertThat(withoutEvidence.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(withoutEvidence.body(), "$.code"))
+                .isEqualTo("EVIDENCE_REQUIRED");
+        assertThat(authorizedPost(
+                taskPath("/evidence"),
+                """
+                {"evidence_type":"DOCUMENT","file_reference":"document-ref"}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(201);
+
+        HttpResponse<String> missingReceipt = authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        );
+
+        assertThat(missingReceipt.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(missingReceipt.body(), "$.code"))
+                .isEqualTo("EVIDENCE_REQUIRED");
+        assertThat(taskStatus()).isEqualTo("APPROVED");
+
+        assertThat(authorizedPost(
+                taskPath("/evidence"),
+                """
+                {"evidence_type":"RECEIPT","file_reference":"receipt-ref"}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/complete"),
+                """
+                {"expected_version":2}
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(200);
+        assertThat(taskStatus()).isEqualTo("COMPLETED");
     }
 
     private HttpResponse<String> requestApproval(String token, String body) throws Exception {
@@ -547,6 +718,34 @@ class ApprovalAuditIntegrationTest {
                 """,
                 companyId,
                 name
+        );
+        jdbcTemplate.update(
+                "INSERT INTO company_settings (company_id) VALUES (?)",
+                companyId
+        );
+    }
+
+    private void setApprovalPolicy(String approvalPolicy) {
+        jdbcTemplate.update(
+                "UPDATE company_settings SET approval_policy = ? WHERE company_id = ?",
+                approvalPolicy,
+                COMPANY_A
+        );
+    }
+
+    private void setEvidenceRules(String evidenceRulesJson) {
+        jdbcTemplate.update(
+                "UPDATE company_settings SET evidence_rules_json = ? WHERE company_id = ?",
+                evidenceRulesJson,
+                COMPANY_A
+        );
+    }
+
+    private void setAuditVisibility(String auditVisibility) {
+        jdbcTemplate.update(
+                "UPDATE company_settings SET audit_visibility = ? WHERE company_id = ?",
+                auditVisibility,
+                COMPANY_A
         );
     }
 

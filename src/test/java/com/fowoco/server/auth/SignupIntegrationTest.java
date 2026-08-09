@@ -91,6 +91,17 @@ class SignupIntegrationTest {
         )).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 """
+                SELECT COUNT(*) FROM company_settings
+                WHERE company_id = ? AND approval_policy = 'ADMIN_OR_HR'
+                  AND link_expiry_hours = 72 AND evidence_rules_json = '{}'
+                  AND file_retention_days = 365 AND ai_log_retention_days = 90
+                  AND audit_visibility = 'ADMIN_ONLY' AND version = 0
+                """,
+                Integer.class,
+                companyId
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
                 SELECT COUNT(*) FROM user_account
                 WHERE user_id = ? AND company_id = ? AND display_name = ?
                   AND normalized_email = ? AND role = 'ADMIN' AND status = 'ACTIVE'
@@ -159,6 +170,7 @@ class SignupIntegrationTest {
         assertThat(JsonPath.<String>read(duplicate.body(), "$.code"))
                 .isEqualTo("EMAIL_ALREADY_REGISTERED");
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company", Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company_settings", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_account", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM company WHERE name = '남으면 안 되는 사업장'",
@@ -187,6 +199,7 @@ class SignupIntegrationTest {
 
             assertThat(statuses).containsExactlyInAnyOrder(201, 409);
             assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company", Integer.class)).isEqualTo(1);
+            assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company_settings", Integer.class)).isEqualTo(1);
             assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_account", Integer.class)).isEqualTo(1);
         } finally {
             executor.shutdownNow();
