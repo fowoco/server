@@ -42,6 +42,8 @@ public class WorkerResponseService {
     private final AuditEventRepository auditRepository;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
+    private final com.fowoco.server.task.application.port.TaskRepository taskRepository;
+    private final com.fowoco.server.reliability.application.port.DomainEventPublisher eventPublisher;
 
     public WorkerResponseService(
             WorkerLinkTenantBootstrap workerLinkTenantBootstrap,
@@ -52,7 +54,9 @@ public class WorkerResponseService {
             StoredFileRepository storedFileRepository,
             AuditEventRepository auditRepository,
             UuidGenerator uuidGenerator,
-            Clock clock
+            Clock clock,
+            com.fowoco.server.task.application.port.TaskRepository taskRepository,
+            com.fowoco.server.reliability.application.port.DomainEventPublisher eventPublisher
     ) {
         this.workerLinkTenantBootstrap = workerLinkTenantBootstrap;
         this.tenantDatabaseContext = tenantDatabaseContext;
@@ -63,6 +67,8 @@ public class WorkerResponseService {
         this.auditRepository = auditRepository;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
+        this.taskRepository = taskRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -141,8 +147,18 @@ public class WorkerResponseService {
                 "근로자 응답 제출: " + command.responseType(),
                 now
         ));
-
+        if (command.responseType() == WorkerResponseType.DOCUMENT_SUBMITTED) {
+            publishResponseSubmittedEvent(link, companyId, now);
+        }
         return new WorkerResponseSubmitResult(responseId, now);
+    }
+
+    private void publishResponseSubmittedEvent(WorkerLink link, UUID companyId, Instant now) {
+        taskRepository.findByIdAndCompanyId(link.taskId(), companyId).ifPresent(task ->
+                eventPublisher.publish(WorkerResponseDomainEvents.responseSubmitted(
+                        uuidGenerator.generate(), task, companyId, now
+                ))
+        );
     }
 
     private boolean requiresHrReview(WorkerResponseType responseType) {
