@@ -31,7 +31,9 @@ class NotificationSecurityIntegrationTest {
     private static final UUID COMPANY_B = UUID.fromString("62000000-0000-0000-0000-000000000002");
     private static final UUID HR_A = UUID.fromString("53000000-0000-0000-0000-000000000001");
     private static final UUID HR_B = UUID.fromString("63000000-0000-0000-0000-000000000002");
+    private static final UUID HR_A2 = UUID.fromString("53000000-0000-0000-0000-000000000002");
     private static final String HR_A_EMAIL = "hr.notification.a@example.com";
+    private static final String HR_A2_EMAIL = "hr.notification.a2@example.com";
     private static final String HR_B_EMAIL = "hr.notification.b@example.com";
     private static final String PASSWORD = "Test-password-1!";
 
@@ -68,6 +70,7 @@ class NotificationSecurityIntegrationTest {
         insertCompany(COMPANY_B, "알림 사업장 B");
         String passwordHash = passwordEncoder.encode(PASSWORD);
         insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash);
+        insertUser(HR_A2, COMPANY_A, HR_A2_EMAIL, passwordHash);
         insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash);
     }
 
@@ -143,16 +146,62 @@ class NotificationSecurityIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(404);
     }
 
+    @Test
+    void notificationsAreIsolatedBetweenUsersInSameCompany() throws Exception {
+        insertNotification(COMPANY_A, HR_A, "TASK", false, Instant.now());
+        String hrA2Token = accessToken(login(HR_A2_EMAIL));
+
+        HttpResponse<String> response = authorizedGet("/api/v1/notifications", hrA2Token);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.items")).isEmpty();
+        assertThat(JsonPath.<Number>read(response.body(), "$.unread_count").longValue()).isZero();
+    }
+
+    @Test
+    void hasNextIsFalseWhenExactlySizeItemsRemain() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            insertNotification(COMPANY_A, HR_A, "TASK", false, Instant.now().minusSeconds(i));
+        }
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedGet("/api/v1/notifications?size=3", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.items")).hasSize(3);
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.has_next")).isFalse();
+    }
+
+    @Test
+    void hasNextIsTrueWhenMoreItemsRemain() throws Exception {
+        for (int i = 0; i < 4; i++) {
+            insertNotification(COMPANY_A, HR_A, "TASK", false, Instant.now().minusSeconds(i));
+        }
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedGet("/api/v1/notifications?size=3", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$.items")).hasSize(3);
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.has_next")).isTrue();
+    }
+
     private UUID insertNotification(UUID companyId, String targetType, boolean read, Instant occurredAt) {
+        return insertNotification(companyId, HR_A, targetType, read, occurredAt);
+    }
+
+    private UUID insertNotification(
+            UUID companyId, UUID userId, String targetType, boolean read, Instant occurredAt
+    ) {
         UUID notificationId = UUID.randomUUID();
         jdbcTemplate.update(
                 """
                 INSERT INTO notification (
-                    notification_id, company_id, target_type, target_id, route,
+                    notification_id, company_id, user_id, target_type, target_id, route,
                     title, is_read, occurred_at, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                notificationId, companyId, targetType, UUID.randomUUID(), "/tasks/" + UUID.randomUUID(),
+                notificationId, companyId, userId, targetType, UUID.randomUUID(), "/tasks/" + UUID.randomUUID(),
                 "테스트 알림", read, java.sql.Timestamp.from(occurredAt), java.sql.Timestamp.from(Instant.now())
         );
         return notificationId;

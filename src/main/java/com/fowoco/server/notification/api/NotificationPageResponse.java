@@ -14,13 +14,20 @@ public final class NotificationPageResponse {
     @Schema(name = "unread_count", description = "읽지 않은 알림 개수")
     private final long unreadCount;
 
+    @JsonProperty("has_next")
+    @Schema(name = "has_next", description = "다음 페이지 존재 여부")
+    private final boolean hasNext;
+
     @JsonProperty("next_cursor")
     @Schema(name = "next_cursor", description = "다음 페이지 조회용 커서 (없으면 마지막 페이지)")
     private final String nextCursor;
 
-    public NotificationPageResponse(List<NotificationItemResponse> items, long unreadCount, String nextCursor) {
+    public NotificationPageResponse(
+            List<NotificationItemResponse> items, long unreadCount, boolean hasNext, String nextCursor
+    ) {
         this.items = items;
         this.unreadCount = unreadCount;
+        this.hasNext = hasNext;
         this.nextCursor = nextCursor;
     }
 
@@ -30,6 +37,10 @@ public final class NotificationPageResponse {
 
     public long getUnreadCount() {
         return unreadCount;
+    }
+
+    public boolean isHasNext() {
+        return hasNext;
     }
 
     public String getNextCursor() {

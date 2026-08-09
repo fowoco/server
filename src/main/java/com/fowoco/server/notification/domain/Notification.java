@@ -8,6 +8,7 @@ public final class Notification {
 
     private final UUID notificationId;
     private final UUID companyId;
+    private final UUID userId;
     private final NotificationTargetType targetType;
     private final UUID targetId;
     private final String route;
@@ -19,6 +20,7 @@ public final class Notification {
     public Notification(
             UUID notificationId,
             UUID companyId,
+            UUID userId,
             NotificationTargetType targetType,
             UUID targetId,
             String route,
@@ -29,6 +31,7 @@ public final class Notification {
     ) {
         this.notificationId = Objects.requireNonNull(notificationId, "notificationId must not be null");
         this.companyId = Objects.requireNonNull(companyId, "companyId must not be null");
+        this.userId = Objects.requireNonNull(userId, "userId must not be null");
         this.targetType = Objects.requireNonNull(targetType, "targetType must not be null");
         this.targetId = Objects.requireNonNull(targetId, "targetId must not be null");
         this.route = requireNonBlank(route, "route");
@@ -41,15 +44,16 @@ public final class Notification {
     public static Notification create(
             UUID notificationId,
             UUID companyId,
+            UUID userId,
             NotificationTargetType targetType,
             UUID targetId,
-            String route,
             String title,
             Instant occurredAt,
             Instant now
     ) {
         return new Notification(
-                notificationId, companyId, targetType, targetId, route, title, false, occurredAt, now
+                notificationId, companyId, userId, targetType, targetId,
+                buildRoute(targetType, targetId), title, false, occurredAt, now
         );
     }
 
@@ -58,7 +62,7 @@ public final class Notification {
             return this;
         }
         return new Notification(
-                notificationId, companyId, targetType, targetId, route, title, true, occurredAt, createdAt
+                notificationId, companyId, userId, targetType, targetId, route, title, true, occurredAt, createdAt
         );
     }
 
@@ -68,6 +72,10 @@ public final class Notification {
 
     public UUID companyId() {
         return companyId;
+    }
+
+    public UUID userId() {
+        return userId;
     }
 
     public NotificationTargetType targetType() {
@@ -96,6 +104,16 @@ public final class Notification {
 
     public Instant createdAt() {
         return createdAt;
+    }
+
+    private static String buildRoute(NotificationTargetType targetType, UUID targetId) {
+        Objects.requireNonNull(targetType, "targetType must not be null");
+        Objects.requireNonNull(targetId, "targetId must not be null");
+        return switch (targetType) {
+            case TASK -> "/tasks/" + targetId;
+            case WORKER -> "/workers/" + targetId + "/detail";
+            case DOCUMENT -> "/documents/" + targetId;
+        };
     }
 
     private static String requireNonBlank(String value, String fieldName) {

@@ -69,7 +69,7 @@ public class NotificationController {
             @Parameter(description = "읽지 않은 알림만 조회") @RequestParam(required = false) Boolean unreadOnly,
             @Parameter(description = "이전 페이지 마지막 항목의 occurred_at (다음 페이지 조회용)")
             @RequestParam(required = false) Instant cursor,
-            @Parameter(description = "페이지당 항목 수 (1~100)")
+            @Parameter(description = "페이지당 항목 수 (1~50)")
             @RequestParam(required = false) @Min(1) @Max(100) Integer size
     ) {
         ActorContext actor = actorContextProvider.requireCurrentActor();
@@ -77,6 +77,7 @@ public class NotificationController {
         return new NotificationPageResponse(
                 result.items().stream().map(NotificationItemResponse::from).toList(),
                 result.unreadCount(),
+                result.hasNext(),
                 result.nextCursor()
         );
     }

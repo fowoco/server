@@ -24,16 +24,18 @@ interface SpringDataNotificationJpaRepository extends JpaRepository<Notification
             SELECT n
               FROM NotificationJpaEntity n
              WHERE n.companyId = :companyId
+               AND n.userId = :userId
                AND (:unreadOnly = false OR n.read = false)
                AND (:cursor IS NULL OR n.occurredAt < :cursor)
              ORDER BY n.occurredAt DESC
             """)
     java.util.List<NotificationJpaEntity> findPage(
             @Param("companyId") UUID companyId,
+            @Param("userId") UUID userId,
             @Param("unreadOnly") boolean unreadOnly,
             @Param("cursor") Instant cursor,
             Pageable pageable
     );
 
-    long countByCompanyIdAndReadFalse(UUID companyId);
+    long countByCompanyIdAndUserIdAndReadFalse(UUID companyId, UUID userId);
 }

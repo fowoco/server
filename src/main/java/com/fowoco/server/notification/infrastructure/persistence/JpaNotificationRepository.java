@@ -38,14 +38,14 @@ public class JpaNotificationRepository implements NotificationRepository {
     }
 
     @Override
-    public List<Notification> findPage(UUID companyId, boolean unreadOnly, Instant cursor, int size) {
-        return repository.findPage(companyId, unreadOnly, cursor, PageRequest.of(0, size)).stream()
+    public List<Notification> findPage(UUID companyId, UUID userId, boolean unreadOnly, Instant cursor, int size) {
+        return repository.findPage(companyId, userId, unreadOnly, cursor, PageRequest.of(0, size)).stream()
                 .map(NotificationJpaEntity::toDomain)
                 .toList();
     }
 
     @Override
-    public long countUnread(UUID companyId) {
-        return repository.countByCompanyIdAndReadFalse(companyId);
+    public long countUnread(UUID companyId, UUID userId) {
+        return repository.countByCompanyIdAndUserIdAndReadFalse(companyId, userId);
     }
 }

@@ -23,6 +23,9 @@ public class NotificationJpaEntity {
     @Column(name = "company_id", nullable = false, updatable = false)
     private UUID companyId;
 
+    @Column(name = "user_id", nullable = false, updatable = false)
+    private UUID userId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "target_type", nullable = false, length = 30, updatable = false)
     private NotificationTargetType targetType;
@@ -51,6 +54,7 @@ public class NotificationJpaEntity {
     private NotificationJpaEntity(
             UUID notificationId,
             UUID companyId,
+            UUID userId,
             NotificationTargetType targetType,
             UUID targetId,
             String route,
@@ -61,6 +65,7 @@ public class NotificationJpaEntity {
     ) {
         this.notificationId = notificationId;
         this.companyId = companyId;
+        this.userId = userId;
         this.targetType = targetType;
         this.targetId = targetId;
         this.route = route;
@@ -75,6 +80,7 @@ public class NotificationJpaEntity {
         return new NotificationJpaEntity(
                 notification.notificationId(),
                 notification.companyId(),
+                notification.userId(),
                 notification.targetType(),
                 notification.targetId(),
                 notification.route(),
@@ -87,7 +93,7 @@ public class NotificationJpaEntity {
 
     public Notification toDomain() {
         return new Notification(
-                notificationId, companyId, targetType, targetId, route, title, read, occurredAt, createdAt
+                notificationId, companyId, userId, targetType, targetId, route, title, read, occurredAt, createdAt
         );
     }
 

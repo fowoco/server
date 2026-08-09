@@ -7,6 +7,7 @@ import com.fowoco.server.notification.application.error.NotificationErrorCode;
 import com.fowoco.server.notification.application.port.NotificationRepository;
 import com.fowoco.server.notification.domain.Notification;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class NotificationService {
 
-    private static final int MAX_PAGE_SIZE = 100;
-    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 35;
+    private static final int DEFAULT_PAGE_SIZE = 5;
 
     private final NotificationRepository notificationRepository;
     private final TenantDatabaseContext tenantDatabaseContext;
@@ -33,17 +34,24 @@ public class NotificationService {
     public NotificationPageResult findPage(ActorContext actor, Boolean unreadOnly, Instant cursor, Integer size) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
         UUID companyId = actor.companyId();
+        UUID userId = actor.actorId();
         int effectiveSize = normalizeSize(size);
 
-        List<Notification> items = notificationRepository.findPage(
-                companyId, unreadOnly != null && unreadOnly, cursor, effectiveSize
+        List<Notification> fetched = notificationRepository.findPage(
+                companyId, userId, unreadOnly != null && unreadOnly, cursor, effectiveSize + 1
         );
-        long unreadCount = notificationRepository.countUnread(companyId);
-        String nextCursor = items.size() == effectiveSize && !items.isEmpty()
+
+        boolean hasNext = fetched.size() > effectiveSize;
+        List<Notification> items = hasNext
+                ? new ArrayList<>(fetched.subList(0, effectiveSize))
+                : fetched;
+
+        long unreadCount = notificationRepository.countUnread(companyId, userId);
+        String nextCursor = hasNext && !items.isEmpty()
                 ? items.get(items.size() - 1).occurredAt().toString()
                 : null;
 
-        return new NotificationPageResult(items, unreadCount, nextCursor);
+        return new NotificationPageResult(items, unreadCount, hasNext, nextCursor);
     }
 
     @Transactional
