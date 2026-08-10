@@ -1,7 +1,20 @@
 # FOWOCO Server
 
-[![Server CI](https://github.com/fowoco/server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fowoco/server/actions/workflows/ci.yml)
-[![Server Documentation](https://github.com/fowoco/server/actions/workflows/database-docs.yml/badge.svg?branch=main)](https://github.com/fowoco/server/actions/workflows/database-docs.yml)
+<p align="center">
+  <img alt="Java 17" src="https://img.shields.io/badge/Java_17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white">
+  <img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring_Boot_4.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white">
+  <img alt="Spring Security" src="https://img.shields.io/badge/Spring_Security-6DB33F?style=for-the-badge&logo=springsecurity&logoColor=white">
+  <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL_16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white">
+  <img alt="Flyway" src="https://img.shields.io/badge/Flyway-CC0200?style=for-the-badge&logo=flyway&logoColor=white">
+  <img alt="Gradle" src="https://img.shields.io/badge/Gradle-02303A?style=for-the-badge&logo=gradle&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white">
+  <img alt="OpenAPI" src="https://img.shields.io/badge/OpenAPI-6BA539?style=for-the-badge&logo=openapiinitiative&logoColor=white">
+</p>
+
+<p align="center">
+  <a href="https://github.com/fowoco/server/actions/workflows/ci.yml"><img alt="Server CI" src="https://github.com/fowoco/server/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/fowoco/server/actions/workflows/database-docs.yml"><img alt="Server Documentation" src="https://github.com/fowoco/server/actions/workflows/database-docs.yml/badge.svg?branch=main"></a>
+</p>
 
 E-9 외국인근로자를 고용한 사업장의 체류·계약·서류·신고 업무를 안전한
 HR Workflow로 운영하는 Spring Boot 백엔드입니다.
