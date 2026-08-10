@@ -71,6 +71,22 @@ DB pool은 기본 최대 10개입니다. 클러스터 규모에 따라 `DB_MAX_P
 현재 Infra에 HTTPS/TLS와 `RELEASED` Workflow Catalog 배포가 없으면 `prod` 완료 조건을
 충족하지 못합니다. 임시 HTTP 주소와 DRAFT Catalog는 개발 Smoke에만 사용합니다.
 
+## HTTPS와 공유 Swagger 연결
+
+GitHub Pages의 공유 Swagger는 HTTPS 페이지이므로 HTTP 데모 Server를 직접 호출할 수
+없습니다. Infra에서 TLS가 준비된 뒤 다음 순서로 연결합니다.
+
+1. Infra Ingress에 TLS 인증서와 HTTPS host를 적용합니다.
+2. Server `CORS_ALLOWED_ORIGINS`에 실제 Client origin과
+   `https://fowoco.github.io`를 쉼표로 구분해 등록합니다.
+3. Server 저장소 Actions Variable `SERVER_PUBLIC_URL`에 HTTPS Server 주소를 등록합니다.
+4. `Database Documentation` Workflow를 재실행합니다.
+5. 공유 Swagger에서 Login → Authorize → 보호 API 호출을 확인합니다.
+
+현재 Infra가 HTTP만 제공하는 동안에는 `SERVER_PUBLIC_URL`을 등록하지 않고 공유
+Swagger를 읽기 전용으로 유지합니다. HTTP 주소를 임시로 넣어 브라우저 보안을 우회하지
+않습니다.
+
 ## 로컬 PostgreSQL 통합 실행
 
 아래 Compose는 로컬 개발용이며 운영 Secret이나 실제 개인정보를 사용하지 않습니다.
@@ -122,6 +138,7 @@ Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
 6. 후보 채택 후 Case·Task 조회 확인
 7. Worker Link 대표 흐름 확인
 8. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
+9. HTTPS 환경에서는 공유 Swagger Login·Authorize·대표 조회 API 호출 확인
 
 Runtime 장애 테스트에서는 가짜 AI 결과를 만들지 않고 안전한 오류 또는 수동 처리 상태로
 남아야 합니다.

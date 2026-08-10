@@ -12,11 +12,39 @@ FOWOCO는 단순 번역 서비스가 아닙니다. 해야 할 일을 업무카�
 > AI는 판단자가 아니라 보조자입니다. AI 결과는 인증, 사업장 권한, 상태 전이,
 > HR 승인과 감사로그 안에서만 사용합니다.
 
+## 프로젝트 한눈에 보기
+
+FOWOCO Server는 세 명의 백엔드 개발자가 기능 경계를 나누되, 공통 계약과 PR을
+서로 검토하며 만든 **modular monolith**입니다. 인증부터 근로자·문서, 업무카드,
+AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 PostgreSQL 기반 업무
+흐름으로 연결합니다.
+
+| 구분 | 현재 상태 |
+| --- | --- |
+| 핵심 업무 API | Auth·Worker·Document·Task·Approval·Worker Link·Case 구현 |
+| AI 연동 | PLAN → Slot 보충 → ANALYZE, Candidate 결정, AiRun·SSE 이력 구현 |
+| 문서 처리 | 파일 저장·다운로드, HWP/HWPX 검증, OCR 실행·HR 검토 구현 |
+| 운영 기반 | Flyway, PostgreSQL 16, RLS 검증, Transactional Outbox, 감사로그 구현 |
+| 마무리 중 | Renewal 실행·생성 문서 연결, 알림 이벤트 생성, HTTPS 배포·제품 E2E |
+
+### Backend Team
+
+| 개발자 | 주로 완성한 영역 |
+| --- | --- |
+| 최현준 [`@hywznn`](https://github.com/hywznn) | Auth·Task·Approval/Audit·AI Integration·AiRun·Case·Outbox·OCR·통합 흐름 |
+| 김채린 [`@chaeliki`](https://github.com/chaeliki) | Worker·Document/File·Worker Link·Dashboard·Notification |
+| 김재성 [`@krestar`](https://github.com/krestar) | PostgreSQL·RLS·Settings·Demo Seed·DB 운영 안전성 |
+| 함께 | API 계약, Flyway 순서 조율, 상호 PR Review, 배포·E2E 준비 |
+
+위 표는 프로젝트 기여를 이해하기 위한 요약입니다. 현재 담당자와 완료 조건은
+[GitHub Issues](https://github.com/fowoco/server/issues)의 Assignee와
+[Server Roadmap](https://github.com/orgs/fowoco/projects/3)을 기준으로 확인합니다.
+
 ## 가장 먼저 볼 문서
 
 | 찾는 내용 | 바로가기 | 이 문서가 기준인 이유 |
 | --- | --- | --- |
-| 현재 구현된 API | [Swagger](https://fowoco.github.io/server/api/) · [OpenAPI JSON](https://fowoco.github.io/server/api/openapi.json) | `main` 코드에서 자동 생성되는 실제 API 계약 |
+| 현재 구현된 API | [Swagger](https://fowoco.github.io/server/api/) · [OpenAPI JSON](https://fowoco.github.io/server/api/openapi.json) | `main` 코드에서 자동 생성되는 실제 API 계약. HTTPS 데모 주소가 연결되면 직접 호출 가능 |
 | DB 테이블·ERD | [Database 문서](https://fowoco.github.io/server/) | Flyway를 빈 PostgreSQL에 적용해 자동 생성한 구조 |
 | 로컬 실행·인증·Workflow | [개발 가이드](docs/development-guide.md) | 처음 서버를 실행하고 기능 흐름을 이해하는 방법 |
 | Demo Seed 수량·시나리오 | [Demo Seed 운영 시나리오](docs/demo-seed.md) | 로컬 데모 데이터의 기준 수량, 대표 흐름과 표현 한계 |
@@ -44,10 +72,12 @@ FOWOCO는 단순 번역 서비스가 아닙니다. 해야 할 일을 업무카�
 - 사업장 사용자 인증과 `ADMIN`·`HR`·`VIEWER` 권한
 - `company_id`를 기준으로 한 사업장 데이터 격리
 - 근로자 기본정보와 서류 메타데이터 관리
+- CSV/XLSX 근로자 명단 가져오기와 OCR 검토
 - 업무카드·체크리스트·상태 전이 관리
 - HR 승인·반려·외부 제출·증빙·완료와 감사로그
 - 만료되는 근로자 보안 링크
-- AI Runtime 요청·응답 검증과 영속 실행 이력
+- AI Runtime PLAN·ANALYZE 요청, Slot 보충, 응답 검증과 영속 실행 이력
+- Today Dashboard·알림·사업장 설정 조회
 - 실패해도 유실되지 않는 후속 이벤트 처리
 
 Provider SDK, Prompt와 모델 라우팅은 Server에 구현하지 않습니다.
@@ -71,15 +101,16 @@ Provider SDK, Prompt와 모델 라우팅은 Server에 구현하지 않습니다.
 
 | 영역 | `main`에서 확인할 수 있는 내용 |
 | --- | --- |
-| Auth·Company | 회원가입, 로그인, JWT Access Token, Refresh Token 회전·로그아웃 |
-| Worker·Document | 근로자 기본정보와 서류 메타데이터 등록·조회·수정 |
-| Worker Import | CSV/XLSX 열 연결, 행 검증·제외·수정과 선택 등록 |
-| Task·Workflow | Knowledge projection 조회, 업무카드·체크리스트·상태 전이 |
-| Approval·Audit | 승인·반려·외부 제출·증빙·완료와 감사 이벤트 |
-| AI Integration | Provider-neutral 계약, 개인정보 차단과 응답·version 검증 |
-| Reliability | PostgreSQL Transactional Outbox, lease·재시도·handler별 멱등 처리 |
-| Database | H2 local, PostgreSQL dev·prod, Flyway와 tenant 격리 기반 |
-| Documentation | Swagger/OpenAPI와 Database 문서 자동 배포 |
+| Auth·Company | 회원가입, 로그인, JWT·Refresh Token, 비밀번호 재설정·SMTP, 사업장 설정 |
+| Worker·Document·File | 근로자·서류 CRUD, 문서 준비도·요청 초안, 파일 업로드·권한 기반 다운로드 |
+| Worker Import·OCR | CSV/XLSX mapping·검증·선택 등록, 신분서류 OCR 실행·암호화 결과·HR 검토 |
+| Task·Workflow·Case | Catalog projection, 업무카드·체크리스트·상태 전이, 복합 Case 조회 |
+| Approval·Audit | 승인·반려·외부 제출·증빙·완료와 변경 이력·감사 이벤트 |
+| Worker Link | 만료·회전 가능한 보안 링크, 전달 상태, 근로자 응답·파일 제출·HR 확인 |
+| AI Integration·AiRun | PLAN/ANALYZE, Slot Resolver, Candidate 결정, retry, SSE·실행 이력 |
+| Dashboard·Notification | Today 요약, 만료·추천 정보, 사용자별 알림 조회·읽음 처리 |
+| Reliability·Database | PostgreSQL 16, Flyway, RLS 검증, Transactional Outbox·수동 재처리 |
+| Documentation | Swagger/OpenAPI와 Database 문서의 GitHub Pages 자동 배포 |
 
 계획 중인 API를 현재 구현된 것처럼 표시하지 않습니다. 아직 병합되지 않은 범위는
 [Issues](https://github.com/fowoco/server/issues)와
@@ -161,10 +192,10 @@ Server는 하나의 Spring Boot 애플리케이션과 PostgreSQL로 배포하는
 src/main/java/com/fowoco/server/
 ├── common
 ├── auth / company
-├── worker / workerimport
-├── workflow / task
+├── worker / workerimport / document / file
+├── workflow / task / casework
 ├── approval / audit
-├── workerlink / file
+├── workerlink / dashboard / notification / settings
 ├── airun / aiintegration
 └── reliability
 ```
@@ -176,12 +207,15 @@ src/main/java/com/fowoco/server/
 
 - 사업장 데이터는 인증 Context의 `company_id`로 격리합니다.
 - Client가 보낸 `company_id`를 신뢰하지 않습니다.
-- 일반 자연어 분석 JSON에는 외국인등록번호·여권번호·전화번호·계좌번호를 넣지 않습니다.
+- PLAN에는 발화문만 보내고, ANALYZE에는 Agent가 요청한 allow-list field만 넣습니다.
+  데모는 합성 데이터만 사용하며 허용된 문서 업무값을 `***`로 치환하지 않습니다.
+- JWT·API Key·비밀번호·Worker Link token 같은 인증정보는 AI 요청에서 항상 차단합니다.
 - OCR은 HR이 선택한 서류 파일만 전용 내부 API로 전송합니다. 실행은 Outbox로 복구하고, 원본 추출값과 HR 수정값을 분리해 암호화 저장하며 일반 로그에는 값 대신 수정한 필드명만 남깁니다.
 - AI 결과와 요청 초안은 HR 승인 전 자동 발송하지 않습니다.
 - 중요한 변경은 actor, 시각, `request_id`와 함께 감사로그에 남깁니다.
 - Worker Link 원본 token, JWT, API Key와 비밀번호를 GitHub·로그·문서에 남기지 않습니다.
-- 운영 Springdoc은 비활성화하고 공유 문서는 test profile에서 읽기 전용으로 생성합니다.
+- 운영 Springdoc은 비활성화합니다. 공유 Swagger는 test profile에서 생성하며,
+  HTTPS 데모 주소와 명시적인 CORS가 준비된 경우에만 실제 호출을 활성화합니다.
 
 보안 문제 신고는 공개 Issue 대신 [SECURITY.md](SECURITY.md)를 따라 주세요.
 
