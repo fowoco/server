@@ -1,26 +1,6 @@
 # FOWOCO Server
 
 <p align="center">
-  <img alt="Java 17" src="https://img.shields.io/badge/Java_17-ED8B00?style=flat-square&logo=openjdk&logoColor=white">
-  <img alt="Spring Boot 4.1" src="https://img.shields.io/badge/Spring_Boot_4.1-6DB33F?style=flat-square&logo=springboot&logoColor=white">
-  <img alt="Spring Security" src="https://img.shields.io/badge/Spring_Security-6DB33F?style=flat-square&logo=springsecurity&logoColor=white">
-  <img alt="Spring Data JPA" src="https://img.shields.io/badge/Spring_Data_JPA-6DB33F?style=flat-square&logo=spring&logoColor=white">
-  <img alt="PostgreSQL 16" src="https://img.shields.io/badge/PostgreSQL_16-4169E1?style=flat-square&logo=postgresql&logoColor=white">
-  <img alt="Flyway" src="https://img.shields.io/badge/Flyway-CC0200?style=flat-square&logo=flyway&logoColor=white">
-  <img alt="Gradle" src="https://img.shields.io/badge/Gradle-02303A?style=flat-square&logo=gradle&logoColor=white">
-</p>
-
-<p align="center">
-  <img alt="OpenAPI 3" src="https://img.shields.io/badge/OpenAPI_3-6BA539?style=flat-square&logo=openapiinitiative&logoColor=white">
-  <img alt="Apache POI" src="https://img.shields.io/badge/Apache_POI-D22128?style=flat-square&logo=apache&logoColor=white">
-  <img alt="JUnit 5" src="https://img.shields.io/badge/JUnit_5-25A162?style=flat-square&logo=junit5&logoColor=white">
-  <img alt="WireMock 3" src="https://img.shields.io/badge/WireMock_3-2C4F7C?style=flat-square&logo=wiremock&logoColor=white">
-  <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white">
-  <img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-326CE5?style=flat-square&logo=kubernetes&logoColor=white">
-  <img alt="GitHub Actions" src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat-square&logo=githubactions&logoColor=white">
-</p>
-
-<p align="center">
   <a href="https://github.com/fowoco/server/actions/workflows/ci.yml"><img alt="Server CI" src="https://github.com/fowoco/server/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="https://github.com/fowoco/server/actions/workflows/database-docs.yml"><img alt="Server Documentation" src="https://github.com/fowoco/server/actions/workflows/database-docs.yml/badge.svg?branch=main"></a>
 </p>
