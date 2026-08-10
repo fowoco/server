@@ -29,6 +29,20 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | 운영 기반 | Flyway, PostgreSQL 16, RLS 검증, Transactional Outbox, 감사로그 구현 |
 | 마무리 중 | Renewal 실행·생성 문서 연결, 알림 이벤트 생성, HTTPS 배포·제품 E2E |
 
+## 왜 이 기술과 구조를 선택했는가
+
+> 기술의 인지도보다 **세 명이 만드는 배포 가능한 MVP**, **사업장 데이터 격리**,
+> **AI 결과의 통제**, **장애 후 업무 복구**에 적합한지를 선택 기준으로 삼았습니다.
+
+| 선택 | 해결해야 했던 서비스 문제 | 판단과 적용 |
+| --- | --- | --- |
+| Spring Boot modular monolith | 인증·Task·승인·감사로그가 하나의 업무 트랜잭션으로 연결됨 | Microservices의 분산 트랜잭션·배포 부담을 먼저 만들지 않고 데이터 일관성과 개발 속도를 확보했습니다. 대신 패키지와 Port로 경계를 나눠 AI 실행·파일 처리처럼 독립성이 커지는 영역부터 추후 분리할 수 있게 했습니다. |
+| PostgreSQL·Flyway·RLS | 사업장별 데이터와 상태 전이·승인 이력을 관계와 트랜잭션으로 보존해야 함 | PostgreSQL을 업무 상태의 단일 기준으로 두고, Flyway로 재현 가능한 변경 이력을 관리했습니다. 애플리케이션의 `company_id` 조건에만 의존하지 않고 복합 FK와 RLS로 DB 격리를 보강했습니다. |
+| Spring Security·JWT·RBAC | HR 사용자 역할과 사업장 권한을 모든 API에서 일관되게 검사해야 함 | Access Token은 stateless JWT로 검증하고 `ActorContext`에서 사용자·역할·사업장을 결정했습니다. 계정이 없는 근로자는 별도의 만료형 Worker Link로 제한된 기능만 사용하게 했습니다. |
+| Server–AI HTTP 경계와 allow-list Resolver | AI가 업무 DB를 직접 조회하면 권한 우회와 개인정보 과다 전달 위험이 있음 | AI Runtime의 DB 직접 접근을 허용하지 않고, PLAN에서 요청한 허용 field만 Server가 tenant 범위로 조회해 ANALYZE에 보충하도록 설계했습니다. 판단·권한·영속 상태는 Server가 소유합니다. |
+| REST + AiRun + SSE | AI 실행은 오래 걸리지만 Client가 보내야 하는 실시간 메시지는 없음 | 요청과 결과는 재조회 가능한 AiRun resource로 저장하고, 단방향 상태 알림은 WebSocket보다 단순한 SSE를 사용했습니다. 연결이 끊겨도 DB 상태를 다시 조회할 수 있게 했습니다. |
+| PostgreSQL Transactional Outbox | DB 변경 성공 후 알림·OCR 같은 후속 실행이 실패하면 업무가 유실될 수 있음 | 별도 Broker를 먼저 운영하는 대신 업무 변경과 Event를 같은 DB 트랜잭션에 저장했습니다. lease·backoff·멱등성·수동 재처리로 장애 후에도 처리 상태가 수렴하도록 했습니다. |
+
 ### Backend Team
 
 | 개발자 | 주로 완성한 영역 |
@@ -177,15 +191,6 @@ HR 로그인
 Server는 하나의 Spring Boot 애플리케이션과 PostgreSQL로 배포하는
 **modular monolith**입니다. 기능별 패키지 안에서 `api → application → domain`
 방향을 지키고, JPA·HTTP·Storage 구현은 `infrastructure`에 둡니다.
-
-> **왜 마이크로서비스가 아니라 모듈형 모놀리스(modular monolith)를 선택했나요?**
->
-> 세 명이 만드는 MVP에서는 서비스별 배포·네트워크 장애·분산 트랜잭션을 먼저
-> 운영하는 것보다, 인증부터 Task·승인·감사로그까지 하나의 트랜잭션으로 안전하게
-> 처리하는 것이 더 중요했습니다. 대신 기능을 한곳에 뒤섞지 않고 패키지와 Port로
-> 경계를 나눴습니다. 따라서 현재는 개발·배포가 단순하고 데이터 일관성을 지키기
-> 쉬우며, 트래픽과 운영 요구가 커지면 AI 실행이나 파일 처리처럼 독립성이 높은
-> 영역부터 별도 서비스로 분리할 수 있습니다.
 
 ```text
 src/main/java/com/fowoco/server/
