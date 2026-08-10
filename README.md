@@ -176,6 +176,14 @@ Server는 하나의 Spring Boot 애플리케이션과 PostgreSQL로 배포하는
 **modular monolith**입니다. 기능별 패키지 안에서 `api → application → domain`
 방향을 지키고, JPA·HTTP·Storage 구현은 `infrastructure`에 둡니다.
 
+> **왜 Microservices가 아니라 modular monolith를 선택했나요?**  
+> 세 명이 만드는 MVP에서는 서비스별 배포·네트워크 장애·분산 트랜잭션을 먼저
+> 운영하는 것보다, 인증부터 Task·승인·감사로그까지 하나의 트랜잭션으로 안전하게
+> 처리하는 것이 더 중요했습니다. 대신 기능을 한곳에 뒤섞지 않고 패키지와 Port로
+> 경계를 나눴습니다. 따라서 현재는 개발·배포가 단순하고 데이터 일관성을 지키기
+> 쉬우며, 트래픽과 운영 요구가 커지면 AI 실행이나 파일 처리처럼 독립성이 높은
+> 영역부터 별도 서비스로 분리할 수 있습니다.
+
 ```text
 src/main/java/com/fowoco/server/
 ├── common
