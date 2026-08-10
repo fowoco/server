@@ -72,13 +72,60 @@ class AiSlotResolutionIntegrationTest {
                 );
     }
 
+    @Test
+    void resolvesLatestIdentityDocumentStatusesWithoutReadingAnotherCompany() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertCompany(COMPANY_B, "사업장 B");
+        insertWorker(WORKER_A, COMPANY_A, "문서상태근로자", "2026-09-30");
+        insertWorker(WORKER_B, COMPANY_B, "문서상태근로자", "2099-12-31");
+        insertDocument(
+                UUID.fromString("73000000-0000-0000-0000-000000000001"),
+                WORKER_A,
+                COMPANY_A,
+                "PASSPORT_COPY",
+                "SUBMITTED",
+                "2026-08-01T00:00:00Z"
+        );
+        insertDocument(
+                UUID.fromString("73000000-0000-0000-0000-000000000002"),
+                WORKER_A,
+                COMPANY_A,
+                "PASSPORT_COPY",
+                "VERIFIED",
+                "2026-08-02T00:00:00Z"
+        );
+        insertDocument(
+                UUID.fromString("73000000-0000-0000-0000-000000000003"),
+                WORKER_B,
+                COMPANY_B,
+                "ARC",
+                "VERIFIED",
+                "2026-08-03T00:00:00Z"
+        );
+
+        AiSlotResolution result = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.2.0",
+                requirement("문서상태근로자", List.of("passport_status", "arc_status"))
+        );
+
+        assertThat(result.resolvedFields()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "passport_status", "VERIFIED",
+                "arc_status", "MISSING"
+        ));
+    }
+
     private AiContextRequirement requirement(String displayName) {
+        return requirement(displayName, List.of("worker_id", "stay_expiry_date"));
+    }
+
+    private AiContextRequirement requirement(String displayName, List<String> fieldKeys) {
         return new AiContextRequirement(
                 "EXPIRY_RENEWAL",
                 new BigDecimal("0.94"),
                 displayName,
                 Map.of(),
-                List.of("worker_id", "stay_expiry_date")
+                fieldKeys
         );
     }
 
@@ -101,6 +148,32 @@ class AiSlotResolutionIntegrationTest {
                 companyId,
                 displayName,
                 expiryDate
+        );
+    }
+
+    private void insertDocument(
+            UUID documentId,
+            UUID workerId,
+            UUID companyId,
+            String documentType,
+            String status,
+            String updatedAt
+    ) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_document (
+                    worker_document_id, worker_id, company_id, document_type,
+                    submission_status, created_at, updated_at, version
+                ) VALUES (?, ?, ?, ?, ?, CAST(? AS TIMESTAMP WITH TIME ZONE),
+                          CAST(? AS TIMESTAMP WITH TIME ZONE), 0)
+                """,
+                documentId,
+                workerId,
+                companyId,
+                documentType,
+                status,
+                updatedAt,
+                updatedAt
         );
     }
 }

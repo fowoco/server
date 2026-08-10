@@ -27,10 +27,13 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
+import com.fowoco.server.aiintegration.application.model.WorkerContext;
+import com.fowoco.server.aiintegration.application.model.WorkflowConstraint;
 import com.fowoco.server.aiintegration.support.AiRuntimeContractFixture;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -225,6 +228,85 @@ class AiRuntimeContractValidatorTest {
         assertFailure(
                 () -> validator.validateResponse(validRequest(), responseWithCandidate(changedDate)),
                 AiRuntimeFailureCode.CORE_VALUE_MISMATCH
+        );
+    }
+
+    @Test
+    void rejectsCandidateThatChangesServerOwnedDocumentStatus() {
+        AiAnalysisRequest request = requestWithDocumentStatuses();
+        AiCandidate changedStatus = new AiCandidate(
+                "candidate-document-status",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of(
+                        "passport_status", "VERIFIED",
+                        "arc_status", "VERIFIED"
+                ),
+                List.of(),
+                BigDecimal.ONE
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(request, responseWithCandidate(changedStatus)),
+                AiRuntimeFailureCode.CORE_VALUE_MISMATCH
+        );
+    }
+
+    @Test
+    void acceptsCandidateThatPreservesServerOwnedDocumentStatuses() {
+        AiCandidate preservedStatuses = new AiCandidate(
+                "candidate-preserved-document-status",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of(
+                        "passport_status", "VERIFIED",
+                        "arc_status", "MISSING"
+                ),
+                List.of(),
+                BigDecimal.ONE
+        );
+
+        assertThatCode(() -> validator.validateResponse(
+                requestWithDocumentStatuses(),
+                responseWithCandidate(preservedStatuses)
+        )).doesNotThrowAnyException();
+    }
+
+    private AiAnalysisRequest requestWithDocumentStatuses() {
+        AiAnalysisRequest base = validRequest();
+        WorkerContext original = base.analysisInput().workers().get(0);
+        WorkerContext worker = new WorkerContext(
+                original.workerRef(),
+                original.displayName(),
+                original.nationalityCode(),
+                original.preferredLanguage(),
+                original.workStatus(),
+                original.stayExpiryDate(),
+                original.contractStartDate(),
+                original.contractEndDate(),
+                Map.of(
+                        "passport_status", "VERIFIED",
+                        "arc_status", "MISSING"
+                )
+        );
+        AnalysisInput input = new AnalysisInput(
+                base.analysisInput().instruction(),
+                base.analysisInput().extractedSlots(),
+                List.of("passport_status", "arc_status"),
+                List.of(worker),
+                List.of(new WorkflowConstraint(
+                        WORKFLOW_ID,
+                        Set.of("passport_status", "arc_status")
+                ))
+        );
+        return new AiAnalysisRequest(
+                base.requestId(),
+                base.attemptId(),
+                base.phase(),
+                base.contractVersion(),
+                base.requiredKnowledgeVersion(),
+                base.deadlineMs(),
+                input
         );
     }
 
