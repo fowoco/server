@@ -46,7 +46,7 @@ Copy-Item .env.example .env.local
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-dev.ps1
 ```
 
-PostgreSQL 17 Compose 실행은 [배포 Runbook](deployment-runbook.md)의 로컬 통합 실행
+PostgreSQL 16 Compose 실행은 [배포 Runbook](deployment-runbook.md)의 로컬 통합 실행
 절차를 따른다.
 
 ## 로그인 계정
@@ -198,13 +198,13 @@ legacy Golden Flow demo seed rows detected; reset the personal demo database or 
 
 H2 `local`은 인메모리 DB이므로 애플리케이션을 종료하고 다시 실행하면 초기화된다.
 
-## PostgreSQL 17 호환성과 테스트
+## PostgreSQL 16 호환성과 테스트
 
 `DemoCaseSeeder`의 직접 SQL은 `Instant`를 PostgreSQL JDBC에 그대로 전달하지 않고
 JDBC 경계에서 `Timestamp.from(instant)`로 변환한다. Domain의 시간 타입과 DB 스키마는
 변경하지 않았고 Flyway Migration도 추가하지 않았다.
 
-일반 테스트에서는 PostgreSQL 환경 테스트가 skip된다. 실제 PostgreSQL 17 검증은 다음
+일반 테스트에서는 PostgreSQL 환경 테스트가 skip된다. 실제 PostgreSQL 16 검증은 다음
 환경 변수를 같은 shell에 설정한 뒤 실행한다.
 
 ```powershell
@@ -224,7 +224,7 @@ $env:POSTGRES_TEST_PASSWORD = "<test-password>"
 - 응웬반A Golden Flow 시작 상태
 - 전체 수량과 Showcase Case timestamp 불변
 
-Issue #94 검증에서는 PostgreSQL 17의 빈 Docker DB로 Demo Seed 활성 서버의 첫 기동이
+Issue #94 검증에서는 PostgreSQL 16의 빈 Docker DB로 Demo Seed 활성 서버의 첫 기동이
 성공했고, 서버를 중지한 뒤 같은 DB volume으로 재기동해도 Seed 오류 없이 정상
 기동했다. 두 번째 기동에서도 응웬반A Worker가 유지됨을 확인했다. 세부 수량·미생성
 상태·timestamp 불변은 위 PostgreSQL 자동 통합 테스트가 검증한다.

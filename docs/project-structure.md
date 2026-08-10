@@ -157,7 +157,7 @@ src/test/java/com/fowoco/server/
 
 - Domain 불변식은 빠른 단위 테스트로 검증합니다.
 - Controller·Security·Transaction은 통합 테스트로 검증합니다.
-- PostgreSQL 전용 제약·동시성·RLS는 CI PostgreSQL 17 환경에서 검증합니다.
+- PostgreSQL 전용 제약·동시성·RLS는 CI PostgreSQL 16 환경에서 검증합니다.
 - API 변경은 OpenAPI Schema와 JSON 직렬화 계약도 확인합니다.
 - Migration 변경은 Flyway `migrate`, `validate`와 실제 제약 동작을 확인합니다.
 
