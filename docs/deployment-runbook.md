@@ -44,6 +44,10 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | AI | `AI_RUNTIME_ENABLED=true` | 실제 Runtime 연동 활성화 |
 | AI | `AI_RUNTIME_ENDPOINT` | 예: `http://ai:8000/internal/v1/analyses` |
 | AI | `AI_RUNTIME_SERVICE_CREDENTIAL` | Server↔AI 내부 Bearer credential |
+| Worker Link | `WORKER_PORTAL_BASE_URL` | 문자에 넣을 실제 Client HTTPS 주소 |
+| Worker Link | `WORKER_LINK_SMS_PROVIDER=solapi` | SMS Adapter 활성화 |
+| Worker Link | `SOLAPI_API_KEY`, `SOLAPI_API_SECRET` | SMS Provider credential |
+| Worker Link | `SOLAPI_SENDER_NUMBER` | Provider에 등록·승인된 발신번호 |
 | OCR | `AI_OCR_ENABLED=true`, `DOCUMENT_OCR_ENABLED=true` | AI OCR 호출과 Server 저장 기능 활성화 |
 | OCR | `AI_OCR_ENDPOINT`, `AI_OCR_SERVICE_CREDENTIAL` | OCR 내부 endpoint와 Bearer credential |
 | OCR | `OCR_RESULT_ENCRYPTION_KEY_BASE64` | 32바이트 OCR 결과 암호화 키의 Base64 |
@@ -121,7 +125,8 @@ Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
 5. `POST /api/v1/ai-runs`의 실제 Server→AI 왕복 확인
 6. 후보 채택 후 Case·Task 조회 확인
 7. Worker Link 대표 흐름 확인
-8. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
+8. SMS가 활성화된 환경에서는 실제 수신·링크 접속·중복 발송 방지 확인
+9. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
 
 Runtime 장애 테스트에서는 가짜 AI 결과를 만들지 않고 안전한 오류 또는 수동 처리 상태로
 남아야 합니다.
