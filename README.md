@@ -56,33 +56,6 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 [GitHub Issues](https://github.com/fowoco/server/issues)의 Assignee와
 [Server Roadmap](https://github.com/orgs/fowoco/projects/3)을 기준으로 확인합니다.
 
-## 가장 먼저 볼 문서
-
-| 찾는 내용 | 바로가기 | 이 문서가 기준인 이유 |
-| --- | --- | --- |
-| 현재 구현된 API | [Swagger](https://fowoco.github.io/server/api/) · [OpenAPI JSON](https://fowoco.github.io/server/api/openapi.json) | `main` 코드에서 자동 생성되는 실제 API 계약. HTTPS 데모 주소가 연결되면 직접 호출 가능 |
-| DB 테이블·ERD | [Database 문서](https://fowoco.github.io/server/) | Flyway를 빈 PostgreSQL에 적용해 자동 생성한 구조 |
-| 로컬 실행·인증·Workflow | [개발 가이드](docs/development-guide.md) | 처음 서버를 실행하고 기능 흐름을 이해하는 방법 |
-| Demo Seed 수량·시나리오 | [Demo Seed 운영 시나리오](docs/demo-seed.md) | 로컬 데모 데이터의 기준 수량, 대표 흐름과 표현 한계 |
-| Docker·데모 배포 | [Server 데모 배포 Runbook](docs/deployment-runbook.md) | 로컬 Compose, 필수 Secret, Smoke와 rollback 기준 |
-| Figma fixture 대응표 | [Figma Demo Fixture Manifest](docs/demo-seed-fixture-manifest.md) | 화면 요구사항별 예약 데이터와 현재 API 노출 범위 |
-| 패키지·모듈 경계 | [프로젝트 구조](docs/project-structure.md) | 코드를 어느 패키지에 구현해야 하는지 설명 |
-| 중요한 설계 결정 | [ADR 목록](docs/adr/README.md) | 저장소 경계, API·보안, Task·AiRun, RLS 결정 원본 |
-| Server ↔ AI 계약 | [AI Runtime 계약](docs/ai-runtime-contract.md) | Server가 AI에 보내고 받을 수 있는 값과 검증 기준 |
-| 근로자 명단 가져오기 | [Worker Import 가이드](docs/worker-import.md) | CSV/XLSX 업로드부터 검증·수정·등록까지의 API 순서 |
-| Agent DB 정보 보충 | [Slot 조회·재호출](docs/ai-slot-resolution.md) | canonical key allow-list, tenant 조회와 ANALYZE 재호출 기준 |
-| 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
-| 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
-| 전체 설명·운영 가이드 | [Server Wiki](https://github.com/fowoco/server/wiki) | 초보자용 아키텍처·API·배포 설명 |
-
-추가 링크:
-[API 문서 사용법](docs/api-documentation.md) ·
-[DB 문서 사용법](docs/database-documentation.md) ·
-[RLS 적용 가이드](docs/database/postgresql-rls-rollout.md) ·
-[Notion API 명세](https://app.notion.com/p/f250e15aa74e82b8872581be4d7c6c3c?v=f280e15aa74e82ce8d6e8848514d41c3&pvs=23) ·
-[Figma](https://www.figma.com/design/eaOD8OXZOGq6vK4H9pGXNi/FOWOCO?node-id=143-2&t=YbytLHiwZ5m1IChO-1) ·
-[Discussions](https://github.com/fowoco/server/discussions)
-
 ## Server가 담당하는 일
 
 - 사업장 사용자 인증과 `ADMIN`·`HR`·`VIEWER` 권한
@@ -108,62 +81,6 @@ Provider SDK, Prompt와 모델 라우팅은 Server에 구현하지 않습니다.
 
 상세 소유권과 금지 의존성은
 [ADR-0001](docs/adr/0001-repository-and-module-boundaries.md)을 따릅니다.
-
-## 현재 구현 기준
-
-고정된 API 개수를 README에 적지 않습니다. API는 계속 변경되므로 현재 구현
-여부는 [Swagger](https://fowoco.github.io/server/api/)와 자동화 테스트를
-기준으로 확인합니다.
-
-| 영역 | `main`에서 확인할 수 있는 내용 |
-| --- | --- |
-| Auth·Company | 회원가입, 로그인, JWT·Refresh Token, 비밀번호 재설정·SMTP, 사업장 설정 |
-| Worker·Document·File | 근로자·서류 CRUD, 문서 준비도·요청 초안, 파일 업로드·권한 기반 다운로드 |
-| Worker Import·OCR | CSV/XLSX mapping·검증·선택 등록, 신분서류 OCR 실행·암호화 결과·HR 검토 |
-| Task·Workflow·Case | Catalog projection, 업무카드·체크리스트·상태 전이, 복합 Case 조회 |
-| Approval·Audit | 승인·반려·외부 제출·증빙·완료와 변경 이력·감사 이벤트 |
-| Worker Link | 만료·회전 가능한 보안 링크, 전달 상태, 근로자 응답·파일 제출·HR 확인 |
-| AI Integration·AiRun | PLAN/ANALYZE, Slot Resolver, Candidate 결정, retry, SSE·실행 이력 |
-| Dashboard·Notification | Today 요약, 만료·추천 정보, 사용자별 알림 조회·읽음 처리 |
-| Reliability·Database | PostgreSQL 16, Flyway, RLS 검증, Transactional Outbox·수동 재처리 |
-| Documentation | Swagger/OpenAPI와 Database 문서의 GitHub Pages 자동 배포 |
-
-계획 중인 API를 현재 구현된 것처럼 표시하지 않습니다. 아직 병합되지 않은 범위는
-[Issues](https://github.com/fowoco/server/issues)와
-[Roadmap](https://github.com/orgs/fowoco/projects/3)에서 확인합니다.
-
-## 5분 실행
-
-### 준비물
-
-- JDK 17
-- Git
-- PostgreSQL은 `dev` Profile을 사용할 때만 필요
-
-```bash
-git clone https://github.com/fowoco/server.git
-cd server
-./gradlew clean test
-./gradlew bootRun
-```
-
-기본 Profile은 H2를 사용하는 `local`이므로 별도 DB가 필요하지 않습니다.
-
-```bash
-curl http://localhost:8080/health
-```
-
-정상이면 `OK`가 반환됩니다.
-
-| 로컬 도구 | 주소 |
-| --- | --- |
-| Swagger UI | <http://localhost:8080/swagger-ui.html> |
-| OpenAPI JSON | <http://localhost:8080/v3/api-docs> |
-| H2 Console | <http://localhost:8080/h2-console> |
-
-PostgreSQL 실행과 회원가입·로그인은 [개발 가이드](docs/development-guide.md),
-Demo Seed의 수량과 대표 업무 구성은
-[Demo Seed 운영 시나리오](docs/demo-seed.md)에서 확인합니다.
 
 ## 대표 흐름
 
@@ -223,19 +140,6 @@ src/main/java/com/fowoco/server/
 
 보안 문제 신고는 공개 Issue 대신 [SECURITY.md](SECURITY.md)를 따라 주세요.
 
-## 기여하기
-
-처음 참여한다면 [개발 협업 가이드](docs/team-development-guide.md)를 먼저 읽습니다.
-
-1. [Roadmap](https://github.com/orgs/fowoco/projects/3)과 Issue의 담당·선행조건을 확인합니다.
-2. `main`에서 짧은 기능 브랜치를 만듭니다.
-3. 코드와 함께 테스트·OpenAPI·Migration·문서 영향을 확인합니다.
-4. PR에 관련 Issue, 변경 이유, 검증 결과와 보안 영향을 작성합니다.
-5. 리뷰와 CI 통과 후 Squash Merge합니다.
-
-질문·아이디어·합의 전 설계는
-[Discussions](https://github.com/fowoco/server/discussions)에 작성합니다.
-
 ## MVP 범위 밖
 
 - 외부기관 자동 로그인·자동 제출
@@ -243,3 +147,30 @@ src/main/java/com/fowoco/server/
 - 자체 학습 모델의 필수 서비스 탑재
 - 범용 OCR·대용량 일괄 파일 처리
 - 실제 Blue/Green Agent 트래픽 전환
+
+## 가장 먼저 볼 문서
+
+| 찾는 내용 | 바로가기 | 이 문서가 기준인 이유 |
+| --- | --- | --- |
+| 현재 구현된 API | [Swagger](https://fowoco.github.io/server/api/) · [OpenAPI JSON](https://fowoco.github.io/server/api/openapi.json) | `main` 코드에서 자동 생성되는 실제 API 계약. HTTPS 데모 주소가 연결되면 직접 호출 가능 |
+| DB 테이블·ERD | [Database 문서](https://fowoco.github.io/server/) | Flyway를 빈 PostgreSQL에 적용해 자동 생성한 구조 |
+| 로컬 실행·인증·Workflow | [개발 가이드](docs/development-guide.md) | 처음 서버를 실행하고 기능 흐름을 이해하는 방법 |
+| Demo Seed 수량·시나리오 | [Demo Seed 운영 시나리오](docs/demo-seed.md) | 로컬 데모 데이터의 기준 수량, 대표 흐름과 표현 한계 |
+| Docker·데모 배포 | [Server 데모 배포 Runbook](docs/deployment-runbook.md) | 로컬 Compose, 필수 Secret, Smoke와 rollback 기준 |
+| Figma fixture 대응표 | [Figma Demo Fixture Manifest](docs/demo-seed-fixture-manifest.md) | 화면 요구사항별 예약 데이터와 현재 API 노출 범위 |
+| 패키지·모듈 경계 | [프로젝트 구조](docs/project-structure.md) | 코드를 어느 패키지에 구현해야 하는지 설명 |
+| 중요한 설계 결정 | [ADR 목록](docs/adr/README.md) | 저장소 경계, API·보안, Task·AiRun, RLS 결정 원본 |
+| Server ↔ AI 계약 | [AI Runtime 계약](docs/ai-runtime-contract.md) | Server가 AI에 보내고 받을 수 있는 값과 검증 기준 |
+| 근로자 명단 가져오기 | [Worker Import 가이드](docs/worker-import.md) | CSV/XLSX 업로드부터 검증·수정·등록까지의 API 순서 |
+| Agent DB 정보 보충 | [Slot 조회·재호출](docs/ai-slot-resolution.md) | canonical key allow-list, tenant 조회와 ANALYZE 재호출 기준 |
+| 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
+| 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
+| 전체 설명·운영 가이드 | [Server Wiki](https://github.com/fowoco/server/wiki) | 초보자용 아키텍처·API·배포 설명 |
+
+추가 링크:
+[API 문서 사용법](docs/api-documentation.md) ·
+[DB 문서 사용법](docs/database-documentation.md) ·
+[RLS 적용 가이드](docs/database/postgresql-rls-rollout.md) ·
+[Notion API 명세](https://app.notion.com/p/f250e15aa74e82b8872581be4d7c6c3c?v=f280e15aa74e82ce8d6e8848514d41c3&pvs=23) ·
+[Figma](https://www.figma.com/design/eaOD8OXZOGq6vK4H9pGXNi/FOWOCO?node-id=143-2&t=YbytLHiwZ5m1IChO-1) ·
+[Discussions](https://github.com/fowoco/server/discussions)
