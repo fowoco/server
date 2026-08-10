@@ -172,14 +172,6 @@ HR 로그인
 
 ## 아키텍처
 
-![FOWOCO Server SW Architecture](docs/assets/architecture/fowoco-server-architecture.png)
-
-이 그림은 실제 요청이 HR Web·Worker Mobile에서 Server의 인증·업무 Workflow를
-거쳐 PostgreSQL, File Storage와 AI Runtime으로 연결되는 경계를 보여 줍니다.
-AI 결과는 Server의 승인·상태·감사 규칙을 우회해 자동 발송되거나 제출되지 않습니다.
-
-[diagrams.net 편집 원본](docs/assets/architecture/fowoco-server-architecture.drawio)
-
 Server는 하나의 Spring Boot 애플리케이션과 PostgreSQL로 배포하는
 **modular monolith**입니다. 기능별 패키지 안에서 `api → application → domain`
 방향을 지키고, JPA·HTTP·Storage 구현은 `infrastructure`에 둡니다.
