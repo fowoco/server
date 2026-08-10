@@ -1,0 +1,101 @@
+<mxfile host="app.diagrams.net" modified="2026-08-10T10:40:00.000Z" agent="Codex" version="24.7.17" type="device" compressed="false">
+  <diagram id="fowoco-core-workflow-erd" name="FOWOCO Core Workflow ERD">
+    <mxGraphModel dx="1700" dy="1160" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1160" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="FOWOCO Core Workflow ERD" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#0B5D57;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="900" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="로그인 → AI 분석 → Case·Task → 승인 → 근로자 링크·문서·OCR 흐름에 직접 참여하는 핵심 테이블" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=15;fontColor=#52646B;" vertex="1" parent="1">
+          <mxGeometry x="42" y="68" width="1300" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="scope" value="&lt;b&gt;Presentation View&lt;/b&gt; · 전체 컬럼이 아닌 PK·FK·상태 필드만 표시 · 모든 업무 데이터는 &lt;b&gt;company_id&lt;/b&gt;로 사업장 격리" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#E7F5F3;strokeColor=#179A91;strokeWidth=1.5;align=left;spacingLeft=16;fontSize=13;fontColor=#164E49;" vertex="1" parent="1">
+          <mxGeometry x="40" y="108" width="1620" height="46" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="tenant-label" value="01 · TENANT &amp;amp; PEOPLE" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=13;fontStyle=1;fontColor=#0F766E;" vertex="1" parent="1">
+          <mxGeometry x="40" y="172" width="280" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="flow-label" value="02 · AI TO CONTROLLED WORKFLOW" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=13;fontStyle=1;fontColor=#4F5FB8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="382" width="340" height="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="delivery-label" value="03 · DOCUMENT &amp;amp; WORKER DELIVERY" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=13;fontStyle=1;fontColor=#8A5B20;" vertex="1" parent="1">
+          <mxGeometry x="40" y="690" width="360" height="24" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="company" value="&lt;b&gt;company&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  company_id : UUID&lt;br&gt;    name : varchar&lt;br&gt;    status : ACTIVE...&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#E7F5F3;strokeColor=#179A91;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#164E49;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="205" width="270" height="145" as="geometry"/>
+        </mxCell>
+        <mxCell id="user-account" value="&lt;b&gt;user_account&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  user_id : UUID&lt;br&gt;FK  company_id : UUID&lt;br&gt;    normalized_email&lt;br&gt;    role : ADMIN/HR/VIEWER&lt;br&gt;    status&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#E7F5F3;strokeColor=#179A91;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#164E49;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="205" width="270" height="165" as="geometry"/>
+        </mxCell>
+        <mxCell id="worker" value="&lt;b&gt;worker&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  worker_id : UUID&lt;br&gt;FK  company_id : UUID&lt;br&gt;    display_name&lt;br&gt;    work_status&lt;br&gt;    stay_expiry_date&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#E7F5F3;strokeColor=#179A91;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#164E49;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="205" width="270" height="165" as="geometry"/>
+        </mxCell>
+        <mxCell id="tenant-note" value="&lt;b&gt;Tenant boundary&lt;/b&gt;&lt;br&gt;&lt;br&gt;Client가 보낸 company_id를 믿지 않고&lt;br&gt;JWT 또는 보안 링크에서 결정합니다.&lt;br&gt;&lt;br&gt;복합 FK는 다른 사업장 Worker·Task·File을&lt;br&gt;서로 연결하지 못하게 막습니다." style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F8FAFC;strokeColor=#94A3B8;dashed=1;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=13;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="205" width="600" height="145" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ai-run" value="&lt;b&gt;ai_run&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  ai_run_id : UUID&lt;br&gt;FK  company_id, requested_by&lt;br&gt;    instruction&lt;br&gt;    status : QUEUED...&lt;br&gt;    detected_intent&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EEF2FF;strokeColor=#6574CD;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#373E77;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="415" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="ai-candidate" value="&lt;b&gt;ai_candidate&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  ai_candidate_id : UUID&lt;br&gt;FK  ai_run_id, worker_id&lt;br&gt;    workflow_id&lt;br&gt;    missing_slots_json&lt;br&gt;    confidence&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EEF2FF;strokeColor=#6574CD;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#373E77;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="415" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="workflow-case" value="&lt;b&gt;workflow_case&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  case_id : UUID&lt;br&gt;FK  company_id, worker_id&lt;br&gt;    lifecycle_status&lt;br&gt;    priority&lt;br&gt;    workflow_snapshot_json&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EAF7EE;strokeColor=#56A36C;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#2D603A;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="415" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="task" value="&lt;b&gt;task&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  task_id : UUID&lt;br&gt;FK  company_id, worker_id&lt;br&gt;REF case_id&lt;br&gt;    task_type / workflow_id&lt;br&gt;    status / due_date / version&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#EAF7EE;strokeColor=#3D9B63;strokeWidth=2.5;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#245535;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="415" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="approval" value="&lt;b&gt;approval_request&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  approval_request_id&lt;br&gt;FK  task_id, requested_by&lt;br&gt;    status : PENDING...&lt;br&gt;    target_task_version&lt;br&gt;    approved_task_version&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFF7E8;strokeColor=#E0A43C;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#5D4315;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="415" width="270" height="185" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="worker-document" value="&lt;b&gt;worker_document&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  worker_document_id&lt;br&gt;FK  worker_id, task_id&lt;br&gt;REF file_id&lt;br&gt;    document_type&lt;br&gt;    submission_status&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F5F3FF;strokeColor=#8B75BD;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#4C3D70;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="725" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="stored-file" value="&lt;b&gt;stored_file&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  stored_file_id : UUID&lt;br&gt;FK  company_id, task_id, worker_id&lt;br&gt;    name / mime_type / size&lt;br&gt;    purpose / storage_key&lt;br&gt;    verified&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F5F3FF;strokeColor=#8B75BD;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#4C3D70;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="725" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="ocr-run" value="&lt;b&gt;document_ocr_run&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  ocr_run_id : UUID&lt;br&gt;FK  worker_document_id&lt;br&gt;FK  stored_file_id, requested_by&lt;br&gt;    status / document_type&lt;br&gt;    encrypted result / correction&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F5F3FF;strokeColor=#8B75BD;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#4C3D70;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="725" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="worker-link" value="&lt;b&gt;worker_link&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  worker_link_id : UUID&lt;br&gt;FK  task_id, issued_by&lt;br&gt;    token_hash / expires_at&lt;br&gt;    status&lt;br&gt;    delivery_status / sent_at&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFF7E8;strokeColor=#E0A43C;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#5D4315;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="725" width="270" height="185" as="geometry"/>
+        </mxCell>
+        <mxCell id="worker-response" value="&lt;b&gt;worker_response&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK  response_id : UUID&lt;br&gt;FK  worker_link_id, company_id&lt;br&gt;    response_type&lt;br&gt;    message&lt;br&gt;    received_at&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFF7E8;strokeColor=#E0A43C;strokeWidth=2;align=left;verticalAlign=top;spacingTop=12;spacingLeft=14;fontSize=16;fontColor=#5D4315;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1360" y="725" width="270" height="185" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="audit" value="&lt;b&gt;audit_event · append-only activity record&lt;/b&gt;&lt;br&gt;&lt;font face=&quot;Courier New&quot; style=&quot;font-size:12px&quot;&gt;PK audit_event_id  ·  FK company_id  ·  REF target_type + target_id  ·  actor_type / actor_id  ·  action / request_id / created_at&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#FFF2F2;strokeColor=#D86B6B;strokeWidth=2;align=left;verticalAlign=middle;spacingLeft=18;fontSize=15;fontColor=#7F2F2F;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="980" width="930" height="92" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend" value="&lt;b&gt;관계 표시&lt;/b&gt;  ━  실제 FK 제약 &amp;nbsp;&amp;nbsp; ┄  서비스/다형 참조(REF) 또는 생략한 결정 테이블 경유" style="rounded=1;whiteSpace=wrap;html=1;arcSize=8;fillColor=#F8FAFC;strokeColor=#CBD5E1;align=center;fontSize=12;fontColor=#475569;" vertex="1" parent="1">
+          <mxGeometry x="370" y="1090" width="930" height="38" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e-company-user" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#179A91;strokeWidth=2;endArrow=ERmany;startArrow=ERone;fontSize=11;fontColor=#0F766E;" edge="1" parent="1" source="company" target="user-account"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-company-worker" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#179A91;strokeWidth=2;endArrow=ERmany;startArrow=ERone;fontSize=11;fontColor=#0F766E;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" edge="1" parent="1" source="company" target="worker"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="175" y="378"/><mxPoint x="835" y="378"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-user-airun" value="requested_by" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6574CD;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#4F5FB8;" edge="1" parent="1" source="user-account" target="ai-run"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="505" y="390"/><mxPoint x="175" y="390"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-airun-candidate" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6574CD;strokeWidth=2;endArrow=ERmany;startArrow=ERone;fontSize=11;fontColor=#4F5FB8;" edge="1" parent="1" source="ai-run" target="ai-candidate"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-worker-candidate" value="worker_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#179A91;strokeWidth=1.5;endArrow=block;endFill=1;fontSize=10;fontColor=#0F766E;" edge="1" parent="1" source="worker" target="ai-candidate"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="835" y="390"/><mxPoint x="505" y="390"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-candidate-case" value="HR 채택 · decision tables 경유" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#6574CD;strokeWidth=2;dashed=1;dashPattern=6 4;endArrow=block;endFill=1;fontSize=10;fontColor=#4F5FB8;" edge="1" parent="1" source="ai-candidate" target="workflow-case"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-case-task" value="case_id · logical REF" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#56A36C;strokeWidth=2;dashed=1;dashPattern=6 4;endArrow=block;endFill=1;fontSize=10;fontColor=#2D603A;" edge="1" parent="1" source="workflow-case" target="task"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-task-approval" value="1:N · 승인 이력" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#E0A43C;strokeWidth=2;endArrow=ERmany;startArrow=ERone;fontSize=10;fontColor=#8A5B20;" edge="1" parent="1" source="task" target="approval"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-task-document" value="task_id + worker_id + company_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#8B75BD;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#4C3D70;" edge="1" parent="1" source="task" target="worker-document"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1165" y="660"/><mxPoint x="175" y="660"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-document-file" value="file_id · logical REF" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#8B75BD;strokeWidth=2;dashed=1;dashPattern=6 4;endArrow=block;endFill=1;fontSize=10;fontColor=#4C3D70;" edge="1" parent="1" source="worker-document" target="stored-file"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-document-ocr" value="worker_document_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#8B75BD;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#4C3D70;" edge="1" parent="1" source="worker-document" target="ocr-run"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="175" y="940"/><mxPoint x="835" y="940"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-file-ocr" value="stored_file_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#8B75BD;strokeWidth=2;endArrow=block;endFill=1;fontSize=10;fontColor=#4C3D70;" edge="1" parent="1" source="stored-file" target="ocr-run"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-task-link" value="1:N · 발급/전달" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#E0A43C;strokeWidth=2;endArrow=ERmany;startArrow=ERone;fontSize=10;fontColor=#8A5B20;" edge="1" parent="1" source="task" target="worker-link"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-link-response" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#E0A43C;strokeWidth=2;endArrow=ERmany;startArrow=ERone;fontSize=11;fontColor=#8A5B20;" edge="1" parent="1" source="worker-link" target="worker-response"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-task-audit" value="target_type + target_id" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D86B6B;strokeWidth=1.8;dashed=1;dashPattern=6 4;endArrow=block;endFill=1;fontSize=10;fontColor=#8A3030;exitX=1;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="task" target="audit"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1330" y="507"/><mxPoint x="1330" y="1026"/><mxPoint x="1300" y="1026"/></Array></mxGeometry></mxCell>
+        <mxCell id="e-ocr-audit" value="검토 활동" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D86B6B;strokeWidth=1.5;dashed=1;dashPattern=6 4;endArrow=block;endFill=1;fontSize=10;fontColor=#8A3030;" edge="1" parent="1" source="ocr-run" target="audit"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-link-audit" value="링크 활동" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#D86B6B;strokeWidth=1.5;dashed=1;dashPattern=6 4;endArrow=block;endFill=1;fontSize=10;fontColor=#8A3030;" edge="1" parent="1" source="worker-link" target="audit"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
