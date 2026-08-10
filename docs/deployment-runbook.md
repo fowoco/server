@@ -78,12 +78,14 @@ DB pool은 기본 최대 10개입니다. 클러스터 규모에 따라 `DB_MAX_P
 ```bash
 export DEMO_DB_PASSWORD='local-demo-password'
 export JWT_SECRET_BASE64="$(openssl rand -base64 32)"
+export DEMO_SEED_ENABLED=true
+export DEMO_SEED_ADMIN_PASSWORD='로컬 전용 12자 이상 값'
 docker compose -f compose.demo.yml up --build
 ```
 
-PostgreSQL Demo Seed는 #94 검증이 끝날 때까지 기본적으로 꺼져 있습니다. 실행 후
-`POST /api/v1/auth/signup`으로 가상 사업장 계정을 만들거나, #94 완료 뒤에만
-`DEMO_SEED_ENABLED=true`와 `DEMO_SEED_ADMIN_PASSWORD`를 추가합니다.
+`DEMO_SEED_ENABLED`의 Compose 기본값은 안전하게 `false`입니다. 개인 Demo DB에서 Seed가
+필요한 경우에만 위와 같이 활성화하고 12자 이상의 합성 비밀번호를 지정합니다. 첫 기동은
+빈 PostgreSQL 17 DB에 Flyway와 전체 Demo Seed를 적용합니다.
 
 확인:
 
@@ -92,8 +94,23 @@ curl --fail http://127.0.0.1:8080/actuator/health/readiness
 curl --fail http://127.0.0.1:8080/health
 ```
 
-종료 시 `docker compose -f compose.demo.yml down`을 사용합니다. DB 데이터를 지우려는 경우에만
-영향을 확인한 뒤 별도로 volume 삭제를 결정합니다.
+멱등성 Smoke는 서버를 중지하되 volume을 유지하고 같은 설정으로 다시 기동합니다.
+
+```bash
+docker compose -f compose.demo.yml stop server
+docker compose -f compose.demo.yml up --build server
+```
+
+두 번째 기동도 성공하고 응웬반A Worker
+`92000000-0000-0000-0000-000000000006`가 한 건 유지되며, 응웬반A의 Golden Flow
+Case·Task는 0건이어야 합니다. WorkerDocument는 Task·StoredFile 연결이 없는
+`PASSPORT_COPY/VERIFIED` 1건과 `ARC/MISSING` 1건만 유지되어야 합니다. 다른 Showcase
+Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
+
+종료 시 `docker compose -f compose.demo.yml down`을 사용합니다. DB 데이터를 지우려는
+경우에만 정확한 Compose project와 전용 volume인지 확인한 뒤 별도로 volume 삭제를
+결정합니다. 구버전 Golden Flow 예약 ID 감지로 기동이 중단된 개인 Demo DB만 초기화
+대상이며, Seed가 기존 데이터를 자동 삭제하거나 Flyway로 정리하지 않습니다.
 
 ## 배포 후 Smoke
 

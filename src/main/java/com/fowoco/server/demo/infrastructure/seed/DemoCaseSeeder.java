@@ -2,6 +2,7 @@ package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.TaskSeed;
 import com.fowoco.server.task.domain.TaskStatus;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -67,8 +68,8 @@ final class DemoCaseSeeder {
                 DemoOperationalSeedCatalog.WORKFLOW_CATALOG_VERSION,
                 snapshot(tasks),
                 context.actorId(),
-                createdAt,
-                context.now()
+                Timestamp.from(createdAt),
+                Timestamp.from(context.now())
         );
     }
 
