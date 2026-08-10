@@ -58,13 +58,40 @@ function validateOpenApi(specification) {
   }
 }
 
+function validateServerUrl(value) {
+  if (value === undefined || String(value).trim() === '') {
+    return null
+  }
+
+  let parsed
+  try {
+    parsed = new URL(String(value).trim())
+  } catch {
+    throw new Error(`실제 호출 Server URL이 올바르지 않습니다: ${value}`)
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('GitHub Pages 실제 호출 Server URL은 HTTPS만 허용합니다.')
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('Server URL에는 인증정보, query, fragment를 포함할 수 없습니다.')
+  }
+  return {
+    url: parsed.href.replace(/\/$/, ''),
+    origin: parsed.origin,
+  }
+}
+
 function commitLink(repositoryUrl, commit) {
   return /^[0-9a-f]{7,40}$/i.test(commit)
     ? `${repositoryUrl}/commit/${commit}`
     : repositoryUrl
 }
 
-const swaggerInit = `
+function swaggerInit(tryItOutEnabled) {
+  const supportedSubmitMethods = tryItOutEnabled
+    ? "['get', 'post', 'put', 'patch', 'delete', 'options', 'head']"
+    : '[]'
+  return `
 window.addEventListener('DOMContentLoaded', () => {
   const specification = JSON.parse(document.getElementById('openapi-specification').textContent)
   window.ui = SwaggerUIBundle({
@@ -74,7 +101,8 @@ window.addEventListener('DOMContentLoaded', () => {
     displayRequestDuration: true,
     filter: true,
     persistAuthorization: false,
-    supportedSubmitMethods: [],
+    withCredentials: false,
+    supportedSubmitMethods: ${supportedSubmitMethods},
     presets: [
       SwaggerUIBundle.presets.apis,
       SwaggerUIStandalonePreset,
@@ -83,11 +111,20 @@ window.addEventListener('DOMContentLoaded', () => {
   })
 })
 `.trimStart()
+}
 
-function page({ specification, generatedAt, commit, repositoryUrl }) {
+function page({ specification, generatedAt, commit, repositoryUrl, server }) {
   const title = specification.info.title
   const version = specification.info.version ?? 'unknown'
   const commitHref = commitLink(repositoryUrl, commit)
+  const connectSource = server ? ` ${server.origin}` : ''
+  const authVisibility = server ? '' : ',\n    .swagger-ui .auth-wrapper'
+  const notice = server
+    ? `실제 데모 Server <code>${escapeHtml(server.url)}</code>를 호출할 수 있습니다.
+    로그인 응답의 Access Token을 복사해 <strong>Authorize</strong>에 입력하세요.
+    Refresh·Logout 쿠키는 same-site 정책 때문에 실제 Client에서 확인합니다.`
+    : `main 코드에서 자동 생성한 읽기 전용 API 계약입니다. 실제 요청 전송은 비활성화되어 있습니다.
+    HTTPS 데모 Server가 준비되면 저장소의 <code>SERVER_PUBLIC_URL</code> 변수로 활성화합니다.`
 
   return `<!doctype html>
 <html lang="ko">
@@ -95,7 +132,7 @@ function page({ specification, generatedAt, commit, repositoryUrl }) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="FOWOCO Server main 브랜치에서 자동 생성한 OpenAPI 문서">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; connect-src 'self'${escapeHtml(connectSource)}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
   <title>${escapeHtml(title)} · Swagger</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_VERSION}/swagger-ui.css">
   <style>
@@ -124,8 +161,7 @@ function page({ specification, generatedAt, commit, repositoryUrl }) {
       font: 14px/1.6 Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .api-docs-meta { color: #d5e8e6; font-size: .85rem; }
-    .swagger-ui .topbar,
-    .swagger-ui .auth-wrapper { display: none; }
+    .swagger-ui .topbar${authVisibility} { display: none; }
     @media (max-width: 720px) {
       .api-docs-header { align-items: flex-start; flex-direction: column; }
     }
@@ -144,8 +180,7 @@ function page({ specification, generatedAt, commit, repositoryUrl }) {
     </nav>
   </header>
   <p class="api-docs-notice">
-    main 코드에서 자동 생성한 읽기 전용 API 계약입니다. 실제 요청 전송은 비활성화되어 있습니다.
-    로컬에서 API를 시험하려면 서버의 <code>/swagger-ui.html</code>을 사용하세요.
+    ${notice}
   </p>
   <main id="swagger-ui"></main>
   <script id="openapi-specification" type="application/json">${safeEmbeddedJson(specification)}</script>
@@ -167,11 +202,19 @@ async function main() {
   const generatedAt = validateGeneratedAt(args['generated-at'] ?? new Date().toISOString())
   const commit = args.commit ?? 'unknown'
   const repositoryUrl = args['repository-url'] ?? 'https://github.com/fowoco/server'
+  const server = validateServerUrl(args['server-url'])
 
   await access(input)
   const specification = JSON.parse(await readFile(input, 'utf8'))
   validateOpenApi(specification)
-  delete specification.servers
+  if (server) {
+    specification.servers = [{
+      url: server.url,
+      description: 'FOWOCO HTTPS 데모 Server',
+    }]
+  } else {
+    delete specification.servers
+  }
 
   await mkdir(path.join(output, 'assets'), { recursive: true })
   await writeFile(path.join(output, 'index.html'), page({
@@ -179,9 +222,10 @@ async function main() {
     generatedAt,
     commit,
     repositoryUrl,
+    server,
   }))
   await writeFile(path.join(output, 'openapi.json'), `${JSON.stringify(specification, null, 2)}\n`)
-  await writeFile(path.join(output, 'assets', 'swagger-init.js'), swaggerInit)
+  await writeFile(path.join(output, 'assets', 'swagger-init.js'), swaggerInit(Boolean(server)))
   await writeFile(path.join(output, 'metadata.json'), `${JSON.stringify({
     generated_at: generatedAt,
     git_commit: commit,
@@ -189,7 +233,8 @@ async function main() {
     api_version: specification.info.version ?? null,
     path_count: Object.keys(specification.paths).length,
     swagger_ui_version: SWAGGER_UI_VERSION,
-    try_it_out_enabled: false,
+    try_it_out_enabled: Boolean(server),
+    server_url: server?.url ?? null,
   }, null, 2)}\n`)
 }
 
