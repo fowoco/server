@@ -85,7 +85,7 @@ docker compose -f compose.demo.yml up --build
 
 `DEMO_SEED_ENABLED`의 Compose 기본값은 안전하게 `false`입니다. 개인 Demo DB에서 Seed가
 필요한 경우에만 위와 같이 활성화하고 12자 이상의 합성 비밀번호를 지정합니다. 첫 기동은
-빈 PostgreSQL 17 DB에 Flyway와 전체 Demo Seed를 적용합니다.
+빈 PostgreSQL 16 DB에 Flyway와 전체 Demo Seed를 적용합니다.
 
 확인:
 

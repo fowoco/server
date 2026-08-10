@@ -40,7 +40,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_DB: fowoco_docs
           POSTGRES_USER: fowoco_docs

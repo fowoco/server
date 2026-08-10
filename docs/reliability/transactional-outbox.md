@@ -181,4 +181,4 @@ Content-Type: application/json
 ./gradlew clean test
 ```
 
-CI는 PostgreSQL 17 service에도 모든 Flyway migration을 적용하고 계약을 검증합니다.
+CI는 PostgreSQL 16 service에도 모든 Flyway migration을 적용하고 계약을 검증합니다.

@@ -2,7 +2,7 @@ name: fowoco-server-demo
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: fowoco
       POSTGRES_USER: fowoco
