@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -235,42 +236,15 @@ class AiRuntimeContractValidatorTest {
 
     @Test
     void rejectsCandidateThatChangesServerOwnedDocumentStatus() {
-        AiAnalysisRequest baseRequest = validRequest();
-        WorkerContext baseWorker = baseRequest.analysisInput().workers().get(0);
-        Map<String, String> requestedFields = new HashMap<>(baseWorker.requestedFields());
-        requestedFields.put("arc_status", "MISSING");
-        WorkerContext worker = new WorkerContext(
-                baseWorker.workerRef(),
-                baseWorker.displayName(),
-                baseWorker.nationalityCode(),
-                baseWorker.preferredLanguage(),
-                baseWorker.workStatus(),
-                baseWorker.stayExpiryDate(),
-                baseWorker.contractStartDate(),
-                baseWorker.contractEndDate(),
-                requestedFields
-        );
-        List<String> requestedFieldKeys = new ArrayList<>(
-                baseRequest.analysisInput().requestedFieldKeys()
-        );
-        requestedFieldKeys.add("arc_status");
-        WorkflowConstraint baseConstraint =
-                baseRequest.analysisInput().workflowConstraints().get(0);
-        var allowedSlotKeys = new HashSet<>(baseConstraint.allowedSlotKeys());
-        allowedSlotKeys.add("arc_status");
-        AnalysisInput input = new AnalysisInput(
-                baseRequest.analysisInput().instruction(),
-                baseRequest.analysisInput().extractedSlots(),
-                requestedFieldKeys,
-                List.of(worker),
-                List.of(new WorkflowConstraint(baseConstraint.workflowId(), allowedSlotKeys))
-        );
-        AiAnalysisRequest request = requestWithPhase(AiAnalysisPhase.ANALYZE, input);
+        AiAnalysisRequest request = requestWithDocumentStatuses();
         AiCandidate changedStatus = new AiCandidate(
-                "candidate-changed-document-status",
+                "candidate-document-status",
                 WORKER_REF,
                 WORKFLOW_ID,
-                Map.of("arc_status", "VERIFIED"),
+                Map.of(
+                        "passport_status", "VERIFIED",
+                        "arc_status", "VERIFIED"
+                ),
                 List.of(),
                 BigDecimal.ONE
         );
@@ -278,6 +252,64 @@ class AiRuntimeContractValidatorTest {
         assertFailure(
                 () -> validator.validateResponse(request, responseWithCandidate(changedStatus)),
                 AiRuntimeFailureCode.CORE_VALUE_MISMATCH
+        );
+    }
+
+    @Test
+    void acceptsCandidateThatPreservesServerOwnedDocumentStatuses() {
+        AiCandidate preservedStatuses = new AiCandidate(
+                "candidate-preserved-document-status",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of(
+                        "passport_status", "VERIFIED",
+                        "arc_status", "MISSING"
+                ),
+                List.of(),
+                BigDecimal.ONE
+        );
+
+        assertThatCode(() -> validator.validateResponse(
+                requestWithDocumentStatuses(),
+                responseWithCandidate(preservedStatuses)
+        )).doesNotThrowAnyException();
+    }
+
+    private AiAnalysisRequest requestWithDocumentStatuses() {
+        AiAnalysisRequest base = validRequest();
+        WorkerContext original = base.analysisInput().workers().get(0);
+        WorkerContext worker = new WorkerContext(
+                original.workerRef(),
+                original.displayName(),
+                original.nationalityCode(),
+                original.preferredLanguage(),
+                original.workStatus(),
+                original.stayExpiryDate(),
+                original.contractStartDate(),
+                original.contractEndDate(),
+                Map.of(
+                        "passport_status", "VERIFIED",
+                        "arc_status", "MISSING"
+                )
+        );
+        AnalysisInput input = new AnalysisInput(
+                base.analysisInput().instruction(),
+                base.analysisInput().extractedSlots(),
+                List.of("passport_status", "arc_status"),
+                List.of(worker),
+                List.of(new WorkflowConstraint(
+                        WORKFLOW_ID,
+                        Set.of("passport_status", "arc_status")
+                ))
+        );
+        return new AiAnalysisRequest(
+                base.requestId(),
+                base.attemptId(),
+                base.phase(),
+                base.contractVersion(),
+                base.requiredKnowledgeVersion(),
+                base.deadlineMs(),
+                input
         );
     }
 

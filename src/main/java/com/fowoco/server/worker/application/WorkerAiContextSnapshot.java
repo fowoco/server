@@ -19,7 +19,7 @@ public record WorkerAiContextSnapshot(
         LocalDate stayExpiryDate,
         LocalDate contractStartDate,
         LocalDate contractEndDate,
-        Map<DocumentType, WorkerDocumentAiContextSnapshot> documents
+        WorkerIdentityDocumentStatuses identityDocumentStatuses
 ) {
 
     public WorkerAiContextSnapshot {
@@ -27,7 +27,31 @@ public record WorkerAiContextSnapshot(
         Objects.requireNonNull(companyId, "companyId must not be null");
         Objects.requireNonNull(displayName, "displayName must not be null");
         Objects.requireNonNull(workStatus, "workStatus must not be null");
-        Objects.requireNonNull(documents, "documents must not be null");
-        documents = Map.copyOf(documents);
+        Objects.requireNonNull(identityDocumentStatuses, "identityDocumentStatuses must not be null");
+    }
+
+    public WorkerAiContextSnapshot(
+            UUID workerId,
+            UUID companyId,
+            String displayName,
+            String nationalityCode,
+            String preferredLanguage,
+            String workStatus,
+            LocalDate stayExpiryDate,
+            LocalDate contractStartDate,
+            LocalDate contractEndDate
+    ) {
+        this(
+                workerId,
+                companyId,
+                displayName,
+                nationalityCode,
+                preferredLanguage,
+                workStatus,
+                stayExpiryDate,
+                contractStartDate,
+                contractEndDate,
+                WorkerIdentityDocumentStatuses.missing()
+        );
     }
 }

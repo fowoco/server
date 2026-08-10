@@ -22,6 +22,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,6 +49,8 @@ class AiRunApiIntegrationTest {
     private static final UUID HR_A = UUID.fromString("82000000-0000-0000-0000-000000000001");
     private static final UUID HR_B = UUID.fromString("82000000-0000-0000-0000-000000000002");
     private static final UUID WORKER_A = UUID.fromString("83000000-0000-0000-0000-000000000001");
+    private static final UUID PASSPORT_A = UUID.fromString("84000000-0000-0000-0000-000000000001");
+    private static final UUID ARC_A = UUID.fromString("84000000-0000-0000-0000-000000000002");
     private static final String HR_A_EMAIL = "airun.hr.a@example.com";
     private static final String HR_B_EMAIL = "airun.hr.b@example.com";
     private static final String PASSWORD = "Test-password-1!";
@@ -105,6 +108,8 @@ class AiRunApiIntegrationTest {
         insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash);
         insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash);
         insertWorker();
+        insertIdentityDocument(PASSPORT_A, "PASSPORT_COPY", "VERIFIED");
+        insertIdentityDocument(ARC_A, "ARC", "VERIFIED");
     }
 
     @Test
@@ -440,6 +445,133 @@ class AiRunApiIntegrationTest {
         assertThat(otherCompany.statusCode()).isEqualTo(404);
     }
 
+    @Test
+    void missingArcCreatesOneDraftDocumentRequestInTheRenewalCase() throws Exception {
+        jdbcTemplate.update(
+                "UPDATE worker_document SET submission_status = 'MISSING' WHERE worker_document_id = ?",
+                ARC_A
+        );
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> directReviewResponse(
+                invocation.getArgument(0),
+                runtimeCalls.incrementAndGet()
+        ));
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> created = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"응웬반A 체류연장 준비해줘"}
+                """,
+                token,
+                "airun-missing-arc"
+        );
+        UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+        HttpResponse<String> detail = awaitRun(aiRunId, token, "REVIEW_REQUIRED", 2);
+        UUID candidateId = UUID.fromString(JsonPath.read(detail.body(), "$.candidates[0].candidate_id"));
+        long expectedVersion = JsonPath.<Number>read(detail.body(), "$.version").longValue();
+        String decisionBody = """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(expectedVersion, candidateId);
+
+        HttpResponse<String> decided = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                token,
+                "candidate-missing-arc"
+        );
+        HttpResponse<String> repeated = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                token,
+                "candidate-missing-arc"
+        );
+
+        assertThat(decided.statusCode()).isEqualTo(200);
+        assertThat(repeated.statusCode()).isEqualTo(200);
+        UUID caseId = UUID.fromString(JsonPath.read(decided.body(), "$.case_id"));
+        assertThat(JsonPath.<List<String>>read(decided.body(), "$.task_ids")).hasSize(4);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'",
+                Integer.class,
+                caseId
+        )).isEqualTo(1);
+        Map<String, Object> requestTask = jdbcTemplate.queryForMap(
+                """
+                SELECT workflow_id, status, business_data_json
+                FROM task
+                WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'
+                """,
+                caseId
+        );
+        assertThat(requestTask.get("workflow_id")).isEqualTo("WF-DOC-001");
+        assertThat(requestTask.get("status")).isEqualTo("DRAFT");
+        assertThat((String) requestTask.get("business_data_json"))
+                .contains("ARC", "SECURE_LINK")
+                .doesNotContain("PASSPORT_COPY");
+    }
+
+    @Test
+    void twoMissingIdentityDocumentsAreCombinedIntoOneRequestTask() throws Exception {
+        jdbcTemplate.update(
+                "UPDATE worker_document SET submission_status = 'MISSING' WHERE worker_id = ?",
+                WORKER_A
+        );
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> directReviewResponse(
+                invocation.getArgument(0),
+                runtimeCalls.incrementAndGet()
+        ));
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> created = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"응웬반A 체류연장 준비해줘"}
+                """,
+                token,
+                "airun-missing-both-documents"
+        );
+        UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+        HttpResponse<String> detail = awaitRun(aiRunId, token, "REVIEW_REQUIRED", 2);
+        UUID candidateId = UUID.fromString(JsonPath.read(detail.body(), "$.candidates[0].candidate_id"));
+        long expectedVersion = JsonPath.<Number>read(detail.body(), "$.version").longValue();
+
+        HttpResponse<String> decided = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(expectedVersion, candidateId),
+                token,
+                "candidate-missing-both-documents"
+        );
+
+        assertThat(decided.statusCode()).isEqualTo(200);
+        UUID caseId = UUID.fromString(JsonPath.read(decided.body(), "$.case_id"));
+        assertThat(JsonPath.<List<String>>read(decided.body(), "$.task_ids")).hasSize(4);
+        String businessData = jdbcTemplate.queryForObject(
+                """
+                SELECT business_data_json
+                FROM task
+                WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'
+                """,
+                String.class,
+                caseId
+        );
+        assertThat(businessData).contains("PASSPORT_COPY", "ARC", "SECURE_LINK");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'",
+                Integer.class,
+                caseId
+        )).isEqualTo(1);
+    }
+
     private AiAnalysisResponse scriptedResponse(AiAnalysisRequest request, int call) {
         if (call == 1) {
             return new AiAnalysisResponse(
@@ -450,7 +582,13 @@ class AiRunApiIntegrationTest {
                             new BigDecimal("0.96"),
                             "응웬반A",
                             Map.of(),
-                            List.of("worker_id", "stay_expiry_date", "due_at")
+                            List.of(
+                                    "worker_id",
+                                    "stay_expiry_date",
+                                    "passport_status",
+                                    "arc_status",
+                                    "due_at"
+                            )
                     ),
                     List.of(),
                     List.of(),
@@ -503,7 +641,12 @@ class AiRunApiIntegrationTest {
                             new BigDecimal("0.96"),
                             "응웬반A",
                             Map.of(),
-                            List.of("worker_id", "stay_expiry_date")
+                            List.of(
+                                    "worker_id",
+                                    "stay_expiry_date",
+                                    "passport_status",
+                                    "arc_status"
+                            )
                     ),
                     List.of(),
                     List.of(),
@@ -513,6 +656,9 @@ class AiRunApiIntegrationTest {
                     30
             );
         }
+        Map<String, String> extractedSlots = new LinkedHashMap<>(
+                request.analysisInput().workers().get(0).requestedFields()
+        );
         return new AiAnalysisResponse(
                 request.requestId(),
                 AiAnalysisOutcome.REVIEW_REQUIRED,
@@ -522,10 +668,7 @@ class AiRunApiIntegrationTest {
                         "candidate-1",
                         WORKER_A,
                         "WF-STY-001",
-                        Map.of(
-                                "worker_id", WORKER_A.toString(),
-                                "stay_expiry_date", "2026-09-30"
-                        ),
+                        extractedSlots,
                         List.of(),
                         new BigDecimal("0.93")
                 )),
@@ -681,6 +824,22 @@ class AiRunApiIntegrationTest {
                 LocalDate.of(2026, 9, 30),
                 LocalDate.of(2025, 9, 1),
                 LocalDate.of(2026, 9, 30)
+        );
+    }
+
+    private void insertIdentityDocument(UUID documentId, String documentType, String status) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_document (
+                    worker_document_id, worker_id, company_id, document_type, submission_status,
+                    created_at, updated_at, version
+                ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                documentId,
+                WORKER_A,
+                COMPANY_A,
+                documentType,
+                status
         );
     }
 }

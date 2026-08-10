@@ -61,7 +61,13 @@ class AiAnalysisContinuationServiceTest {
                     assertThat(phase).isEqualTo(AiAnalysisPhase.ANALYZE);
                     assertThat(contextRound).isEqualTo(1);
                     assertThat(analysisInput.requestedFieldKeys())
-                            .containsExactly("worker_id", "stay_expiry_date", "due_at");
+                            .containsExactly(
+                                    "worker_id",
+                                    "stay_expiry_date",
+                                    "passport_status",
+                                    "arc_status",
+                                    "due_at"
+                            );
                     callOrder.add("attempt");
                     return NEXT_ATTEMPT_ID;
                 },
@@ -93,12 +99,20 @@ class AiAnalysisContinuationServiceTest {
         assertThat(analyzeRequest.analysisInput().extractedSlots())
                 .containsEntry("document_type", "STAY_EXTENSION");
         assertThat(analyzeRequest.analysisInput().requestedFieldKeys())
-                .containsExactly("worker_id", "stay_expiry_date", "due_at");
+                .containsExactly(
+                        "worker_id",
+                        "stay_expiry_date",
+                        "passport_status",
+                        "arc_status",
+                        "due_at"
+                );
         assertThat(analyzeRequest.analysisInput().workers()).hasSize(1);
         assertThat(analyzeRequest.analysisInput().workers().get(0).requestedFields())
                 .containsExactlyInAnyOrderEntriesOf(Map.of(
                         "worker_id", WORKER_ID.toString(),
-                        "stay_expiry_date", "2026-09-30"
+                        "stay_expiry_date", "2026-09-30",
+                        "passport_status", "MISSING",
+                        "arc_status", "MISSING"
                 ));
     }
 
@@ -150,7 +164,13 @@ class AiAnalysisContinuationServiceTest {
                         new BigDecimal("0.94"),
                         "응웬반안",
                         Map.of("document_type", "STAY_EXTENSION"),
-                        List.of("worker_id", "stay_expiry_date", "due_at")
+                        List.of(
+                                "worker_id",
+                                "stay_expiry_date",
+                                "passport_status",
+                                "arc_status",
+                                "due_at"
+                        )
                 ),
                 List.of(),
                 List.of(),
@@ -176,7 +196,13 @@ class AiAnalysisContinuationServiceTest {
     }
 
     private WorkflowCatalog catalog() {
-        Set<String> allowedSlots = Set.of("worker_id", "due_at", "stay_expiry_date");
+        Set<String> allowedSlots = Set.of(
+                "worker_id",
+                "due_at",
+                "stay_expiry_date",
+                "passport_status",
+                "arc_status"
+        );
         WorkflowDefinition workflow = new WorkflowDefinition(
                 "WF-STY-001",
                 "체류기간 연장",

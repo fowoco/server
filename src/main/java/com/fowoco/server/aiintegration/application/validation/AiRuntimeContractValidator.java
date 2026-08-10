@@ -343,16 +343,15 @@ public class AiRuntimeContractValidator {
                     "AI Runtime changed a Server-owned core value."
             );
         }
-        for (String fieldKey : SERVER_OWNED_DOCUMENT_FIELDS) {
-            String returnedValue = candidate.extractedSlots().get(fieldKey);
-            if (returnedValue != null
-                    && !Objects.equals(worker.requestedFields().get(fieldKey), returnedValue)) {
+        worker.requestedFields().forEach((key, originalValue) -> {
+            String returnedValue = candidate.extractedSlots().get(key);
+            if (returnedValue != null && !originalValue.equals(returnedValue)) {
                 reject(
                         AiRuntimeFailureCode.CORE_VALUE_MISMATCH,
-                        "AI Runtime changed a Server-owned document value."
+                        "AI Runtime changed a Server-owned requested field."
                 );
             }
-        }
+        });
     }
 
     private void validateAllowedSlot(String slot, Set<String> allowedSlots) {

@@ -43,10 +43,8 @@ class AiSlotResolutionTransactionTest {
                 requirement(List.of(
                         "worker_id",
                         "stay_expiry_date",
-                        "passport_copy_status",
-                        "passport_copy_expiry_date",
+                        "passport_status",
                         "arc_status",
-                        "arc_expiry_date",
                         "due_at"
                 ))
         );
@@ -56,8 +54,7 @@ class AiSlotResolutionTransactionTest {
         assertThat(result.resolvedFields()).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "worker_id", WORKER_A.toString(),
                 "stay_expiry_date", "2026-09-30",
-                "passport_copy_status", "VERIFIED",
-                "passport_copy_expiry_date", "2027-09-30",
+                "passport_status", "MISSING",
                 "arc_status", "MISSING"
         ));
         assertThat(result.missingFieldKeys()).containsExactly("arc_expiry_date", "due_at");
@@ -150,10 +147,8 @@ class AiSlotResolutionTransactionTest {
                                         "worker_id",
                                         "due_at",
                                         "stay_expiry_date",
-                                        "passport_copy_status",
-                                        "passport_copy_expiry_date",
-                                        "arc_status",
-                                        "arc_expiry_date"
+                                        "passport_status",
+                                        "arc_status"
                                 )
                         ),
                         workflow(

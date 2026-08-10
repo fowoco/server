@@ -145,13 +145,8 @@ public class AiSlotResolutionTransaction {
             case "worker_id" -> worker.workerId().toString();
             case "stay_expiry_date" -> formatDate(worker.stayExpiryDate());
             case "contract_end_date" -> formatDate(worker.contractEndDate());
-            case "passport_copy_status" -> documentStatus(worker, DocumentType.PASSPORT_COPY);
-            case "passport_copy_expiry_date" -> documentExpiryDate(
-                    worker,
-                    DocumentType.PASSPORT_COPY
-            );
-            case "arc_status" -> documentStatus(worker, DocumentType.ARC);
-            case "arc_expiry_date" -> documentExpiryDate(worker, DocumentType.ARC);
+            case "passport_status" -> worker.identityDocumentStatuses().passportStatus().name();
+            case "arc_status" -> worker.identityDocumentStatuses().arcStatus().name();
             default -> null;
         };
     }
