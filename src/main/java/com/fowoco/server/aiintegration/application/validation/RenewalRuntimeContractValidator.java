@@ -25,6 +25,8 @@ public final class RenewalRuntimeContractValidator {
             "NEEDS_INFO",
             "REQUEST_CONTRACT_SLOTS",
             "REQUEST_IDENTITY_DOCUMENT",
+            "REQUEST_PASSPORT",
+            "REQUEST_ALIEN_REGISTRATION",
             "GENERATE_DRAFTS",
             "READY_FOR_REVIEW",
             "OCR_SAVED",
@@ -81,7 +83,12 @@ public final class RenewalRuntimeContractValidator {
         if (!request.taskId().equals(response.taskId())) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal response taskId does not match.");
         }
-        if (!RENEWAL_INTENT.equals(response.intent()) || !RENEWAL_WORKFLOW.equals(response.workflowId())) {
+        boolean renewalResult = RENEWAL_INTENT.equals(response.intent())
+                && RENEWAL_WORKFLOW.equals(response.workflowId());
+        boolean outOfScopeResult = "out_of_scope".equals(response.scenario())
+                && "OUT_OF_SCOPE".equals(response.intent())
+                && (response.workflowId() == null || response.workflowId().isBlank());
+        if (!renewalResult && !outOfScopeResult) {
             reject(AiRuntimeFailureCode.UNEXPECTED_WORKFLOW, "Renewal response Intent or Workflow is invalid.");
         }
         if (response.confidence() == null
@@ -126,6 +133,9 @@ public final class RenewalRuntimeContractValidator {
                 reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal Case signal is invalid.");
             }
         });
+        if (outOfScopeResult && !response.caseSignals().contains("CANCEL_OUT_OF_SCOPE")) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OUT_OF_SCOPE signal is missing.");
+        }
         validateScenario(response);
     }
 

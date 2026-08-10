@@ -19,6 +19,7 @@ import com.fowoco.server.document.domain.DocumentRequestDraft;
 import com.fowoco.server.task.application.TaskContentCodec;
 import com.fowoco.server.task.application.TaskContentCodec.EncodedTaskContent;
 import com.fowoco.server.task.application.error.TaskErrorCode;
+import com.fowoco.server.task.application.port.TaskChecklistStatusRepository;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.application.port.TaskTransitionRecorder;
 import com.fowoco.server.task.domain.Task;
@@ -45,6 +46,7 @@ class RenewalExecutionResultApplier {
 
     private final TenantDatabaseContext tenantContext;
     private final TaskRepository taskRepository;
+    private final TaskChecklistStatusRepository checklistStatusRepository;
     private final DocumentRequestDraftRepository draftRepository;
     private final TaskTransitionRecorder transitionRecorder;
     private final ApprovalControlPort approvalControl;
@@ -56,6 +58,7 @@ class RenewalExecutionResultApplier {
     RenewalExecutionResultApplier(
             TenantDatabaseContext tenantContext,
             TaskRepository taskRepository,
+            TaskChecklistStatusRepository checklistStatusRepository,
             DocumentRequestDraftRepository draftRepository,
             TaskTransitionRecorder transitionRecorder,
             ApprovalControlPort approvalControl,
@@ -66,6 +69,7 @@ class RenewalExecutionResultApplier {
     ) {
         this.tenantContext = tenantContext;
         this.taskRepository = taskRepository;
+        this.checklistStatusRepository = checklistStatusRepository;
         this.draftRepository = draftRepository;
         this.transitionRecorder = transitionRecorder;
         this.approvalControl = approvalControl;
@@ -112,7 +116,10 @@ class RenewalExecutionResultApplier {
                 encoded.businessDataJson(),
                 encoded.criticalFingerprint(),
                 task.dueDate(),
-                agentResult.missingSlots().isEmpty(),
+                agentResult.missingSlots().isEmpty()
+                        && !checklistStatusRepository.existsIncompleteRequiredItem(
+                                task.taskId(), task.companyId()
+                        ),
                 expectedVersion,
                 actor.actorId(),
                 now
@@ -125,9 +132,15 @@ class RenewalExecutionResultApplier {
             );
         }
         if (update.approvalInvalidated()) {
-            approvalControl.invalidateForCriticalChange(
-                    taskId, actor, "Renewal Agent 실행 결과로 필수정보가 변경됨", now, metadata
-            );
+            if (saved.status() == TaskStatus.DRAFT) {
+                saved = approvalControl.replaceReviewAfterCriticalChange(
+                        taskId, actor, "Renewal Agent 실행 결과로 필수정보가 변경됨", now, metadata
+                );
+            } else {
+                approvalControl.invalidateForCriticalChange(
+                        taskId, actor, "Renewal Agent 실행 결과로 필수정보가 변경됨", now, metadata
+                );
+            }
         }
         appendAudit(
                 actor, AuditAction.TASK_UPDATED, AuditTargetType.TASK, saved.taskId(),
@@ -142,7 +155,7 @@ class RenewalExecutionResultApplier {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("request_id", result.requestId().toString());
         metadata.put("intent", result.intent());
-        metadata.put("workflow_id", result.workflowId());
+        putIfPresent(metadata, "workflow_id", result.workflowId());
         metadata.put("confidence", result.confidence());
         metadata.put("scenario", result.scenario());
         metadata.put("outcome", result.outcome());

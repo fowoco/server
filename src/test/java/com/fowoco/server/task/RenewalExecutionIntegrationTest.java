@@ -86,6 +86,14 @@ class RenewalExecutionIntegrationTest {
         insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash);
         insertWorker();
         insertCaseAndTask();
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_document (
+                    worker_document_id,worker_id,company_id,document_type,submission_status
+                ) VALUES (?,?,?,'PASSPORT_COPY','MISSING')
+                """,
+                UUID.fromString("a8700000-0000-0000-0000-000000000001"), WORKER_A, COMPANY_A
+        );
     }
 
     @Test
@@ -109,6 +117,7 @@ class RenewalExecutionIntegrationTest {
         assertThat(sent.instruction()).isEqualTo("응웬반안 체류연장 준비해줘");
         assertThat(sent.worker().displayName()).isEqualTo("응웬반안");
         assertThat(sent.company().name()).isEqualTo("Renewal 사업장 A");
+        assertThat(sent.documents()).isEmpty();
         assertThat(sent.slots())
                 .containsEntry("stay_expiry_date", "2027-08-31")
                 .containsEntry("contract_end_date", "2027-08-31");
@@ -164,6 +173,74 @@ class RenewalExecutionIntegrationTest {
         verifyNoInteractions(runtimeClient);
     }
 
+    @Test
+    void replacesTheExistingReviewRequestWhenCriticalAgentDataChanges() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                generateResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> review = requestApproval(token);
+        assertThat(review.statusCode()).isEqualTo(201);
+        long reviewTaskVersion = ((Number) JsonPath.read(review.body(), "$.task_version")).longValue();
+
+        HttpResponse<String> response = postRenewal(token, reviewTaskVersion);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.task_status"))
+                .isEqualTo("READY_FOR_REVIEW");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM approval_request WHERE task_id = ? AND status = 'INVALIDATED'",
+                Integer.class,
+                TASK_A
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM approval_request WHERE task_id = ? AND status = 'PENDING'",
+                Integer.class,
+                TASK_A
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void keepsTheTaskInNeedsInfoWhenARequiredChecklistItemIsIncomplete() throws Exception {
+        jdbcTemplate.update(
+                """
+                INSERT INTO task_checklist_item (
+                    checklist_item_id,task_id,company_id,item_code,label,required,completed,
+                    created_at,updated_at,version
+                ) VALUES (?,?,?,'SIGNED_CONTRACT','서명 계약서 확인',TRUE,FALSE,
+                    CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0)
+                """,
+                UUID.fromString("a8600000-0000-0000-0000-000000000001"), TASK_A, COMPANY_A
+        );
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                generateResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.task_status"))
+                .isEqualTo("NEEDS_INFO");
+    }
+
+    @Test
+    void recordsOutOfScopeWithoutAutomaticallyCancellingTheTask() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                outOfScopeResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.intent")).isEqualTo("OUT_OF_SCOPE");
+        assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("DRAFT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM task WHERE task_id = ?", String.class, TASK_A
+        )).isEqualTo("DRAFT");
+    }
+
     private RenewalRunResponse askHrResponse(RenewalRunRequest request) {
         return response(
                 request, "ask_hr", "NEEDS_INFO", "NEEDS_INFO", List.of("wage"),
@@ -180,6 +257,35 @@ class RenewalExecutionIntegrationTest {
                 "Vui lòng gửi hộ chiếu cho 담당자.",
                 Map.of("target_language", "vi", "translated_text", "Vui lòng gửi hộ chiếu cho 담당자."),
                 List.of("REQUEST_IDENTITY_DOCUMENT", "NEEDS_INFO")
+        );
+    }
+
+    private RenewalRunResponse generateResponse(RenewalRunRequest request) {
+        return new RenewalRunResponse(
+                request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
+                "WF-STY-001", new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
+                "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
+                null, null, null, null,
+                List.of(Map.of(
+                        "template_id", "standard_labor_contract_v6",
+                        "name", "표준근로계약서",
+                        "format", "hwp",
+                        "status", "stub",
+                        "mapped_fields", List.of("employee_name")
+                )),
+                List.of(), null, List.of("GENERATE_DRAFTS", "READY_FOR_REVIEW"),
+                List.of(), null, "rules", "main", List.of()
+        );
+    }
+
+    private RenewalRunResponse outOfScopeResponse(RenewalRunRequest request) {
+        return new RenewalRunResponse(
+                request.requestId(), request.attemptId(), request.taskId(), "OUT_OF_SCOPE", "",
+                new BigDecimal("0.93"), "CANCELLED", "OUT_OF_SCOPE", "out_of_scope",
+                "PHASE_1", "STEP_2", Map.of(), List.of(), List.of(),
+                "지원 범위를 벗어난 요청입니다.", null, null, null, List.of(), List.of(),
+                null, List.of("CANCEL_OUT_OF_SCOPE"), List.of(), null, "rules", "main",
+                List.of()
         );
     }
 
@@ -210,6 +316,25 @@ class RenewalExecutionIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString("""
                         {"instruction":"응웬반안 체류연장 준비해줘","expected_version":%d}
                         """.formatted(version)))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> requestApproval(String token) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(
+                        uri("/api/v1/tasks/" + TASK_A + "/approval-requests")
+                )
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofString("""
+                        {
+                          "expected_version":0,
+                          "ai_snapshot":{"intent":"EXPIRY_RENEWAL"},
+                          "hr_snapshot":{"worker_id":"%s"},
+                          "changed_fields":[],
+                          "source_versions":{"workflow_catalog_version":"0.2.0"}
+                        }
+                        """.formatted(WORKER_A)))
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }

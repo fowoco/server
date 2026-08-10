@@ -1,6 +1,8 @@
 package com.fowoco.server.aiintegration.application.renewal;
 
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,7 +43,9 @@ public record RenewalRunResponse(
         languageAssistant = copyNullableMap(languageAssistant);
         ocrResult = copyNullableMap(ocrResult);
         generatedDocuments = copyMapList(generatedDocuments);
-        evidence = evidence == null ? List.of() : evidence.stream().map(Map::copyOf).toList();
+        evidence = evidence == null
+                ? List.of()
+                : evidence.stream().map(RenewalRunResponse::copyStringMap).toList();
         documentValidation = copyNullableMap(documentValidation);
         caseSignals = copyList(caseSignals);
         progressEvents = copyMapList(progressEvents);
@@ -49,11 +53,15 @@ public record RenewalRunResponse(
     }
 
     private static Map<String, Object> copyMap(Map<String, Object> value) {
-        return value == null ? Map.of() : Map.copyOf(value);
+        return value == null
+                ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(value));
     }
 
     private static Map<String, Object> copyNullableMap(Map<String, Object> value) {
-        return value == null ? null : Map.copyOf(value);
+        return value == null
+                ? null
+                : Collections.unmodifiableMap(new LinkedHashMap<>(value));
     }
 
     private static List<String> copyList(List<String> value) {
@@ -61,6 +69,10 @@ public record RenewalRunResponse(
     }
 
     private static List<Map<String, Object>> copyMapList(List<Map<String, Object>> value) {
-        return value == null ? List.of() : value.stream().map(Map::copyOf).toList();
+        return value == null ? List.of() : value.stream().map(RenewalRunResponse::copyMap).toList();
+    }
+
+    private static Map<String, String> copyStringMap(Map<String, String> value) {
+        return Collections.unmodifiableMap(new LinkedHashMap<>(value));
     }
 }

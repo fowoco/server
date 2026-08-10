@@ -12,6 +12,7 @@ import com.fowoco.server.aiintegration.application.renewal.RenewalTaskSnapshot;
 import com.fowoco.server.aiintegration.application.renewal.RenewalWorkerSnapshot;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -46,6 +47,56 @@ class RenewalRuntimeContractValidatorTest {
 
         assertThatThrownBy(() -> validator.validateResponse(request, invalid))
                 .isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void acceptsAgentIdentitySignalsAndNullableLanguageFields() {
+        RenewalRunRequest request = request();
+        RenewalRunResponse valid = response(request);
+        Map<String, Object> language = new LinkedHashMap<>();
+        language.put("target_language", "vi");
+        language.put("standard_korean_text", "여권을 제출해 주세요.");
+        language.put("translated_text", null);
+        RenewalRunResponse response = new RenewalRunResponse(
+                valid.requestId(), valid.attemptId(), valid.taskId(), valid.intent(),
+                valid.workflowId(), valid.confidence(), "WAITING_WORKER", "WAITING_WORKER",
+                "ask_worker", valid.phase(), valid.step(), valid.slots(),
+                List.of("passport_number", "alien_registration_number"),
+                List.of(
+                        new RenewalRequestedField("passport_number", "DOCUMENT_OCR"),
+                        new RenewalRequestedField("alien_registration_number", "DOCUMENT_OCR")
+                ),
+                valid.guideMessage(), "여권과 외국인등록증을 제출해 주세요.", language,
+                valid.ocrResult(), valid.generatedDocuments(), valid.evidence(),
+                valid.documentValidation(),
+                List.of(
+                        "REQUEST_IDENTITY_DOCUMENT",
+                        "REQUEST_PASSPORT",
+                        "REQUEST_ALIEN_REGISTRATION"
+                ),
+                valid.progressEvents(), valid.supervisorReason(), valid.supervisorSource(),
+                valid.activeSubgraph(), valid.errors()
+        );
+
+        assertThatCode(() -> validator.validateResponse(request, response))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void acceptsTheAgentOutOfScopeResultWithoutTreatingItAsRenewal() {
+        RenewalRunRequest request = request();
+        RenewalRunResponse valid = response(request);
+        RenewalRunResponse outOfScope = new RenewalRunResponse(
+                valid.requestId(), valid.attemptId(), valid.taskId(), "OUT_OF_SCOPE", "",
+                new BigDecimal("0.93"), "CANCELLED", "OUT_OF_SCOPE", "out_of_scope",
+                "PHASE_1", "STEP_2", Map.of(), List.of(), List.of(),
+                "지원 범위를 벗어난 요청입니다.", null, null, null, List.of(), List.of(),
+                null, List.of("CANCEL_OUT_OF_SCOPE"), List.of(), null, "rules", "main",
+                List.of()
+        );
+
+        assertThatCode(() -> validator.validateResponse(request, outOfScope))
+                .doesNotThrowAnyException();
     }
 
     private RenewalRunRequest request() {

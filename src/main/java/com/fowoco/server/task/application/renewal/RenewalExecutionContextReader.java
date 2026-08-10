@@ -28,10 +28,12 @@ import com.fowoco.server.worker.domain.Worker;
 import com.fowoco.server.worker.domain.WorkerDocument;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -106,7 +108,7 @@ class RenewalExecutionContextReader {
                 task.taskId(),
                 task.companyId(),
                 task.workerId(),
-                Map.copyOf(slots),
+                Collections.unmodifiableMap(new LinkedHashMap<>(slots)),
                 ocr.documents(),
                 ocr.latestResult(),
                 toWorkerSnapshot(worker),
@@ -164,22 +166,22 @@ class RenewalExecutionContextReader {
         List<RenewalDocumentInput> documents = new ArrayList<>();
         List<ApprovedOcr> approvedResults = new ArrayList<>();
         for (WorkerDocument document : workerDocuments) {
+            Optional<ApprovedOcr> approved = approvedOcr(document, companyId);
+            if (approved.isEmpty()) {
+                continue;
+            }
+            ApprovedOcr result = approved.get();
+            approvedResults.add(result);
             Map<String, Object> hints = new LinkedHashMap<>();
             hints.put("workerDocumentId", document.workerDocumentId().toString());
             hints.put("submissionStatus", document.submissionStatus().name());
             if (document.expiryDate() != null) {
                 hints.put("expiryDate", document.expiryDate().toString());
             }
-            Map<String, Object> fields = approvedOcr(document, companyId)
-                    .map(result -> {
-                        approvedResults.add(result);
-                        return result.fields();
-                    })
-                    .orElse(Map.of());
             documents.add(new RenewalDocumentInput(
                     document.documentType().name(),
                     null,
-                    fields,
+                    result.fields(),
                     hints
             ));
         }
@@ -190,9 +192,9 @@ class RenewalExecutionContextReader {
         return new OcrContext(List.copyOf(documents), latest);
     }
 
-    private java.util.Optional<ApprovedOcr> approvedOcr(WorkerDocument document, UUID companyId) {
+    private Optional<ApprovedOcr> approvedOcr(WorkerDocument document, UUID companyId) {
         if (!ocrResultCipher.isAvailable()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
         return ocrRunRepository.findLatestByDocumentIdAndCompanyId(document.workerDocumentId(), companyId)
                 .filter(run -> run.status() == DocumentOcrRunStatus.APPROVED)

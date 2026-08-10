@@ -2,6 +2,8 @@ package com.fowoco.server.aiintegration.application.renewal;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,6 +29,8 @@ public record RenewalTaskSnapshot(
         long version
 ) {
     public RenewalTaskSnapshot {
-        businessDataJson = businessDataJson == null ? Map.of() : Map.copyOf(businessDataJson);
+        businessDataJson = businessDataJson == null
+                ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(businessDataJson));
     }
 }

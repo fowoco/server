@@ -1,5 +1,7 @@
 package com.fowoco.server.aiintegration.application.renewal;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public record RenewalDocumentInput(
@@ -9,7 +11,13 @@ public record RenewalDocumentInput(
         Map<String, Object> hints
 ) {
     public RenewalDocumentInput {
-        fields = fields == null ? Map.of() : Map.copyOf(fields);
-        hints = hints == null ? Map.of() : Map.copyOf(hints);
+        fields = immutableMap(fields);
+        hints = immutableMap(hints);
+    }
+
+    private static Map<String, Object> immutableMap(Map<String, Object> value) {
+        return value == null
+                ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(value));
     }
 }

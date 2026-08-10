@@ -1,5 +1,7 @@
 package com.fowoco.server.aiintegration.application.renewal;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -19,8 +21,14 @@ public record RenewalRunRequest(
         RenewalTaskSnapshot task
 ) {
     public RenewalRunRequest {
-        slots = slots == null ? Map.of() : Map.copyOf(slots);
+        slots = immutableMap(slots);
         documents = documents == null ? List.of() : List.copyOf(documents);
-        ocrResult = ocrResult == null ? null : Map.copyOf(ocrResult);
+        ocrResult = ocrResult == null ? null : immutableMap(ocrResult);
+    }
+
+    private static Map<String, Object> immutableMap(Map<String, Object> value) {
+        return value == null
+                ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(value));
     }
 }
