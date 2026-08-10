@@ -67,6 +67,7 @@ app:
   ai-runtime:
     enabled: ${AI_RUNTIME_ENABLED:false}
     endpoint: ${AI_RUNTIME_ENDPOINT:http://127.0.0.1:8000/internal/v1/analyses}
+    renewal-endpoint: ${AI_RUNTIME_RENEWAL_ENDPOINT:http://127.0.0.1:8000/internal/v1/workflows/renewal/run}
     service-credential: ${AI_RUNTIME_SERVICE_CREDENTIAL:}
     connect-timeout: ${AI_RUNTIME_CONNECT_TIMEOUT:2s}
     overall-timeout: ${AI_RUNTIME_OVERALL_TIMEOUT:15s}

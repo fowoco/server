@@ -12,6 +12,7 @@ public final class AiRuntimeProperties {
 
     private boolean enabled;
     private URI endpoint = URI.create("http://127.0.0.1:8000/internal/v1/analyses");
+    private URI renewalEndpoint = URI.create("http://127.0.0.1:8000/internal/v1/workflows/renewal/run");
     private String serviceCredential;
     private Duration connectTimeout = Duration.ofSeconds(2);
     private Duration overallTimeout = Duration.ofSeconds(15);
@@ -34,6 +35,14 @@ public final class AiRuntimeProperties {
 
     public void setEndpoint(URI endpoint) {
         this.endpoint = requireHttpEndpoint(endpoint);
+    }
+
+    public URI getRenewalEndpoint() {
+        return renewalEndpoint;
+    }
+
+    public void setRenewalEndpoint(URI renewalEndpoint) {
+        this.renewalEndpoint = requireHttpEndpoint(renewalEndpoint);
     }
 
     public void setServiceCredential(String serviceCredential) {
@@ -114,6 +123,7 @@ public final class AiRuntimeProperties {
 
     void validateEnabledConfiguration() {
         requireHttpEndpoint(endpoint);
+        requireHttpEndpoint(renewalEndpoint);
         authorizationHeader();
         requirePositive(connectTimeout, "connectTimeout");
         requirePositive(overallTimeout, "overallTimeout");
