@@ -10,6 +10,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -68,6 +70,8 @@ class WorkerLinkSecurityIntegrationTest {
         jdbcTemplate.update("DELETE FROM worker_response_upload");
         jdbcTemplate.update("DELETE FROM worker_response");
         jdbcTemplate.update("DELETE FROM worker_link");
+        jdbcTemplate.update("DELETE FROM document_request_draft_type");
+        jdbcTemplate.update("DELETE FROM document_request_draft");
         jdbcTemplate.update("DELETE FROM stored_file");
         jdbcTemplate.update("DELETE FROM event_consumption");
         jdbcTemplate.update("DELETE FROM event_publication");
@@ -80,6 +84,7 @@ class WorkerLinkSecurityIntegrationTest {
         jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
+        jdbcTemplate.update("UPDATE company_settings SET link_expiry_hours = 72");
     }
 
     private void cleanupAll() {
@@ -94,6 +99,7 @@ class WorkerLinkSecurityIntegrationTest {
         String hrToken = accessToken(login(HR_A_EMAIL));
         String workerId = registerWorker(hrToken, "전체흐름테스트근로자");
         String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
 
         HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
                 "/api/v1/tasks/" + taskId + "/worker-link",
@@ -110,6 +116,12 @@ class WorkerLinkSecurityIntegrationTest {
         HttpResponse<String> viewResponse = getJson("/public/worker-links/" + workerUrl, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
         assertThat(viewResponse.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(JsonPath.<String>read(viewResponse.body(), "$.guidance"))
+                .isEqualTo("여권 사본과 근로계약서를 제출해 주세요.");
+        assertThat(JsonPath.<String>read(viewResponse.body(), "$.language")).isEqualTo("vi");
+        assertThat(JsonPath.<String>read(viewResponse.body(), "$.due_date")).isEqualTo("2026-08-20");
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_document_types"))
+                .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
 
         HttpResponse<String> uploadResponse = uploadFile(workerUrl, "passport.pdf", "application/pdf", "content".getBytes(StandardCharsets.UTF_8));
         assertThat(uploadResponse.statusCode()).isEqualTo(201);
@@ -148,6 +160,97 @@ class WorkerLinkSecurityIntegrationTest {
         HttpResponse<String> activitiesResponse = getJson("/api/v1/tasks/" + taskId + "/activities", hrToken);
         assertThat(activitiesResponse.statusCode()).isEqualTo(200);
         assertThat(activitiesResponse.body()).contains("WORKER_LINK_RESPONSE_SUBMITTED");
+    }
+
+    @Test
+    void issueUsesCompanyDefaultExpiryAndExplicitRequestTakesPrecedence() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        jdbcTemplate.update(
+                "UPDATE company_settings SET link_expiry_hours = 24 WHERE company_id = ?",
+                COMPANY_A
+        );
+
+        String defaultWorkerId = registerWorker(hrToken, "회사기본만료시간근로자");
+        String defaultTaskId = createApprovedTask(hrToken, defaultWorkerId);
+        Instant beforeDefaultIssue = Instant.now();
+        HttpResponse<String> defaultResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + defaultTaskId + "/worker-link",
+                """
+                {"rotate_existing":false}
+                """,
+                hrToken,
+                "company-default-expiry-key"
+        );
+        Instant afterDefaultIssue = Instant.now();
+
+        assertThat(defaultResponse.statusCode())
+                .as("default expiry response body: %s", defaultResponse.body())
+                .isEqualTo(201);
+        Instant defaultExpiresAt = Instant.parse(
+                JsonPath.read(defaultResponse.body(), "$.expires_at")
+        );
+        assertThat(defaultExpiresAt)
+                .isBetween(beforeDefaultIssue.plusSeconds(24L * 60L * 60L)
+                                .truncatedTo(ChronoUnit.MICROS),
+                        afterDefaultIssue.plusSeconds(24L * 60L * 60L));
+
+        String explicitWorkerId = registerWorker(hrToken, "요청만료시간근로자");
+        String explicitTaskId = createApprovedTask(hrToken, explicitWorkerId);
+        Instant beforeExplicitIssue = Instant.now();
+        HttpResponse<String> explicitResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + explicitTaskId + "/worker-link",
+                """
+                {"expires_in_hours":12,"rotate_existing":false}
+                """,
+                hrToken,
+                "explicit-expiry-key"
+        );
+        Instant afterExplicitIssue = Instant.now();
+
+        assertThat(explicitResponse.statusCode())
+                .as("explicit expiry response body: %s", explicitResponse.body())
+                .isEqualTo(201);
+        Instant explicitExpiresAt = Instant.parse(
+                JsonPath.read(explicitResponse.body(), "$.expires_at")
+        );
+        assertThat(explicitExpiresAt)
+                .isBetween(beforeExplicitIssue.plusSeconds(12L * 60L * 60L)
+                                .truncatedTo(ChronoUnit.MICROS),
+                        afterExplicitIssue.plusSeconds(12L * 60L * 60L));
+    }
+
+    @Test
+    void issueRejectsExpiryOutsideMvpRange() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "만료시간검증근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+
+        assertThat(postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                "{\"expires_in_hours\":0,\"rotate_existing\":false}",
+                hrToken,
+                "expiry-too-small-key"
+        ).statusCode()).isEqualTo(400);
+        assertThat(postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                "{\"expires_in_hours\":169,\"rotate_existing\":false}",
+                hrToken,
+                "expiry-too-large-key"
+        ).statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void activeWorkerLinkWithoutDraftReturnsContentNotReady() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "초안없는링크근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String workerUrl = issueWorkerLink(hrToken, taskId, "content-not-ready-key");
+
+        HttpResponse<String> response = getJson("/public/worker-links/" + workerUrl, null);
+
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("WORKER_LINK_CONTENT_NOT_READY");
     }
 
     @Test
@@ -338,6 +441,14 @@ class WorkerLinkSecurityIntegrationTest {
                 response.body(),
                 "$.paths['/api/v1/worker-links/{workerLinkId}/sent'].post.operationId"
         )).isEqualTo("markWorkerLinkSent");
+        assertThat(JsonPath.<Number>read(
+                response.body(),
+                "$.components.schemas.WorkerLinkIssueRequest.properties.expires_in_hours.minimum"
+        ).longValue()).isEqualTo(1L);
+        assertThat(JsonPath.<Number>read(
+                response.body(),
+                "$.components.schemas.WorkerLinkIssueRequest.properties.expires_in_hours.maximum"
+        ).longValue()).isEqualTo(168L);
     }
 
     @Test
@@ -448,6 +559,22 @@ class WorkerLinkSecurityIntegrationTest {
         return JsonPath.read(response.body(), "$.worker_url");
     }
 
+    private void saveDocumentRequestDraft(String token, String taskId) throws Exception {
+        HttpResponse<String> response = putJson(
+                "/api/v1/tasks/" + taskId + "/document-request-draft",
+                """
+                {
+                  "language":"vi",
+                  "document_types":["PASSPORT_COPY","CONTRACT"],
+                  "message":"여권 사본과 근로계약서를 제출해 주세요.",
+                  "expected_version":0
+                }
+                """,
+                token
+        );
+        assertThat(response.statusCode()).as("draft response body: %s", response.body()).isEqualTo(200);
+    }
+
     private void completeRequiredChecklistItems(String taskId, String token) throws Exception {
         HttpResponse<String> detail = getJson("/api/v1/tasks/" + taskId, token);
         assertThat(detail.statusCode()).isEqualTo(200);
@@ -545,6 +672,10 @@ class WorkerLinkSecurityIntegrationTest {
                 """,
                 companyId, name
         );
+        jdbcTemplate.update(
+                "INSERT INTO company_settings (company_id) VALUES (?)",
+                companyId
+        );
     }
 
     private void insertUser(
@@ -619,6 +750,16 @@ class WorkerLinkSecurityIntegrationTest {
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
                 .method("PATCH", HttpRequest.BodyPublishers.ofString(body));
+        if (token != null) {
+            builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> putJson(String path, String body, String token) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path))
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(body));
         if (token != null) {
             builder.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
         }

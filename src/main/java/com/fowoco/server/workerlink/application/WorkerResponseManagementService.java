@@ -10,6 +10,7 @@ import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
+import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
@@ -86,13 +87,15 @@ public class WorkerResponseManagementService {
     public void markReviewed(UUID taskId, ActorContext actor, RequestMetadata metadata) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
         requireTask(taskId, actor.companyId());
-        Instant now = clock.instant();
+        Instant now = DatabaseTimestamp.now(clock);
         List<WorkerLink> unreadLinks = workerLinkRepository
                 .findAllByTaskIdAndCompanyId(taskId, actor.companyId())
                 .stream()
                 .filter(link -> link.conversationStatus() == ConversationStatus.NEEDS_FOLLOWUP)
                 .toList();
-        unreadLinks.forEach(link -> workerLinkRepository.update(link.markReviewed(now)));
+        unreadLinks.forEach(link -> workerLinkRepository.update(link.markReviewed(
+                DatabaseTimestamp.nowNotBefore(clock, link.createdAt())
+        )));
         if (unreadLinks.isEmpty()) {
             return;
         }

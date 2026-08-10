@@ -6,6 +6,8 @@ import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.dashboard.api.DashboardSummaryCountsResponse;
 import com.fowoco.server.dashboard.api.DashboardTaskSummaryResponse;
 import com.fowoco.server.dashboard.api.DashboardTodayResponse;
+import com.fowoco.server.dashboard.api.DashboardRecommendationItemResponse;
+import com.fowoco.server.dashboard.api.DashboardRecommendationsResponse;
 import com.fowoco.server.dashboard.api.UpcomingExpiryCategory;
 import com.fowoco.server.dashboard.api.UpcomingExpiryItemResponse;
 import com.fowoco.server.dashboard.application.error.DashboardErrorCode;
@@ -35,6 +37,9 @@ public class DashboardQueryService {
 
     private static final int PRIORITY_TASK_LIMIT = 5;
     private static final int UPCOMING_DAYS = 7;
+    private static final java.util.Comparator<Task> PRIORITY_ORDER = java.util.Comparator
+            .comparing(Task::dueDate, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+            .thenComparing(Task::createdAt, java.util.Comparator.reverseOrder());
 
     private final TaskRepository taskRepository;
     private final WorkerRepository workerRepository;
@@ -60,7 +65,8 @@ public class DashboardQueryService {
     public DashboardTodayResponse today(ActorContext actor, LocalDate date, String timezone) {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(actor.companyId());
         UUID companyId = actor.companyId();
-        Clock effectiveClock = timezone != null ? clock.withZone(parseTimezone(timezone)) : clock;
+        ZoneId effectiveZone = timezone != null ? parseTimezone(timezone) : ZoneId.of("Asia/Seoul");
+        Clock effectiveClock = clock.withZone(effectiveZone);
         LocalDate targetDate = date != null ? date : LocalDate.now(effectiveClock);
         LocalDate windowEnd = targetDate.plusDays(UPCOMING_DAYS + 1);
 
@@ -79,8 +85,49 @@ public class DashboardQueryService {
                 .toList();
 
         List<UpcomingExpiryItemResponse> upcoming7Days = collectUpcomingExpiry(companyId, targetDate, windowEnd);
+       DashboardRecommendationsResponse recommendations = collectRecommendations(companyId);
 
-        return new DashboardTodayResponse(summaryCounts, priorityTasks, upcoming7Days, pendingApproval, workerResponse);
+        return new DashboardTodayResponse(
+                summaryCounts, priorityTasks, upcoming7Days, recommendations, pendingApproval, workerResponse
+        );
+    }
+
+    private DashboardRecommendationsResponse collectRecommendations(UUID companyId) {
+        List<Task> preparedTasks = taskRepository.findAll(new TaskRepository.TaskSearchCriteria(
+                companyId, TaskStatus.DRAFT, null, null, com.fowoco.server.task.domain.TaskSource.AI_CANDIDATE,
+                null, null, null, null, null, 0, 100
+        )).items();
+
+        List<Task> needsInfoTasks = taskRepository.findAll(new TaskRepository.TaskSearchCriteria(
+                companyId, TaskStatus.NEEDS_INFO, null, null, null, null, null, null, null, null, 0, 100
+        )).items();
+        List<Task> readyTasks = taskRepository.findAll(new TaskRepository.TaskSearchCriteria(
+                companyId, TaskStatus.READY_FOR_REVIEW, null, null, null, null, null, null, null, null, 0, 100
+        )).items();
+        List<Task> reviewTasks = new ArrayList<>();
+        reviewTasks.addAll(needsInfoTasks);
+        reviewTasks.addAll(readyTasks);
+        reviewTasks.sort(PRIORITY_ORDER);
+
+        List<Task> waitingWorkerTasks = taskRepository.findAll(new TaskRepository.TaskSearchCriteria(
+                companyId, TaskStatus.WAITING_WORKER, null, null, null, null, null, null, null, null, 0, 100
+        )).items();
+        List<Task> waitingExternalTasks = taskRepository.findAll(new TaskRepository.TaskSearchCriteria(
+                companyId, TaskStatus.WAITING_EXTERNAL, null, null, null, null, null, null, null, null, 0, 100
+        )).items();
+        List<Task> afterApprovalTasks = new ArrayList<>();
+        afterApprovalTasks.addAll(waitingWorkerTasks);
+        afterApprovalTasks.addAll(waitingExternalTasks);
+        afterApprovalTasks.sort(PRIORITY_ORDER);
+
+        long connectedCount = taskRepository.countOpenTasksByCompanyId(companyId);
+
+        return new DashboardRecommendationsResponse(
+                connectedCount,
+                preparedTasks.stream().map(DashboardRecommendationItemResponse::from).toList(),
+                reviewTasks.stream().map(DashboardRecommendationItemResponse::from).toList(),
+                afterApprovalTasks.stream().map(DashboardRecommendationItemResponse::from).toList()
+        );
     }
 
     private List<UpcomingExpiryItemResponse> collectUpcomingExpiry(UUID companyId, LocalDate windowStart, LocalDate windowEnd) {

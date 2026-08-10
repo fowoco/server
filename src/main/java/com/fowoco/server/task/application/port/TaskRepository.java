@@ -16,6 +16,7 @@ public interface TaskRepository {
     List<Task> findOpenTasks(UUID companyId, int limit);
     long countByCompanyIdAndStatus(UUID companyId, TaskStatus status);
     long countOpenTasksDueOn(UUID companyId, LocalDate dueDate);
+    long countOpenTasksByCompanyId(UUID companyId);
     Task save(Task task);
 
     record TaskSearchCriteria(

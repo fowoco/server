@@ -74,6 +74,11 @@ public class JpaTaskRepository implements TaskRepository {
     }
 
     @Override
+    public long countOpenTasksByCompanyId(UUID companyId) {
+        return repository.countOpenTasksByCompanyId(companyId);
+    }
+
+    @Override
     public Task save(Task task) {
         TaskJpaEntity entity = repository.findByTaskIdAndCompanyId(task.taskId(), task.companyId())
                 .map(existing -> {

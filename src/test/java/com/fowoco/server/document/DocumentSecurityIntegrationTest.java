@@ -59,6 +59,9 @@ class DocumentSecurityIntegrationTest {
 
     @BeforeEach
     void resetState() {
+        jdbcTemplate.update("DELETE FROM worker_response_upload");
+        jdbcTemplate.update("DELETE FROM worker_response");
+        jdbcTemplate.update("DELETE FROM worker_link");
         jdbcTemplate.update("DELETE FROM document_request_draft_type");
         jdbcTemplate.update("DELETE FROM document_request_draft");
         jdbcTemplate.update("DELETE FROM stored_file");
@@ -76,6 +79,9 @@ class DocumentSecurityIntegrationTest {
     }
 
     private void cleanupAll() {
+        jdbcTemplate.update("DELETE FROM worker_response_upload");
+        jdbcTemplate.update("DELETE FROM worker_response");
+        jdbcTemplate.update("DELETE FROM worker_link");
         jdbcTemplate.update("DELETE FROM document_request_draft_type");
         jdbcTemplate.update("DELETE FROM document_request_draft");
         jdbcTemplate.update("DELETE FROM stored_file");
@@ -170,8 +176,30 @@ class DocumentSecurityIntegrationTest {
         assertThat(updateResponse.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<Number>read(updateResponse.body(), "$.version").longValue()).isEqualTo(1);
 
+        HttpResponse<String> findResponse = getJson(path, token);
+        assertThat(findResponse.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(findResponse.body(), "$.language")).isEqualTo("ko");
+        assertThat(JsonPath.<List<String>>read(findResponse.body(), "$.document_types"))
+                .containsExactlyInAnyOrder("CONTRACT", "PERMIT");
+        assertThat(JsonPath.<String>read(findResponse.body(), "$.message")).isEqualTo("수정된 안내");
+        assertThat(JsonPath.<Number>read(findResponse.body(), "$.version").longValue()).isEqualTo(1);
+        assertThat(JsonPath.<String>read(findResponse.body(), "$.review_status")).isEqualTo("DRAFT");
+        assertThat(JsonPath.<String>read(findResponse.body(), "$.updated_at")).isNotBlank();
+
         HttpResponse<String> staleResponse = putJson(path, updateBody, token);
         assertThat(staleResponse.statusCode()).isEqualTo(409);
+    }
+
+    @Test
+    void documentRequestDraftGetReturnsNotFoundForMissingDraftAndOtherCompanyTask() throws Exception {
+        String tokenA = accessToken(login(HR_A_EMAIL));
+        String tokenB = accessToken(login(HR_B_EMAIL));
+        String workerId = registerWorker(tokenA, "초안조회격리근로자");
+        String taskId = createTask(tokenA, workerId);
+        String path = "/api/v1/tasks/" + taskId + "/document-request-draft";
+
+        assertThat(getJson(path, tokenA).statusCode()).isEqualTo(404);
+        assertThat(getJson(path, tokenB).statusCode()).isEqualTo(404);
     }
 
     @Test

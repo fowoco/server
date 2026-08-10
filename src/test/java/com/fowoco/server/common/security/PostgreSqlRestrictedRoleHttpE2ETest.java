@@ -45,6 +45,8 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
             "task",
             "worker_link",
             "worker_response",
+            "document_request_draft",
+            "document_request_draft_type",
             "audit_event"
     );
 
@@ -143,9 +145,11 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
         assertTablePrivileges("user_account", true, false, false, false);
         assertTablePrivileges("refresh_token", true, true, true, false);
         assertTablePrivileges("worker", true, true, true, false);
-        assertTablePrivileges("task", false, false, false, false);
+        assertTablePrivileges("task", true, false, false, false);
         assertTablePrivileges("worker_link", true, false, false, false);
         assertTablePrivileges("worker_response", true, true, false, false);
+        assertTablePrivileges("document_request_draft", true, false, false, false);
+        assertTablePrivileges("document_request_draft_type", true, false, false, false);
         assertTablePrivileges("audit_event", true, true, false, false);
 
         for (String table : RLS_TABLES) {
@@ -165,7 +169,7 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
         }
         assertThat(environment.hasTablePrivilege("flyway_schema_history", "SELECT"))
                 .isFalse();
-        assertThat(environment.hasTablePrivilege("task", "SELECT")).isFalse();
+        assertThat(environment.hasTablePrivilege("task", "SELECT")).isTrue();
         assertThat(environment.hasTablePrivilege("worker_document", "SELECT")).isFalse();
         assertThat(environment.hasFunctionPrivilege(
                 "bootstrap_company_id_by_normalized_email(text)",
@@ -260,6 +264,12 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
                 null
         );
         assertThat(active.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(active.body(), "$.guidance"))
+                .isEqualTo("여권 사본을 제출해 주세요.");
+        assertThat(JsonPath.<String>read(active.body(), "$.due_date"))
+                .isEqualTo("2027-08-01");
+        assertThat(JsonPath.<List<String>>read(active.body(), "$.requested_document_types"))
+                .containsExactly("PASSPORT_COPY");
         assertThat(active.body()).doesNotContain(
                 PostgreSqlRestrictedRoleHttpDataFixture.ACTIVE_WORKER_LINK_TOKEN,
                 PostgreSqlRestrictedRoleHttpDataFixture.USER_A_EMAIL,
