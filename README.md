@@ -27,7 +27,6 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | AI 연동 | PLAN → Slot 보충 → ANALYZE, Candidate 결정, AiRun·SSE 이력 구현 |
 | 문서 처리 | 파일 저장·다운로드, HWP/HWPX 검증, OCR 실행·HR 검토 구현 |
 | 운영 기반 | Flyway, PostgreSQL 16, RLS 검증, Transactional Outbox, 감사로그 구현 |
-| 마무리 중 | Renewal 실행·생성 문서 연결, 알림 이벤트 생성, HTTPS 배포·제품 E2E |
 
 ## 왜 이 기술과 구조를 선택했는가
 
