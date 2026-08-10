@@ -199,20 +199,6 @@ src/main/java/com/fowoco/server/
 전체 트리, 패키지 책임과 Flyway 규칙은
 [프로젝트 구조](docs/project-structure.md)를 확인합니다.
 
-### 핵심 Workflow ERD
-
-![FOWOCO Core Workflow ERD](docs/assets/architecture/fowoco-core-workflow-erd.png)
-
-발표와 서비스 흐름 이해를 위한 축약 ERD입니다. 전체 컬럼을 나열하지 않고
-`로그인 → AI 분석 → Case·Task → 승인 → Worker Link·문서·OCR`에 직접 참여하는
-테이블의 PK·FK·상태 필드만 표시합니다.
-
-- 실선은 PostgreSQL의 실제 FK 제약입니다.
-- 점선 `REF`는 서비스상 참조하거나 중간 결정 테이블을 생략한 관계입니다.
-- 실제 테이블 전체와 모든 컬럼은 [Database 문서](https://fowoco.github.io/server/)를 기준으로 확인합니다.
-
-[diagrams.net 편집 원본](docs/assets/architecture/fowoco-core-workflow-erd.drawio)
-
 ## 변하지 않는 보안 원칙
 
 - 사업장 데이터는 인증 Context의 `company_id`로 격리합니다.
