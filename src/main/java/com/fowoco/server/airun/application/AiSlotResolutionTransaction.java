@@ -144,6 +144,8 @@ public class AiSlotResolutionTransaction {
             case "worker_id" -> worker.workerId().toString();
             case "stay_expiry_date" -> formatDate(worker.stayExpiryDate());
             case "contract_end_date" -> formatDate(worker.contractEndDate());
+            case "passport_status" -> worker.identityDocumentStatuses().passportStatus().name();
+            case "arc_status" -> worker.identityDocumentStatuses().arcStatus().name();
             default -> null;
         };
     }
