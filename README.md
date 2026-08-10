@@ -231,7 +231,7 @@ src/main/java/com/fowoco/server/
 
 ## 기여하기
 
-처음 참여한다면 [CONTRIBUTING.md](CONTRIBUTING.md)를 먼저 읽습니다.
+처음 참여한다면 [개발 협업 가이드](docs/team-development-guide.md)를 먼저 읽습니다.
 
 1. [Roadmap](https://github.com/orgs/fowoco/projects/3)과 Issue의 담당·선행조건을 확인합니다.
 2. `main`에서 짧은 기능 브랜치를 만듭니다.
