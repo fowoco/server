@@ -23,10 +23,10 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 
 | 구분 | 현재 상태 |
 | --- | --- |
-| 핵심 업무 API | Auth·Worker·Document·Task·Approval·Worker Link·Case 구현 |
-| AI 연동 | PLAN → Slot 보충 → ANALYZE, Candidate 결정, AiRun·SSE 이력 구현 |
-| 문서 처리 | 파일 저장·다운로드, HWP/HWPX 검증, OCR 실행·HR 검토 구현 |
-| 운영 기반 | Flyway, PostgreSQL 16, RLS 검증, Transactional Outbox, 감사로그 구현 |
+| 핵심 업무 API | Auth·Worker·Document·Task·Approval·Worker Link·Case·Dashboard·Notification 구현 |
+| AI 연동 | PLAN → Slot 보충 → ANALYZE, Candidate 결정, Renewal Workflow 실행, AiRun·SSE 이력 구현 |
+| 문서 처리 | 파일 저장·다운로드, HWP/HWPX 검증·생성 결과 연계, OCR 실행·HR 검토 구현 |
+| 운영 기반 | Flyway, PostgreSQL 16, RLS, Transactional Outbox, 감사로그, Docker·Kubernetes·HTTPS 배포와 제품 E2E 검증 |
 
 ## 왜 이 기술과 구조를 선택했는가
 
