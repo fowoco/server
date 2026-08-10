@@ -110,8 +110,20 @@
       "sensitivity": "high",
       "supported_task_types": ["STAY_PERIOD_EXTENSION"],
       "required_slots": ["worker_id", "due_at"],
-      "allowed_slot_keys": ["worker_id", "due_at", "stay_expiry_date"],
-      "resolvable_slot_keys": ["worker_id", "due_at", "stay_expiry_date"],
+      "allowed_slot_keys": [
+        "worker_id",
+        "due_at",
+        "stay_expiry_date",
+        "passport_status",
+        "arc_status"
+      ],
+      "resolvable_slot_keys": [
+        "worker_id",
+        "due_at",
+        "stay_expiry_date",
+        "passport_status",
+        "arc_status"
+      ],
       "checklist_items": [
         {
           "item_code": "PASSPORT_COPY_VERIFY_CURRENT",
