@@ -106,9 +106,10 @@ Agent·Prompt 버전은 실제 AI 실행 후 `AiAttempt` 메타데이터로 기�
 명시하는 `MISSING`이다. 두 문서 모두 `task_id`와 `file_id`가 없으며 여권번호,
 외국인등록번호, OCR 결과와 신분증 이미지를 포함하지 않는다.
 
-AI Runtime이 해당 필드를 요청하면 Server는 같은 `company_id` 범위에서 문서를 조회해
-`passport_copy_status`, `passport_copy_expiry_date`, `arc_status`, `arc_expiry_date`를
-구조화된 Context로 제공한다. Runtime은 이 Server 소유 값을 다른 값으로 변경할 수 없다.
+AI Runtime이 해당 필드를 요청하면 Server는 같은 `company_id` 범위에서 최신 문서를 조회해
+PR #127에서 합의한 canonical key인 `passport_status`, `arc_status`를 구조화된 Context로
+제공한다. Runtime은 이 Server 소유 값을 다른 값으로 변경할 수 없다. 문서 만료일은
+Golden Flow Seed 검증값으로 유지하지만 AI Context 계약에는 포함하지 않는다.
 
 ### 시연 전에 존재하지 않는 데이터
 

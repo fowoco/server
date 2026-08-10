@@ -496,21 +496,16 @@ class DemoAuthSeedIntegrationTest {
                         "응웬반A",
                         Map.of(),
                         List.of(
-                                "passport_copy_status",
-                                "passport_copy_expiry_date",
-                                "arc_status",
-                                "arc_expiry_date"
+                                "passport_status",
+                                "arc_status"
                         )
                 )
         );
 
         assertThat(resolution.resolvedFields())
-                .containsEntry("passport_copy_status", "VERIFIED")
+                .containsEntry("passport_status", "VERIFIED")
                 .containsEntry("arc_status", "MISSING");
-        assertThat(LocalDate.parse(
-                resolution.resolvedFields().get("passport_copy_expiry_date")
-        )).isAfter(LocalDate.now(clock));
-        assertThat(resolution.missingFieldKeys()).containsExactly("arc_expiry_date");
+        assertThat(resolution.missingFieldKeys()).isEmpty();
     }
 
     private void assertShowcaseApprovalAndSubmissionFixtures() {

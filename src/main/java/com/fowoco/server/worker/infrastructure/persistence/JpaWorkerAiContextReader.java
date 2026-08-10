@@ -31,7 +31,7 @@ public class JpaWorkerAiContextReader implements
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName must not be blank");
         }
-        List<WorkerJpaEntity> workers = entityManager.createQuery(
+        return entityManager.createQuery(
                         """
                         select worker
                         from WorkerJpaEntity worker
@@ -44,51 +44,9 @@ public class JpaWorkerAiContextReader implements
                 .setParameter("companyId", companyId)
                 .setParameter("displayName", displayName.strip())
                 .setMaxResults(2)
-                .getResultList();
-        if (workers.isEmpty()) {
-            return List.of();
-        }
-        List<UUID> workerIds = workers.stream()
-                .map(entity -> entity.toDomain().workerId())
-                .toList();
-        Map<UUID, Map<DocumentType, WorkerDocumentAiContextSnapshot>> documentsByWorker =
-                new LinkedHashMap<>();
-        entityManager.createQuery(
-                        """
-                        select document
-                        from WorkerDocumentJpaEntity document
-                        where document.companyId = :companyId
-                          and document.workerId in :workerIds
-                          and document.documentType in :documentTypes
-                        order by document.updatedAt desc, document.workerDocumentId
-                        """,
-                        WorkerDocumentJpaEntity.class
-                )
-                .setParameter("companyId", companyId)
-                .setParameter("workerIds", workerIds)
-                .setParameter(
-                        "documentTypes",
-                        List.of(DocumentType.PASSPORT_COPY, DocumentType.ARC)
-                )
                 .getResultList()
-                .forEach(entity -> {
-                    var document = entity.toDomain();
-                    documentsByWorker
-                            .computeIfAbsent(document.workerId(), ignored -> new LinkedHashMap<>())
-                            .putIfAbsent(
-                                    document.documentType(),
-                                    new WorkerDocumentAiContextSnapshot(
-                                            document.documentType(),
-                                            document.submissionStatus(),
-                                            document.expiryDate()
-                                    )
-                            );
-                });
-        return workers.stream()
-                .map(worker -> toSnapshot(
-                        worker,
-                        documentsByWorker.getOrDefault(worker.toDomain().workerId(), Map.of())
-                ))
+                .stream()
+                .map(this::toSnapshot)
                 .toList();
     }
 

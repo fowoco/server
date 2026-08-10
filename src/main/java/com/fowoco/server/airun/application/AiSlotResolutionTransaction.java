@@ -8,7 +8,6 @@ import com.fowoco.server.airun.application.error.AiContextResolutionFailureCode;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
 import com.fowoco.server.worker.application.port.WorkerAiContextReader;
-import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.workflow.application.WorkflowCatalogService;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -149,16 +148,6 @@ public class AiSlotResolutionTransaction {
             case "arc_status" -> worker.identityDocumentStatuses().arcStatus().name();
             default -> null;
         };
-    }
-
-    private String documentStatus(WorkerAiContextSnapshot worker, DocumentType documentType) {
-        var document = worker.documents().get(documentType);
-        return document == null ? null : document.submissionStatus().name();
-    }
-
-    private String documentExpiryDate(WorkerAiContextSnapshot worker, DocumentType documentType) {
-        var document = worker.documents().get(documentType);
-        return document == null ? null : formatDate(document.expiryDate());
     }
 
     private String formatDate(java.time.LocalDate date) {

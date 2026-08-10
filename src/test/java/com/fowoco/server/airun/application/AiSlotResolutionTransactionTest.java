@@ -8,10 +8,7 @@ import com.fowoco.server.airun.application.error.AiContextResolutionException;
 import com.fowoco.server.airun.application.error.AiContextResolutionFailureCode;
 import com.fowoco.server.task.domain.TaskType;
 import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
-import com.fowoco.server.worker.application.WorkerDocumentAiContextSnapshot;
 import com.fowoco.server.worker.application.port.WorkerAiContextReader;
-import com.fowoco.server.worker.domain.DocumentType;
-import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.workflow.application.WorkflowCatalogService;
 import com.fowoco.server.workflow.domain.WorkflowCatalog;
 import com.fowoco.server.workflow.domain.WorkflowDefinition;
@@ -57,7 +54,7 @@ class AiSlotResolutionTransactionTest {
                 "passport_status", "MISSING",
                 "arc_status", "MISSING"
         ));
-        assertThat(result.missingFieldKeys()).containsExactly("arc_expiry_date", "due_at");
+        assertThat(result.missingFieldKeys()).containsExactly("due_at");
         assertThat(result.workflowConstraints())
                 .extracting(constraint -> constraint.workflowId())
                 .containsExactly("WF-CON-001", "WF-STY-001");
@@ -195,21 +192,7 @@ class AiSlotResolutionTransactionTest {
                 "ACTIVE",
                 LocalDate.of(2026, 9, 30),
                 LocalDate.of(2026, 1, 1),
-                LocalDate.of(2026, 8, 31),
-                Map.of(
-                        DocumentType.PASSPORT_COPY,
-                        new WorkerDocumentAiContextSnapshot(
-                                DocumentType.PASSPORT_COPY,
-                                SubmissionStatus.VERIFIED,
-                                LocalDate.of(2027, 9, 30)
-                        ),
-                        DocumentType.ARC,
-                        new WorkerDocumentAiContextSnapshot(
-                                DocumentType.ARC,
-                                SubmissionStatus.MISSING,
-                                null
-                        )
-                )
+                LocalDate.of(2026, 8, 31)
         );
     }
 

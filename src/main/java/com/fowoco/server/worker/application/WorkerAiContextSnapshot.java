@@ -1,8 +1,6 @@
 package com.fowoco.server.worker.application;
 
-import com.fowoco.server.worker.domain.DocumentType;
 import java.time.LocalDate;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
