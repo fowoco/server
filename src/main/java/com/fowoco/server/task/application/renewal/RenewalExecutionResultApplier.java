@@ -116,7 +116,8 @@ class RenewalExecutionResultApplier {
                 encoded.businessDataJson(),
                 encoded.criticalFingerprint(),
                 task.dueDate(),
-                agentResult.missingSlots().isEmpty()
+                !"out_of_scope".equals(agentResult.scenario())
+                        && agentResult.missingSlots().isEmpty()
                         && !checklistStatusRepository.existsIncompleteRequiredItem(
                                 task.taskId(), task.companyId()
                         ),

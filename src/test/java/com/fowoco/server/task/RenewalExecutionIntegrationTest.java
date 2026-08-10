@@ -235,10 +235,10 @@ class RenewalExecutionIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<String>read(response.body(), "$.intent")).isEqualTo("OUT_OF_SCOPE");
-        assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("DRAFT");
+        assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("NEEDS_INFO");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM task WHERE task_id = ?", String.class, TASK_A
-        )).isEqualTo("DRAFT");
+        )).isEqualTo("NEEDS_INFO");
     }
 
     private RenewalRunResponse askHrResponse(RenewalRunRequest request) {
