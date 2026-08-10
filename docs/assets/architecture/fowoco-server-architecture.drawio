@@ -1,0 +1,95 @@
+<mxfile host="app.diagrams.net" modified="2026-08-10T10:10:00.000Z" agent="Codex" version="24.7.17" type="device" compressed="false">
+  <diagram id="fowoco-server-architecture" name="FOWOCO Server Architecture">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="FOWOCO SW Architecture · Controlled AI Workflow MVP" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=28;fontStyle=1;fontColor=#0B5D57;" vertex="1" parent="1">
+          <mxGeometry x="40" y="28" width="1000" height="44" as="geometry"/>
+        </mxCell>
+        <mxCell id="subtitle" value="AI의 제안을 인증·상태·승인·증빙 안에서 실제 HR 업무로 연결하는 Spring Boot 운영 서버" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=15;fontColor=#52646B;" vertex="1" parent="1">
+          <mxGeometry x="42" y="70" width="1100" height="28" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="hr" value="&lt;b&gt;HR Web&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;React Client · JWT&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=18;fillColor=#E7F5F3;strokeColor=#179A91;strokeWidth=2;fontSize=16;fontColor=#123F3C;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="45" y="235" width="170" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="worker" value="&lt;b&gt;Worker Mobile&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;만료 보안 링크 · 로그인 없음&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=18;fillColor=#FFF7E8;strokeColor=#E0A43C;strokeWidth=2;fontSize=16;fontColor=#5D4315;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="45" y="520" width="170" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="gateway" value="&lt;b&gt;HTTPS Ingress&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;TLS · CORS · Routing&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=18;fillColor=#F1F5F9;strokeColor=#64748B;strokeWidth=2;fontSize=15;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="260" y="370" width="150" height="86" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="server" value="" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#FBFDFC;strokeColor=#0F766E;strokeWidth=3;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="445" y="118" width="735" height="665" as="geometry"/>
+        </mxCell>
+        <mxCell id="serverTitle" value="&lt;b&gt;FOWOCO Server&lt;/b&gt;  ·  Spring Boot Modular Monolith" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=20;fontColor=#0F5F59;" vertex="1" parent="1">
+          <mxGeometry x="475" y="132" width="620" height="38" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="entry" value="&lt;b&gt;API &amp;amp; Security&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;/api/v1 · /public/worker-links · JWT · ActorContext · Role · company_id 격리&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#E6F4F1;strokeColor=#179A91;strokeWidth=2;align=left;spacingLeft=18;fontSize=16;fontColor=#164E49;" vertex="1" parent="1">
+          <mxGeometry x="480" y="182" width="665" height="82" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="business" value="&lt;b&gt;HR Workflow Core&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F0F7F6;strokeColor=#5AA9A2;strokeWidth=2;verticalAlign=top;align=left;spacingTop=14;spacingLeft=18;fontSize=17;fontColor=#164E49;" vertex="1" parent="1">
+          <mxGeometry x="480" y="285" width="665" height="202" as="geometry"/>
+        </mxCell>
+        <mxCell id="workerDoc" value="&lt;b&gt;Worker · Document · File&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;근로자 · 서류 · Import · OCR&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FFFFFF;strokeColor=#83BDB7;fontSize=13;fontColor=#264A47;" vertex="1" parent="1">
+          <mxGeometry x="505" y="336" width="185" height="76" as="geometry"/>
+        </mxCell>
+        <mxCell id="taskCase" value="&lt;b&gt;Task · Workflow · Case&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;업무카드 · 체크리스트 · 상태 전이&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FFFFFF;strokeColor=#83BDB7;fontSize=13;fontColor=#264A47;" vertex="1" parent="1">
+          <mxGeometry x="717" y="336" width="190" height="76" as="geometry"/>
+        </mxCell>
+        <mxCell id="approval" value="&lt;b&gt;Approval · Audit&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;HITL · 증빙 · 외부 제출 · 이력&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FFF7E8;strokeColor=#E0A43C;fontSize=13;fontColor=#5D4315;" vertex="1" parent="1">
+          <mxGeometry x="934" y="336" width="185" height="76" as="geometry"/>
+        </mxCell>
+        <mxCell id="support" value="&lt;b&gt;Worker Link · Dashboard · Notification · Settings&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:11px&quot;&gt;전달·응답 · 오늘 업무 · 알림 · 사업장 설정&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FFFFFF;strokeColor=#83BDB7;fontSize=13;fontColor=#264A47;" vertex="1" parent="1">
+          <mxGeometry x="505" y="427" width="614" height="42" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="aiLayer" value="&lt;b&gt;AI Orchestration&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;AiRun · PLAN/ANALYZE · Slot Resolver · Candidate · Renewal/OCR/Document Client&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#EEF2FF;strokeColor=#6574CD;strokeWidth=2;align=left;spacingLeft=18;fontSize=16;fontColor=#373E77;" vertex="1" parent="1">
+          <mxGeometry x="480" y="510" width="665" height="92" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="reliability" value="&lt;b&gt;Reliability &amp;amp; Persistence&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;Transactional Outbox · Idempotency · Flyway · RLS · FileStorage Port · Request/Audit Log&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F5F3FF;strokeColor=#8B75BD;strokeWidth=2;align=left;spacingLeft=18;fontSize=16;fontColor=#4C3D70;" vertex="1" parent="1">
+          <mxGeometry x="480" y="625" width="665" height="92" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="guardrail" value="&lt;b&gt;Guardrail&lt;/b&gt; · AI 결과만으로 자동 승인·자동 발송·자동 제출하지 않음" style="rounded=1;whiteSpace=wrap;html=1;arcSize=10;fillColor=#FFF2F2;strokeColor=#D86B6B;dashed=1;fontSize=12;fontColor=#8A3030;" vertex="1" parent="1">
+          <mxGeometry x="565" y="735" width="500" height="32" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="db" value="&lt;b&gt;PostgreSQL 16&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;업무 상태 · AiRun · Audit · Outbox&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=12;fillColor=#EAF4FF;strokeColor=#3B82B4;strokeWidth=2;fontSize=14;fontColor=#214C68;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="150" width="215" height="92" as="geometry"/>
+        </mxCell>
+        <mxCell id="storage" value="&lt;b&gt;File Storage&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;PVC / S3-compatible&lt;br&gt;HWPX · PDF · 제출 파일&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F2F8FC;strokeColor=#5B8DA8;strokeWidth=2;fontSize=14;fontColor=#284C60;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="278" width="215" height="88" as="geometry"/>
+        </mxCell>
+        <mxCell id="runtime" value="&lt;b&gt;AI Runtime&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;FastAPI · Agent Pipeline&lt;br&gt;Intent · OCR · Renewal · HWPX&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#EEF2FF;strokeColor=#6574CD;strokeWidth=2;fontSize=14;fontColor=#373E77;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="420" width="215" height="102" as="geometry"/>
+        </mxCell>
+        <mxCell id="knowledge" value="&lt;b&gt;Knowledge Bundle&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;Intent · Slot · Workflow Catalog&lt;br&gt;공식 근거 · Version/Checksum&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#EAF7EE;strokeColor=#56A36C;strokeWidth=2;fontSize=14;fontColor=#2D603A;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="558" width="215" height="92" as="geometry"/>
+        </mxCell>
+        <mxCell id="providers" value="&lt;b&gt;External Providers&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:12px&quot;&gt;Hugging Face · LLM · CLOVA OCR&lt;br&gt;rhwp / LibreOffice&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#F8F5F1;strokeColor=#A9855C;strokeWidth=2;fontSize=14;fontColor=#62492F;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="690" width="215" height="92" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="edge-hr-gw" value="JWT API" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#0F766E;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#0F5F59;" edge="1" parent="1" source="hr" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-worker-gw" value="보안 Token" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#C8892D;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#7A531A;" edge="1" parent="1" source="worker" target="gateway"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-gw-entry" value="REST / SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#475569;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;" edge="1" parent="1" source="gateway" target="entry"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-entry-business" value="권한·tenant 검증" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#179A91;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#0F5F59;" edge="1" parent="1" source="entry" target="business"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-business-ai" value="분석·문서 실행" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6574CD;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#373E77;" edge="1" parent="1" source="business" target="aiLayer"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-ai-reliability" value="실행·이벤트 저장" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#8B75BD;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#4C3D70;" edge="1" parent="1" source="aiLayer" target="reliability"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="edge-db" value="JPA / JDBC" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#3B82B4;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#214C68;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="reliability" target="db"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1195" y="671"/><mxPoint x="1195" y="196"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-storage" value="FileStorage Port" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#5B8DA8;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#284C60;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="business" target="storage"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1210" y="386"/><mxPoint x="1210" y="322"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-runtime" value="Internal REST · Bearer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6574CD;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#373E77;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="aiLayer" target="runtime"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1225" y="556"/><mxPoint x="1225" y="471"/></Array></mxGeometry></mxCell>
+        <mxCell id="edge-knowledge" value="Versioned release" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#56A36C;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#2D603A;dashed=1;" edge="1" parent="1" source="knowledge" target="runtime"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge-provider" value="Model / OCR / Render" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#A9855C;strokeWidth=2;endArrow=block;endFill=1;fontSize=11;fontColor=#62492F;exitX=1;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="runtime" target="providers"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1490" y="471"/><mxPoint x="1490" y="736"/></Array></mxGeometry></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
