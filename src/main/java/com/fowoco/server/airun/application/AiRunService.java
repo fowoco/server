@@ -443,7 +443,8 @@ public class AiRunService implements AiAttemptStarter {
                 previous.extractedSlots(),
                 new ArrayList<>(fieldKeys),
                 List.of(mergedWorker),
-                previous.workflowConstraints()
+                previous.workflowConstraints(),
+                previous.plannedIntentDecision()
         );
     }
 

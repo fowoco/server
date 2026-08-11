@@ -6,6 +6,8 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
+import com.fowoco.server.aiintegration.application.model.AiIntentDecision;
 import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
@@ -89,7 +91,13 @@ public class AiRuntimeContractValidator {
                 ));
         Set<String> candidateRefs = new HashSet<>();
         response.candidates().forEach(candidate ->
-                validateCandidate(candidate, allowedWorkers, allowedSlotsByWorkflow, candidateRefs));
+                validateCandidate(
+                        candidate,
+                        request.analysisInput().plannedIntentDecision(),
+                        allowedWorkers,
+                        allowedSlotsByWorkflow,
+                        candidateRefs
+                ));
         response.validationErrors().forEach(error -> {
             validateIdentifier(error.code(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
             boundaryPolicy.validateKey(error.field());
@@ -106,7 +114,8 @@ public class AiRuntimeContractValidator {
         if (!request.analysisInput().extractedSlots().isEmpty()
                 || !request.analysisInput().requestedFieldKeys().isEmpty()
                 || !request.analysisInput().workers().isEmpty()
-                || !request.analysisInput().workflowConstraints().isEmpty()) {
+                || !request.analysisInput().workflowConstraints().isEmpty()
+                || request.analysisInput().plannedIntentDecision() != null) {
             reject(
                     AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
                     "PLAN request must contain only the HR instruction."
@@ -115,6 +124,16 @@ public class AiRuntimeContractValidator {
     }
 
     private void validateAnalyzeInput(AiAnalysisRequest request) {
+        if (request.analysisInput().plannedIntentDecision() == null) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                    "ANALYZE request must preserve the PLAN Intent decision."
+            );
+        }
+        validateIntentDecision(
+                request.analysisInput().plannedIntentDecision(),
+                AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
+        );
         if (request.analysisInput().requestedFieldKeys().isEmpty()) {
             reject(
                     AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
@@ -123,6 +142,16 @@ public class AiRuntimeContractValidator {
         }
         validateWorkers(request);
         validateWorkflowConstraints(request);
+        boolean plannedWorkflowAllowed = request.analysisInput().workflowConstraints().stream()
+                .anyMatch(workflow -> workflow.workflowId().equals(
+                        request.analysisInput().plannedIntentDecision().workflowId()
+                ));
+        if (!plannedWorkflowAllowed) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                    "ANALYZE request PLAN Workflow is outside the active Workflow constraints."
+            );
+        }
         Set<String> requestedFieldKeys = Set.copyOf(request.analysisInput().requestedFieldKeys());
         request.analysisInput().workers().forEach(worker -> {
             if (!requestedFieldKeys.containsAll(worker.requestedFields().keySet())) {
@@ -200,7 +229,14 @@ public class AiRuntimeContractValidator {
 
     private void validateContextRequirement(AiContextRequirement requirement) {
         validateIdentifier(requirement.detectedIntent(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
-        validateConfidence(requirement.confidence());
+        validateIdentifier(requirement.workflowId(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+        boundaryPolicy.validateText(requirement.evidence(), 1_000, true);
+        validateConfidence(
+                requirement.confidence(),
+                requirement.confidenceSource(),
+                requirement.bertRoutingScore(),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
         boundaryPolicy.validateText(requirement.targetDisplayName(), 120, true);
         if (requirement.extractedSlots().size() > MAX_CONTEXT_FIELDS
                 || requirement.requiredFieldKeys().isEmpty()
@@ -295,6 +331,7 @@ public class AiRuntimeContractValidator {
 
     private void validateCandidate(
             AiCandidate candidate,
+            AiIntentDecision plannedDecision,
             Map<UUID, WorkerContext> allowedWorkers,
             Map<String, Set<String>> allowedSlotsByWorkflow,
             Set<String> candidateRefs
@@ -310,7 +347,13 @@ public class AiRuntimeContractValidator {
         if (allowedSlots == null) {
             reject(AiRuntimeFailureCode.UNEXPECTED_WORKFLOW, "AI Runtime returned an unexpected Workflow.");
         }
-        validateConfidence(candidate.confidence());
+        if (plannedDecision == null || !plannedDecision.workflowId().equals(candidate.workflowId())) {
+            reject(
+                    AiRuntimeFailureCode.UNEXPECTED_WORKFLOW,
+                    "AI Runtime changed the Workflow selected during PLAN."
+            );
+        }
+        validateScore(candidate.confidence(), false, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         candidate.extractedSlots().forEach((key, value) -> {
             validateAllowedSlot(key, allowedSlots);
             boundaryPolicy.validateText(value, 4_000, true);
@@ -368,11 +411,46 @@ public class AiRuntimeContractValidator {
         return Set.copyOf(allowedSlots);
     }
 
-    private void validateConfidence(BigDecimal confidence) {
-        if (confidence == null
-                || confidence.compareTo(BigDecimal.ZERO) < 0
-                || confidence.compareTo(BigDecimal.ONE) > 0) {
-            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "AI Runtime confidence is invalid.");
+    private void validateIntentDecision(AiIntentDecision decision, AiRuntimeFailureCode failureCode) {
+        validateIdentifier(decision.detectedIntent(), failureCode);
+        validateIdentifier(decision.workflowId(), failureCode);
+        boundaryPolicy.validateText(decision.evidence(), 1_000, true);
+        validateConfidence(
+                decision.confidence(),
+                decision.confidenceSource(),
+                decision.bertRoutingScore(),
+                failureCode
+        );
+    }
+
+    private void validateConfidence(
+            BigDecimal confidence,
+            AiConfidenceSource source,
+            BigDecimal bertRoutingScore,
+            AiRuntimeFailureCode failureCode
+    ) {
+        if (source == null) {
+            reject(failureCode, "AI Runtime confidence source is missing.");
+        }
+        if (source == AiConfidenceSource.UNAVAILABLE && confidence != null) {
+            reject(failureCode, "Unavailable confidence must be null.");
+        }
+        if (source != AiConfidenceSource.UNAVAILABLE && confidence == null) {
+            reject(failureCode, "Available confidence must include a score.");
+        }
+        validateScore(confidence, true, failureCode);
+        validateScore(bertRoutingScore, true, failureCode);
+    }
+
+    private void validateScore(BigDecimal score, boolean nullable, AiRuntimeFailureCode failureCode) {
+        if (score == null) {
+            if (!nullable) {
+                reject(failureCode, "AI Runtime confidence is missing.");
+            }
+            return;
+        }
+        if (score.compareTo(BigDecimal.ZERO) < 0 || score.compareTo(BigDecimal.ONE) > 0) {
+            reject(failureCode, "AI Runtime confidence is invalid.");
         }
     }
 
