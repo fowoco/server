@@ -25,6 +25,8 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisPhase;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
+import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
@@ -55,6 +57,38 @@ class AiRuntimeContractValidatorTest {
     void acceptsInstructionOnlyPlanAndStructuredContextRequirement() {
         assertThatCode(() -> validator.validateResponse(validPlanRequest(), contextRequiredResponse()))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsAConfidenceValueWhenTheFinalModelDoesNotProvideOne() {
+        AiContextRequirement valid = contextRequiredResponse().contextRequirement();
+        AiContextRequirement invalid = new AiContextRequirement(
+                valid.detectedIntent(),
+                new BigDecimal("0.3088"),
+                valid.targetDisplayName(),
+                valid.extractedSlots(),
+                valid.requiredFieldKeys(),
+                valid.workflowId(),
+                valid.evidence(),
+                AiConfidenceSource.UNAVAILABLE,
+                new BigDecimal("0.3088")
+        );
+        AiAnalysisResponse response = new AiAnalysisResponse(
+                REQUEST_ID,
+                AiAnalysisOutcome.CONTEXT_REQUIRED,
+                invalid,
+                List.of(),
+                List.of(),
+                List.of(),
+                validVersions(),
+                1,
+                100
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(validPlanRequest(), response),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
     }
 
     @Test
@@ -198,6 +232,44 @@ class AiRuntimeContractValidatorTest {
     }
 
     @Test
+    void rejectsCandidateThatChangesTheWorkflowSelectedDuringPlan() {
+        AiAnalysisRequest base = validRequest();
+        AnalysisInput input = new AnalysisInput(
+                base.analysisInput().instruction(),
+                base.analysisInput().extractedSlots(),
+                base.analysisInput().requestedFieldKeys(),
+                base.analysisInput().workers(),
+                List.of(
+                        new WorkflowConstraint(WORKFLOW_ID, Set.of("stay_expiry_date")),
+                        new WorkflowConstraint("WF-CON-001", Set.of("contract_end_date"))
+                ),
+                base.analysisInput().plannedIntentDecision()
+        );
+        AiAnalysisRequest request = new AiAnalysisRequest(
+                base.requestId(),
+                base.attemptId(),
+                base.phase(),
+                base.contractVersion(),
+                base.requiredKnowledgeVersion(),
+                base.deadlineMs(),
+                input
+        );
+        AiCandidate changedWorkflow = new AiCandidate(
+                "candidate-changed-workflow",
+                WORKER_REF,
+                "WF-CON-001",
+                Map.of(),
+                List.of("contract_end_date"),
+                BigDecimal.ONE
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(request, responseWithCandidate(changedWorkflow)),
+                AiRuntimeFailureCode.UNEXPECTED_WORKFLOW
+        );
+    }
+
+    @Test
     void acceptsOriginalPiiCandidateValueWhenTheWorkflowAllowsTheSlot() {
         AiCandidate originalValueCandidate = new AiCandidate(
                 "candidate-original-value",
@@ -297,7 +369,8 @@ class AiRuntimeContractValidatorTest {
                 List.of(new WorkflowConstraint(
                         WORKFLOW_ID,
                         Set.of("passport_status", "arc_status")
-                ))
+                )),
+                base.analysisInput().plannedIntentDecision()
         );
         return new AiAnalysisRequest(
                 base.requestId(),

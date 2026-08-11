@@ -10,8 +10,10 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
+import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.jayway.jsonpath.JsonPath;
 import java.io.InputStream;
@@ -39,6 +41,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import tools.jackson.databind.ObjectMapper;
 
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -63,6 +66,9 @@ class AiRunApiIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @MockitoBean
     private AiRuntimeClient runtimeClient;
@@ -162,6 +168,30 @@ class AiRunApiIntegrationTest {
                 Integer.class,
                 aiRunId
         )).isEqualTo(3);
+        String analyzeInputJson = jdbcTemplate.queryForObject(
+                """
+                SELECT analysis_input_json
+                FROM ai_attempt
+                WHERE ai_run_id = ? AND sequence_no = 2
+                """,
+                String.class,
+                aiRunId
+        );
+        AnalysisInput persistedAnalyzeInput = objectMapper.readValue(analyzeInputJson, AnalysisInput.class);
+        assertThat(persistedAnalyzeInput.plannedIntentDecision().detectedIntent())
+                .isEqualTo("EXPIRY_RENEWAL");
+        assertThat(persistedAnalyzeInput.plannedIntentDecision().workflowId())
+                .isEqualTo("WF-STY-001");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT model_version FROM ai_attempt WHERE ai_run_id = ? AND sequence_no = 1",
+                String.class,
+                aiRunId
+        )).isEqualTo("1");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT prompt_version FROM ai_attempt WHERE ai_run_id = ? AND sequence_no = 1",
+                String.class,
+                aiRunId
+        )).isEqualTo("prompt-demo-1");
         assertThat(jdbcTemplate.queryForList(
                 "SELECT action FROM audit_event WHERE target_id = ? ORDER BY created_at",
                 String.class,
@@ -588,7 +618,11 @@ class AiRunApiIntegrationTest {
                                     "passport_status",
                                     "arc_status",
                                     "due_at"
-                            )
+                            ),
+                            "WF-STY-001",
+                            "체류연장 준비",
+                            AiConfidenceSource.MODEL,
+                            null
                     ),
                     List.of(),
                     List.of(),
@@ -646,7 +680,11 @@ class AiRunApiIntegrationTest {
                                     "stay_expiry_date",
                                     "passport_status",
                                     "arc_status"
-                            )
+                            ),
+                            "WF-STY-001",
+                            "체류연장 준비",
+                            AiConfidenceSource.MODEL,
+                            null
                     ),
                     List.of(),
                     List.of(),
