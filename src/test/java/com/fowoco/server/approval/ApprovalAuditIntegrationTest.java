@@ -180,6 +180,13 @@ class ApprovalAuditIntegrationTest {
                 .doesNotContain("file-ref-001");
 
         String adminToken = accessToken(login(ADMIN_A_EMAIL));
+        HttpResponse<String> unfilteredAuditPage = authorizedGet(
+                "/api/v1/audit-events?limit=100",
+                adminToken
+        );
+        assertThat(unfilteredAuditPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<?>>read(unfilteredAuditPage.body(), "$.items")).isNotEmpty();
+
         HttpResponse<String> auditPage = authorizedGet(
                 "/api/v1/audit-events?target_type=TASK&target_id=" + TASK_A + "&limit=2",
                 adminToken
