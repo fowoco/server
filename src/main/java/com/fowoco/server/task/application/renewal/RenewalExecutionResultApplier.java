@@ -88,6 +88,7 @@ class RenewalExecutionResultApplier {
             long expectedVersion,
             RenewalRunResponse agentResult,
             List<PreparedRenewalDocument> preparedDocuments,
+            Map<String, String> submittedSlotAnswers,
             ActorContext actor,
             RequestMetadata metadata
     ) {
@@ -105,6 +106,7 @@ class RenewalExecutionResultApplier {
         Map<String, Object> businessData = new LinkedHashMap<>(
                 contentCodec.decodeBusinessData(task.businessDataJson())
         );
+        mergeRenewalInputs(businessData, submittedSlotAnswers);
         businessData.put("renewal_execution", executionMetadata(agentResult, generatedDocuments));
         EncodedTaskContent encoded = contentCodec.encode(
                 task.targetType(),
@@ -158,6 +160,26 @@ class RenewalExecutionResultApplier {
 
         DocumentRequestDraft draft = saveWorkerMessageDraft(saved, agentResult, actor, metadata, now);
         return new RenewalExecutionResult(saved, agentResult, generatedDocuments, draft);
+    }
+
+    private void mergeRenewalInputs(
+            Map<String, Object> businessData,
+            Map<String, String> submittedSlotAnswers
+    ) {
+        if (submittedSlotAnswers.isEmpty()) {
+            return;
+        }
+        Map<String, Object> merged = new LinkedHashMap<>();
+        Object current = businessData.get("renewal_inputs");
+        if (current instanceof Map<?, ?> currentMap) {
+            currentMap.forEach((key, value) -> {
+                if (key instanceof String stringKey && value != null) {
+                    merged.put(stringKey, value);
+                }
+            });
+        }
+        merged.putAll(submittedSlotAnswers);
+        businessData.put("renewal_inputs", Map.copyOf(merged));
     }
 
     private Map<String, Object> executionMetadata(

@@ -74,7 +74,12 @@ public final class RenewalExecutionService {
                 metadata.requestId(),
                 taskId,
                 CONTEXT_LOAD,
-                () -> contextReader.load(taskId, command.expectedVersion(), actor)
+                () -> contextReader.load(
+                        taskId,
+                        command.expectedVersion(),
+                        command.slotAnswers(),
+                        actor
+                )
         );
         RenewalRunRequest request = new RenewalRunRequest(
                 runtimeRequestId,
@@ -118,6 +123,7 @@ public final class RenewalExecutionService {
                             command.expectedVersion(),
                             response,
                             generatedDocuments,
+                            context.submittedSlotAnswers(),
                             actor,
                             metadata
                     )

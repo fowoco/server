@@ -39,7 +39,8 @@ public class RenewalExecutionController {
 
     @Operation(
             summary = "Renewal Agent 실행",
-            description = "Task·Worker·Company·승인된 OCR 문맥을 Agent에 전달하고, 결과를 기존 Task와 안내 초안에 반영합니다. 자동 승인·발송·완료는 하지 않습니다."
+            description = "Task·Worker·Company·승인된 OCR 문맥과 HR이 보충한 Slot을 Agent에 전달하고, "
+                    + "결과를 기존 Task와 안내 초안에 반영합니다. 자동 승인·발송·완료는 하지 않습니다."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Agent 결과 검증·반영 완료"),

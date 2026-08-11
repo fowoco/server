@@ -3,6 +3,8 @@ package com.fowoco.server.task;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -198,6 +200,82 @@ class RenewalExecutionIntegrationTest {
                 "SELECT COUNT(*) FROM audit_event WHERE action = 'DOCUMENT_REQUEST_DRAFT_SAVED'",
                 Integer.class
         )).isEqualTo(1);
+    }
+
+    @Test
+    void storesHrSlotAnswersAndSendsThemToTheNextRenewalRun() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation -> {
+            RenewalRunRequest request = invocation.getArgument(0);
+            capturedRequest.set(request);
+            return request.slots().containsKey("wage")
+                    ? generateResponse(request)
+                    : askHrResponse(request);
+        });
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> first = postRenewal(token, 0);
+        long nextVersion = ((Number) JsonPath.read(first.body(), "$.task_version")).longValue();
+        HttpResponse<String> second = postRenewalWithSlots(
+                token,
+                nextVersion,
+                "{\"wage\":\"2,500,000\"}"
+        );
+
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(second.statusCode()).isEqualTo(200);
+        assertThat(capturedRequest.get().slots()).containsEntry("wage", "2500000");
+        String businessData = jdbcTemplate.queryForObject(
+                "SELECT business_data_json FROM task WHERE task_id = ?", String.class, TASK_A
+        );
+        assertThat(JsonPath.<String>read(businessData, "$.renewal_inputs.wage"))
+                .isEqualTo("2500000");
+        verify(runtimeClient, times(2)).run(any(), any());
+    }
+
+    @Test
+    void rejectsDocumentOcrSlotsSubmittedByTheClient() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                askWorkerResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> first = postRenewal(token, 0);
+        long nextVersion = ((Number) JsonPath.read(first.body(), "$.task_version")).longValue();
+        HttpResponse<String> second = postRenewalWithSlots(
+                token,
+                nextVersion,
+                "{\"passport_number\":\"M12345678\"}"
+        );
+
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(second.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(second.body(), "$.code"))
+                .isEqualTo("INVALID_RENEWAL_SLOT_ANSWER");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT business_data_json FROM task WHERE task_id = ?", String.class, TASK_A
+        )).doesNotContain("M12345678", "renewal_inputs");
+        verify(runtimeClient, times(1)).run(any(), any());
+    }
+
+    @Test
+    void rejectsAnInvalidValueForARequestedHrSlot() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                askHrResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> first = postRenewal(token, 0);
+        long nextVersion = ((Number) JsonPath.read(first.body(), "$.task_version")).longValue();
+        HttpResponse<String> second = postRenewalWithSlots(
+                token,
+                nextVersion,
+                "{\"wage\":null}"
+        );
+
+        assertThat(second.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(second.body(), "$.code"))
+                .isEqualTo("INVALID_RENEWAL_SLOT_ANSWER");
+        verify(runtimeClient, times(1)).run(any(), any());
     }
 
     @Test
@@ -475,6 +553,25 @@ class RenewalExecutionIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString("""
                         {"instruction":"응웬반안 체류연장 준비해줘","expected_version":%d}
                         """.formatted(version)))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> postRenewalWithSlots(
+            String token,
+            long version,
+            String slotAnswers
+    ) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/tasks/" + TASK_A + "/renewal-run"))
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofString("""
+                        {
+                          "instruction":"응웬반안 체류연장 준비해줘",
+                          "expected_version":%d,
+                          "slot_answers":%s
+                        }
+                        """.formatted(version, slotAnswers)))
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }

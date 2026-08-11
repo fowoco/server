@@ -13,6 +13,7 @@ record RenewalExecutionContext(
         UUID companyId,
         UUID workerId,
         Map<String, Object> slots,
+        Map<String, String> submittedSlotAnswers,
         List<RenewalDocumentInput> documents,
         Map<String, Object> ocrResult,
         RenewalWorkerSnapshot worker,

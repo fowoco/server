@@ -61,6 +61,7 @@ class RenewalExecutionContextReader {
     private final DocumentOcrRunRepository ocrRunRepository;
     private final OcrResultCipher ocrResultCipher;
     private final TaskContentCodec taskContentCodec;
+    private final RenewalSlotAnswerValidator slotAnswerValidator;
     private final ObjectMapper objectMapper;
 
     RenewalExecutionContextReader(
@@ -73,6 +74,7 @@ class RenewalExecutionContextReader {
             DocumentOcrRunRepository ocrRunRepository,
             OcrResultCipher ocrResultCipher,
             TaskContentCodec taskContentCodec,
+            RenewalSlotAnswerValidator slotAnswerValidator,
             ObjectMapper objectMapper
     ) {
         this.authorizer = authorizer;
@@ -84,11 +86,17 @@ class RenewalExecutionContextReader {
         this.ocrRunRepository = ocrRunRepository;
         this.ocrResultCipher = ocrResultCipher;
         this.taskContentCodec = taskContentCodec;
+        this.slotAnswerValidator = slotAnswerValidator;
         this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
-    RenewalExecutionContext load(UUID taskId, long expectedVersion, ActorContext actor) {
+    RenewalExecutionContext load(
+            UUID taskId,
+            long expectedVersion,
+            Map<String, String> submittedSlotAnswers,
+            ActorContext actor
+    ) {
         authorizer.requireHrWrite(actor);
         tenantContext.setCompanyIdForCurrentTransaction(actor.companyId());
         Task task = taskRepository.findByIdAndCompanyId(taskId, actor.companyId())
@@ -101,14 +109,26 @@ class RenewalExecutionContextReader {
         Map<String, Object> businessData = new LinkedHashMap<>(
                 taskContentCodec.decodeBusinessData(task.businessDataJson())
         );
+        Map<String, String> normalizedAnswers = slotAnswerValidator.validate(
+                submittedSlotAnswers,
+                businessData.get("renewal_execution")
+        );
         businessData.remove("renewal_execution");
-        Map<String, Object> slots = buildSlots(businessData, worker, company);
+        Map<String, Object> storedRenewalInputs = renewalInputs(businessData.remove("renewal_inputs"));
+        Map<String, Object> slots = buildSlots(
+                businessData,
+                storedRenewalInputs,
+                normalizedAnswers,
+                worker,
+                company
+        );
         OcrContext ocr = loadOcrContext(worker, actor.companyId());
         return new RenewalExecutionContext(
                 task.taskId(),
                 task.companyId(),
                 task.workerId(),
                 Collections.unmodifiableMap(new LinkedHashMap<>(slots)),
+                normalizedAnswers,
                 ocr.documents(),
                 ocr.latestResult(),
                 toWorkerSnapshot(worker),
@@ -131,10 +151,14 @@ class RenewalExecutionContextReader {
 
     private Map<String, Object> buildSlots(
             Map<String, Object> businessData,
+            Map<String, Object> storedRenewalInputs,
+            Map<String, String> submittedSlotAnswers,
             Worker worker,
             Company company
     ) {
         Map<String, Object> slots = new LinkedHashMap<>(businessData);
+        slots.putAll(storedRenewalInputs);
+        slots.putAll(submittedSlotAnswers);
         put(slots, "worker_id", worker.workerId());
         put(slots, "company_id", company.companyId());
         put(slots, "display_name", worker.displayName());
@@ -148,6 +172,19 @@ class RenewalExecutionContextReader {
         put(slots, "employment_activity_end_date", worker.employmentActivityEndDate());
         put(slots, "enterprise_name", company.name());
         return slots;
+    }
+
+    private Map<String, Object> renewalInputs(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        Map<String, Object> inputs = new LinkedHashMap<>();
+        map.forEach((key, input) -> {
+            if (key instanceof String stringKey && input != null) {
+                inputs.put(stringKey, input);
+            }
+        });
+        return Map.copyOf(inputs);
     }
 
     private void put(Map<String, Object> values, String key, Object value) {
