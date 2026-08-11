@@ -2,20 +2,30 @@ package com.fowoco.server.notification.infrastructure.persistence;
 
 import com.fowoco.server.notification.application.port.NotificationRepository;
 import com.fowoco.server.notification.domain.Notification;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class JpaNotificationRepository implements NotificationRepository {
 
     private final SpringDataNotificationJpaRepository repository;
+    private final EntityManager entityManager;
 
-    public JpaNotificationRepository(SpringDataNotificationJpaRepository repository) {
+    public JpaNotificationRepository(
+            SpringDataNotificationJpaRepository repository,
+            EntityManager entityManager
+    ) {
         this.repository = repository;
+        this.entityManager = entityManager;
     }
 
     @Override
@@ -39,7 +49,27 @@ public class JpaNotificationRepository implements NotificationRepository {
 
     @Override
     public List<Notification> findPage(UUID companyId, UUID userId, boolean unreadOnly, Instant cursor, int size) {
-        return repository.findPage(companyId, userId, unreadOnly, cursor, PageRequest.of(0, size)).stream()
+        CriteriaBuilder builder = entityManager.getCriteriaBuilder();
+        CriteriaQuery<NotificationJpaEntity> query = builder.createQuery(NotificationJpaEntity.class);
+        Root<NotificationJpaEntity> notification = query.from(NotificationJpaEntity.class);
+        List<Predicate> predicates = new ArrayList<>();
+
+        predicates.add(builder.equal(notification.get("companyId"), companyId));
+        predicates.add(builder.equal(notification.get("userId"), userId));
+        if (unreadOnly) {
+            predicates.add(builder.isFalse(notification.get("read")));
+        }
+        if (cursor != null) {
+            predicates.add(builder.lessThan(notification.<Instant>get("occurredAt"), cursor));
+        }
+
+        query.where(predicates.toArray(Predicate[]::new));
+        query.orderBy(builder.desc(notification.get("occurredAt")));
+
+        return entityManager.createQuery(query)
+                .setMaxResults(size)
+                .getResultList()
+                .stream()
                 .map(NotificationJpaEntity::toDomain)
                 .toList();
     }

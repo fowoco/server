@@ -186,6 +186,29 @@ class NotificationSecurityIntegrationTest {
         assertThat(JsonPath.<Boolean>read(response.body(), "$.has_next")).isTrue();
     }
 
+    @Test
+    void cursorAndUnreadOnlyFiltersCanBeCombined() throws Exception {
+        Instant cursor = Instant.parse("2026-08-11T02:00:00Z");
+        insertNotification(COMPANY_A, HR_A, "TASK", false, cursor.minusSeconds(1));
+        insertNotification(COMPANY_A, HR_A, "TASK", true, cursor.minusSeconds(2));
+        insertNotification(COMPANY_A, HR_A, "TASK", false, cursor.plusSeconds(1));
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> page = authorizedGet(
+                "/api/v1/notifications?cursor=" + cursor,
+                accessToken
+        );
+        HttpResponse<String> unreadPage = authorizedGet(
+                "/api/v1/notifications?unreadOnly=true&cursor=" + cursor,
+                accessToken
+        );
+
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(page.body(), "$.items")).hasSize(2);
+        assertThat(unreadPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(unreadPage.body(), "$.items")).hasSize(1);
+    }
+
     private UUID insertNotification(UUID companyId, String targetType, boolean read, Instant occurredAt) {
         return insertNotification(companyId, HR_A, targetType, read, occurredAt);
     }
