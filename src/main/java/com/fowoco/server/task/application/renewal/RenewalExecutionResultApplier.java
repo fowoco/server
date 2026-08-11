@@ -52,6 +52,7 @@ class RenewalExecutionResultApplier {
     private final ApprovalControlPort approvalControl;
     private final AuditEventRepository auditRepository;
     private final TaskContentCodec contentCodec;
+    private final GeneratedDocumentService generatedDocumentService;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -64,6 +65,7 @@ class RenewalExecutionResultApplier {
             ApprovalControlPort approvalControl,
             AuditEventRepository auditRepository,
             TaskContentCodec contentCodec,
+            GeneratedDocumentService generatedDocumentService,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -75,6 +77,7 @@ class RenewalExecutionResultApplier {
         this.approvalControl = approvalControl;
         this.auditRepository = auditRepository;
         this.contentCodec = contentCodec;
+        this.generatedDocumentService = generatedDocumentService;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -84,6 +87,7 @@ class RenewalExecutionResultApplier {
             UUID taskId,
             long expectedVersion,
             RenewalRunResponse agentResult,
+            List<PreparedRenewalDocument> preparedDocuments,
             ActorContext actor,
             RequestMetadata metadata
     ) {
@@ -94,10 +98,14 @@ class RenewalExecutionResultApplier {
             throw new ApiException(TaskErrorCode.CONCURRENT_MODIFICATION);
         }
 
+        List<GeneratedDocumentResult> generatedDocuments = generatedDocumentService.store(
+                task.taskId(), task.workerId(), preparedDocuments, actor, metadata
+        );
+
         Map<String, Object> businessData = new LinkedHashMap<>(
                 contentCodec.decodeBusinessData(task.businessDataJson())
         );
-        businessData.put("renewal_execution", executionMetadata(agentResult));
+        businessData.put("renewal_execution", executionMetadata(agentResult, generatedDocuments));
         EncodedTaskContent encoded = contentCodec.encode(
                 task.targetType(),
                 task.workerId(),
@@ -149,10 +157,13 @@ class RenewalExecutionResultApplier {
         );
 
         DocumentRequestDraft draft = saveWorkerMessageDraft(saved, agentResult, actor, metadata, now);
-        return new RenewalExecutionResult(saved, agentResult, draft);
+        return new RenewalExecutionResult(saved, agentResult, generatedDocuments, draft);
     }
 
-    private Map<String, Object> executionMetadata(RenewalRunResponse result) {
+    private Map<String, Object> executionMetadata(
+            RenewalRunResponse result,
+            List<GeneratedDocumentResult> generatedDocuments
+    ) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("request_id", result.requestId().toString());
         metadata.put("intent", result.intent());
@@ -167,7 +178,7 @@ class RenewalExecutionResultApplier {
                 .map(this::requestedFieldMetadata)
                 .toList());
         metadata.put("case_signals", result.caseSignals());
-        metadata.put("generated_documents", result.generatedDocuments().stream()
+        metadata.put("generated_documents", generatedDocuments.stream()
                 .map(this::generatedDocumentMetadata)
                 .toList());
         return Map.copyOf(metadata);
@@ -177,22 +188,14 @@ class RenewalExecutionResultApplier {
         return Map.of("key", field.key(), "source_hint", field.sourceHint());
     }
 
-    private Map<String, Object> generatedDocumentMetadata(Map<String, Object> raw) {
-        Map<String, Object> safe = new LinkedHashMap<>();
-        copyAllowed(raw, safe, "template_id");
-        copyAllowed(raw, safe, "name");
-        copyAllowed(raw, safe, "format");
-        copyAllowed(raw, safe, "status");
-        copyAllowed(raw, safe, "mapped_fields");
-        copyAllowed(raw, safe, "changed_fields");
-        return Map.copyOf(safe);
-    }
-
-    private void copyAllowed(Map<String, Object> source, Map<String, Object> target, String key) {
-        Object value = source.get(key);
-        if (value != null) {
-            target.put(key, value);
-        }
+    private Map<String, Object> generatedDocumentMetadata(GeneratedDocumentResult result) {
+        return Map.of(
+                "template_id", result.templateId(),
+                "format", result.format(),
+                "status", result.status(),
+                "stored_file_id", result.storedFileId().toString(),
+                "worker_document_id", result.workerDocumentId().toString()
+        );
     }
 
     private void putIfPresent(Map<String, Object> target, String key, String value) {

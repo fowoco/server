@@ -1,5 +1,6 @@
 package com.fowoco.server.aiintegration.infrastructure.http;
 
+import com.fowoco.server.aiintegration.application.document.DocumentGenerationClient;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
 import com.fowoco.server.aiintegration.application.validation.AiRuntimeContractValidator;
@@ -87,6 +88,28 @@ public class AiRuntimeHttpConfiguration {
                 )
         );
         return new ValidatingRenewalRuntimeClient(remote, validator);
+    }
+
+    @Bean
+    public DocumentGenerationClient documentGenerationClient(
+            AiRuntimeProperties properties,
+            ObjectMapper applicationObjectMapper
+    ) {
+        if (!properties.isEnabled()) {
+            return new DisabledDocumentGenerationClient();
+        }
+        properties.validateEnabledConfiguration();
+        ObjectMapper contractObjectMapper = applicationObjectMapper.rebuild()
+                .propertyNamingStrategy(PropertyNamingStrategies.LOWER_CAMEL_CASE)
+                .build();
+        return new RemoteDocumentGenerationClient(
+                properties.getDocumentGenerationEndpoint(),
+                properties.authorizationHeader(),
+                properties.getOverallTimeout(),
+                properties.getMaxDocumentResponseBytes(),
+                createHttpClient(properties.getConnectTimeout()),
+                contractObjectMapper
+        );
     }
 
     static HttpClient createHttpClient(Duration connectTimeout) {

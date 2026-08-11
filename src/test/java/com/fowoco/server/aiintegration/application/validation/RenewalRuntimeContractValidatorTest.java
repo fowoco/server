@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.renewal.RenewalCompanySnapshot;
+import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
@@ -99,6 +100,26 @@ class RenewalRuntimeContractValidatorTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void acceptsGeneratedDocumentValuesForTheCanonicalTemplate() {
+        RenewalRunRequest request = request();
+
+        assertThatCode(() -> validator.validateResponse(
+                request,
+                generateResponse(request, Map.of("employee_name", "NGUYEN VAN AN"))
+        )).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsAGeneratedDocumentWithoutValues() {
+        RenewalRunRequest request = request();
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                generateResponse(request, Map.of())
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
     private RenewalRunRequest request() {
         UUID requestId = UUID.randomUUID();
         UUID attemptId = UUID.randomUUID();
@@ -131,6 +152,24 @@ class RenewalRuntimeContractValidatorTest {
                 "임금을 확인해 주세요.", null, null, null, List.of(), List.of(), null,
                 List.of("REQUEST_CONTRACT_SLOTS", "NEEDS_INFO"), List.of(), null, "rules", "main",
                 List.of()
+        );
+    }
+
+    private RenewalRunResponse generateResponse(
+            RenewalRunRequest request,
+            Map<String, Object> values
+    ) {
+        return new RenewalRunResponse(
+                request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
+                "WF-STY-001", new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
+                "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
+                null, null, null, null,
+                List.of(new RenewalGeneratedDocument(
+                        "standard_labor_contract_v6", "표준근로계약서", "hwp", "stub", null, null,
+                        List.copyOf(values.keySet()), List.of(), values
+                )),
+                List.of(), null, List.of("GENERATE_DRAFTS", "READY_FOR_REVIEW"),
+                List.of(), null, "rules", "main", List.of()
         );
     }
 }

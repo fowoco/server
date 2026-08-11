@@ -2,6 +2,7 @@ package com.fowoco.server.aiintegration.application.validation;
 
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
+import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
@@ -33,6 +34,13 @@ public final class RenewalRuntimeContractValidator {
             "CANCEL_OUT_OF_SCOPE"
     );
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
+    private static final Set<String> DOCUMENT_TEMPLATES = Set.of(
+            "standard_labor_contract_v6",
+            "employment_extension_application_v12_3",
+            "immigration_integrated_application_v34",
+            "identity_guaranty_v129"
+    );
+    private static final Set<String> DOCUMENT_FORMATS = Set.of("hwp", "hwpx");
 
     private final AiRuntimeBoundaryPolicy boundaryPolicy;
 
@@ -133,6 +141,7 @@ public final class RenewalRuntimeContractValidator {
                 reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal Case signal is invalid.");
             }
         });
+        response.generatedDocuments().forEach(this::validateGeneratedDocument);
         if (outOfScopeResult && !response.caseSignals().contains("CANCEL_OUT_OF_SCOPE")) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OUT_OF_SCOPE signal is missing.");
         }
@@ -166,6 +175,31 @@ public final class RenewalRuntimeContractValidator {
         if ("generate".equals(response.scenario()) && response.generatedDocuments().isEmpty()) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "generate requires document descriptors.");
         }
+        if (!"generate".equals(response.scenario()) && !response.generatedDocuments().isEmpty()) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Only generate may return document descriptors.");
+        }
+    }
+
+    private void validateGeneratedDocument(RenewalGeneratedDocument document) {
+        if (document == null
+                || !DOCUMENT_TEMPLATES.contains(document.templateId())
+                || !DOCUMENT_FORMATS.contains(document.format())
+                || document.values().isEmpty()
+                || document.values().size() > 200) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal document descriptor is invalid.");
+        }
+        boundaryPolicy.validateText(document.name(), 255, false);
+        boundaryPolicy.validateText(document.status(), 40, false);
+        boundaryPolicy.validateText(document.path(), 1_000, false);
+        boundaryPolicy.validateText(document.error(), 1_000, false);
+        document.values().forEach((key, value) -> {
+            validateIdentifier(key, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+            if (value instanceof String text) {
+                boundaryPolicy.validateText(text, 4_000, false);
+            } else if (!(value instanceof Number) && !(value instanceof Boolean)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal document value is invalid.");
+            }
+        });
     }
 
     private void validateIdentifier(String value, AiRuntimeFailureCode code) {

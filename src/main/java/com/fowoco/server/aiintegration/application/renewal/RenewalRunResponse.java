@@ -26,7 +26,7 @@ public record RenewalRunResponse(
         String workerRequestMessage,
         Map<String, Object> languageAssistant,
         Map<String, Object> ocrResult,
-        List<Map<String, Object>> generatedDocuments,
+        List<RenewalGeneratedDocument> generatedDocuments,
         List<Map<String, String>> evidence,
         Map<String, Object> documentValidation,
         List<String> caseSignals,
@@ -42,7 +42,7 @@ public record RenewalRunResponse(
         requestedFields = requestedFields == null ? List.of() : List.copyOf(requestedFields);
         languageAssistant = copyNullableMap(languageAssistant);
         ocrResult = copyNullableMap(ocrResult);
-        generatedDocuments = copyMapList(generatedDocuments);
+        generatedDocuments = generatedDocuments == null ? List.of() : List.copyOf(generatedDocuments);
         evidence = evidence == null
                 ? List.of()
                 : evidence.stream().map(RenewalRunResponse::copyStringMap).toList();

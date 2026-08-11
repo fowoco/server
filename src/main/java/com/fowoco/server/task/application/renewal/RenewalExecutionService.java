@@ -12,6 +12,7 @@ import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.task.application.error.TaskErrorCode;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -21,17 +22,20 @@ public final class RenewalExecutionService {
     private final RenewalExecutionContextReader contextReader;
     private final RenewalRuntimeClient runtimeClient;
     private final RenewalExecutionResultApplier resultApplier;
+    private final GeneratedDocumentService generatedDocumentService;
     private final UuidGenerator uuidGenerator;
 
     RenewalExecutionService(
             RenewalExecutionContextReader contextReader,
             RenewalRuntimeClient runtimeClient,
             RenewalExecutionResultApplier resultApplier,
+            GeneratedDocumentService generatedDocumentService,
             UuidGenerator uuidGenerator
     ) {
         this.contextReader = contextReader;
         this.runtimeClient = runtimeClient;
         this.resultApplier = resultApplier;
+        this.generatedDocumentService = generatedDocumentService;
         this.uuidGenerator = uuidGenerator;
     }
 
@@ -58,8 +62,17 @@ public final class RenewalExecutionService {
         );
         try {
             RenewalRunResponse response = runtimeClient.run(request, AiRuntimeCallContext.withoutTrace());
+            List<PreparedRenewalDocument> generatedDocuments =
+                    "generate".equals(response.scenario())
+                            ? generatedDocumentService.prepare(response.generatedDocuments())
+                            : List.of();
             return resultApplier.apply(
-                    taskId, command.expectedVersion(), response, actor, metadata
+                    taskId,
+                    command.expectedVersion(),
+                    response,
+                    generatedDocuments,
+                    actor,
+                    metadata
             );
         } catch (AiRuntimeContractException exception) {
             throw contractFailure(exception.failureCode());

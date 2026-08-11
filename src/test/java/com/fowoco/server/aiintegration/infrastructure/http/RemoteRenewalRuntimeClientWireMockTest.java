@@ -74,6 +74,25 @@ class RemoteRenewalRuntimeClientWireMockTest {
         assertThat(response.requestedFields()).extracting("key").containsExactly("wage");
     }
 
+    @Test
+    void decodesGeneratedDocumentValuesAndIgnoresTheAgentLocalPathForLaterUse() {
+        RenewalRunRequest request = request();
+        wireMock.stubFor(post(urlEqualTo(PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(generatedResponseJson(request))));
+
+        RenewalRunResponse response = client().run(request, AiRuntimeCallContext.withoutTrace());
+
+        assertThat(response.generatedDocuments()).hasSize(1);
+        assertThat(response.generatedDocuments().get(0).templateId())
+                .isEqualTo("standard_labor_contract_v6");
+        assertThat(response.generatedDocuments().get(0).path()).isEqualTo("/tmp/agent-only.hwp");
+        assertThat(response.generatedDocuments().get(0).values())
+                .containsEntry("employee_name", "NGUYEN VAN AN");
+    }
+
     private RemoteRenewalRuntimeClient client() {
         return new RemoteRenewalRuntimeClient(
                 URI.create(wireMock.baseUrl() + PATH),
@@ -137,6 +156,49 @@ class RemoteRenewalRuntimeClientWireMockTest {
                   "evidence":[],
                   "documentValidation":null,
                   "caseSignals":["REQUEST_CONTRACT_SLOTS","NEEDS_INFO"],
+                  "progressEvents":[],
+                  "supervisorReason":null,
+                  "supervisorSource":"rules",
+                  "activeSubgraph":"main",
+                  "errors":[]
+                }
+                """.formatted(request.requestId(), request.attemptId(), request.taskId());
+    }
+
+    private String generatedResponseJson(RenewalRunRequest request) {
+        return """
+                {
+                  "requestId":"%s",
+                  "attemptId":"%s",
+                  "taskId":"%s",
+                  "intent":"EXPIRY_RENEWAL",
+                  "workflowId":"WF-STY-001",
+                  "confidence":0.94,
+                  "status":"READY_FOR_REVIEW",
+                  "outcome":"REVIEW_REQUIRED",
+                  "scenario":"generate",
+                  "phase":"PHASE_4",
+                  "step":"STEP_13",
+                  "slots":{},
+                  "missingSlots":[],
+                  "requestedFields":[],
+                  "guideMessage":null,
+                  "workerRequestMessage":null,
+                  "languageAssistant":null,
+                  "ocrResult":null,
+                  "generatedDocuments":[{
+                    "template_id":"standard_labor_contract_v6",
+                    "name":"표준근로계약서",
+                    "format":"hwp",
+                    "status":"generated",
+                    "path":"/tmp/agent-only.hwp",
+                    "mapped_fields":["employee_name"],
+                    "changed_fields":["employee_name"],
+                    "values":{"employee_name":"NGUYEN VAN AN"}
+                  }],
+                  "evidence":[],
+                  "documentValidation":null,
+                  "caseSignals":["GENERATE_DRAFTS","READY_FOR_REVIEW"],
                   "progressEvents":[],
                   "supervisorReason":null,
                   "supervisorSource":"rules",

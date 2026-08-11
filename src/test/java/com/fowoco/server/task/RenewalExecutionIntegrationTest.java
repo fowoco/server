@@ -6,16 +6,21 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fowoco.server.aiintegration.application.document.DocumentGenerationClient;
+import com.fowoco.server.aiintegration.application.document.GeneratedDocumentFile;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
+import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
+import com.fowoco.server.file.application.port.FileStorage;
 import com.jayway.jsonpath.JsonPath;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -59,21 +64,32 @@ class RenewalExecutionIntegrationTest {
     @MockitoBean
     private RenewalRuntimeClient runtimeClient;
 
+    @MockitoBean
+    private DocumentGenerationClient documentGenerationClient;
+
+    @MockitoBean
+    private FileStorage fileStorage;
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final AtomicReference<RenewalRunRequest> capturedRequest = new AtomicReference<>();
 
     @BeforeEach
     void resetAndSeed() {
         reset(runtimeClient);
+        reset(documentGenerationClient, fileStorage);
+        when(documentGenerationClient.generate(any())).thenReturn(new GeneratedDocumentFile(
+                "표준근로계약서.hwp", "hwp", validHwpFile()
+        ));
         capturedRequest.set(null);
         jdbcTemplate.update("DELETE FROM document_request_draft");
         jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM approval_request");
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM task_checklist_item");
+        jdbcTemplate.update("DELETE FROM worker_document");
+        jdbcTemplate.update("DELETE FROM stored_file");
         jdbcTemplate.update("DELETE FROM task");
         jdbcTemplate.update("DELETE FROM workflow_case");
-        jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
         jdbcTemplate.update("DELETE FROM refresh_token");
         jdbcTemplate.update("DELETE FROM user_account");
@@ -201,6 +217,57 @@ class RenewalExecutionIntegrationTest {
     }
 
     @Test
+    void generatesAndLinksADraftWithoutPersistingTheRawValues() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                generateResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].template_id"))
+                .isEqualTo("standard_labor_contract_v6");
+        assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].status"))
+                .isEqualTo("GENERATED");
+        assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].stored_file_id"))
+                .isNotBlank();
+        assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].worker_document_id"))
+                .isNotBlank();
+        assertThat(response.body()).doesNotContain("NGUYEN VAN AN", "passport_number");
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE task_id = ? AND worker_id = ?",
+                Integer.class, TASK_A, WORKER_A
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM worker_document
+                WHERE task_id = ? AND worker_id = ? AND file_id IS NOT NULL
+                    AND document_type = 'CONTRACT' AND submission_status = 'SUBMITTED'
+                """,
+                Integer.class, TASK_A, WORKER_A
+        )).isEqualTo(1);
+        String businessData = jdbcTemplate.queryForObject(
+                "SELECT business_data_json FROM task WHERE task_id = ?", String.class, TASK_A
+        );
+        assertThat(businessData)
+                .contains("stored_file_id", "worker_document_id")
+                .doesNotContain("NGUYEN VAN AN", "passport_number", "values");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE change_summary LIKE '%NGUYEN VAN AN%'",
+                Integer.class
+        )).isZero();
+
+        HttpResponse<String> retry = postRenewal(token, 0);
+        assertThat(retry.statusCode()).isEqualTo(409);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document WHERE task_id = ?",
+                Integer.class, TASK_A
+        )).isEqualTo(1);
+    }
+
+    @Test
     void keepsTheTaskInNeedsInfoWhenARequiredChecklistItemIsIncomplete() throws Exception {
         jdbcTemplate.update(
                 """
@@ -266,16 +333,38 @@ class RenewalExecutionIntegrationTest {
                 "WF-STY-001", new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
                 "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
                 null, null, null, null,
-                List.of(Map.of(
-                        "template_id", "standard_labor_contract_v6",
-                        "name", "표준근로계약서",
-                        "format", "hwp",
-                        "status", "stub",
-                        "mapped_fields", List.of("employee_name")
+                List.of(new RenewalGeneratedDocument(
+                        "standard_labor_contract_v6",
+                        "표준근로계약서",
+                        "hwp",
+                        "stub",
+                        null,
+                        null,
+                        List.of("employee_name", "passport_number"),
+                        List.of(),
+                        Map.of(
+                                "employee_name", "NGUYEN VAN AN",
+                                "passport_number", "M12345678"
+                        )
                 )),
                 List.of(), null, List.of("GENERATE_DRAFTS", "READY_FOR_REVIEW"),
                 List.of(), null, "rules", "main", List.of()
         );
+    }
+
+    private byte[] validHwpFile() {
+        try (org.apache.poi.poifs.filesystem.POIFSFileSystem fileSystem =
+                     new org.apache.poi.poifs.filesystem.POIFSFileSystem()) {
+            byte[] header = new byte[256];
+            byte[] signature = "HWP Document File".getBytes(StandardCharsets.US_ASCII);
+            System.arraycopy(signature, 0, header, 0, signature.length);
+            fileSystem.createDocument(new java.io.ByteArrayInputStream(header), "FileHeader");
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+            fileSystem.writeFilesystem(output);
+            return output.toByteArray();
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 
     private RenewalRunResponse outOfScopeResponse(RenewalRunRequest request) {
