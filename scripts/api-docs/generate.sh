@@ -83,11 +83,17 @@ else
   REPOSITORY_URL="https://github.com/fowoco/server"
 fi
 
-node "${SCRIPT_DIR}/generate-site.mjs" \
-  --openapi "${OUTPUT_ROOT}/openapi.json" \
-  --output "${OUTPUT_ROOT}/site" \
-  --commit "${GIT_COMMIT}" \
-  --generated-at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+SITE_ARGUMENTS=(
+  --openapi "${OUTPUT_ROOT}/openapi.json"
+  --output "${OUTPUT_ROOT}/site"
+  --commit "${GIT_COMMIT}"
+  --generated-at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   --repository-url "${REPOSITORY_URL}"
+)
+if [[ -n "${API_DOCS_SERVER_URL:-}" ]]; then
+  SITE_ARGUMENTS+=(--server-url "${API_DOCS_SERVER_URL}")
+fi
+
+node "${SCRIPT_DIR}/generate-site.mjs" "${SITE_ARGUMENTS[@]}"
 
 echo "[api-docs] 생성 완료: ${OUTPUT_ROOT}/site/index.html"

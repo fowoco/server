@@ -5,6 +5,7 @@ import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.workerlink.application.WorkerLinkIssueCommand;
 import com.fowoco.server.workerlink.application.WorkerLinkIssueResult;
 import com.fowoco.server.workerlink.application.WorkerLinkService;
+import com.fowoco.server.workerlink.infrastructure.sms.WorkerPortalUrlFactory;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -34,13 +35,16 @@ public class WorkerLinkController {
 
     private final WorkerLinkService workerLinkService;
     private final ActorContextProvider actorContextProvider;
+    private final WorkerPortalUrlFactory workerPortalUrlFactory;
 
     public WorkerLinkController(
             WorkerLinkService workerLinkService,
-            ActorContextProvider actorContextProvider
+            ActorContextProvider actorContextProvider,
+            WorkerPortalUrlFactory workerPortalUrlFactory
     ) {
         this.workerLinkService = workerLinkService;
         this.actorContextProvider = actorContextProvider;
+        this.workerPortalUrlFactory = workerPortalUrlFactory;
     }
 
     @Operation(
@@ -81,6 +85,10 @@ public class WorkerLinkController {
                 idempotencyKey
         );
         WorkerLinkIssueResult result = workerLinkService.issue(command, actor);
-        return ResponseEntity.status(HttpStatus.CREATED).body(WorkerLinkIssueResponse.from(result));
+        String workerUrl = result.rawToken() == null
+                ? null
+                : workerPortalUrlFactory.create(result.rawToken()).toString();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(WorkerLinkIssueResponse.from(result, workerUrl));
     }
 }

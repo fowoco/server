@@ -15,8 +15,34 @@ JSON을 읽기 쉬운 화면으로 변환한 문서입니다.
 | OpenAPI JSON | Client 코드 생성, 계약 비교, 다른 도구에서 불러오기 |
 | 로컬 Swagger UI | 개발 중인 브랜치의 API 확인과 직접 요청 테스트 |
 
-공유 사이트는 의도하지 않은 API 실행을 막기 위해 `Try it out`을 비활성화한
-읽기 전용 문서입니다. 실제 요청 테스트는 본인의 로컬 서버에서 진행합니다.
+공유 사이트는 기본적으로 `Try it out`을 비활성화한 읽기 전용 문서입니다.
+저장소의 `SERVER_PUBLIC_URL` 변수에 **HTTPS 데모 Server 주소**가 설정된 경우에만
+실제 호출 기능과 `Authorize` 버튼이 활성화됩니다.
+
+## 공유 Swagger에서 실제 호출하기
+
+다음 세 조건이 모두 충족돼야 합니다.
+
+1. 배포 Server가 `https://` 주소를 제공합니다.
+2. GitHub 저장소 `Settings → Secrets and variables → Actions → Variables`에
+   `SERVER_PUBLIC_URL=https://...`을 등록합니다.
+3. Server의 `CORS_ALLOWED_ORIGINS`에 `https://fowoco.github.io`를 추가합니다.
+
+그 뒤 `Database Documentation` Workflow가 `main`에서 다시 실행되면 Swagger의
+`Try it out`이 열립니다.
+
+```text
+POST /api/v1/auth/login
+→ 응답의 Access Token 복사
+→ Swagger 우측 상단 Authorize
+→ Bearer Token 입력
+→ 보호 API Execute
+```
+
+GitHub Pages는 HTTPS이므로 HTTP Server는 브라우저의 mixed content 정책에 의해
+차단됩니다. 생성기도 잘못된 HTTP 주소를 받으면 실패하도록 구성했습니다.
+Refresh Token은 HttpOnly·SameSite Cookie이므로 로그인 이후의 Refresh·Logout 흐름은
+공유 Swagger보다 실제 Client에서 확인합니다.
 
 ## 언제 갱신되나요?
 
@@ -31,8 +57,9 @@ Spring Boot test profile 실행
 → DB 문서와 하나의 GitHub Pages 사이트로 배포
 ```
 
-운영 서버의 Swagger는 보안상 계속 비활성화합니다. 공유 사이트는 운영 서버에
-접속하지 않으며 test profile과 메모리 DB만 사용합니다.
+운영 서버의 내장 Swagger는 보안상 계속 비활성화합니다. 공유 사이트의 명세 자체는
+test profile과 메모리 DB에서 만들며 운영 DB를 조회하지 않습니다. 실제 호출을 켠 경우에만
+사용자가 누른 요청이 지정된 HTTPS 데모 Server로 전송됩니다.
 
 ## PR에서 먼저 확인하기
 
@@ -60,10 +87,19 @@ open build/api-docs/site/index.html
 API_DOCS_PORT=18081 ./scripts/api-docs/generate.sh
 ```
 
+로컬에서 실제 호출용 정적 사이트 결과를 확인할 때는 HTTPS 테스트 주소를 지정합니다.
+
+```bash
+API_DOCS_SERVER_URL=https://demo.example.com ./scripts/api-docs/generate.sh
+```
+
 ## 보안 원칙
 
 - 운영·Staging DB와 운영 API에 연결하지 않습니다.
 - 실제 사용자·근로자 데이터나 Access·Refresh Token을 포함하지 않습니다.
-- `Try it out`을 비활성화하고 외부 API 호출을 Content Security Policy로 막습니다.
+- 기본은 `Try it out` 비활성화이며, 검증된 HTTPS origin 하나만 Content Security
+  Policy의 연결 대상으로 허용합니다.
+- GitHub Pages에는 DB·JWT·AI·SMTP Secret을 저장하지 않습니다.
+- 공유 Swagger에서 입력한 Access Token은 브라우저 새로고침 뒤 보존하지 않습니다.
 - HTML에 표시하는 것은 API 경로, DTO Schema, 예시값과 비민감 build metadata뿐입니다.
 - 배포 전에 생성기 테스트와 OpenAPI 기본 구조 검증을 통과해야 합니다.

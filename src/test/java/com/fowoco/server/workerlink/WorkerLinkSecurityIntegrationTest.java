@@ -1,7 +1,16 @@
 package com.fowoco.server.workerlink;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+import com.fowoco.server.workerlink.application.port.WorkerLinkSmsMessage;
+import com.fowoco.server.workerlink.application.port.WorkerLinkSmsProviderException;
+import com.fowoco.server.workerlink.application.port.WorkerLinkSmsSender;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -19,6 +28,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -26,6 +36,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -52,6 +63,9 @@ class WorkerLinkSecurityIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @MockitoBean
+    private WorkerLinkSmsSender workerLinkSmsSender;
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @BeforeAll
@@ -69,6 +83,7 @@ class WorkerLinkSecurityIntegrationTest {
     void resetState() {
         jdbcTemplate.update("DELETE FROM worker_response_upload");
         jdbcTemplate.update("DELETE FROM worker_response");
+        jdbcTemplate.update("DELETE FROM worker_document_upload_idempotency");
         jdbcTemplate.update("DELETE FROM worker_link");
         jdbcTemplate.update("DELETE FROM document_request_draft_type");
         jdbcTemplate.update("DELETE FROM document_request_draft");
@@ -110,10 +125,12 @@ class WorkerLinkSecurityIntegrationTest {
                 "fullflow-issue-key"
         );
         assertThat(issueResponse.statusCode()).as("issue response body: %s", issueResponse.body()).isEqualTo(201);
+        String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
         String workerUrl = JsonPath.read(issueResponse.body(), "$.worker_url");
-        assertThat(workerUrl).isNotBlank();
+        assertThat(rawToken).isNotBlank();
+        assertThat(workerUrl).isEqualTo("http://localhost:5173/worker-portal/" + rawToken);
 
-        HttpResponse<String> viewResponse = getJson("/public/worker-links/" + workerUrl, null);
+        HttpResponse<String> viewResponse = getJson("/public/worker-links/" + rawToken, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
         assertThat(viewResponse.headers().firstValue("Cache-Control")).contains("no-store");
         assertThat(JsonPath.<String>read(viewResponse.body(), "$.guidance"))
@@ -123,19 +140,19 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_document_types"))
                 .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
 
-        HttpResponse<String> uploadResponse = uploadFile(workerUrl, "passport.pdf", "application/pdf", "content".getBytes(StandardCharsets.UTF_8));
+        HttpResponse<String> uploadResponse = uploadFile(rawToken, "passport.pdf", "application/pdf", "content".getBytes(StandardCharsets.UTF_8));
         assertThat(uploadResponse.statusCode()).isEqualTo(201);
         String uploadId = JsonPath.read(uploadResponse.body(), "$.upload_id");
 
         HttpResponse<String> uploadFirstResponse = uploadFileWithFixedClientRequestId(
-                workerUrl, "passport.pdf", "application/pdf",
+                rawToken, "passport.pdf", "application/pdf",
                 "content".getBytes(StandardCharsets.UTF_8), "fixed-client-request-id"
         );
         assertThat(uploadFirstResponse.statusCode()).isEqualTo(201);
         String firstUploadId = JsonPath.read(uploadFirstResponse.body(), "$.upload_id");
 
         HttpResponse<String> uploadRetryResponse = uploadFileWithFixedClientRequestId(
-                workerUrl, "passport.pdf", "application/pdf",
+                rawToken, "passport.pdf", "application/pdf",
                 "content".getBytes(StandardCharsets.UTF_8), "fixed-client-request-id"
         );
         assertThat(uploadRetryResponse.statusCode()).isEqualTo(201);
@@ -143,7 +160,7 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(retryUploadId).isEqualTo(firstUploadId);
 
         HttpResponse<String> responseSubmit = postJson(
-                "/public/worker-links/" + workerUrl + "/responses",
+                "/public/worker-links/" + rawToken + "/responses",
                 """
                 {"response_type":"DOCUMENT_SUBMITTED","upload_ids":["%s"],"idempotency_key":"key-1"}
                 """.formatted(uploadId),
@@ -398,6 +415,231 @@ class WorkerLinkSecurityIntegrationTest {
     }
 
     @Test
+    void hrCanSendWorkerLinkBySmsAndRetryWithoutDuplicateDelivery() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "SMS발송테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String issuanceKey = "sms-delivery-issue-key";
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                hrToken,
+                issuanceKey
+        );
+        assertThat(issueResponse.statusCode()).isEqualTo(201);
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+        String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
+        String body = """
+                {"recipient_phone":"+82 10-1234-5678","worker_link_token":"%s"}
+                """.formatted(rawToken);
+
+        HttpResponse<String> first = postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                body,
+                hrToken,
+                issuanceKey
+        );
+        HttpResponse<String> retry = postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                body,
+                hrToken,
+                issuanceKey
+        );
+
+        assertThat(first.statusCode()).as("SMS response body: %s", first.body()).isEqualTo(200);
+        assertThat(retry.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(first.body(), "$.delivery_status")).isEqualTo("SENT");
+        assertThat(JsonPath.<String>read(retry.body(), "$.sent_at"))
+                .isEqualTo(JsonPath.read(first.body(), "$.sent_at"));
+
+        ArgumentCaptor<WorkerLinkSmsMessage> messageCaptor =
+                ArgumentCaptor.forClass(WorkerLinkSmsMessage.class);
+        verify(workerLinkSmsSender, times(1)).send(messageCaptor.capture());
+        assertThat(messageCaptor.getValue().recipientPhone()).isEqualTo("01012345678");
+        assertThat(messageCaptor.getValue().content())
+                .contains("http://localhost:5173/worker-portal/" + rawToken)
+                .doesNotContain("01012345678");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'WORKER_LINK_SENT'",
+                Integer.class,
+                UUID.fromString(workerLinkId)
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void smsProviderFailureKeepsWorkerLinkNotSent() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "SMS실패테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String issuanceKey = "sms-delivery-failure-key";
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                hrToken,
+                issuanceKey
+        );
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+        String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
+        doThrow(WorkerLinkSmsProviderException.rejected(null))
+                .when(workerLinkSmsSender).send(any(WorkerLinkSmsMessage.class));
+
+        HttpResponse<String> response = postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                """
+                {"recipient_phone":"010-1234-5678","worker_link_token":"%s"}
+                """.formatted(rawToken),
+                hrToken,
+                issuanceKey
+        );
+
+        assertThat(response.statusCode()).as("SMS failure body: %s", response.body()).isEqualTo(502);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?",
+                String.class,
+                UUID.fromString(workerLinkId)
+        )).isEqualTo("NOT_SENT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'WORKER_LINK_SENT'",
+                Integer.class,
+                UUID.fromString(workerLinkId)
+        )).isZero();
+    }
+
+    @Test
+    void smsDeliveryCommitsSendingBeforeProviderAndDoesNotRecheckExpiryAfterAcceptance() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "SMS만료경계테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String issuanceKey = "sms-delivery-expiry-boundary-key";
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                hrToken,
+                issuanceKey
+        );
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+        String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
+        UUID linkId = UUID.fromString(workerLinkId);
+        doAnswer(invocation -> {
+            assertThat(jdbcTemplate.queryForObject(
+                    "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?",
+                    String.class,
+                    linkId
+            )).isEqualTo("SENDING");
+            Instant createdAt = jdbcTemplate.queryForObject(
+                    "SELECT created_at FROM worker_link WHERE worker_link_id = ?",
+                    Instant.class,
+                    linkId
+            );
+            jdbcTemplate.update(
+                    "UPDATE worker_link SET expires_at = ? WHERE worker_link_id = ?",
+                    createdAt.plusMillis(1),
+                    linkId
+            );
+            return null;
+        }).when(workerLinkSmsSender).send(any(WorkerLinkSmsMessage.class));
+
+        HttpResponse<String> response = postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                """
+                {"recipient_phone":"010-1234-5678","worker_link_token":"%s"}
+                """.formatted(rawToken),
+                hrToken,
+                issuanceKey
+        );
+
+        assertThat(response.statusCode()).as("SMS expiry boundary body: %s", response.body()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.delivery_status")).isEqualTo("SENT");
+        verify(workerLinkSmsSender, times(1)).send(any(WorkerLinkSmsMessage.class));
+    }
+
+    @Test
+    void unknownSmsResultRequiresReviewAndBlocksAutomaticRetry() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "SMS결과확인테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String issuanceKey = "sms-delivery-unknown-key";
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                hrToken,
+                issuanceKey
+        );
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+        String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
+        doThrow(WorkerLinkSmsProviderException.unknown(null))
+                .when(workerLinkSmsSender).send(any(WorkerLinkSmsMessage.class));
+        String body = """
+                {"recipient_phone":"010-1234-5678","worker_link_token":"%s"}
+                """.formatted(rawToken);
+
+        HttpResponse<String> first = postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                body,
+                hrToken,
+                issuanceKey
+        );
+        HttpResponse<String> retry = postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                body,
+                hrToken,
+                issuanceKey
+        );
+
+        assertThat(first.statusCode()).isEqualTo(409);
+        assertThat(retry.statusCode()).isEqualTo(409);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?",
+                String.class,
+                UUID.fromString(workerLinkId)
+        )).isEqualTo("REVIEW_REQUIRED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event WHERE target_id = ? "
+                        + "AND action = 'WORKER_LINK_SMS_DELIVERY_REVIEW_REQUIRED'",
+                Integer.class,
+                UUID.fromString(workerLinkId)
+        )).isEqualTo(1);
+        verify(workerLinkSmsSender, times(1)).send(any(WorkerLinkSmsMessage.class));
+    }
+
+    @Test
+    void smsDeliveryRejectsTokenMismatchWithoutCallingProvider() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "SMS위변조테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        String issuanceKey = "sms-delivery-mismatch-key";
+        HttpResponse<String> issueResponse = postJsonWithIdempotencyKey(
+                "/api/v1/tasks/" + taskId + "/worker-link",
+                """
+                {"expires_in_hours":72,"rotate_existing":false}
+                """,
+                hrToken,
+                issuanceKey
+        );
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+
+        HttpResponse<String> response = postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                """
+                {"recipient_phone":"01012345678","worker_link_token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+                """,
+                hrToken,
+                issuanceKey
+        );
+
+        assertThat(response.statusCode()).isEqualTo(409);
+        verify(workerLinkSmsSender, never()).send(any(WorkerLinkSmsMessage.class));
+    }
+
+    @Test
     void deliveryEndpointsHideOtherCompanyAndRejectViewer() throws Exception {
         String hrTokenA = accessToken(login(HR_A_EMAIL));
         String hrTokenB = accessToken(login(HR_B_EMAIL));
@@ -413,6 +655,10 @@ class WorkerLinkSecurityIntegrationTest {
                 "delivery-security-issue-key"
         );
         String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
+        String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
+        String smsBody = """
+                {"recipient_phone":"01012345678","worker_link_token":"%s"}
+                """.formatted(rawToken);
 
         assertThat(getJson("/api/v1/tasks/" + taskId + "/worker-link", hrTokenB).statusCode())
                 .isEqualTo(404);
@@ -420,12 +666,25 @@ class WorkerLinkSecurityIntegrationTest {
                 "/api/v1/worker-links/" + workerLinkId + "/sent",
                 hrTokenB
         ).statusCode()).isEqualTo(404);
+        assertThat(postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                smsBody,
+                hrTokenB,
+                "delivery-security-issue-key"
+        ).statusCode()).isEqualTo(404);
         assertThat(getJson("/api/v1/tasks/" + taskId + "/worker-link", viewerTokenA).statusCode())
                 .isEqualTo(403);
         assertThat(postWithoutBody(
                 "/api/v1/worker-links/" + workerLinkId + "/sent",
                 viewerTokenA
         ).statusCode()).isEqualTo(403);
+        assertThat(postJsonWithIdempotencyKey(
+                "/api/v1/worker-links/" + workerLinkId + "/sms-deliveries",
+                smsBody,
+                viewerTokenA,
+                "delivery-security-issue-key"
+        ).statusCode()).isEqualTo(403);
+        verify(workerLinkSmsSender, never()).send(any(WorkerLinkSmsMessage.class));
     }
 
     @Test
@@ -441,6 +700,10 @@ class WorkerLinkSecurityIntegrationTest {
                 response.body(),
                 "$.paths['/api/v1/worker-links/{workerLinkId}/sent'].post.operationId"
         )).isEqualTo("markWorkerLinkSent");
+        assertThat(JsonPath.<String>read(
+                response.body(),
+                "$.paths['/api/v1/worker-links/{workerLinkId}/sms-deliveries'].post.operationId"
+        )).isEqualTo("sendWorkerLinkSms");
         assertThat(JsonPath.<Number>read(
                 response.body(),
                 "$.components.schemas.WorkerLinkIssueRequest.properties.expires_in_hours.minimum"
@@ -556,7 +819,7 @@ class WorkerLinkSecurityIntegrationTest {
                 idempotencyKey
         );
         assertThat(response.statusCode()).as("issue response body: %s", response.body()).isEqualTo(201);
-        return JsonPath.read(response.body(), "$.worker_url");
+        return JsonPath.read(response.body(), "$.worker_link_token");
     }
 
     private void saveDocumentRequestDraft(String token, String taskId) throws Exception {
