@@ -1,4 +1,4 @@
-# FOWOCO Server 기여 가이드
+# FOWOCO Server 개발 협업 가이드
 
 처음 참여한 개발자가 어디서 시작하고 무엇을 확인해야 하는지 설명합니다.
 
@@ -6,7 +6,7 @@
 
 - 답이 아직 없거나 여러 선택지를 비교해야 하면 [Discussion](https://github.com/fowoco/server/discussions)에 작성합니다.
 - 구현 범위·담당자·완료 조건이 정해졌으면 [Issue](https://github.com/fowoco/server/issues/new/choose)를 만듭니다.
-- Discussion에서 결론이 나면 실행할 내용을 Issue로 옮깁니다. 오래 유지할 구조·API·상태 결정은 [ADR](docs/adr/README.md)을 `Proposed`로 작성해 PR에서 합의하고, `Accepted` 후 Wiki·Notion 설명을 동기화합니다.
+- Discussion에서 결론이 나면 실행할 내용을 Issue로 옮깁니다. 오래 유지할 구조·API·상태 결정은 [ADR](adr/README.md)을 `Proposed`로 작성해 PR에서 합의하고, `Accepted` 후 Wiki·Notion 설명을 동기화합니다.
 
 실제 근로자 정보, JWT, Worker Link 원본 토큰, API Key, 비밀번호, 전체 `.env`, 전체 로그는 올리지 않습니다.
 
@@ -85,7 +85,7 @@ curl http://localhost:8080/health
 - 인증·tenant·PII 정책 변경
 - 외부 서비스, Event, retry와 transaction 경계 변경
 
-ADR은 [작성 절차](docs/adr/README.md)를 따릅니다. Accepted ADR을 의미가 달라지도록 직접 고치지 않고, 새 ADR에서 기존 결정을 `Superseded`합니다.
+ADR은 [작성 절차](adr/README.md)를 따릅니다. Accepted ADR을 의미가 달라지도록 직접 고치지 않고, 새 ADR에서 기존 결정을 `Superseded`합니다.
 
 ## 6. PR
 

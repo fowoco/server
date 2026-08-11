@@ -56,6 +56,8 @@ public class DemoOperationalSeedConfiguration {
             );
         }
         DemoOperationalSeedCatalog catalog = new DemoOperationalSeedCatalog();
+        DemoGoldenFlowSeedStateGuard goldenFlowStateGuard =
+                new DemoGoldenFlowSeedStateGuard(jdbcTemplate);
         DemoCaseSeeder caseSeeder = new DemoCaseSeeder(jdbcTemplate, objectMapper);
         DemoTaskSeeder taskSeeder = new DemoTaskSeeder(taskRepository, taskContentCodec);
         DemoStoredFileSeeder storedFileSeeder = new DemoStoredFileSeeder(
@@ -107,6 +109,7 @@ public class DemoOperationalSeedConfiguration {
                 properties,
                 clock,
                 catalog,
+                goldenFlowStateGuard,
                 caseSeeder,
                 taskSeeder,
                 documentSeeder,

@@ -2,7 +2,9 @@ package com.fowoco.server.airun;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome;
@@ -10,10 +12,14 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
+import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.jayway.jsonpath.JsonPath;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -22,6 +28,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,6 +37,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -38,6 +46,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import tools.jackson.databind.ObjectMapper;
 
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -48,6 +57,8 @@ class AiRunApiIntegrationTest {
     private static final UUID HR_A = UUID.fromString("82000000-0000-0000-0000-000000000001");
     private static final UUID HR_B = UUID.fromString("82000000-0000-0000-0000-000000000002");
     private static final UUID WORKER_A = UUID.fromString("83000000-0000-0000-0000-000000000001");
+    private static final UUID PASSPORT_A = UUID.fromString("84000000-0000-0000-0000-000000000001");
+    private static final UUID ARC_A = UUID.fromString("84000000-0000-0000-0000-000000000002");
     private static final String HR_A_EMAIL = "airun.hr.a@example.com";
     private static final String HR_B_EMAIL = "airun.hr.b@example.com";
     private static final String PASSWORD = "Test-password-1!";
@@ -60,6 +71,12 @@ class AiRunApiIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @MockitoBean
     private AiRuntimeClient runtimeClient;
@@ -105,10 +122,16 @@ class AiRunApiIntegrationTest {
         insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash);
         insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash);
         insertWorker();
+        insertIdentityDocument(PASSPORT_A, "PASSPORT_COPY", "VERIFIED");
+        insertIdentityDocument(ARC_A, "ARC", "VERIFIED");
     }
 
     @Test
     void createsQueriesAnswersAndFinishesOneWorkerAnalysis() throws Exception {
+        long planBefore = stageCount("PLAN", "PLAN_RUNTIME_CALL", "SUCCESS");
+        long slotBefore = stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS");
+        long analyzeBefore = stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS");
+        double reviewRequiredBefore = outcomeCount("REVIEW_REQUIRED");
         String token = login(HR_A_EMAIL);
         HttpResponse<String> created = post(
                 "/api/v1/ai-runs",
@@ -150,6 +173,7 @@ class AiRunApiIntegrationTest {
                 .isEqualTo("REVIEW_REQUIRED");
         assertThat(JsonPath.<List<String>>read(answered.body(), "$.candidates[*].workflow_id"))
                 .containsExactly("WF-STY-001");
+        assertThat((Object) JsonPath.read(answered.body(), "$.candidates[0].confidence")).isNull();
         assertThat(JsonPath.<Number>read(answered.body(), "$.attempt_count").intValue())
                 .isEqualTo(3);
         assertThat(jdbcTemplate.queryForObject(
@@ -157,11 +181,120 @@ class AiRunApiIntegrationTest {
                 Integer.class,
                 aiRunId
         )).isEqualTo(3);
+        String analyzeInputJson = jdbcTemplate.queryForObject(
+                """
+                SELECT analysis_input_json
+                FROM ai_attempt
+                WHERE ai_run_id = ? AND sequence_no = 2
+                """,
+                String.class,
+                aiRunId
+        );
+        AnalysisInput persistedAnalyzeInput = objectMapper.readValue(analyzeInputJson, AnalysisInput.class);
+        assertThat(persistedAnalyzeInput.plannedIntentDecision().detectedIntent())
+                .isEqualTo("EXPIRY_RENEWAL");
+        assertThat(persistedAnalyzeInput.plannedIntentDecision().workflowId())
+                .isEqualTo("WF-STY-001");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT model_version FROM ai_attempt WHERE ai_run_id = ? AND sequence_no = 1",
+                String.class,
+                aiRunId
+        )).isEqualTo("1");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT prompt_version FROM ai_attempt WHERE ai_run_id = ? AND sequence_no = 1",
+                String.class,
+                aiRunId
+        )).isEqualTo("prompt-demo-1");
         assertThat(jdbcTemplate.queryForList(
                 "SELECT action FROM audit_event WHERE target_id = ? ORDER BY created_at",
                 String.class,
                 aiRunId
         )).containsExactly("AI_RUN_CREATED", "AI_RUN_ANSWERS_SUBMITTED");
+        ArgumentCaptor<AiAnalysisRequest> requestCaptor = ArgumentCaptor.forClass(AiAnalysisRequest.class);
+        verify(runtimeClient, atLeast(3)).analyze(requestCaptor.capture(), any());
+        assertThat(requestCaptor.getAllValues())
+                .allSatisfy(request -> assertThat(request.deadlineMs()).isEqualTo(240_000L));
+        assertThat(stageCount("PLAN", "PLAN_RUNTIME_CALL", "SUCCESS") - planBefore)
+                .isEqualTo(1);
+        assertThat(stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS") - slotBefore)
+                .isEqualTo(1);
+        assertThat(stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS") - analyzeBefore)
+                .isEqualTo(2);
+        assertThat(outcomeCount("REVIEW_REQUIRED") - reviewRequiredBefore)
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    void finishesOutOfScopeAfterPlanWithoutResolvingSlotsOrCallingAnalyze() throws Exception {
+        long slotBefore = stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS");
+        long analyzeBefore = stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS");
+        double outOfScopeBefore = outcomeCount("OUT_OF_SCOPE");
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> {
+            AiAnalysisRequest request = invocation.getArgument(0);
+            runtimeCalls.incrementAndGet();
+            return new AiAnalysisResponse(
+                    request.requestId(),
+                    AiAnalysisOutcome.OUT_OF_SCOPE,
+                    null,
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    versions(),
+                    1,
+                    15
+            );
+        });
+
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> created = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"오늘 날씨 어때?"}
+                """,
+                token,
+                "airun-out-of-scope"
+        );
+
+        assertThat(created.statusCode()).isEqualTo(202);
+        UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+        HttpResponse<String> detail = awaitRun(aiRunId, token, "OUT_OF_SCOPE", 1);
+
+        assertThat(JsonPath.<String>read(detail.body(), "$.status")).isEqualTo("SUCCEEDED");
+        assertThat((Object) JsonPath.read(detail.body(), "$.detected_intent")).isNull();
+        assertThat(runtimeCalls).hasValue(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ai_attempt WHERE ai_run_id = ? AND phase = 'ANALYZE'",
+                Integer.class,
+                aiRunId
+        )).isZero();
+
+        HttpResponse<String> events = getEvents(aiRunId, token, null);
+        assertThat(events.statusCode()).isEqualTo(200);
+        assertThat(events.body())
+                .contains("event:COMPLETED", "\"analysis_outcome\":\"OUT_OF_SCOPE\"")
+                .doesNotContain("event:SLOT_CHECKING");
+        assertThat(stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS"))
+                .isEqualTo(slotBefore);
+        assertThat(stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS"))
+                .isEqualTo(analyzeBefore);
+        assertThat(outcomeCount("OUT_OF_SCOPE") - outOfScopeBefore)
+                .isEqualTo(1.0);
+    }
+
+    private long stageCount(String phase, String stage, String status) {
+        Timer timer = meterRegistry.find("fowoco.ai.pipeline.stage")
+                .tags("phase", phase, "stage", stage, "status", status)
+                .timer();
+        return timer == null ? 0L : timer.count();
+    }
+
+    private double outcomeCount(String outcome) {
+        var counter = meterRegistry.find("fowoco.ai.analysis.outcomes")
+                .tag("outcome", outcome)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
     }
 
     @Test
@@ -440,6 +573,133 @@ class AiRunApiIntegrationTest {
         assertThat(otherCompany.statusCode()).isEqualTo(404);
     }
 
+    @Test
+    void missingArcCreatesOneDraftDocumentRequestInTheRenewalCase() throws Exception {
+        jdbcTemplate.update(
+                "UPDATE worker_document SET submission_status = 'MISSING' WHERE worker_document_id = ?",
+                ARC_A
+        );
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> directReviewResponse(
+                invocation.getArgument(0),
+                runtimeCalls.incrementAndGet()
+        ));
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> created = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"응웬반A 체류연장 준비해줘"}
+                """,
+                token,
+                "airun-missing-arc"
+        );
+        UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+        HttpResponse<String> detail = awaitRun(aiRunId, token, "REVIEW_REQUIRED", 2);
+        UUID candidateId = UUID.fromString(JsonPath.read(detail.body(), "$.candidates[0].candidate_id"));
+        long expectedVersion = JsonPath.<Number>read(detail.body(), "$.version").longValue();
+        String decisionBody = """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(expectedVersion, candidateId);
+
+        HttpResponse<String> decided = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                token,
+                "candidate-missing-arc"
+        );
+        HttpResponse<String> repeated = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                decisionBody,
+                token,
+                "candidate-missing-arc"
+        );
+
+        assertThat(decided.statusCode()).isEqualTo(200);
+        assertThat(repeated.statusCode()).isEqualTo(200);
+        UUID caseId = UUID.fromString(JsonPath.read(decided.body(), "$.case_id"));
+        assertThat(JsonPath.<List<String>>read(decided.body(), "$.task_ids")).hasSize(4);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'",
+                Integer.class,
+                caseId
+        )).isEqualTo(1);
+        Map<String, Object> requestTask = jdbcTemplate.queryForMap(
+                """
+                SELECT workflow_id, status, business_data_json
+                FROM task
+                WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'
+                """,
+                caseId
+        );
+        assertThat(requestTask.get("workflow_id")).isEqualTo("WF-DOC-001");
+        assertThat(requestTask.get("status")).isEqualTo("DRAFT");
+        assertThat((String) requestTask.get("business_data_json"))
+                .contains("ARC", "SECURE_LINK")
+                .doesNotContain("PASSPORT_COPY");
+    }
+
+    @Test
+    void twoMissingIdentityDocumentsAreCombinedIntoOneRequestTask() throws Exception {
+        jdbcTemplate.update(
+                "UPDATE worker_document SET submission_status = 'MISSING' WHERE worker_id = ?",
+                WORKER_A
+        );
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> directReviewResponse(
+                invocation.getArgument(0),
+                runtimeCalls.incrementAndGet()
+        ));
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> created = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"응웬반A 체류연장 준비해줘"}
+                """,
+                token,
+                "airun-missing-both-documents"
+        );
+        UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+        HttpResponse<String> detail = awaitRun(aiRunId, token, "REVIEW_REQUIRED", 2);
+        UUID candidateId = UUID.fromString(JsonPath.read(detail.body(), "$.candidates[0].candidate_id"));
+        long expectedVersion = JsonPath.<Number>read(detail.body(), "$.version").longValue();
+
+        HttpResponse<String> decided = post(
+                "/api/v1/ai-runs/" + aiRunId + "/candidate-decisions",
+                """
+                {
+                  "expected_run_version":%d,
+                  "decisions":[{"candidate_id":"%s","action":"ACCEPT"}]
+                }
+                """.formatted(expectedVersion, candidateId),
+                token,
+                "candidate-missing-both-documents"
+        );
+
+        assertThat(decided.statusCode()).isEqualTo(200);
+        UUID caseId = UUID.fromString(JsonPath.read(decided.body(), "$.case_id"));
+        assertThat(JsonPath.<List<String>>read(decided.body(), "$.task_ids")).hasSize(4);
+        String businessData = jdbcTemplate.queryForObject(
+                """
+                SELECT business_data_json
+                FROM task
+                WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'
+                """,
+                String.class,
+                caseId
+        );
+        assertThat(businessData).contains("PASSPORT_COPY", "ARC", "SECURE_LINK");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM task WHERE case_id = ? AND task_type = 'DOCUMENT_REQUEST'",
+                Integer.class,
+                caseId
+        )).isEqualTo(1);
+    }
+
     private AiAnalysisResponse scriptedResponse(AiAnalysisRequest request, int call) {
         if (call == 1) {
             return new AiAnalysisResponse(
@@ -447,10 +707,20 @@ class AiRunApiIntegrationTest {
                     AiAnalysisOutcome.CONTEXT_REQUIRED,
                     new AiContextRequirement(
                             "EXPIRY_RENEWAL",
-                            new BigDecimal("0.96"),
+                            null,
                             "응웬반A",
                             Map.of(),
-                            List.of("worker_id", "stay_expiry_date", "due_at")
+                            List.of(
+                                    "worker_id",
+                                    "stay_expiry_date",
+                                    "passport_status",
+                                    "arc_status",
+                                    "due_at"
+                            ),
+                            "WF-STY-001",
+                            "체류연장 준비",
+                            AiConfidenceSource.UNAVAILABLE,
+                            new BigDecimal("0.3088")
                     ),
                     List.of(),
                     List.of(),
@@ -484,7 +754,7 @@ class AiRunApiIntegrationTest {
                         "WF-STY-001",
                         Map.of("due_at", "2026-08-31"),
                         List.of(),
-                        new BigDecimal("0.93")
+                        null
                 )),
                 List.of(),
                 versions(),
@@ -500,10 +770,19 @@ class AiRunApiIntegrationTest {
                     AiAnalysisOutcome.CONTEXT_REQUIRED,
                     new AiContextRequirement(
                             "EXPIRY_RENEWAL",
-                            new BigDecimal("0.96"),
+                            null,
                             "응웬반A",
                             Map.of(),
-                            List.of("worker_id", "stay_expiry_date")
+                            List.of(
+                                    "worker_id",
+                                    "stay_expiry_date",
+                                    "passport_status",
+                                    "arc_status"
+                            ),
+                            "WF-STY-001",
+                            "체류연장 준비",
+                            AiConfidenceSource.UNAVAILABLE,
+                            new BigDecimal("0.3088")
                     ),
                     List.of(),
                     List.of(),
@@ -513,6 +792,9 @@ class AiRunApiIntegrationTest {
                     30
             );
         }
+        Map<String, String> extractedSlots = new LinkedHashMap<>(
+                request.analysisInput().workers().get(0).requestedFields()
+        );
         return new AiAnalysisResponse(
                 request.requestId(),
                 AiAnalysisOutcome.REVIEW_REQUIRED,
@@ -522,12 +804,9 @@ class AiRunApiIntegrationTest {
                         "candidate-1",
                         WORKER_A,
                         "WF-STY-001",
-                        Map.of(
-                                "worker_id", WORKER_A.toString(),
-                                "stay_expiry_date", "2026-09-30"
-                        ),
+                        extractedSlots,
                         List.of(),
-                        new BigDecimal("0.93")
+                        null
                 )),
                 List.of(),
                 versions(),
@@ -545,7 +824,7 @@ class AiRunApiIntegrationTest {
                 "prompt-demo-1",
                 "context-demo-1",
                 "0.2.0",
-                "1.0.0"
+                "1.1.0"
         );
     }
 
@@ -681,6 +960,22 @@ class AiRunApiIntegrationTest {
                 LocalDate.of(2026, 9, 30),
                 LocalDate.of(2025, 9, 1),
                 LocalDate.of(2026, 9, 30)
+        );
+    }
+
+    private void insertIdentityDocument(UUID documentId, String documentType, String status) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_document (
+                    worker_document_id, worker_id, company_id, document_type, submission_status,
+                    created_at, updated_at, version
+                ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                documentId,
+                WORKER_A,
+                COMPANY_A,
+                documentType,
+                status
         );
     }
 }

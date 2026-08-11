@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.airun.application.error.AiContextResolutionException;
 import com.fowoco.server.airun.application.error.AiContextResolutionFailureCode;
 import com.fowoco.server.task.domain.TaskType;
@@ -37,14 +38,22 @@ class AiSlotResolutionTransactionTest {
         AiSlotResolution result = transaction.resolve(
                 COMPANY_A,
                 "0.2.0",
-                requirement(List.of("worker_id", "stay_expiry_date", "due_at"))
+                requirement(List.of(
+                        "worker_id",
+                        "stay_expiry_date",
+                        "passport_status",
+                        "arc_status",
+                        "due_at"
+                ))
         );
 
         assertThat(boundCompany.get()).isEqualTo(COMPANY_A);
         assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
         assertThat(result.resolvedFields()).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "worker_id", WORKER_A.toString(),
-                "stay_expiry_date", "2026-09-30"
+                "stay_expiry_date", "2026-09-30",
+                "passport_status", "MISSING",
+                "arc_status", "MISSING"
         ));
         assertThat(result.missingFieldKeys()).containsExactly("due_at");
         assertThat(result.workflowConstraints())
@@ -79,6 +88,30 @@ class AiSlotResolutionTransactionTest {
                         new AtomicReference<>()
                 ).resolve(COMPANY_A, "9.9.9", requirement(List.of("worker_id"))),
                 AiContextResolutionFailureCode.KNOWLEDGE_VERSION_MISMATCH
+        );
+    }
+
+    @Test
+    void rejectsWorkflowThatDoesNotBelongToTheDetectedIntent() {
+        AiContextRequirement valid = requirement(List.of("worker_id"));
+        AiContextRequirement mismatched = new AiContextRequirement(
+                valid.detectedIntent(),
+                valid.confidence(),
+                valid.targetDisplayName(),
+                valid.extractedSlots(),
+                valid.requiredFieldKeys(),
+                "WF-PAY-001",
+                valid.evidence(),
+                valid.confidenceSource(),
+                valid.bertRoutingScore()
+        );
+
+        assertFailure(
+                () -> transaction(
+                        (companyId, displayName) -> List.of(worker(COMPANY_A)),
+                        new AtomicReference<>()
+                ).resolve(COMPANY_A, "0.2.0", mismatched),
+                AiContextResolutionFailureCode.UNSUPPORTED_WORKFLOW
         );
     }
 
@@ -132,7 +165,13 @@ class AiSlotResolutionTransactionTest {
                 List.of(
                         workflow(
                                 "WF-STY-001",
-                                Set.of("worker_id", "due_at", "stay_expiry_date")
+                                Set.of(
+                                        "worker_id",
+                                        "due_at",
+                                        "stay_expiry_date",
+                                        "passport_status",
+                                        "arc_status"
+                                )
                         ),
                         workflow(
                                 "WF-CON-001",
@@ -164,7 +203,11 @@ class AiSlotResolutionTransactionTest {
                 new BigDecimal("0.94"),
                 "응웬반안",
                 Map.of("document_type", "STAY_EXTENSION"),
-                requiredFieldKeys
+                requiredFieldKeys,
+                "WF-STY-001",
+                "체류연장 준비",
+                AiConfidenceSource.MODEL,
+                null
         );
     }
 

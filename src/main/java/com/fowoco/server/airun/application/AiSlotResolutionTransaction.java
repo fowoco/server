@@ -65,6 +65,14 @@ public class AiSlotResolutionTransaction {
                     "The Runtime returned an Intent that is not in the active Workflow Catalog."
             );
         }
+        boolean plannedWorkflowMatches = workflows.stream()
+                .anyMatch(workflow -> workflow.workflowId().equals(requirement.workflowId()));
+        if (!plannedWorkflowMatches) {
+            reject(
+                    AiContextResolutionFailureCode.UNSUPPORTED_WORKFLOW,
+                    "The Runtime returned a Workflow that does not belong to the detected Intent."
+            );
+        }
 
         Set<String> resolvableKeys = new LinkedHashSet<>();
         workflows.forEach(workflow -> resolvableKeys.addAll(workflow.resolvableSlotKeys()));
@@ -144,6 +152,8 @@ public class AiSlotResolutionTransaction {
             case "worker_id" -> worker.workerId().toString();
             case "stay_expiry_date" -> formatDate(worker.stayExpiryDate());
             case "contract_end_date" -> formatDate(worker.contractEndDate());
+            case "passport_status" -> worker.identityDocumentStatuses().passportStatus().name();
+            case "arc_status" -> worker.identityDocumentStatuses().arcStatus().name();
             default -> null;
         };
     }

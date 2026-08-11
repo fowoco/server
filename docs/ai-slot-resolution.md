@@ -34,6 +34,21 @@ projection은 다음 세 집합을 구분합니다.
 - `allowedSlotKeys`: Agent candidate와 질문에서 사용할 수 있는 전체 Slot
 - `resolvableSlotKeys`: Server context 조회를 요청할 수 있는 Slot
 
+### 신분서류 상태 Context
+
+`WF-STY-001`은 다음 Server-owned key를 요청할 수 있습니다.
+
+- `passport_status`: 최신 `PASSPORT_COPY`의 제출 상태
+- `arc_status`: 최신 `ARC`의 제출 상태
+
+값은 `MISSING`, `SUBMITTED`, `VERIFIED` 중 하나입니다. 신규 Worker 컬럼을
+추가하지 않고 현재 사업장의 `worker_document`를 조회해 계산합니다. 같은 유형의
+서류가 여러 장이면 `updated_at`, `created_at`, `worker_document_id` 내림차순의 첫
+상태를 사용하며, 기록이 없으면 `MISSING`으로 처리합니다.
+
+여권번호·외국인등록번호·파일·OCR 원문은 이 Context에 포함하지 않습니다. AI가
+응답에서 Server가 제공한 상태를 다른 값으로 변경하면 계약 오류로 거부합니다.
+
 분석이 고정한 `requiredKnowledgeVersion`과 현재 활성 projection의 `bundleVersion`이 다르면
 서로 다른 지식 기준을 섞지 않고 `KNOWLEDGE_VERSION_MISMATCH`로 중단합니다.
 

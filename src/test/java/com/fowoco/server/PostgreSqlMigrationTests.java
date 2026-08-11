@@ -74,6 +74,7 @@ class PostgreSqlMigrationTests {
         assertThat(tableNames(connection))
                 .contains(
                         "company",
+                        "company_settings",
                         "user_account",
                         "refresh_token",
                         "worker",
@@ -116,6 +117,15 @@ class PostgreSqlMigrationTests {
                 .containsEntry("status", new ColumnSpec("varchar", false))
                 .containsEntry("version", new ColumnSpec("int8", false))
                 .doesNotContainKey("company_name");
+        assertThat(columnSpecs(connection, "company_settings"))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("approval_policy", new ColumnSpec("varchar", false))
+                .containsEntry("link_expiry_hours", new ColumnSpec("int8", false))
+                .containsEntry("evidence_rules_json", new ColumnSpec("text", false))
+                .containsEntry("file_retention_days", new ColumnSpec("int4", false))
+                .containsEntry("ai_log_retention_days", new ColumnSpec("int4", false))
+                .containsEntry("audit_visibility", new ColumnSpec("varchar", false))
+                .containsEntry("version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "user_account"))
                 .containsEntry("user_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
@@ -254,7 +264,7 @@ class PostgreSqlMigrationTests {
                 .containsEntry("ai_candidate_id", new ColumnSpec("uuid", false))
                 .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
-                .containsEntry("confidence", new ColumnSpec("numeric", false));
+                .containsEntry("confidence", new ColumnSpec("numeric", true));
         assertThat(columnSpecs(connection, "ai_candidate_decision_batch"))
                 .containsEntry("decision_batch_id", new ColumnSpec("uuid", false))
                 .containsEntry("ai_run_id", new ColumnSpec("uuid", false))
@@ -338,6 +348,16 @@ class PostgreSqlMigrationTests {
         assertThat(constraintNames(connection))
                 .contains(
                         "pk_company",
+                        "pk_company_settings",
+                        "fk_company_settings_company",
+                        "ck_company_settings_approval_policy",
+                        "ck_company_settings_link_expiry_hours",
+                        "ck_company_settings_evidence_rules_json_not_blank",
+                        "ck_company_settings_file_retention_days",
+                        "ck_company_settings_ai_log_retention_days",
+                        "ck_company_settings_audit_visibility",
+                        "ck_company_settings_version",
+                        "ck_company_settings_time_order",
                         "pk_user_account",
                         "fk_user_account_company",
                         "uq_user_account_normalized_email",
@@ -470,6 +490,7 @@ class PostgreSqlMigrationTests {
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
                         "pl_company_tenant_isolation",
+                        "pl_company_settings_tenant_isolation",
                         "pl_user_account_tenant_isolation",
                         "pl_refresh_token_tenant_isolation",
                         "pl_worker_tenant_isolation",
@@ -656,6 +677,21 @@ class PostgreSqlMigrationTests {
                 "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?::uuid",
                 "21000000-0000-0000-0000-000000000001"
         )).isEqualTo("NOT_SENT");
+        execute(connection, """
+                UPDATE worker_link
+                   SET delivery_status = 'SENDING'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """);
+        execute(connection, """
+                UPDATE worker_link
+                   SET delivery_status = 'REVIEW_REQUIRED'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """);
+        execute(connection, """
+                UPDATE worker_link
+                   SET delivery_status = 'NOT_SENT'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """);
         assertSqlState(connection, "23514", """
                 UPDATE worker_link
                    SET delivery_status = 'SENT'

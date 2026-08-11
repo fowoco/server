@@ -10,6 +10,7 @@ import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
+import com.fowoco.server.aiintegration.application.port.AiRuntimeDeadlinePolicy;
 import com.fowoco.server.airun.application.error.AiContextResolutionException;
 import com.fowoco.server.airun.application.error.AiRunErrorCode;
 import com.fowoco.server.airun.application.port.AiAttemptStarter;
@@ -50,6 +51,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Phase.ANALYZE;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Phase.PIPELINE;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Phase.PLAN;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Stage.ANALYZE_RUNTIME_CALL;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Stage.PLAN_RUNTIME_CALL;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Stage.RESULT_PERSIST;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Stage.TOTAL;
+
 /**
  * Owns the demo vertical slice: persist first, call Runtime without a database transaction,
  * and persist the validated result in a new transaction.
@@ -57,8 +66,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class AiRunService implements AiAttemptStarter {
 
-    private static final String CONTRACT_VERSION = "1.0.0";
-    private static final long ATTEMPT_DEADLINE_MS = 10_000;
+    private static final String CONTRACT_VERSION = "1.1.0";
     private static final int MAX_INSTRUCTION_LENGTH = 10_000;
     private static final Pattern SLOT_KEY = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final String AUDIT_EVENT_VERSION = "1";
@@ -67,6 +75,7 @@ public class AiRunService implements AiAttemptStarter {
     private final TenantDatabaseContext tenantDatabaseContext;
     private final AiRunRepository repository;
     private final AiRuntimeClient runtimeClient;
+    private final AiRuntimeDeadlinePolicy runtimeDeadlinePolicy;
     private final AiSlotResolutionTransaction slotResolutionTransaction;
     private final WorkflowCatalogService workflowCatalogService;
     private final UuidGenerator uuidGenerator;
@@ -75,12 +84,14 @@ public class AiRunService implements AiAttemptStarter {
     private final AuditEventRepository auditEventRepository;
     private final AiRunPublicEventPublisher publicEventPublisher;
     private final Executor aiRunTaskExecutor;
+    private final AiRunExecutionTelemetry telemetry;
 
     public AiRunService(
             ActorAuthorizer actorAuthorizer,
             TenantDatabaseContext tenantDatabaseContext,
             AiRunRepository repository,
             AiRuntimeClient runtimeClient,
+            AiRuntimeDeadlinePolicy runtimeDeadlinePolicy,
             AiSlotResolutionTransaction slotResolutionTransaction,
             WorkflowCatalogService workflowCatalogService,
             UuidGenerator uuidGenerator,
@@ -88,12 +99,14 @@ public class AiRunService implements AiAttemptStarter {
             TransactionTemplate transactionTemplate,
             AuditEventRepository auditEventRepository,
             AiRunPublicEventPublisher publicEventPublisher,
-            @Qualifier("aiRunTaskExecutor") Executor aiRunTaskExecutor
+            @Qualifier("aiRunTaskExecutor") Executor aiRunTaskExecutor,
+            AiRunExecutionTelemetry telemetry
     ) {
         this.actorAuthorizer = actorAuthorizer;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.repository = repository;
         this.runtimeClient = runtimeClient;
+        this.runtimeDeadlinePolicy = runtimeDeadlinePolicy;
         this.slotResolutionTransaction = slotResolutionTransaction;
         this.workflowCatalogService = workflowCatalogService;
         this.uuidGenerator = uuidGenerator;
@@ -102,6 +115,7 @@ public class AiRunService implements AiAttemptStarter {
         this.auditEventRepository = auditEventRepository;
         this.publicEventPublisher = publicEventPublisher;
         this.aiRunTaskExecutor = aiRunTaskExecutor;
+        this.telemetry = telemetry;
     }
 
     public AiRunResult createAndSchedule(
@@ -312,34 +326,79 @@ public class AiRunService implements AiAttemptStarter {
                     clock.instant()
             ));
             publishCurrent(initial.aiRunId(), initial.companyId());
-            AiAnalysisResponse planResponse = runtimeClient.analyze(
-                    creation.request(),
-                    AiRuntimeCallContext.withoutTrace()
+            telemetry.measure(
+                    creation.request().requestId(),
+                    creation.request().attemptId(),
+                    PIPELINE,
+                    TOTAL,
+                    () -> {
+                        executePlanMeasured(creation);
+                        return null;
+                    }
             );
-            saveSuccess(creation.aiRunId(), creation.companyId(), creation.request().attemptId(), planResponse);
-            if (planResponse.outcome() == AiAnalysisOutcome.CONTEXT_REQUIRED) {
-                AiAnalysisContinuationResult result = new AiAnalysisContinuationService(
-                        slotResolutionTransaction,
-                        this,
-                        runtimeClient
-                ).continueAnalysis(
-                        creation.companyId(),
-                        creation.request(),
-                        planResponse,
-                        0,
-                        ATTEMPT_DEADLINE_MS,
-                        AiRuntimeCallContext.withoutTrace()
-                );
-                saveSuccess(
-                        creation.aiRunId(),
-                        creation.companyId(),
-                        result.attemptId(),
-                        result.response()
-                );
-            }
         } catch (RuntimeException exception) {
             markLatestFailed(initial, exception);
         }
+    }
+
+    private void executePlanMeasured(AiRunCreation creation) {
+        AiAnalysisResponse planResponse = telemetry.measure(
+                creation.request().requestId(),
+                creation.request().attemptId(),
+                PLAN,
+                PLAN_RUNTIME_CALL,
+                () -> runtimeClient.analyze(
+                        creation.request(),
+                        AiRuntimeCallContext.withoutTrace()
+                )
+        );
+        telemetry.measure(
+                creation.request().requestId(),
+                creation.request().attemptId(),
+                PLAN,
+                RESULT_PERSIST,
+                () -> {
+                    saveSuccess(
+                            creation.aiRunId(),
+                            creation.companyId(),
+                            creation.request().attemptId(),
+                            planResponse
+                    );
+                    return null;
+                }
+        );
+        if (planResponse.outcome() != AiAnalysisOutcome.CONTEXT_REQUIRED) {
+            return;
+        }
+
+        AiAnalysisContinuationResult result = new AiAnalysisContinuationService(
+                slotResolutionTransaction,
+                this,
+                runtimeClient,
+                telemetry
+        ).continueAnalysis(
+                creation.companyId(),
+                creation.request(),
+                planResponse,
+                0,
+                runtimeDeadlinePolicy.attemptDeadlineMs(),
+                AiRuntimeCallContext.withoutTrace()
+        );
+        telemetry.measure(
+                creation.request().requestId(),
+                result.attemptId(),
+                ANALYZE,
+                RESULT_PERSIST,
+                () -> {
+                    saveSuccess(
+                            creation.aiRunId(),
+                            creation.companyId(),
+                            result.attemptId(),
+                            result.response()
+                    );
+                    return null;
+                }
+        );
     }
 
     private void schedulePlan(AiRunCreation creation) {
@@ -355,11 +414,40 @@ public class AiRunService implements AiAttemptStarter {
 
     private void executeOne(ExecutionState state, AiAnalysisRequest request) {
         try {
-            AiAnalysisResponse response = runtimeClient.analyze(
-                    request,
-                    AiRuntimeCallContext.withoutTrace()
+            telemetry.measure(
+                    request.requestId(),
+                    request.attemptId(),
+                    ANALYZE,
+                    TOTAL,
+                    () -> {
+                        AiAnalysisResponse response = telemetry.measure(
+                                request.requestId(),
+                                request.attemptId(),
+                                ANALYZE,
+                                ANALYZE_RUNTIME_CALL,
+                                () -> runtimeClient.analyze(
+                                        request,
+                                        AiRuntimeCallContext.withoutTrace()
+                                )
+                        );
+                        telemetry.measure(
+                                request.requestId(),
+                                request.attemptId(),
+                                ANALYZE,
+                                RESULT_PERSIST,
+                                () -> {
+                                    saveSuccess(
+                                            state.aiRunId(),
+                                            state.companyId(),
+                                            request.attemptId(),
+                                            response
+                                    );
+                                    return null;
+                                }
+                        );
+                        return null;
+                    }
             );
-            saveSuccess(state.aiRunId(), state.companyId(), request.attemptId(), response);
         } catch (RuntimeException exception) {
             markLatestFailed(state, exception);
         }
@@ -375,6 +463,7 @@ public class AiRunService implements AiAttemptStarter {
             repository.markAttemptSucceeded(aiRunId, companyId, attemptId, response, clock.instant());
             return null;
         });
+        telemetry.recordOutcome(response.outcome());
         publishCurrent(aiRunId, companyId);
     }
 
@@ -413,7 +502,7 @@ public class AiRunService implements AiAttemptStarter {
                 phase,
                 CONTRACT_VERSION,
                 workflowCatalogService.getActiveCatalog().bundleVersion(),
-                ATTEMPT_DEADLINE_MS,
+                runtimeDeadlinePolicy.attemptDeadlineMs(),
                 input
         );
     }
@@ -443,7 +532,8 @@ public class AiRunService implements AiAttemptStarter {
                 previous.extractedSlots(),
                 new ArrayList<>(fieldKeys),
                 List.of(mergedWorker),
-                previous.workflowConstraints()
+                previous.workflowConstraints(),
+                previous.plannedIntentDecision()
         );
     }
 

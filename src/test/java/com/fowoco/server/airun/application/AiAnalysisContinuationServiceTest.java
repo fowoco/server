@@ -11,6 +11,7 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisPhase;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.fowoco.server.aiintegration.application.validation.AiRuntimeBoundaryPolicy;
@@ -23,6 +24,7 @@ import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
 import com.fowoco.server.workflow.application.WorkflowCatalogService;
 import com.fowoco.server.workflow.domain.WorkflowCatalog;
 import com.fowoco.server.workflow.domain.WorkflowDefinition;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -61,11 +63,18 @@ class AiAnalysisContinuationServiceTest {
                     assertThat(phase).isEqualTo(AiAnalysisPhase.ANALYZE);
                     assertThat(contextRound).isEqualTo(1);
                     assertThat(analysisInput.requestedFieldKeys())
-                            .containsExactly("worker_id", "stay_expiry_date", "due_at");
+                            .containsExactly(
+                                    "worker_id",
+                                    "stay_expiry_date",
+                                    "passport_status",
+                                    "arc_status",
+                                    "due_at"
+                            );
                     callOrder.add("attempt");
                     return NEXT_ATTEMPT_ID;
                 },
-                validatingClient
+                validatingClient,
+                new AiRunExecutionTelemetry(new SimpleMeterRegistry())
         );
 
         AiAnalysisContinuationResult result = service.continueAnalysis(
@@ -90,15 +99,29 @@ class AiAnalysisContinuationServiceTest {
                 .isEqualTo(validPlanRequest().analysisInput().instruction());
         assertThat(analyzeRequest.analysisInput().instruction())
                 .isEqualTo("응웬반안 체류연장 준비해줘");
+        assertThat(analyzeRequest.analysisInput().plannedIntentDecision().detectedIntent())
+                .isEqualTo("EXPIRY_RENEWAL");
+        assertThat(analyzeRequest.analysisInput().plannedIntentDecision().workflowId())
+                .isEqualTo("WF-STY-001");
+        assertThat(analyzeRequest.analysisInput().plannedIntentDecision().evidence())
+                .isEqualTo("체류연장 준비해줘");
         assertThat(analyzeRequest.analysisInput().extractedSlots())
                 .containsEntry("document_type", "STAY_EXTENSION");
         assertThat(analyzeRequest.analysisInput().requestedFieldKeys())
-                .containsExactly("worker_id", "stay_expiry_date", "due_at");
+                .containsExactly(
+                        "worker_id",
+                        "stay_expiry_date",
+                        "passport_status",
+                        "arc_status",
+                        "due_at"
+                );
         assertThat(analyzeRequest.analysisInput().workers()).hasSize(1);
         assertThat(analyzeRequest.analysisInput().workers().get(0).requestedFields())
                 .containsExactlyInAnyOrderEntriesOf(Map.of(
                         "worker_id", WORKER_ID.toString(),
-                        "stay_expiry_date", "2026-09-30"
+                        "stay_expiry_date", "2026-09-30",
+                        "passport_status", "MISSING",
+                        "arc_status", "MISSING"
                 ));
     }
 
@@ -113,7 +136,8 @@ class AiAnalysisContinuationServiceTest {
                 },
                 (request, context) -> {
                     throw new AssertionError("Runtime must not be called after the round limit.");
-                }
+                },
+                new AiRunExecutionTelemetry(new SimpleMeterRegistry())
         );
 
         assertThatThrownBy(() -> service.continueAnalysis(
@@ -150,7 +174,17 @@ class AiAnalysisContinuationServiceTest {
                         new BigDecimal("0.94"),
                         "응웬반안",
                         Map.of("document_type", "STAY_EXTENSION"),
-                        List.of("worker_id", "stay_expiry_date", "due_at")
+                        List.of(
+                                "worker_id",
+                                "stay_expiry_date",
+                                "passport_status",
+                                "arc_status",
+                                "due_at"
+                        ),
+                        "WF-STY-001",
+                        "체류연장 준비해줘",
+                        AiConfidenceSource.MODEL,
+                        null
                 ),
                 List.of(),
                 List.of(),
@@ -176,7 +210,13 @@ class AiAnalysisContinuationServiceTest {
     }
 
     private WorkflowCatalog catalog() {
-        Set<String> allowedSlots = Set.of("worker_id", "due_at", "stay_expiry_date");
+        Set<String> allowedSlots = Set.of(
+                "worker_id",
+                "due_at",
+                "stay_expiry_date",
+                "passport_status",
+                "arc_status"
+        );
         WorkflowDefinition workflow = new WorkflowDefinition(
                 "WF-STY-001",
                 "체류기간 연장",

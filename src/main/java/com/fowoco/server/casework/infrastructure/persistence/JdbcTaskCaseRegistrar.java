@@ -115,7 +115,10 @@ public class JdbcTaskCaseRegistrar implements TaskCaseRegistrar {
                 "depends_on_task_id",
                 "dependency_reason",
                 "missing_information",
-                "submission_due_offset_days"
+                "submission_due_offset_days",
+                "document_type",
+                "requested_document_types",
+                "submission_channel"
         ).forEach(key -> {
             if (businessData.containsKey(key)) {
                 conditions.put(key, businessData.get(key));

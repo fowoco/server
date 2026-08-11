@@ -24,7 +24,6 @@ public record AiCandidate(
         Objects.requireNonNull(workflowId, "workflowId must not be null");
         Objects.requireNonNull(extractedSlots, "extractedSlots must not be null");
         Objects.requireNonNull(missingSlots, "missingSlots must not be null");
-        Objects.requireNonNull(confidence, "confidence must not be null");
         extractedSlots = Map.copyOf(extractedSlots);
         missingSlots = List.copyOf(missingSlots);
     }

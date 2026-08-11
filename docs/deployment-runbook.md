@@ -44,6 +44,10 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | AI | `AI_RUNTIME_ENABLED=true` | 실제 Runtime 연동 활성화 |
 | AI | `AI_RUNTIME_ENDPOINT` | 예: `http://ai:8000/internal/v1/analyses` |
 | AI | `AI_RUNTIME_SERVICE_CREDENTIAL` | Server↔AI 내부 Bearer credential |
+| Worker Link | `WORKER_PORTAL_BASE_URL` | 문자에 넣을 실제 Client HTTPS 주소 |
+| Worker Link | `WORKER_LINK_SMS_PROVIDER=solapi` | SMS Adapter 활성화 |
+| Worker Link | `SOLAPI_API_KEY`, `SOLAPI_API_SECRET` | SMS Provider credential |
+| Worker Link | `SOLAPI_SENDER_NUMBER` | Provider에 등록·승인된 발신번호 |
 | OCR | `AI_OCR_ENABLED=true`, `DOCUMENT_OCR_ENABLED=true` | AI OCR 호출과 Server 저장 기능 활성화 |
 | OCR | `AI_OCR_ENDPOINT`, `AI_OCR_SERVICE_CREDENTIAL` | OCR 내부 endpoint와 Bearer credential |
 | OCR | `OCR_RESULT_ENCRYPTION_KEY_BASE64` | 32바이트 OCR 결과 암호화 키의 Base64 |
@@ -68,8 +72,42 @@ SMTP 비밀번호와 재설정 원본 token은 Git, Issue, 일반 로그에 기�
 DB pool은 기본 최대 10개입니다. 클러스터 규모에 따라 `DB_MAX_POOL_SIZE`, `DB_MIN_IDLE`,
 `DB_CONNECTION_TIMEOUT_MS`, `DB_VALIDATION_TIMEOUT_MS`로 제한합니다.
 
+## 관측 설정 경계
+
+Server는 AiRun·Renewal 구간의 Micrometer 지표를 생성하지만, 현재 데모 배포에서는
+Prometheus를 클러스터에 함께 배포하지 않습니다.
+
+- `/actuator/prometheus`는 기본 보안 Chain에서 보호됩니다.
+- 로컬 `observability` profile은 `prod`와 함께 활성화해도 공개 Chain이 생성되지
+  않습니다.
+- 배포 환경에서 수집이 필요해지면 Infra가 내부 Service·NetworkPolicy·인증 또는
+  별도 management port를 먼저 구성합니다.
+- 공개 Ingress와 `CORS_ALLOWED_ORIGINS`에 Prometheus endpoint를 추가하지 않습니다.
+- Metric에는 `companyId`, `workerId`, `taskId`, 요청·시도 ID와 개인정보를 tag로
+  넣지 않습니다.
+
+따라서 현재 `server-env`에 `SPRING_PROFILES_ACTIVE=prod,observability`를 설정하면
+안 됩니다. 로컬 측정과 정량 평가 절차는
+[AI 파이프라인 관측 가이드](ai-pipeline-observability.md)를 사용합니다.
+
 현재 Infra에 HTTPS/TLS와 `RELEASED` Workflow Catalog 배포가 없으면 `prod` 완료 조건을
 충족하지 못합니다. 임시 HTTP 주소와 DRAFT Catalog는 개발 Smoke에만 사용합니다.
+
+## HTTPS와 공유 Swagger 연결
+
+GitHub Pages의 공유 Swagger는 HTTPS 페이지이므로 HTTP 데모 Server를 직접 호출할 수
+없습니다. Infra에서 TLS가 준비된 뒤 다음 순서로 연결합니다.
+
+1. Infra Ingress에 TLS 인증서와 HTTPS host를 적용합니다.
+2. Server `CORS_ALLOWED_ORIGINS`에 실제 Client origin과
+   `https://fowoco.github.io`를 쉼표로 구분해 등록합니다.
+3. Server 저장소 Actions Variable `SERVER_PUBLIC_URL`에 HTTPS Server 주소를 등록합니다.
+4. `Database Documentation` Workflow를 재실행합니다.
+5. 공유 Swagger에서 Login → Authorize → 보호 API 호출을 확인합니다.
+
+현재 Infra가 HTTP만 제공하는 동안에는 `SERVER_PUBLIC_URL`을 등록하지 않고 공유
+Swagger를 읽기 전용으로 유지합니다. HTTP 주소를 임시로 넣어 브라우저 보안을 우회하지
+않습니다.
 
 ## 로컬 PostgreSQL 통합 실행
 
@@ -78,12 +116,14 @@ DB pool은 기본 최대 10개입니다. 클러스터 규모에 따라 `DB_MAX_P
 ```bash
 export DEMO_DB_PASSWORD='local-demo-password'
 export JWT_SECRET_BASE64="$(openssl rand -base64 32)"
+export DEMO_SEED_ENABLED=true
+export DEMO_SEED_ADMIN_PASSWORD='로컬 전용 12자 이상 값'
 docker compose -f compose.demo.yml up --build
 ```
 
-PostgreSQL Demo Seed는 #94 검증이 끝날 때까지 기본적으로 꺼져 있습니다. 실행 후
-`POST /api/v1/auth/signup`으로 가상 사업장 계정을 만들거나, #94 완료 뒤에만
-`DEMO_SEED_ENABLED=true`와 `DEMO_SEED_ADMIN_PASSWORD`를 추가합니다.
+`DEMO_SEED_ENABLED`의 Compose 기본값은 안전하게 `false`입니다. 개인 Demo DB에서 Seed가
+필요한 경우에만 위와 같이 활성화하고 12자 이상의 합성 비밀번호를 지정합니다. 첫 기동은
+빈 PostgreSQL 16 DB에 Flyway와 전체 Demo Seed를 적용합니다.
 
 확인:
 
@@ -92,8 +132,23 @@ curl --fail http://127.0.0.1:8080/actuator/health/readiness
 curl --fail http://127.0.0.1:8080/health
 ```
 
-종료 시 `docker compose -f compose.demo.yml down`을 사용합니다. DB 데이터를 지우려는 경우에만
-영향을 확인한 뒤 별도로 volume 삭제를 결정합니다.
+멱등성 Smoke는 서버를 중지하되 volume을 유지하고 같은 설정으로 다시 기동합니다.
+
+```bash
+docker compose -f compose.demo.yml stop server
+docker compose -f compose.demo.yml up --build server
+```
+
+두 번째 기동도 성공하고 응웬반A Worker
+`92000000-0000-0000-0000-000000000006`가 한 건 유지되며, 응웬반A의 Golden Flow
+Case·Task는 0건이어야 합니다. WorkerDocument는 Task·StoredFile 연결이 없는
+`PASSPORT_COPY/VERIFIED` 1건과 `ARC/MISSING` 1건만 유지되어야 합니다. 다른 Showcase
+Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
+
+종료 시 `docker compose -f compose.demo.yml down`을 사용합니다. DB 데이터를 지우려는
+경우에만 정확한 Compose project와 전용 volume인지 확인한 뒤 별도로 volume 삭제를
+결정합니다. 구버전 Golden Flow 예약 ID 감지로 기동이 중단된 개인 Demo DB만 초기화
+대상이며, Seed가 기존 데이터를 자동 삭제하거나 Flyway로 정리하지 않습니다.
 
 ## 배포 후 Smoke
 
@@ -104,7 +159,9 @@ curl --fail http://127.0.0.1:8080/health
 5. `POST /api/v1/ai-runs`의 실제 Server→AI 왕복 확인
 6. 후보 채택 후 Case·Task 조회 확인
 7. Worker Link 대표 흐름 확인
-8. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
+8. SMS가 활성화된 환경에서는 실제 수신·링크 접속·중복 발송 방지 확인
+9. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
+10. 로그에서 AiRun·Renewal `TOTAL` 단계와 안전한 `failure_code`가 기록되는지 확인
 
 Runtime 장애 테스트에서는 가짜 AI 결과를 만들지 않고 안전한 오류 또는 수동 처리 상태로
 남아야 합니다.

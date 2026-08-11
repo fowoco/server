@@ -18,6 +18,13 @@ public final class WorkerLinkIssueResponse {
     @Schema(name = "worker_url", description = "근로자에게 전달할 링크 URL. 같은 idempotency key로 재요청한 경우 null")
     private final String workerUrl;
 
+    @JsonProperty("worker_link_token")
+    @Schema(
+            name = "worker_link_token",
+            description = "SMS 발송 API와 근로자 공개 API에 사용할 원본 token. 발급 직후에만 반환"
+    )
+    private final String workerLinkToken;
+
     @JsonProperty("expires_at")
     @Schema(name = "expires_at")
     private final Instant expiresAt;
@@ -37,6 +44,7 @@ public final class WorkerLinkIssueResponse {
     private WorkerLinkIssueResponse(
             UUID workerLinkId,
             String workerUrl,
+            String workerLinkToken,
             Instant expiresAt,
             WorkerLinkDeliveryStatus deliveryStatus,
             Instant sentAt,
@@ -44,19 +52,17 @@ public final class WorkerLinkIssueResponse {
     ) {
         this.workerLinkId = workerLinkId;
         this.workerUrl = workerUrl;
+        this.workerLinkToken = workerLinkToken;
         this.expiresAt = expiresAt;
         this.deliveryStatus = deliveryStatus;
         this.sentAt = sentAt;
         this.alreadyIssued = alreadyIssued;
     }
 
-    public static WorkerLinkIssueResponse from(WorkerLinkIssueResult result) {
-        // TODO: workerUrl 조립 방식 확정 필요.
-        // 확인 후 실제 프론트 base URL + 경로로 조립해야 함.
-        // 지금은 원문 토큰만 그대로 노출한 상태(미완성).
-        // 재시도 worker_url을 null로 반환함.
+    public static WorkerLinkIssueResponse from(WorkerLinkIssueResult result, String workerUrl) {
         return new WorkerLinkIssueResponse(
                 result.workerLinkId(),
+                workerUrl,
                 result.rawToken(),
                 result.expiresAt(),
                 result.deliveryStatus(),
@@ -71,6 +77,10 @@ public final class WorkerLinkIssueResponse {
 
     public String getWorkerUrl() {
         return workerUrl;
+    }
+
+    public String getWorkerLinkToken() {
+        return workerLinkToken;
     }
 
     public Instant getExpiresAt() {

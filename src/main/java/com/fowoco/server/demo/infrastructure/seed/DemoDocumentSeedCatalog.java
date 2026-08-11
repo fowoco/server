@@ -142,8 +142,8 @@ final class DemoDocumentSeedCatalog {
     ) {
         if (workerNumber == 6) {
             return documentType == DocumentType.PASSPORT_COPY
-                    ? SubmissionStatus.MISSING
-                    : SubmissionStatus.VERIFIED;
+                    ? SubmissionStatus.VERIFIED
+                    : SubmissionStatus.MISSING;
         }
         return additionStatus(additionIndex);
     }
@@ -155,8 +155,8 @@ final class DemoDocumentSeedCatalog {
     ) {
         if (workerNumber == 6) {
             return switch (documentType) {
-                case PASSPORT_COPY -> null;
-                case ARC -> 365;
+                case PASSPORT_COPY -> 365;
+                case ARC -> null;
                 case CONTRACT -> 180;
                 case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
             };
@@ -167,7 +167,7 @@ final class DemoDocumentSeedCatalog {
     private static String scenarioDestination(int workerNumber, DocumentType documentType) {
         if (workerNumber == 6) {
             return documentType == DocumentType.PASSPORT_COPY
-                    ? "근로자 문서 요청"
+                    ? "체류기간 연장"
                     : "재계약·연장 준비";
         }
         return destination(documentType);
@@ -180,8 +180,8 @@ final class DemoDocumentSeedCatalog {
     ) {
         if (workerNumber == 6) {
             return switch (documentType) {
-                case PASSPORT_COPY -> "여권 사본 미보유 · 베트남어 요청 필요";
-                case ARC -> "외국인등록증 확인 완료";
+                case PASSPORT_COPY -> "검증된 유효 여권 사본";
+                case ARC -> "외국인등록증 사본 요청 필요";
                 case CONTRACT -> "현재 근로계약서 확인 완료";
                 case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
             };

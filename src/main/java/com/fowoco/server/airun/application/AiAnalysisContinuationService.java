@@ -6,6 +6,7 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
+import com.fowoco.server.aiintegration.application.model.AiIntentDecision;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.fowoco.server.airun.application.error.AiContextResolutionException;
@@ -19,6 +20,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Phase.ANALYZE;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Stage.ANALYZE_RUNTIME_CALL;
+import static com.fowoco.server.airun.application.AiRunExecutionTelemetry.Stage.SLOT_RESOLUTION;
+
 /**
  * Continues a validated CONTEXT_REQUIRED result without holding a database transaction open.
  * #24 wires this service to a durable AiAttempt implementation.
@@ -30,11 +35,13 @@ public final class AiAnalysisContinuationService {
     private final AiSlotResolutionTransaction slotResolutionTransaction;
     private final AiAttemptStarter attemptStarter;
     private final AiRuntimeClient runtimeClient;
+    private final AiRunExecutionTelemetry telemetry;
 
     public AiAnalysisContinuationService(
             AiSlotResolutionTransaction slotResolutionTransaction,
             AiAttemptStarter attemptStarter,
-            AiRuntimeClient runtimeClient
+            AiRuntimeClient runtimeClient,
+            AiRunExecutionTelemetry telemetry
     ) {
         this.slotResolutionTransaction = Objects.requireNonNull(
                 slotResolutionTransaction,
@@ -42,6 +49,7 @@ public final class AiAnalysisContinuationService {
         );
         this.attemptStarter = Objects.requireNonNull(attemptStarter, "attemptStarter must not be null");
         this.runtimeClient = Objects.requireNonNull(runtimeClient, "runtimeClient must not be null");
+        this.telemetry = Objects.requireNonNull(telemetry, "telemetry must not be null");
     }
 
     public AiAnalysisContinuationResult continueAnalysis(
@@ -58,10 +66,16 @@ public final class AiAnalysisContinuationService {
         Objects.requireNonNull(callContext, "callContext must not be null");
         validateContinuation(previousRequest, previousResponse, completedContextRounds);
 
-        AiSlotResolution resolution = slotResolutionTransaction.resolve(
-                companyId,
-                previousRequest.requiredKnowledgeVersion(),
-                previousResponse.contextRequirement()
+        AiSlotResolution resolution = telemetry.measure(
+                previousRequest.requestId(),
+                previousRequest.attemptId(),
+                ANALYZE,
+                SLOT_RESOLUTION,
+                () -> slotResolutionTransaction.resolve(
+                        companyId,
+                        previousRequest.requiredKnowledgeVersion(),
+                        previousResponse.contextRequirement()
+                )
         );
         validateSameWorker(previousRequest, resolution.worker());
 
@@ -87,7 +101,13 @@ public final class AiAnalysisContinuationService {
                 remainingDeadlineMs,
                 analyzeInput
         );
-        AiAnalysisResponse response = runtimeClient.analyze(analyzeRequest, callContext);
+        AiAnalysisResponse response = telemetry.measure(
+                analyzeRequest.requestId(),
+                analyzeRequest.attemptId(),
+                ANALYZE,
+                ANALYZE_RUNTIME_CALL,
+                () -> runtimeClient.analyze(analyzeRequest, callContext)
+        );
         return new AiAnalysisContinuationResult(
                 attemptId,
                 response,
@@ -128,7 +148,8 @@ public final class AiAnalysisContinuationService {
                 extractedSlots,
                 new ArrayList<>(requestedFieldKeys),
                 List.of(mergedWorker),
-                resolution.workflowConstraints()
+                resolution.workflowConstraints(),
+                AiIntentDecision.from(previousResponse.contextRequirement())
         );
     }
 

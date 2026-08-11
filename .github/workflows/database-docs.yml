@@ -40,7 +40,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:16-alpine
         env:
           POSTGRES_DB: fowoco_docs
           POSTGRES_USER: fowoco_docs
@@ -114,6 +114,7 @@ jobs:
         run: ./scripts/api-docs/generate.sh
         env:
           API_DOCS_GIT_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          API_DOCS_SERVER_URL: ${{ vars.SERVER_PUBLIC_URL }}
 
       - name: Upload API documentation preview
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

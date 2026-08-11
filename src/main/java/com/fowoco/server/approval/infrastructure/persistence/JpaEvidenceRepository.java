@@ -2,6 +2,8 @@ package com.fowoco.server.approval.infrastructure.persistence;
 
 import com.fowoco.server.approval.application.port.EvidenceRepository;
 import com.fowoco.server.approval.domain.Evidence;
+import com.fowoco.server.approval.domain.EvidenceType;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
@@ -20,7 +22,7 @@ public class JpaEvidenceRepository implements EvidenceRepository {
     }
 
     @Override
-    public boolean existsByTaskIdAndCompanyId(UUID taskId, UUID companyId) {
-        return repository.existsByTaskIdAndCompanyId(taskId, companyId);
+    public Set<EvidenceType> findTypesByTaskIdAndCompanyId(UUID taskId, UUID companyId) {
+        return Set.copyOf(repository.findTypesByTaskIdAndCompanyId(taskId, companyId));
     }
 }

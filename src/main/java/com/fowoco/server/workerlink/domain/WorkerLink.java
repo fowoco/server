@@ -144,6 +144,49 @@ public final class WorkerLink {
         );
     }
 
+    public WorkerLink markSending(Instant now) {
+        Objects.requireNonNull(now, "now must not be null");
+        if (deliveryStatus != WorkerLinkDeliveryStatus.NOT_SENT) {
+            throw new IllegalStateException("only a not-sent worker link can start SMS delivery");
+        }
+        return withDeliveryState(WorkerLinkDeliveryStatus.SENDING, null, null, now);
+    }
+
+    public WorkerLink markDeliveryReviewRequired(Instant now) {
+        Objects.requireNonNull(now, "now must not be null");
+        if (deliveryStatus == WorkerLinkDeliveryStatus.REVIEW_REQUIRED) {
+            return this;
+        }
+        if (deliveryStatus != WorkerLinkDeliveryStatus.SENDING) {
+            throw new IllegalStateException("only an in-flight SMS delivery can require review");
+        }
+        return withDeliveryState(WorkerLinkDeliveryStatus.REVIEW_REQUIRED, null, null, now);
+    }
+
+    public WorkerLink markNotSentAfterRejectedDelivery(Instant now) {
+        Objects.requireNonNull(now, "now must not be null");
+        if (deliveryStatus == WorkerLinkDeliveryStatus.NOT_SENT) {
+            return this;
+        }
+        if (deliveryStatus != WorkerLinkDeliveryStatus.SENDING) {
+            throw new IllegalStateException("only an in-flight SMS delivery can return to not-sent");
+        }
+        return withDeliveryState(WorkerLinkDeliveryStatus.NOT_SENT, null, null, now);
+    }
+
+    private WorkerLink withDeliveryState(
+            WorkerLinkDeliveryStatus nextStatus,
+            Instant nextSentAt,
+            UUID nextSentBy,
+            Instant now
+    ) {
+        return new WorkerLink(
+                workerLinkId, taskId, companyId, tokenHash, expiresAt,
+                status, conversationStatus, nextStatus, nextSentAt, nextSentBy,
+                assigneeId, issuedBy, replacesLinkId, idempotencyKey, createdAt, now, version
+        );
+    }
+
     public boolean isUsable(Instant now) {
         return status == WorkerLinkStatus.ACTIVE && expiresAt.isAfter(now);
     }
