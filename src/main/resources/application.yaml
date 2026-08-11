@@ -76,6 +76,17 @@ app:
     circuit-breaker-open-duration: ${AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION:30s}
   worker-import:
     source-retention: ${WORKER_IMPORT_SOURCE_RETENTION:7d}
+  worker-link:
+    portal-base-url: ${WORKER_PORTAL_BASE_URL:http://localhost:5173}
+    sms:
+      provider: ${WORKER_LINK_SMS_PROVIDER:none}
+      endpoint: ${SOLAPI_ENDPOINT:https://api.solapi.com/messages/v4/send-many/detail}
+      api-key: ${SOLAPI_API_KEY:}
+      api-secret: ${SOLAPI_API_SECRET:}
+      sender-number: ${SOLAPI_SENDER_NUMBER:}
+      connect-timeout: ${WORKER_LINK_SMS_CONNECT_TIMEOUT:2s}
+      overall-timeout: ${WORKER_LINK_SMS_OVERALL_TIMEOUT:5s}
+      max-response-bytes: ${WORKER_LINK_SMS_MAX_RESPONSE_BYTES:65536}
   ai-ocr:
     enabled: ${AI_OCR_ENABLED:false}
     endpoint: ${AI_OCR_ENDPOINT:http://127.0.0.1:8000/internal/v1/ocr/worker-documents}
