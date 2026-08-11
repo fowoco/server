@@ -168,7 +168,7 @@ public scope = worker_link_id + action + key_hash
 - idempotency record와 업무 변경은 같은 transaction에 저장합니다.
 - candidate에서 만든 Task는 `source_candidate_id` 같은 business unique constraint로 record 보존기간 이후의 중복도 막습니다.
 - 원본 Worker Link token처럼 재생할 수 없는 Secret을 idempotency record에 저장하지 않습니다.
-- Worker Link 발급·회전을 같은 key로 재요청하면 새 Link를 만들지 않고 `worker_link_id`, `expires_at`, `already_issued=true`, `worker_url=null`만 반환합니다.
+- Worker Link 발급·회전을 같은 key로 재요청하면 새 Link를 만들지 않고 `worker_link_id`, `expires_at`, `already_issued=true`, `worker_url=null`, `worker_link_token=null`만 반환합니다.
 - 첫 응답을 잃어 원본 token을 확인할 수 없다면 새 key로 명시적인 rotate Command를 호출합니다. 기존 Link를 폐기하고 새 token을 한 번만 반환합니다.
 - 보존기간과 body 크기 제한은 endpoint OpenAPI와 운영 설정에 명시합니다.
 
