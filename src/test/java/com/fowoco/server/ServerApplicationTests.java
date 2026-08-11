@@ -37,6 +37,13 @@ class ServerApplicationTests {
 	}
 
 	@Test
+	void prometheusEndpointIsNotPublicWithoutObservabilityProfile() throws Exception {
+		HttpResponse<String> response = get("/actuator/prometheus");
+
+		assertThat(response.statusCode()).isEqualTo(401);
+	}
+
+	@Test
 	void openApiIncludesHealthApi() throws Exception {
 		HttpResponse<String> response = get("/v3/api-docs");
 		String successRequestIdHeader = JsonPath.read(

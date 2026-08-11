@@ -8,6 +8,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +29,8 @@ class RenewalExecutionTelemetryTest {
 
     private final Logger logger = (Logger) LoggerFactory.getLogger(RenewalExecutionTelemetry.class);
     private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    private final RenewalExecutionTelemetry telemetry = new RenewalExecutionTelemetry();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final RenewalExecutionTelemetry telemetry = new RenewalExecutionTelemetry(meterRegistry);
 
     @BeforeEach
     void attachAppender() {
@@ -47,7 +49,6 @@ class RenewalExecutionTelemetryTest {
         assertThatThrownBy(() -> telemetry.measure(
                 REQUEST_ID,
                 HTTP_REQUEST_ID,
-                TASK_ID,
                 RenewalExecutionTelemetry.Stage.RENEWAL_RUNTIME_CALL,
                 () -> {
                     throw new AiRuntimeCallException(
@@ -63,12 +64,48 @@ class RenewalExecutionTelemetryTest {
                 .contains(
                         "request_id=" + REQUEST_ID,
                         "http_request_id=" + HTTP_REQUEST_ID,
-                        "task_id=" + TASK_ID,
                         "stage=RENEWAL_RUNTIME_CALL",
                         "status=FAILED",
                         "error_code=DEADLINE_EXCEEDED"
                 )
-                .doesNotContain("NGUYEN VAN AN", "passport_number", "M12345678");
+                .doesNotContain(
+                        "task_id",
+                        TASK_ID.toString(),
+                        "NGUYEN VAN AN",
+                        "passport_number",
+                        "M12345678"
+                );
         assertThat(event.getThrowableProxy()).isNull();
+        assertThat(meterRegistry.get("fowoco.renewal.stage")
+                .tag("stage", "RENEWAL_RUNTIME_CALL")
+                .tag("status", "FAILED")
+                .timer()
+                .count()).isEqualTo(1);
+        assertThat(meterRegistry.get("fowoco.renewal.failures")
+                .tag("stage", "RENEWAL_RUNTIME_CALL")
+                .tag("failure_code", "DEADLINE_EXCEEDED")
+                .counter()
+                .count()).isEqualTo(1);
+    }
+
+    @Test
+    void successRecordsDurationWithoutResourceIdentifiers() {
+        String result = telemetry.measure(
+                REQUEST_ID,
+                HTTP_REQUEST_ID,
+                RenewalExecutionTelemetry.Stage.CONTEXT_LOAD,
+                () -> "loaded"
+        );
+
+        assertThat(result).isEqualTo("loaded");
+        assertThat(appender.list).hasSize(1);
+        assertThat(appender.list.get(0).getFormattedMessage())
+                .contains("stage=CONTEXT_LOAD", "status=SUCCESS", "duration_ms=")
+                .doesNotContain("task_id", TASK_ID.toString());
+        assertThat(meterRegistry.get("fowoco.renewal.stage")
+                .tag("stage", "CONTEXT_LOAD")
+                .tag("status", "SUCCESS")
+                .timer()
+                .count()).isEqualTo(1);
     }
 }

@@ -72,6 +72,24 @@ SMTP 비밀번호와 재설정 원본 token은 Git, Issue, 일반 로그에 기�
 DB pool은 기본 최대 10개입니다. 클러스터 규모에 따라 `DB_MAX_POOL_SIZE`, `DB_MIN_IDLE`,
 `DB_CONNECTION_TIMEOUT_MS`, `DB_VALIDATION_TIMEOUT_MS`로 제한합니다.
 
+## 관측 설정 경계
+
+Server는 AiRun·Renewal 구간의 Micrometer 지표를 생성하지만, 현재 데모 배포에서는
+Prometheus를 클러스터에 함께 배포하지 않습니다.
+
+- `/actuator/prometheus`는 기본 보안 Chain에서 보호됩니다.
+- 로컬 `observability` profile은 `prod`와 함께 활성화해도 공개 Chain이 생성되지
+  않습니다.
+- 배포 환경에서 수집이 필요해지면 Infra가 내부 Service·NetworkPolicy·인증 또는
+  별도 management port를 먼저 구성합니다.
+- 공개 Ingress와 `CORS_ALLOWED_ORIGINS`에 Prometheus endpoint를 추가하지 않습니다.
+- Metric에는 `companyId`, `workerId`, `taskId`, 요청·시도 ID와 개인정보를 tag로
+  넣지 않습니다.
+
+따라서 현재 `server-env`에 `SPRING_PROFILES_ACTIVE=prod,observability`를 설정하면
+안 됩니다. 로컬 측정과 정량 평가 절차는
+[AI 파이프라인 관측 가이드](ai-pipeline-observability.md)를 사용합니다.
+
 현재 Infra에 HTTPS/TLS와 `RELEASED` Workflow Catalog 배포가 없으면 `prod` 완료 조건을
 충족하지 못합니다. 임시 HTTP 주소와 DRAFT Catalog는 개발 Smoke에만 사용합니다.
 
@@ -143,6 +161,7 @@ Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
 7. Worker Link 대표 흐름 확인
 8. SMS가 활성화된 환경에서는 실제 수신·링크 접속·중복 발송 방지 확인
 9. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
+10. 로그에서 AiRun·Renewal `TOTAL` 단계와 안전한 `failure_code`가 기록되는지 확인
 
 Runtime 장애 테스트에서는 가짜 AI 결과를 만들지 않고 안전한 오류 또는 수동 처리 상태로
 남아야 합니다.

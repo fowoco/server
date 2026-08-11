@@ -24,6 +24,7 @@ import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
 import com.fowoco.server.workflow.application.WorkflowCatalogService;
 import com.fowoco.server.workflow.domain.WorkflowCatalog;
 import com.fowoco.server.workflow.domain.WorkflowDefinition;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -72,7 +73,8 @@ class AiAnalysisContinuationServiceTest {
                     callOrder.add("attempt");
                     return NEXT_ATTEMPT_ID;
                 },
-                validatingClient
+                validatingClient,
+                new AiRunExecutionTelemetry(new SimpleMeterRegistry())
         );
 
         AiAnalysisContinuationResult result = service.continueAnalysis(
@@ -134,7 +136,8 @@ class AiAnalysisContinuationServiceTest {
                 },
                 (request, context) -> {
                     throw new AssertionError("Runtime must not be called after the round limit.");
-                }
+                },
+                new AiRunExecutionTelemetry(new SimpleMeterRegistry())
         );
 
         assertThatThrownBy(() -> service.continueAnalysis(
