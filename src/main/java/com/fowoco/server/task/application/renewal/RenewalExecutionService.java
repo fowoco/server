@@ -56,7 +56,7 @@ public final class RenewalExecutionService {
     ) {
         UUID runtimeRequestId = uuidGenerator.generate();
         UUID attemptId = uuidGenerator.generate();
-        return telemetry.measure(runtimeRequestId, metadata.requestId(), taskId, TOTAL, () ->
+        return telemetry.measure(runtimeRequestId, metadata.requestId(), TOTAL, () ->
                 executeMeasured(taskId, command, actor, metadata, runtimeRequestId, attemptId)
         );
     }
@@ -72,7 +72,6 @@ public final class RenewalExecutionService {
         RenewalExecutionContext context = telemetry.measure(
                 runtimeRequestId,
                 metadata.requestId(),
-                taskId,
                 CONTEXT_LOAD,
                 () -> contextReader.load(
                         taskId,
@@ -99,7 +98,6 @@ public final class RenewalExecutionService {
             RenewalRunResponse response = telemetry.measure(
                     runtimeRequestId,
                     metadata.requestId(),
-                    taskId,
                     RENEWAL_RUNTIME_CALL,
                     () -> runtimeClient.run(request, AiRuntimeCallContext.withoutTrace())
             );
@@ -108,7 +106,6 @@ public final class RenewalExecutionService {
                             ? telemetry.measure(
                                     runtimeRequestId,
                                     metadata.requestId(),
-                                    taskId,
                                     DOCUMENT_GENERATION,
                                     () -> generatedDocumentService.prepare(response.generatedDocuments())
                             )
@@ -116,7 +113,6 @@ public final class RenewalExecutionService {
             return telemetry.measure(
                     runtimeRequestId,
                     metadata.requestId(),
-                    taskId,
                     RESULT_APPLY,
                     () -> resultApplier.apply(
                             taskId,
