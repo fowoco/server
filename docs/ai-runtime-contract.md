@@ -301,6 +301,8 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 | `AI_RUNTIME_CONNECT_TIMEOUT` | `2s` | AI 서버에 TCP 연결을 맺을 수 있는 최대 시간 |
 | `AI_RUNTIME_OVERALL_TIMEOUT` | `15s` | 연결·요청·응답 수신 전체의 Server 상한 |
 | `AI_RUNTIME_MAX_RESPONSE_BYTES` | `1048576` | 응답을 메모리에 받기 전 적용하는 최대 크기 |
+| `AI_DOCUMENT_GENERATION_ENDPOINT` | `http://127.0.0.1:8000/api/v1/documents/generate` | Renewal 문서 생성 API |
+| `AI_DOCUMENT_GENERATION_MAX_RESPONSE_BYTES` | `20971520` | 생성 파일을 메모리에 받기 전 적용하는 최대 크기 |
 | `AI_RUNTIME_MAX_CONCURRENT_CALLS` | `8` | Server 한 인스턴스가 동시에 보내는 최대 호출 수 |
 | `AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | 연속 장애 후 호출을 잠시 막는 기준 |
 | `AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION` | `30s` | 차단 후 시험 호출까지 기다리는 시간 |
@@ -308,6 +310,62 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 Server 내부 요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧은 값을 HTTP
 timeout으로 사용합니다. `deadlineMs` 자체는 Runtime JSON에 전송하지 않습니다. 따라서
 상위 AiRun이 허용한 시간보다 오래 기다리지 않습니다.
+
+## Renewal Task와 Workflow 연결
+
+`POST /internal/v1/workflows/renewal/run`에는 이미 생성된 Task의 canonical Workflow를
+`task.workflowId`로 전달합니다. Server가 허용하는 조합은 활성 Knowledge Catalog와 같습니다.
+
+| Task type | Workflow ID |
+| --- | --- |
+| `RECONTRACT` | `WF-CON-001` |
+| `EMPLOYMENT_PERIOD_EXTENSION` | `WF-CON-001` |
+| `STAY_PERIOD_EXTENSION` | `WF-STY-001` |
+
+Server는 Task type과 Workflow가 위 표와 다르면 AI를 호출하지 않습니다. 정상 Renewal
+응답의 `workflowId`도 요청의 `task.workflowId`와 반드시 같아야 합니다. 같은
+`EXPIRY_RENEWAL` Intent 안에서 Runtime이 첫 Workflow를 고르거나 발화만 다시 분류해 다른
+Workflow로 바꾼 응답은 `UNEXPECTED_WORKFLOW`로 거부합니다.
+
+`scenario=out_of_scope`, `intent=OUT_OF_SCOPE`인 종료 응답만 `workflowId`가 비어 있을 수
+있습니다. 이는 Workflow 실행 결과가 아니라 지원 범위 밖 정상 종료 신호이기 때문입니다.
+
+## Renewal 생성 문서 연결
+
+Renewal 응답의 `generatedDocuments[]`는 다음 세 값을 문서 생성 기준으로 사용합니다.
+
+```json
+{
+  "template_id": "standard_labor_contract_v6",
+  "format": "hwp",
+  "values": {
+    "employee_name": "NGUYEN VAN AN"
+  }
+}
+```
+
+Server는 `scenario=generate`일 때만 각 항목을 Agent의
+`POST /api/v1/documents/generate`에 `multipart/form-data`의 `payload` JSON으로 전달합니다.
+응답 파일은 기존 `stored_file`에 저장하고 Task·Worker에 속한 `worker_document`와 연결합니다.
+검토 전 초안이므로 `worker_document.submission_status=SUBMITTED`로 기록하고 자동으로
+`VERIFIED` 처리하지 않습니다.
+
+`values`에는 개인정보가 포함될 수 있으므로 문서 생성 요청 중에만 메모리에서 사용합니다.
+Task JSON, 감사로그, 외부 API 응답에는 저장하지 않으며 다음 식별자만 반환합니다.
+
+```json
+{
+  "template_id": "standard_labor_contract_v6",
+  "format": "hwp",
+  "status": "GENERATED",
+  "stored_file_id": "...",
+  "worker_document_id": "..."
+}
+```
+
+현재 허용 템플릿은 Renewal 필수 초안 4종이며, 표준근로계약서는 `CONTRACT`, 나머지 연장·
+체류 신청 문서는 `PERMIT`로 문서함에 분류합니다. 새 템플릿을 추가할 때는 Agent 계약과
+Server 문서 종류 매핑을 함께 변경합니다.
 
 OCR까지 활성화하려면 별도 Secret과 결과 암호화 키를 함께 설정합니다.
 

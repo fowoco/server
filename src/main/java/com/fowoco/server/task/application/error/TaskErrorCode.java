@@ -28,6 +28,18 @@ public enum TaskErrorCode implements ApiErrorCode {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "AI 업무 후보의 Workflow 또는 필수정보를 확인해 주세요."
     ),
+    RENEWAL_EXECUTION_NOT_ALLOWED(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "이 업무카드에서는 재계약·연장 Agent를 실행할 수 없습니다."
+    ),
+    INVALID_RENEWAL_SLOT_ANSWER(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "재계약·연장 업무에 제출한 추가 정보를 확인해 주세요."
+    ),
+    RENEWAL_RUNTIME_UNAVAILABLE(
+            HttpStatus.SERVICE_UNAVAILABLE,
+            "재계약·연장 분석을 일시적으로 실행할 수 없습니다."
+    ),
     CHECKLIST_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "체크리스트 항목을 찾을 수 없습니다."),
     CASE_WORKER_MISMATCH(HttpStatus.CONFLICT, "Case와 업무카드의 근로자가 일치하지 않습니다."),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "업무카드가 다른 요청에서 변경되었습니다."),
