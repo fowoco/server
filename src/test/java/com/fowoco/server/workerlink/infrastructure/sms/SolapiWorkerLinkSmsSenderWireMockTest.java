@@ -89,7 +89,7 @@ class SolapiWorkerLinkSmsSenderWireMockTest {
                 "[FOWOCO] 테스트"
         ))).isInstanceOfSatisfying(WorkerLinkSmsProviderException.class, exception -> {
             org.assertj.core.api.Assertions.assertThat(exception.failureType())
-                    .isEqualTo(WorkerLinkSmsProviderException.FailureType.DELIVERY_FAILED);
+                    .isEqualTo(WorkerLinkSmsProviderException.FailureType.REJECTED);
             org.assertj.core.api.Assertions.assertThat(exception.getMessage())
                     .doesNotContain("provider-secret-error");
         });
@@ -110,7 +110,9 @@ class SolapiWorkerLinkSmsSenderWireMockTest {
         assertThatThrownBy(() -> sender().send(new WorkerLinkSmsMessage(
                 "01012345678",
                 "[FOWOCO] 테스트"
-        ))).isInstanceOf(WorkerLinkSmsProviderException.class);
+        ))).isInstanceOfSatisfying(WorkerLinkSmsProviderException.class, exception ->
+                org.assertj.core.api.Assertions.assertThat(exception.failureType())
+                        .isEqualTo(WorkerLinkSmsProviderException.FailureType.REJECTED));
     }
 
     @Test
@@ -125,7 +127,9 @@ class SolapiWorkerLinkSmsSenderWireMockTest {
         assertThatThrownBy(() -> sender(Duration.ofMillis(100)).send(new WorkerLinkSmsMessage(
                 "01012345678",
                 "[FOWOCO] 테스트"
-        ))).isInstanceOf(WorkerLinkSmsProviderException.class);
+        ))).isInstanceOfSatisfying(WorkerLinkSmsProviderException.class, exception ->
+                org.assertj.core.api.Assertions.assertThat(exception.failureType())
+                        .isEqualTo(WorkerLinkSmsProviderException.FailureType.UNKNOWN));
     }
 
     @Test
