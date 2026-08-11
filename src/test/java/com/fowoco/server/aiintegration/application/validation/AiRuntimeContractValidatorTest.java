@@ -427,8 +427,8 @@ class AiRuntimeContractValidatorTest {
     }
 
     @Test
-    void rejectsCandidateConfidenceThatDiffersFromPlan() {
-        AiCandidate changedConfidence = new AiCandidate(
+    void acceptsIndependentCandidateConfidenceWithoutComparingItToPlan() {
+        AiCandidate candidateConfidence = new AiCandidate(
                 "candidate-confidence",
                 WORKER_REF,
                 WORKFLOW_ID,
@@ -437,14 +437,14 @@ class AiRuntimeContractValidatorTest {
                 new BigDecimal("0.99")
         );
 
-        assertFailure(
-                () -> validator.validateResponse(validRequest(), responseWithCandidate(changedConfidence)),
-                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
-        );
+        assertThatCode(() -> validator.validateResponse(
+                validRequest(),
+                responseWithCandidate(candidateConfidence)
+        )).doesNotThrowAnyException();
     }
 
     @Test
-    void acceptsCandidateThatPreservesBertPlanConfidence() {
+    void acceptsNullCandidateConfidenceWhenBertPlanHasConfidence() {
         BigDecimal confidence = new BigDecimal("0.8400");
         AiAnalysisRequest request = requestWithPlanDecision(
                 new AiIntentDecision(
@@ -462,11 +462,28 @@ class AiRuntimeContractValidatorTest {
                 WORKFLOW_ID,
                 Map.of(),
                 List.of(),
-                new BigDecimal("0.84")
+                null
         );
 
         assertThatCode(() -> validator.validateResponse(request, responseWithCandidate(candidate)))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsCandidateConfidenceOutsideTheValidRange() {
+        AiCandidate invalidConfidence = new AiCandidate(
+                "candidate-invalid-confidence",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of(),
+                List.of(),
+                new BigDecimal("1.01")
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(validRequest(), responseWithCandidate(invalidConfidence)),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
     }
 
     private AiAnalysisRequest requestWithDocumentStatuses() {

@@ -138,6 +138,9 @@ MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택
   `ai_attempt.analysis_input_json`에 보존한 뒤 ANALYZE에 다시 전달합니다. Runtime은 이 값이
   있으면 Intent 모델을 다시 호출하지 않습니다.
 - ANALYZE가 PLAN 결정을 재사용해 Provider를 호출하지 않았다면 `providerAttemptCount=0`을 허용합니다.
+- PLAN confidence는 Intent 분류 이력이며 ANALYZE HTTP에 다시 보내지 않습니다. Candidate
+  confidence는 별도의 선택값으로 취급하고 PLAN 값과 비교하지 않습니다. 모델을 다시 호출하지
+  않았다면 `null`을 반환하며, 값이 있는 경우에만 0 이상 1 이하인지 검증합니다.
 - `requestedFieldKeys`: Agent가 PLAN에서 요청했던 전체 key입니다. DB에 값이 없어도 목록에는 남습니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
 
@@ -266,9 +269,8 @@ Server는 AI 응답의 허용 field와 confidence뿐 아니라 다음도 다시 
 - 요청과 다른 contract 또는 Workflow Catalog version
 - 요청에 없던 `workerRef`나 `workflowId`
 - PLAN에서 선택한 `plannedWorkflowId`와 다른 ANALYZE Candidate
-- PLAN과 다른 Candidate confidence (`null` 포함)
 - Workflow가 허용하지 않은 slot
-- 0 미만 또는 1 초과 confidence·BERT 라우팅 점수
+- 0 미만 또는 1 초과인 Candidate confidence·PLAN confidence·BERT 라우팅 점수
 - `confidenceSource=UNAVAILABLE`인데 confidence가 들어 있는 응답
 - 중복 candidate reference와 잘못된 outcome 구조
 - PLAN에 Worker DB context가 포함되거나 ANALYZE에 Worker context가 없는 요청

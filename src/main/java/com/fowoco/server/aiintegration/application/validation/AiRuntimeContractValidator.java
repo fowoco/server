@@ -375,12 +375,6 @@ public class AiRuntimeContractValidator {
             );
         }
         validateScore(candidate.confidence(), true, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
-        if (!sameScore(candidate.confidence(), plannedDecision.confidence())) {
-            reject(
-                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
-                    "AI Runtime candidate confidence differs from the PLAN decision."
-            );
-        }
         candidate.extractedSlots().forEach((key, value) -> {
             validateAllowedSlot(key, allowedSlots);
             boundaryPolicy.validateText(value, 4_000, true);
@@ -479,13 +473,6 @@ public class AiRuntimeContractValidator {
         if (score.compareTo(BigDecimal.ZERO) < 0 || score.compareTo(BigDecimal.ONE) > 0) {
             reject(failureCode, "AI Runtime confidence is invalid.");
         }
-    }
-
-    private boolean sameScore(BigDecimal left, BigDecimal right) {
-        if (left == null || right == null) {
-            return left == right;
-        }
-        return left.compareTo(right) == 0;
     }
 
     private void validateEvidence(
