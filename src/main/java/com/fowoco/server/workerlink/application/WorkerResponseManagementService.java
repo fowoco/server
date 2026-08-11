@@ -12,8 +12,12 @@ import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.time.DatabaseTimestamp;
 import com.fowoco.server.common.web.RequestMetadata;
+import com.fowoco.server.file.application.port.StoredFileRepository;
+import com.fowoco.server.file.domain.StoredFile;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
+import com.fowoco.server.worker.application.port.WorkerDocumentFileLookup;
+import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
 import com.fowoco.server.workerlink.application.port.WorkerResponseRepository;
 import com.fowoco.server.workerlink.domain.ConversationStatus;
@@ -34,6 +38,8 @@ public class WorkerResponseManagementService {
     private final TaskRepository taskRepository;
     private final WorkerResponseRepository workerResponseRepository;
     private final WorkerLinkRepository workerLinkRepository;
+    private final StoredFileRepository storedFileRepository;
+    private final WorkerDocumentFileLookup workerDocumentFileLookup;
     private final AuditEventRepository auditRepository;
     private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
@@ -43,6 +49,8 @@ public class WorkerResponseManagementService {
             TaskRepository taskRepository,
             WorkerResponseRepository workerResponseRepository,
             WorkerLinkRepository workerLinkRepository,
+            StoredFileRepository storedFileRepository,
+            WorkerDocumentFileLookup workerDocumentFileLookup,
             AuditEventRepository auditRepository,
             TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
@@ -51,6 +59,8 @@ public class WorkerResponseManagementService {
         this.taskRepository = taskRepository;
         this.workerResponseRepository = workerResponseRepository;
         this.workerLinkRepository = workerLinkRepository;
+        this.storedFileRepository = storedFileRepository;
+        this.workerDocumentFileLookup = workerDocumentFileLookup;
         this.auditRepository = auditRepository;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
@@ -69,6 +79,9 @@ public class WorkerResponseManagementService {
                         item.response().responseType(),
                         item.response().message(),
                         item.uploadIds(),
+                        item.uploadIds().stream()
+                                .map(fileId -> toUploadResult(fileId, actor.companyId()))
+                                .toList(),
                         item.conversationStatus(),
                         item.conversationStatus() == ConversationStatus.NEEDS_FOLLOWUP,
                         item.response().receivedAt()
@@ -81,6 +94,27 @@ public class WorkerResponseManagementService {
                 result.totalElements(),
                 result.totalPages()
         );
+    }
+
+    private WorkerResponseUploadResult toUploadResult(UUID fileId, UUID companyId) {
+        StoredFile file = storedFileRepository.findByIdAndCompanyId(fileId, companyId)
+                .orElseThrow(() -> new IllegalStateException("worker response upload file is missing"));
+        return new WorkerResponseUploadResult(
+                file.storedFileId(),
+                file.name(),
+                file.mimeType(),
+                file.size(),
+                parseDocumentType(file.purpose()),
+                workerDocumentFileLookup.findByFileIdAndCompanyId(fileId, companyId).isPresent()
+        );
+    }
+
+    private DocumentType parseDocumentType(String value) {
+        try {
+            return DocumentType.valueOf(value);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     @Transactional
