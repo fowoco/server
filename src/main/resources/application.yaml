@@ -29,7 +29,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
   endpoint:
     health:
       show-details: never
@@ -45,6 +45,11 @@ management:
       enabled: true
     readinessstate:
       enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        fowoco.ai.pipeline.stage: true
+        fowoco.renewal.stage: true
 
 server:
   shutdown: graceful
@@ -187,7 +192,7 @@ spring:
       enabled: true
       path: /h2-console
 server:
-  address: 127.0.0.1
+  address: ${SERVER_ADDRESS:127.0.0.1}
 app:
   auth:
     jwt:
