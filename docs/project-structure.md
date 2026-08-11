@@ -12,9 +12,9 @@ server/
 ├── settings.gradle
 ├── .env.example
 ├── README.md
-├── CONTRIBUTING.md
 ├── docs/
 │   ├── development-guide.md
+│   ├── team-development-guide.md
 │   ├── project-structure.md
 │   ├── api-documentation.md
 │   ├── database-documentation.md
