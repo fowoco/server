@@ -1,5 +1,11 @@
 package com.fowoco.server.task.application.renewal;
 
+import static com.fowoco.server.task.application.renewal.RenewalExecutionTelemetry.Stage.CONTEXT_LOAD;
+import static com.fowoco.server.task.application.renewal.RenewalExecutionTelemetry.Stage.DOCUMENT_GENERATION;
+import static com.fowoco.server.task.application.renewal.RenewalExecutionTelemetry.Stage.RENEWAL_RUNTIME_CALL;
+import static com.fowoco.server.task.application.renewal.RenewalExecutionTelemetry.Stage.RESULT_APPLY;
+import static com.fowoco.server.task.application.renewal.RenewalExecutionTelemetry.Stage.TOTAL;
+
 import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
@@ -23,6 +29,7 @@ public final class RenewalExecutionService {
     private final RenewalRuntimeClient runtimeClient;
     private final RenewalExecutionResultApplier resultApplier;
     private final GeneratedDocumentService generatedDocumentService;
+    private final RenewalExecutionTelemetry telemetry;
     private final UuidGenerator uuidGenerator;
 
     RenewalExecutionService(
@@ -30,12 +37,14 @@ public final class RenewalExecutionService {
             RenewalRuntimeClient runtimeClient,
             RenewalExecutionResultApplier resultApplier,
             GeneratedDocumentService generatedDocumentService,
+            RenewalExecutionTelemetry telemetry,
             UuidGenerator uuidGenerator
     ) {
         this.contextReader = contextReader;
         this.runtimeClient = runtimeClient;
         this.resultApplier = resultApplier;
         this.generatedDocumentService = generatedDocumentService;
+        this.telemetry = telemetry;
         this.uuidGenerator = uuidGenerator;
     }
 
@@ -45,7 +54,23 @@ public final class RenewalExecutionService {
             ActorContext actor,
             RequestMetadata metadata
     ) {
-        RenewalExecutionContext context = contextReader.load(taskId, command.expectedVersion(), actor);
+        return telemetry.measure(metadata.requestId(), taskId, TOTAL, () ->
+                executeMeasured(taskId, command, actor, metadata)
+        );
+    }
+
+    private RenewalExecutionResult executeMeasured(
+            UUID taskId,
+            RenewalExecutionCommand command,
+            ActorContext actor,
+            RequestMetadata metadata
+    ) {
+        RenewalExecutionContext context = telemetry.measure(
+                metadata.requestId(),
+                taskId,
+                CONTEXT_LOAD,
+                () -> contextReader.load(taskId, command.expectedVersion(), actor)
+        );
         RenewalRunRequest request = new RenewalRunRequest(
                 uuidGenerator.generate(),
                 uuidGenerator.generate(),
@@ -61,18 +86,33 @@ public final class RenewalExecutionService {
                 context.task()
         );
         try {
-            RenewalRunResponse response = runtimeClient.run(request, AiRuntimeCallContext.withoutTrace());
+            RenewalRunResponse response = telemetry.measure(
+                    metadata.requestId(),
+                    taskId,
+                    RENEWAL_RUNTIME_CALL,
+                    () -> runtimeClient.run(request, AiRuntimeCallContext.withoutTrace())
+            );
             List<PreparedRenewalDocument> generatedDocuments =
                     "generate".equals(response.scenario())
-                            ? generatedDocumentService.prepare(response.generatedDocuments())
+                            ? telemetry.measure(
+                                    metadata.requestId(),
+                                    taskId,
+                                    DOCUMENT_GENERATION,
+                                    () -> generatedDocumentService.prepare(response.generatedDocuments())
+                            )
                             : List.of();
-            return resultApplier.apply(
+            return telemetry.measure(
+                    metadata.requestId(),
                     taskId,
-                    command.expectedVersion(),
-                    response,
-                    generatedDocuments,
-                    actor,
-                    metadata
+                    RESULT_APPLY,
+                    () -> resultApplier.apply(
+                            taskId,
+                            command.expectedVersion(),
+                            response,
+                            generatedDocuments,
+                            actor,
+                            metadata
+                    )
             );
         } catch (AiRuntimeContractException exception) {
             throw contractFailure(exception.failureCode());

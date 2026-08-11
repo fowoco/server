@@ -6,6 +6,9 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fowoco.server.aiintegration.application.document.DocumentGenerationClient;
 import com.fowoco.server.aiintegration.application.document.GeneratedDocumentFile;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
@@ -26,8 +29,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -51,6 +58,7 @@ class RenewalExecutionIntegrationTest {
     private static final String PASSWORD = "Test-password-1!";
     private static final String HR_A_EMAIL = "renewal.hr.a@example.com";
     private static final String HR_B_EMAIL = "renewal.hr.b@example.com";
+    private static final Pattern REQUEST_ID_LOG_VALUE = Pattern.compile("request_id=([^ ]+)");
 
     @LocalServerPort
     private int port;
@@ -72,9 +80,15 @@ class RenewalExecutionIntegrationTest {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final AtomicReference<RenewalRunRequest> capturedRequest = new AtomicReference<>();
+    private final Logger telemetryLogger = (Logger) LoggerFactory.getLogger(
+            "com.fowoco.server.task.application.renewal.RenewalExecutionTelemetry"
+    );
+    private final ListAppender<ILoggingEvent> telemetryAppender = new ListAppender<>();
 
     @BeforeEach
     void resetAndSeed() {
+        telemetryAppender.start();
+        telemetryLogger.addAppender(telemetryAppender);
         reset(runtimeClient);
         reset(documentGenerationClient, fileStorage);
         when(documentGenerationClient.generate(any())).thenReturn(new GeneratedDocumentFile(
@@ -110,6 +124,12 @@ class RenewalExecutionIntegrationTest {
                 """,
                 UUID.fromString("a8700000-0000-0000-0000-000000000001"), WORKER_A, COMPANY_A
         );
+    }
+
+    @AfterEach
+    void detachTelemetryAppender() {
+        telemetryLogger.detachAppender(telemetryAppender);
+        telemetryAppender.stop();
     }
 
     @Test
@@ -268,6 +288,39 @@ class RenewalExecutionIntegrationTest {
     }
 
     @Test
+    void recordsSafeServerStageDurationsForGeneratedDocumentFlow() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                generateResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> logs = telemetryAppender.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .toList();
+        assertThat(logs)
+                .hasSize(5)
+                .anyMatch(value -> value.contains("stage=CONTEXT_LOAD status=SUCCESS"))
+                .anyMatch(value -> value.contains("stage=RENEWAL_RUNTIME_CALL status=SUCCESS"))
+                .anyMatch(value -> value.contains("stage=DOCUMENT_GENERATION status=SUCCESS"))
+                .anyMatch(value -> value.contains("stage=RESULT_APPLY status=SUCCESS"))
+                .anyMatch(value -> value.contains("stage=TOTAL status=SUCCESS"));
+        assertThat(logs).allMatch(value ->
+                value.matches(".*duration_ms=\\d+(?: error_code=[A-Z_]+)?$")
+        );
+        assertThat(logs.stream().map(this::requestIdFromLog).distinct()).hasSize(1);
+        assertThat(String.join("\n", logs))
+                .doesNotContain(
+                        "응웬반안",
+                        "NGUYEN VAN AN",
+                        "M12345678",
+                        "passport_number"
+                );
+    }
+
+    @Test
     void keepsTheTaskInNeedsInfoWhenARequiredChecklistItemIsIncomplete() throws Exception {
         jdbcTemplate.update(
                 """
@@ -314,6 +367,12 @@ class RenewalExecutionIntegrationTest {
                 List.of(new RenewalRequestedField("wage", "USER_INPUT")), null, null,
                 List.of("REQUEST_CONTRACT_SLOTS", "NEEDS_INFO")
         );
+    }
+
+    private String requestIdFromLog(String value) {
+        Matcher matcher = REQUEST_ID_LOG_VALUE.matcher(value);
+        assertThat(matcher.find()).isTrue();
+        return matcher.group(1);
     }
 
     private RenewalRunResponse askWorkerResponse(RenewalRunRequest request) {
