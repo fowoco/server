@@ -6,6 +6,8 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
+import com.fowoco.server.aiintegration.application.model.AiIntentDecision;
 import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
@@ -23,9 +25,10 @@ public final class AiRuntimeContractFixture {
     public static final UUID REQUEST_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     public static final UUID ATTEMPT_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     public static final UUID WORKER_REF = UUID.fromString("30000000-0000-0000-0000-000000000001");
-    public static final String CONTRACT_VERSION = "1.0.0";
+    public static final String CONTRACT_VERSION = "1.1.0";
     public static final String KNOWLEDGE_VERSION = "0.2.0";
-    public static final String WORKFLOW_ID = "EXPIRY_RENEWAL";
+    public static final String INTENT = "EXPIRY_RENEWAL";
+    public static final String WORKFLOW_ID = "WF-STY-001";
 
     private AiRuntimeContractFixture() {
     }
@@ -92,7 +95,15 @@ public final class AiRuntimeContractFixture {
                         List.of(new WorkflowConstraint(
                                 WORKFLOW_ID,
                                 Set.of("stay_expiry_date", "contract_end_date", "monthly_wage")
-                        ))
+                        )),
+                        new AiIntentDecision(
+                                INTENT,
+                                WORKFLOW_ID,
+                                "체류연장 준비",
+                                null,
+                                AiConfidenceSource.UNAVAILABLE,
+                                new BigDecimal("0.3088")
+                        )
                 )
         );
     }
@@ -106,11 +117,15 @@ public final class AiRuntimeContractFixture {
                 REQUEST_ID,
                 AiAnalysisOutcome.CONTEXT_REQUIRED,
                 new AiContextRequirement(
-                        WORKFLOW_ID,
-                        new BigDecimal("0.94"),
+                        INTENT,
+                        null,
                         "응웬반안",
                         Map.of(),
-                        List.of("legal_name", "stay_expiry_date")
+                        List.of("legal_name", "stay_expiry_date"),
+                        WORKFLOW_ID,
+                        "체류연장 준비해줘",
+                        AiConfidenceSource.UNAVAILABLE,
+                        new BigDecimal("0.3088")
                 ),
                 List.of(),
                 List.of(),
@@ -118,6 +133,20 @@ public final class AiRuntimeContractFixture {
                 validVersions(),
                 1,
                 120
+        );
+    }
+
+    public static AiAnalysisResponse outOfScopeResponse() {
+        return new AiAnalysisResponse(
+                REQUEST_ID,
+                AiAnalysisOutcome.OUT_OF_SCOPE,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                validVersions(),
+                1,
+                80
         );
     }
 
@@ -156,7 +185,7 @@ public final class AiRuntimeContractFixture {
                 WORKFLOW_ID,
                 Map.of("stay_expiry_date", "2026-12-31"),
                 List.of("contract_end_date", "monthly_wage"),
-                new BigDecimal("0.92")
+                null
         );
     }
 

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.airun.application.AiSlotResolution;
 import com.fowoco.server.airun.application.AiSlotResolutionTransaction;
 import com.fowoco.server.airun.application.error.AiContextResolutionException;
@@ -125,7 +126,11 @@ class AiSlotResolutionIntegrationTest {
                 new BigDecimal("0.94"),
                 displayName,
                 Map.of(),
-                fieldKeys
+                fieldKeys,
+                "WF-STY-001",
+                "체류연장 준비",
+                AiConfidenceSource.MODEL,
+                null
         );
     }
 

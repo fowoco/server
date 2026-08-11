@@ -7,16 +7,28 @@ import java.util.Objects;
 /**
  * HR instruction plus Server-managed phase context.
  *
- * <p>PLAN keeps context collections empty. ANALYZE preserves the context needed for validation,
- * while the HTTP Adapter transmits only requested field keys and resolved Worker values.</p>
+ * <p>PLAN keeps context collections and the planned decision empty. ANALYZE preserves the PLAN
+ * decision for persistence and validation, while the HTTP Adapter transmits its Intent and
+ * Workflow IDs with requested field keys and resolved Worker values.</p>
  */
 public record AnalysisInput(
         String instruction,
         Map<String, String> extractedSlots,
         List<String> requestedFieldKeys,
         List<WorkerContext> workers,
-        List<WorkflowConstraint> workflowConstraints
+        List<WorkflowConstraint> workflowConstraints,
+        AiIntentDecision plannedIntentDecision
 ) {
+
+    public AnalysisInput(
+            String instruction,
+            Map<String, String> extractedSlots,
+            List<String> requestedFieldKeys,
+            List<WorkerContext> workers,
+            List<WorkflowConstraint> workflowConstraints
+    ) {
+        this(instruction, extractedSlots, requestedFieldKeys, workers, workflowConstraints, null);
+    }
 
     public AnalysisInput {
         Objects.requireNonNull(instruction, "instruction must not be null");

@@ -61,7 +61,11 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
   "outcome": "CONTEXT_REQUIRED",
   "contextRequirement": {
     "detectedIntent": "EXPIRY_RENEWAL",
-    "confidence": 0.94,
+    "workflowId": "WF-STY-001",
+    "evidence": "체류연장 준비해줘",
+    "confidence": null,
+    "confidenceSource": "UNAVAILABLE",
+    "bertRoutingScore": 0.3088,
     "targetDisplayName": "응웬반안",
     "extractedSlots": {},
     "requiredFieldKeys": [
@@ -80,12 +84,48 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
     "promptVersion": "prompt-3",
     "contextPackVersion": "context-0.2.0",
     "workflowCatalogVersion": "0.2.0",
-    "contractVersion": "1.0.0"
+    "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
   "latencyMs": 120
 }
 ```
+
+MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택합니다. 복합 Intent를
+여러 업무로 나누는 기능은 후속 범위입니다. A.X처럼 분류 확률을 제공하지 않는 모델은
+`confidence=null`, `confidenceSource=UNAVAILABLE`을 반환합니다. PLAN 전에 사용한 BERT
+라우팅 점수는 A.X confidence로 위장하지 않고 `bertRoutingScore`에만 기록합니다.
+`evidence`는 일반 Slot이 아니므로 `extractedSlots`에 `evidence:*` 같은 가짜 key로 넣지 않습니다.
+
+발화가 지원 업무가 아니면 Runtime은 DB field나 Workflow를 억지로 만들지 않고 PLAN에서
+`OUT_OF_SCOPE`로 정상 종료합니다.
+
+```json
+{
+  "requestId": "10000000-0000-0000-0000-000000000001",
+  "outcome": "OUT_OF_SCOPE",
+  "contextRequirement": null,
+  "questions": [],
+  "candidates": [],
+  "validationErrors": [],
+  "versions": {
+    "agentVersion": "agent-1.0.0",
+    "modelProvider": "huggingface",
+    "modelName": "klue-roberta-base",
+    "modelVersion": "BERT",
+    "promptVersion": "knowledge-25e778ad",
+    "contextPackVersion": "context-0.2.0",
+    "workflowCatalogVersion": "0.2.0",
+    "contractVersion": "1.1.0"
+  },
+  "providerAttemptCount": 1,
+  "latencyMs": 80
+}
+```
+
+Server는 이를 `SUCCEEDED + OUT_OF_SCOPE`로 저장하고 공개 SSE를 `COMPLETED`로 끝냅니다.
+Slot 조회와 ANALYZE 호출은 수행하지 않습니다. 따라서 지원하지 않는 발화가 빈
+`workflowId`나 임의의 Workflow로 실행되는 일도 없습니다.
 
 ## ANALYZE 요청 계약
 
@@ -99,6 +139,8 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
   "phase": "ANALYZE",
   "analysisInput": {
     "instruction": "응웬반안 체류연장 준비해줘",
+    "plannedIntent": "EXPIRY_RENEWAL",
+    "plannedWorkflowId": "WF-STY-001",
     "requestedFieldKeys": [
       "legal_name",
       "stay_expiry_date"
@@ -122,12 +164,29 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
   추측한 Intent를 덧붙이지 않습니다. 현재 데모에서는 가상 근로자 데이터만 사용합니다.
 - `detectedIntent`: Runtime 응답에서만 정해지는 최종 Intent입니다. Server가 발화문이나
   화면 태그를 기준으로 별도 판정하지 않습니다.
+- `plannedIntent`, `plannedWorkflowId`: PLAN에서 Runtime이 정한 대표 결과입니다. Server가
+  `ai_attempt.analysis_input_json`에 보존한 뒤 ANALYZE에 다시 전달합니다. Runtime은 이 값이
+  있으면 Intent 모델을 다시 호출하지 않습니다.
+- ANALYZE가 PLAN 결정을 재사용해 Provider를 호출하지 않았다면 `providerAttemptCount=0`을 허용합니다.
+- PLAN confidence는 Intent 분류 이력이며 ANALYZE HTTP에 다시 보내지 않습니다. Candidate
+  confidence는 별도의 선택값으로 취급하고 PLAN 값과 비교하지 않습니다. 모델을 다시 호출하지
+  않았다면 `null`을 반환하며, 값이 있는 경우에만 0 이상 1 이하인지 검증합니다.
 - `requestedFieldKeys`: Agent가 PLAN에서 요청했던 전체 key입니다. DB에 값이 없어도 목록에는 남습니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
 
 `attemptId`, `contractVersion`, `requiredKnowledgeVersion`, `deadlineMs`, `extractedSlots`,
 `workflowConstraints`는 Server가 재시도·응답 검증·제한시간을 관리하기 위해 내부
 `AiAnalysisRequest`에 유지하지만 HTTP JSON에는 넣지 않습니다.
+
+한 번의 PLAN 또는 ANALYZE 호출 제한시간은 `AI_RUNTIME_OVERALL_TIMEOUT`을 단일 기준으로
+사용합니다. 기본값은 실제 A.X CPU 추론 시간을 수용하는 `240s`이고 계약상 최대값은
+`5m`입니다. Client 요청은 먼저 `202 + aiRunId`를 반환하므로 이 제한시간 동안 HTTP 화면
+요청을 붙잡지 않으며, 진행 상태는 SSE와 조회 API로 제공합니다.
+
+`modelVersion`과 `promptVersion`은 기존 `ai_attempt` 버전 컬럼에 저장합니다. PLAN 결정은
+ANALYZE attempt의 `analysis_input_json`에 함께 저장하므로 PLAN 결정 재사용 자체는 새 DB
+컬럼을 요구하지 않습니다. `OUT_OF_SCOPE` 저장을 허용하기 위해서는
+`V41__add_ai_run_out_of_scope_outcome.sql`이 기존 outcome 체크 제약을 확장합니다.
 
 현재 데모에서는 PII 마스킹과 차단을 적용하지 않습니다. 실명·여권번호·전화번호 등
 Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원본으로 전달합니다.
@@ -157,7 +216,7 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
         "contract_end_date",
         "monthly_wage"
       ],
-      "confidence": 0.92
+      "confidence": null
     }
   ],
   "validationErrors": [],
@@ -169,16 +228,17 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
     "promptVersion": "prompt-3",
     "contextPackVersion": "context-0.2.0",
     "workflowCatalogVersion": "0.2.0",
-    "contractVersion": "1.0.0"
+    "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
   "latencyMs": 245
 }
 ```
 
-`CONTEXT_REQUIRED`, `NEEDS_INFO`, `REVIEW_REQUIRED`는 모두 정상 분석 결과이며 AiRun의
+`OUT_OF_SCOPE`, `CONTEXT_REQUIRED`, `NEEDS_INFO`, `REVIEW_REQUIRED`는 모두 정상 분석 결과이며 AiRun의
 기술적 `FAILED` 상태와 섞지 않습니다.
 
+- `OUT_OF_SCOPE`: 지원하지 않는 발화입니다. PLAN에서 종료하며 context·질문·candidate가 없습니다.
 - `CONTEXT_REQUIRED`: Server DB에서 조회할 canonical field key가 있습니다.
 - `NEEDS_INFO`: DB로 채울 수 없어 HR에게 보여 줄 `questions`가 있습니다.
 - `REVIEW_REQUIRED`: 검토 가능한 `candidates`가 있습니다.
@@ -245,9 +305,12 @@ Server는 AI 응답의 허용 field와 confidence뿐 아니라 다음도 다시 
 - 요청과 다른 `requestId`
 - 요청과 다른 contract 또는 Workflow Catalog version
 - 요청에 없던 `workerRef`나 `workflowId`
+- PLAN에서 선택한 `plannedWorkflowId`와 다른 ANALYZE Candidate
 - Workflow가 허용하지 않은 slot
-- 0 미만 또는 1 초과 confidence
+- 0 미만 또는 1 초과인 Candidate confidence·PLAN confidence·BERT 라우팅 점수
+- `confidenceSource=UNAVAILABLE`인데 confidence가 들어 있는 응답
 - 중복 candidate reference와 잘못된 outcome 구조
+- `OUT_OF_SCOPE`가 ANALYZE에서 반환되거나 context·질문·candidate·validation error를 포함한 응답
 - PLAN에 Worker DB context가 포함되거나 ANALYZE에 Worker context가 없는 요청
 - `CONTEXT_REQUIRED`인데 field key가 없거나, `NEEDS_INFO`인데 질문이 없는 응답
 - API Key·JWT·Bearer Token·비밀번호·Worker Link token 같은 서비스 인증정보
@@ -266,7 +329,8 @@ Server는 AI 응답의 허용 field와 confidence뿐 아니라 다음도 다시 
 WireMock 계약 테스트는 다음 동작을 검증합니다.
 
 1. `Authorization: Bearer <service-credential>`, `X-Request-Id`, `traceparent` 전달
-2. 문서와 같은 camelCase 요청 JSON 및 `PLAN → CONTEXT_REQUIRED → ANALYZE` 구조 사용
+2. 문서와 같은 camelCase 요청 JSON, `PLAN → CONTEXT_REQUIRED → ANALYZE` 구조 및
+   `PLAN → OUT_OF_SCOPE` 단일 호출 종료 사용
 3. 알 수 없는 JSON field와 제한보다 큰 응답 거부
 4. connect timeout과 요청·응답 전체 deadline
 5. circuit breaker와 동시 호출 수 bulkhead
@@ -301,6 +365,8 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 | `AI_RUNTIME_CONNECT_TIMEOUT` | `2s` | AI 서버에 TCP 연결을 맺을 수 있는 최대 시간 |
 | `AI_RUNTIME_OVERALL_TIMEOUT` | `15s` | 연결·요청·응답 수신 전체의 Server 상한 |
 | `AI_RUNTIME_MAX_RESPONSE_BYTES` | `1048576` | 응답을 메모리에 받기 전 적용하는 최대 크기 |
+| `AI_DOCUMENT_GENERATION_ENDPOINT` | `http://127.0.0.1:8000/api/v1/documents/generate` | Renewal 문서 생성 API |
+| `AI_DOCUMENT_GENERATION_MAX_RESPONSE_BYTES` | `20971520` | 생성 파일을 메모리에 받기 전 적용하는 최대 크기 |
 | `AI_RUNTIME_MAX_CONCURRENT_CALLS` | `8` | Server 한 인스턴스가 동시에 보내는 최대 호출 수 |
 | `AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | 연속 장애 후 호출을 잠시 막는 기준 |
 | `AI_RUNTIME_CIRCUIT_BREAKER_OPEN_DURATION` | `30s` | 차단 후 시험 호출까지 기다리는 시간 |
@@ -308,6 +374,62 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 Server 내부 요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧은 값을 HTTP
 timeout으로 사용합니다. `deadlineMs` 자체는 Runtime JSON에 전송하지 않습니다. 따라서
 상위 AiRun이 허용한 시간보다 오래 기다리지 않습니다.
+
+## Renewal Task와 Workflow 연결
+
+`POST /internal/v1/workflows/renewal/run`에는 이미 생성된 Task의 canonical Workflow를
+`task.workflowId`로 전달합니다. Server가 허용하는 조합은 활성 Knowledge Catalog와 같습니다.
+
+| Task type | Workflow ID |
+| --- | --- |
+| `RECONTRACT` | `WF-CON-001` |
+| `EMPLOYMENT_PERIOD_EXTENSION` | `WF-CON-001` |
+| `STAY_PERIOD_EXTENSION` | `WF-STY-001` |
+
+Server는 Task type과 Workflow가 위 표와 다르면 AI를 호출하지 않습니다. 정상 Renewal
+응답의 `workflowId`도 요청의 `task.workflowId`와 반드시 같아야 합니다. 같은
+`EXPIRY_RENEWAL` Intent 안에서 Runtime이 첫 Workflow를 고르거나 발화만 다시 분류해 다른
+Workflow로 바꾼 응답은 `UNEXPECTED_WORKFLOW`로 거부합니다.
+
+`scenario=out_of_scope`, `intent=OUT_OF_SCOPE`인 종료 응답만 `workflowId`가 비어 있을 수
+있습니다. 이는 Workflow 실행 결과가 아니라 지원 범위 밖 정상 종료 신호이기 때문입니다.
+
+## Renewal 생성 문서 연결
+
+Renewal 응답의 `generatedDocuments[]`는 다음 세 값을 문서 생성 기준으로 사용합니다.
+
+```json
+{
+  "template_id": "standard_labor_contract_v6",
+  "format": "hwp",
+  "values": {
+    "employee_name": "NGUYEN VAN AN"
+  }
+}
+```
+
+Server는 `scenario=generate`일 때만 각 항목을 Agent의
+`POST /api/v1/documents/generate`에 `multipart/form-data`의 `payload` JSON으로 전달합니다.
+응답 파일은 기존 `stored_file`에 저장하고 Task·Worker에 속한 `worker_document`와 연결합니다.
+검토 전 초안이므로 `worker_document.submission_status=SUBMITTED`로 기록하고 자동으로
+`VERIFIED` 처리하지 않습니다.
+
+`values`에는 개인정보가 포함될 수 있으므로 문서 생성 요청 중에만 메모리에서 사용합니다.
+Task JSON, 감사로그, 외부 API 응답에는 저장하지 않으며 다음 식별자만 반환합니다.
+
+```json
+{
+  "template_id": "standard_labor_contract_v6",
+  "format": "hwp",
+  "status": "GENERATED",
+  "stored_file_id": "...",
+  "worker_document_id": "..."
+}
+```
+
+현재 허용 템플릿은 Renewal 필수 초안 4종이며, 표준근로계약서는 `CONTRACT`, 나머지 연장·
+체류 신청 문서는 `PERMIT`로 문서함에 분류합니다. 새 템플릿을 추가할 때는 Agent 계약과
+Server 문서 종류 매핑을 함께 변경합니다.
 
 OCR까지 활성화하려면 별도 Secret과 결과 암호화 키를 함께 설정합니다.
 

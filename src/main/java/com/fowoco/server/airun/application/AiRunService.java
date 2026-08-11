@@ -10,6 +10,7 @@ import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
+import com.fowoco.server.aiintegration.application.port.AiRuntimeDeadlinePolicy;
 import com.fowoco.server.airun.application.error.AiContextResolutionException;
 import com.fowoco.server.airun.application.error.AiRunErrorCode;
 import com.fowoco.server.airun.application.port.AiAttemptStarter;
@@ -57,8 +58,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class AiRunService implements AiAttemptStarter {
 
-    private static final String CONTRACT_VERSION = "1.0.0";
-    private static final long ATTEMPT_DEADLINE_MS = 10_000;
+    private static final String CONTRACT_VERSION = "1.1.0";
     private static final int MAX_INSTRUCTION_LENGTH = 10_000;
     private static final Pattern SLOT_KEY = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final String AUDIT_EVENT_VERSION = "1";
@@ -67,6 +67,7 @@ public class AiRunService implements AiAttemptStarter {
     private final TenantDatabaseContext tenantDatabaseContext;
     private final AiRunRepository repository;
     private final AiRuntimeClient runtimeClient;
+    private final AiRuntimeDeadlinePolicy runtimeDeadlinePolicy;
     private final AiSlotResolutionTransaction slotResolutionTransaction;
     private final WorkflowCatalogService workflowCatalogService;
     private final UuidGenerator uuidGenerator;
@@ -81,6 +82,7 @@ public class AiRunService implements AiAttemptStarter {
             TenantDatabaseContext tenantDatabaseContext,
             AiRunRepository repository,
             AiRuntimeClient runtimeClient,
+            AiRuntimeDeadlinePolicy runtimeDeadlinePolicy,
             AiSlotResolutionTransaction slotResolutionTransaction,
             WorkflowCatalogService workflowCatalogService,
             UuidGenerator uuidGenerator,
@@ -94,6 +96,7 @@ public class AiRunService implements AiAttemptStarter {
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.repository = repository;
         this.runtimeClient = runtimeClient;
+        this.runtimeDeadlinePolicy = runtimeDeadlinePolicy;
         this.slotResolutionTransaction = slotResolutionTransaction;
         this.workflowCatalogService = workflowCatalogService;
         this.uuidGenerator = uuidGenerator;
@@ -327,7 +330,7 @@ public class AiRunService implements AiAttemptStarter {
                         creation.request(),
                         planResponse,
                         0,
-                        ATTEMPT_DEADLINE_MS,
+                        runtimeDeadlinePolicy.attemptDeadlineMs(),
                         AiRuntimeCallContext.withoutTrace()
                 );
                 saveSuccess(
@@ -413,7 +416,7 @@ public class AiRunService implements AiAttemptStarter {
                 phase,
                 CONTRACT_VERSION,
                 workflowCatalogService.getActiveCatalog().bundleVersion(),
-                ATTEMPT_DEADLINE_MS,
+                runtimeDeadlinePolicy.attemptDeadlineMs(),
                 input
         );
     }
@@ -443,7 +446,8 @@ public class AiRunService implements AiAttemptStarter {
                 previous.extractedSlots(),
                 new ArrayList<>(fieldKeys),
                 List.of(mergedWorker),
-                previous.workflowConstraints()
+                previous.workflowConstraints(),
+                previous.plannedIntentDecision()
         );
     }
 

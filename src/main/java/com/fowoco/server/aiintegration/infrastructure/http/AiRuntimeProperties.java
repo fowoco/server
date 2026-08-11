@@ -1,21 +1,27 @@
 package com.fowoco.server.aiintegration.infrastructure.http;
 
+import com.fowoco.server.aiintegration.application.port.AiRuntimeDeadlinePolicy;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.ai-runtime")
-public final class AiRuntimeProperties {
+public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
 
     private static final int MIN_RESPONSE_BYTES = 1_024;
     private static final int MAX_RESPONSE_BYTES = 10 * 1_024 * 1_024;
+    private static final Duration MAX_OVERALL_TIMEOUT = Duration.ofMinutes(5);
+    private static final int MAX_DOCUMENT_RESPONSE_BYTES = 20 * 1_024 * 1_024;
 
     private boolean enabled;
     private URI endpoint = URI.create("http://127.0.0.1:8000/internal/v1/analyses");
+    private URI renewalEndpoint = URI.create("http://127.0.0.1:8000/internal/v1/workflows/renewal/run");
+    private URI documentGenerationEndpoint = URI.create("http://127.0.0.1:8000/api/v1/documents/generate");
     private String serviceCredential;
     private Duration connectTimeout = Duration.ofSeconds(2);
-    private Duration overallTimeout = Duration.ofSeconds(15);
+    private Duration overallTimeout = Duration.ofMinutes(4);
     private int maxResponseBytes = 1_048_576;
+    private int maxDocumentResponseBytes = MAX_DOCUMENT_RESPONSE_BYTES;
     private int maxConcurrentCalls = 8;
     private int circuitBreakerFailureThreshold = 5;
     private Duration circuitBreakerOpenDuration = Duration.ofSeconds(30);
@@ -36,6 +42,22 @@ public final class AiRuntimeProperties {
         this.endpoint = requireHttpEndpoint(endpoint);
     }
 
+    public URI getRenewalEndpoint() {
+        return renewalEndpoint;
+    }
+
+    public void setRenewalEndpoint(URI renewalEndpoint) {
+        this.renewalEndpoint = requireHttpEndpoint(renewalEndpoint);
+    }
+
+    public URI getDocumentGenerationEndpoint() {
+        return documentGenerationEndpoint;
+    }
+
+    public void setDocumentGenerationEndpoint(URI documentGenerationEndpoint) {
+        this.documentGenerationEndpoint = requireHttpEndpoint(documentGenerationEndpoint);
+    }
+
     public void setServiceCredential(String serviceCredential) {
         this.serviceCredential = serviceCredential;
     }
@@ -53,7 +75,16 @@ public final class AiRuntimeProperties {
     }
 
     public void setOverallTimeout(Duration overallTimeout) {
-        this.overallTimeout = requirePositive(overallTimeout, "overallTimeout");
+        Duration validated = requirePositive(overallTimeout, "overallTimeout");
+        if (validated.compareTo(MAX_OVERALL_TIMEOUT) > 0) {
+            throw new IllegalArgumentException("overallTimeout must not exceed 5m");
+        }
+        this.overallTimeout = validated;
+    }
+
+    @Override
+    public long attemptDeadlineMs() {
+        return overallTimeout.toMillis();
     }
 
     public int getMaxResponseBytes() {
@@ -65,6 +96,18 @@ public final class AiRuntimeProperties {
             throw new IllegalArgumentException("maxResponseBytes must be between 1 KiB and 10 MiB");
         }
         this.maxResponseBytes = maxResponseBytes;
+    }
+
+    public int getMaxDocumentResponseBytes() {
+        return maxDocumentResponseBytes;
+    }
+
+    public void setMaxDocumentResponseBytes(int maxDocumentResponseBytes) {
+        if (maxDocumentResponseBytes < MIN_RESPONSE_BYTES
+                || maxDocumentResponseBytes > MAX_DOCUMENT_RESPONSE_BYTES) {
+            throw new IllegalArgumentException("maxDocumentResponseBytes must be between 1 KiB and 20 MiB");
+        }
+        this.maxDocumentResponseBytes = maxDocumentResponseBytes;
     }
 
     public int getMaxConcurrentCalls() {
@@ -114,6 +157,8 @@ public final class AiRuntimeProperties {
 
     void validateEnabledConfiguration() {
         requireHttpEndpoint(endpoint);
+        requireHttpEndpoint(renewalEndpoint);
+        requireHttpEndpoint(documentGenerationEndpoint);
         authorizationHeader();
         requirePositive(connectTimeout, "connectTimeout");
         requirePositive(overallTimeout, "overallTimeout");

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jayway.jsonpath.JsonPath;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.airun.application.AiSlotResolutionTransaction;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -498,7 +499,11 @@ class DemoAuthSeedIntegrationTest {
                         List.of(
                                 "passport_status",
                                 "arc_status"
-                        )
+                        ),
+                        "WF-STY-001",
+                        "체류연장 준비",
+                        AiConfidenceSource.MODEL,
+                        null
                 )
         );
 
