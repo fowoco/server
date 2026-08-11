@@ -8,6 +8,7 @@ import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.W
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.WORKFLOW_ID;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.contextRequiredResponse;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.needsInfoResponse;
+import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.outOfScopeResponse;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.responseWithCandidate;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validCandidate;
 import static com.fowoco.server.aiintegration.support.AiRuntimeContractFixture.validRequest;
@@ -115,6 +116,41 @@ class AiRuntimeContractValidatorTest {
     void acceptsInstructionOnlyPlanAndStructuredContextRequirement() {
         assertThatCode(() -> validator.validateResponse(validPlanRequest(), contextRequiredResponse()))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void acceptsPayloadFreeOutOfScopeAsAPlanTerminalOutcome() {
+        assertThatCode(() -> validator.validateResponse(validPlanRequest(), outOfScopeResponse()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsOutOfScopeDuringAnalyze() {
+        assertFailure(
+                () -> validator.validateResponse(validRequest(), outOfScopeResponse()),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
+    }
+
+    @Test
+    void rejectsOutOfScopeWithAnalysisPayload() {
+        AiAnalysisResponse base = outOfScopeResponse();
+        AiAnalysisResponse withContext = new AiAnalysisResponse(
+                base.requestId(),
+                base.outcome(),
+                contextRequiredResponse().contextRequirement(),
+                base.questions(),
+                base.candidates(),
+                base.validationErrors(),
+                base.versions(),
+                base.providerAttemptCount(),
+                base.latencyMs()
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(validPlanRequest(), withContext),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
     }
 
     @Test

@@ -58,7 +58,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class AiRunService implements AiAttemptStarter {
 
-    private static final String CONTRACT_VERSION = "1.0.0";
+    private static final String CONTRACT_VERSION = "1.1.0";
     private static final int MAX_INSTRUCTION_LENGTH = 10_000;
     private static final Pattern SLOT_KEY = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final String AUDIT_EVENT_VERSION = "1";

@@ -208,6 +208,56 @@ class AiRunApiIntegrationTest {
     }
 
     @Test
+    void finishesOutOfScopeAfterPlanWithoutResolvingSlotsOrCallingAnalyze() throws Exception {
+        reset(runtimeClient);
+        runtimeCalls.set(0);
+        when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> {
+            AiAnalysisRequest request = invocation.getArgument(0);
+            runtimeCalls.incrementAndGet();
+            return new AiAnalysisResponse(
+                    request.requestId(),
+                    AiAnalysisOutcome.OUT_OF_SCOPE,
+                    null,
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    versions(),
+                    1,
+                    15
+            );
+        });
+
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> created = post(
+                "/api/v1/ai-runs",
+                """
+                {"instruction":"오늘 날씨 어때?"}
+                """,
+                token,
+                "airun-out-of-scope"
+        );
+
+        assertThat(created.statusCode()).isEqualTo(202);
+        UUID aiRunId = UUID.fromString(JsonPath.read(created.body(), "$.ai_run_id"));
+        HttpResponse<String> detail = awaitRun(aiRunId, token, "OUT_OF_SCOPE", 1);
+
+        assertThat(JsonPath.<String>read(detail.body(), "$.status")).isEqualTo("SUCCEEDED");
+        assertThat((Object) JsonPath.read(detail.body(), "$.detected_intent")).isNull();
+        assertThat(runtimeCalls).hasValue(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM ai_attempt WHERE ai_run_id = ? AND phase = 'ANALYZE'",
+                Integer.class,
+                aiRunId
+        )).isZero();
+
+        HttpResponse<String> events = getEvents(aiRunId, token, null);
+        assertThat(events.statusCode()).isEqualTo(200);
+        assertThat(events.body())
+                .contains("event:COMPLETED", "\"analysis_outcome\":\"OUT_OF_SCOPE\"")
+                .doesNotContain("event:SLOT_CHECKING");
+    }
+
+    @Test
     void replaysSafeOrderedSseEventsAndEnforcesTenantScope() throws Exception {
         CountDownLatch planStarted = new CountDownLatch(1);
         CountDownLatch releasePlan = new CountDownLatch(1);
@@ -734,7 +784,7 @@ class AiRunApiIntegrationTest {
                 "prompt-demo-1",
                 "context-demo-1",
                 "0.2.0",
-                "1.0.0"
+                "1.1.0"
         );
     }
 

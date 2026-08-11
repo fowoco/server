@@ -84,7 +84,7 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
     "promptVersion": "prompt-3",
     "contextPackVersion": "context-0.2.0",
     "workflowCatalogVersion": "0.2.0",
-    "contractVersion": "1.0.0"
+    "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
   "latencyMs": 120
@@ -96,6 +96,36 @@ MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택
 `confidence=null`, `confidenceSource=UNAVAILABLE`을 반환합니다. PLAN 전에 사용한 BERT
 라우팅 점수는 A.X confidence로 위장하지 않고 `bertRoutingScore`에만 기록합니다.
 `evidence`는 일반 Slot이 아니므로 `extractedSlots`에 `evidence:*` 같은 가짜 key로 넣지 않습니다.
+
+발화가 지원 업무가 아니면 Runtime은 DB field나 Workflow를 억지로 만들지 않고 PLAN에서
+`OUT_OF_SCOPE`로 정상 종료합니다.
+
+```json
+{
+  "requestId": "10000000-0000-0000-0000-000000000001",
+  "outcome": "OUT_OF_SCOPE",
+  "contextRequirement": null,
+  "questions": [],
+  "candidates": [],
+  "validationErrors": [],
+  "versions": {
+    "agentVersion": "agent-1.0.0",
+    "modelProvider": "huggingface",
+    "modelName": "klue-roberta-base",
+    "modelVersion": "BERT",
+    "promptVersion": "knowledge-25e778ad",
+    "contextPackVersion": "context-0.2.0",
+    "workflowCatalogVersion": "0.2.0",
+    "contractVersion": "1.1.0"
+  },
+  "providerAttemptCount": 1,
+  "latencyMs": 80
+}
+```
+
+Server는 이를 `SUCCEEDED + OUT_OF_SCOPE`로 저장하고 공개 SSE를 `COMPLETED`로 끝냅니다.
+Slot 조회와 ANALYZE 호출은 수행하지 않습니다. 따라서 지원하지 않는 발화가 빈
+`workflowId`나 임의의 Workflow로 실행되는 일도 없습니다.
 
 ## ANALYZE 요청 계약
 
@@ -154,8 +184,9 @@ MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택
 요청을 붙잡지 않으며, 진행 상태는 SSE와 조회 API로 제공합니다.
 
 `modelVersion`과 `promptVersion`은 기존 `ai_attempt` 버전 컬럼에 저장합니다. PLAN 결정은
-ANALYZE attempt의 `analysis_input_json`에 함께 저장하므로 이번 계약 변경은 새 Flyway
-Migration을 만들지 않습니다.
+ANALYZE attempt의 `analysis_input_json`에 함께 저장하므로 PLAN 결정 재사용 자체는 새 DB
+컬럼을 요구하지 않습니다. `OUT_OF_SCOPE` 저장을 허용하기 위해서는
+`V41__add_ai_run_out_of_scope_outcome.sql`이 기존 outcome 체크 제약을 확장합니다.
 
 현재 데모에서는 PII 마스킹과 차단을 적용하지 않습니다. 실명·여권번호·전화번호 등
 Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원본으로 전달합니다.
@@ -197,16 +228,17 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
     "promptVersion": "prompt-3",
     "contextPackVersion": "context-0.2.0",
     "workflowCatalogVersion": "0.2.0",
-    "contractVersion": "1.0.0"
+    "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
   "latencyMs": 245
 }
 ```
 
-`CONTEXT_REQUIRED`, `NEEDS_INFO`, `REVIEW_REQUIRED`는 모두 정상 분석 결과이며 AiRun의
+`OUT_OF_SCOPE`, `CONTEXT_REQUIRED`, `NEEDS_INFO`, `REVIEW_REQUIRED`는 모두 정상 분석 결과이며 AiRun의
 기술적 `FAILED` 상태와 섞지 않습니다.
 
+- `OUT_OF_SCOPE`: 지원하지 않는 발화입니다. PLAN에서 종료하며 context·질문·candidate가 없습니다.
 - `CONTEXT_REQUIRED`: Server DB에서 조회할 canonical field key가 있습니다.
 - `NEEDS_INFO`: DB로 채울 수 없어 HR에게 보여 줄 `questions`가 있습니다.
 - `REVIEW_REQUIRED`: 검토 가능한 `candidates`가 있습니다.
@@ -278,6 +310,7 @@ Server는 AI 응답의 허용 field와 confidence뿐 아니라 다음도 다시 
 - 0 미만 또는 1 초과인 Candidate confidence·PLAN confidence·BERT 라우팅 점수
 - `confidenceSource=UNAVAILABLE`인데 confidence가 들어 있는 응답
 - 중복 candidate reference와 잘못된 outcome 구조
+- `OUT_OF_SCOPE`가 ANALYZE에서 반환되거나 context·질문·candidate·validation error를 포함한 응답
 - PLAN에 Worker DB context가 포함되거나 ANALYZE에 Worker context가 없는 요청
 - `CONTEXT_REQUIRED`인데 field key가 없거나, `NEEDS_INFO`인데 질문이 없는 응답
 - API Key·JWT·Bearer Token·비밀번호·Worker Link token 같은 서비스 인증정보
@@ -296,7 +329,8 @@ Server는 AI 응답의 허용 field와 confidence뿐 아니라 다음도 다시 
 WireMock 계약 테스트는 다음 동작을 검증합니다.
 
 1. `Authorization: Bearer <service-credential>`, `X-Request-Id`, `traceparent` 전달
-2. 문서와 같은 camelCase 요청 JSON 및 `PLAN → CONTEXT_REQUIRED → ANALYZE` 구조 사용
+2. 문서와 같은 camelCase 요청 JSON, `PLAN → CONTEXT_REQUIRED → ANALYZE` 구조 및
+   `PLAN → OUT_OF_SCOPE` 단일 호출 종료 사용
 3. 알 수 없는 JSON field와 제한보다 큰 응답 거부
 4. connect timeout과 요청·응답 전체 deadline
 5. circuit breaker와 동시 호출 수 bulkhead

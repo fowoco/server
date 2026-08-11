@@ -110,9 +110,26 @@ public class AiRuntimeContractValidator {
             validateIdentifier(error.field(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         });
         switch (response.outcome()) {
+            case OUT_OF_SCOPE -> validateOutOfScopeResponse(request, response);
             case CONTEXT_REQUIRED -> validateContextRequiredResponse(request, response);
             case NEEDS_INFO -> validateNeedsInfoResponse(request, response);
             case REVIEW_REQUIRED -> validateReviewRequiredResponse(response);
+        }
+    }
+
+    private void validateOutOfScopeResponse(
+            AiAnalysisRequest request,
+            AiAnalysisResponse response
+    ) {
+        if (request.phase() != AiAnalysisPhase.PLAN
+                || response.contextRequirement() != null
+                || !response.questions().isEmpty()
+                || !response.candidates().isEmpty()
+                || !response.validationErrors().isEmpty()) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "OUT_OF_SCOPE is a PLAN-only terminal response without analysis payloads."
+            );
         }
     }
 

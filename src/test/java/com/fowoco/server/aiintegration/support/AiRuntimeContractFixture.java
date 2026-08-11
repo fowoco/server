@@ -25,7 +25,7 @@ public final class AiRuntimeContractFixture {
     public static final UUID REQUEST_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     public static final UUID ATTEMPT_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     public static final UUID WORKER_REF = UUID.fromString("30000000-0000-0000-0000-000000000001");
-    public static final String CONTRACT_VERSION = "1.0.0";
+    public static final String CONTRACT_VERSION = "1.1.0";
     public static final String KNOWLEDGE_VERSION = "0.2.0";
     public static final String INTENT = "EXPIRY_RENEWAL";
     public static final String WORKFLOW_ID = "WF-STY-001";
@@ -133,6 +133,20 @@ public final class AiRuntimeContractFixture {
                 validVersions(),
                 1,
                 120
+        );
+    }
+
+    public static AiAnalysisResponse outOfScopeResponse() {
+        return new AiAnalysisResponse(
+                REQUEST_ID,
+                AiAnalysisOutcome.OUT_OF_SCOPE,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                validVersions(),
+                1,
+                80
         );
     }
 
