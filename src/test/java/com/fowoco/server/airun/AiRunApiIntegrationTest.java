@@ -161,6 +161,7 @@ class AiRunApiIntegrationTest {
                 .isEqualTo("REVIEW_REQUIRED");
         assertThat(JsonPath.<List<String>>read(answered.body(), "$.candidates[*].workflow_id"))
                 .containsExactly("WF-STY-001");
+        assertThat((Object) JsonPath.read(answered.body(), "$.candidates[0].confidence")).isNull();
         assertThat(JsonPath.<Number>read(answered.body(), "$.attempt_count").intValue())
                 .isEqualTo(3);
         assertThat(jdbcTemplate.queryForObject(
@@ -609,7 +610,7 @@ class AiRunApiIntegrationTest {
                     AiAnalysisOutcome.CONTEXT_REQUIRED,
                     new AiContextRequirement(
                             "EXPIRY_RENEWAL",
-                            new BigDecimal("0.96"),
+                            null,
                             "응웬반A",
                             Map.of(),
                             List.of(
@@ -621,8 +622,8 @@ class AiRunApiIntegrationTest {
                             ),
                             "WF-STY-001",
                             "체류연장 준비",
-                            AiConfidenceSource.MODEL,
-                            null
+                            AiConfidenceSource.UNAVAILABLE,
+                            new BigDecimal("0.3088")
                     ),
                     List.of(),
                     List.of(),
@@ -656,7 +657,7 @@ class AiRunApiIntegrationTest {
                         "WF-STY-001",
                         Map.of("due_at", "2026-08-31"),
                         List.of(),
-                        new BigDecimal("0.93")
+                        null
                 )),
                 List.of(),
                 versions(),
@@ -672,7 +673,7 @@ class AiRunApiIntegrationTest {
                     AiAnalysisOutcome.CONTEXT_REQUIRED,
                     new AiContextRequirement(
                             "EXPIRY_RENEWAL",
-                            new BigDecimal("0.96"),
+                            null,
                             "응웬반A",
                             Map.of(),
                             List.of(
@@ -683,8 +684,8 @@ class AiRunApiIntegrationTest {
                             ),
                             "WF-STY-001",
                             "체류연장 준비",
-                            AiConfidenceSource.MODEL,
-                            null
+                            AiConfidenceSource.UNAVAILABLE,
+                            new BigDecimal("0.3088")
                     ),
                     List.of(),
                     List.of(),
@@ -708,7 +709,7 @@ class AiRunApiIntegrationTest {
                         "WF-STY-001",
                         extractedSlots,
                         List.of(),
-                        new BigDecimal("0.93")
+                        null
                 )),
                 List.of(),
                 versions(),

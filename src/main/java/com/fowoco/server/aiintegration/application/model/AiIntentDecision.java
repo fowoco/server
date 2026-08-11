@@ -18,7 +18,6 @@ public record AiIntentDecision(
     public AiIntentDecision {
         Objects.requireNonNull(detectedIntent, "detectedIntent must not be null");
         Objects.requireNonNull(workflowId, "workflowId must not be null");
-        Objects.requireNonNull(evidence, "evidence must not be null");
         Objects.requireNonNull(confidenceSource, "confidenceSource must not be null");
     }
 

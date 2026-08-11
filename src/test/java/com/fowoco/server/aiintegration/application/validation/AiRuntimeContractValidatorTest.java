@@ -27,6 +27,7 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
 import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiIntentDecision;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
@@ -54,9 +55,90 @@ class AiRuntimeContractValidatorTest {
     }
 
     @Test
+    void acceptsAnalyzeWithoutProviderAttemptWhenPlanDecisionIsReused() {
+        AiAnalysisResponse valid = validResponse();
+        AiAnalysisResponse withoutProviderCall = new AiAnalysisResponse(
+                valid.requestId(),
+                valid.outcome(),
+                valid.contextRequirement(),
+                valid.questions(),
+                valid.candidates(),
+                valid.validationErrors(),
+                valid.versions(),
+                0,
+                valid.latencyMs()
+        );
+
+        assertThatCode(() -> validator.validateResponse(validRequest(), withoutProviderCall))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     void acceptsInstructionOnlyPlanAndStructuredContextRequirement() {
         assertThatCode(() -> validator.validateResponse(validPlanRequest(), contextRequiredResponse()))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void acceptsMissingEvidenceWhenTheFinalModelDoesNotProvideIt() {
+        AiContextRequirement valid = contextRequiredResponse().contextRequirement();
+        AiContextRequirement withoutEvidence = new AiContextRequirement(
+                valid.detectedIntent(),
+                valid.confidence(),
+                valid.targetDisplayName(),
+                valid.extractedSlots(),
+                valid.requiredFieldKeys(),
+                valid.workflowId(),
+                null,
+                valid.confidenceSource(),
+                valid.bertRoutingScore()
+        );
+        AiAnalysisResponse response = new AiAnalysisResponse(
+                REQUEST_ID,
+                AiAnalysisOutcome.CONTEXT_REQUIRED,
+                withoutEvidence,
+                List.of(),
+                List.of(),
+                List.of(),
+                validVersions(),
+                1,
+                100
+        );
+
+        assertThatCode(() -> validator.validateResponse(validPlanRequest(), response))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsEvidenceOutsideTheOriginalInstruction() {
+        AiContextRequirement valid = contextRequiredResponse().contextRequirement();
+        AiContextRequirement inventedEvidence = new AiContextRequirement(
+                valid.detectedIntent(),
+                valid.confidence(),
+                valid.targetDisplayName(),
+                valid.extractedSlots(),
+                valid.requiredFieldKeys(),
+                valid.workflowId(),
+                "원문에 없는 판단 근거",
+                valid.confidenceSource(),
+                valid.bertRoutingScore()
+        );
+        AiAnalysisResponse response = new AiAnalysisResponse(
+                REQUEST_ID,
+                AiAnalysisOutcome.CONTEXT_REQUIRED,
+                inventedEvidence,
+                List.of(),
+                List.of(),
+                List.of(),
+                validVersions(),
+                1,
+                100
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(validPlanRequest(), response),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
     }
 
     @Test
@@ -197,7 +279,7 @@ class AiRuntimeContractValidatorTest {
                 WORKFLOW_ID,
                 Map.of(),
                 List.of("stay_expiry_date"),
-                BigDecimal.ONE
+                null
         );
         assertFailure(
                 () -> validator.validateResponse(validRequest(), responseWithCandidate(unknownWorker)),
@@ -210,7 +292,7 @@ class AiRuntimeContractValidatorTest {
                 "UNKNOWN_WORKFLOW",
                 Map.of(),
                 List.of(),
-                BigDecimal.ONE
+                null
         );
         assertFailure(
                 () -> validator.validateResponse(validRequest(), responseWithCandidate(unknownWorkflow)),
@@ -223,7 +305,7 @@ class AiRuntimeContractValidatorTest {
                 WORKFLOW_ID,
                 Map.of("passport_number", "M12345678"),
                 List.of(),
-                BigDecimal.ONE
+                null
         );
         assertFailure(
                 () -> validator.validateResponse(validRequest(), responseWithCandidate(unknownSlot)),
@@ -260,7 +342,7 @@ class AiRuntimeContractValidatorTest {
                 "WF-CON-001",
                 Map.of(),
                 List.of("contract_end_date"),
-                BigDecimal.ONE
+                null
         );
 
         assertFailure(
@@ -277,7 +359,7 @@ class AiRuntimeContractValidatorTest {
                 WORKFLOW_ID,
                 Map.of("contract_end_date", "담당자 전화 010-1234-5678"),
                 List.of(),
-                BigDecimal.ONE
+                null
         );
 
         assertThatCode(() -> validator.validateResponse(
@@ -294,7 +376,7 @@ class AiRuntimeContractValidatorTest {
                 WORKFLOW_ID,
                 Map.of("stay_expiry_date", "2099-01-01"),
                 List.of("contract_end_date", "monthly_wage"),
-                BigDecimal.ONE
+                null
         );
 
         assertFailure(
@@ -315,7 +397,7 @@ class AiRuntimeContractValidatorTest {
                         "arc_status", "VERIFIED"
                 ),
                 List.of(),
-                BigDecimal.ONE
+                null
         );
 
         assertFailure(
@@ -335,13 +417,56 @@ class AiRuntimeContractValidatorTest {
                         "arc_status", "MISSING"
                 ),
                 List.of(),
-                BigDecimal.ONE
+                null
         );
 
         assertThatCode(() -> validator.validateResponse(
                 requestWithDocumentStatuses(),
                 responseWithCandidate(preservedStatuses)
         )).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsCandidateConfidenceThatDiffersFromPlan() {
+        AiCandidate changedConfidence = new AiCandidate(
+                "candidate-confidence",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of(),
+                List.of(),
+                new BigDecimal("0.99")
+        );
+
+        assertFailure(
+                () -> validator.validateResponse(validRequest(), responseWithCandidate(changedConfidence)),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
+    }
+
+    @Test
+    void acceptsCandidateThatPreservesBertPlanConfidence() {
+        BigDecimal confidence = new BigDecimal("0.8400");
+        AiAnalysisRequest request = requestWithPlanDecision(
+                new AiIntentDecision(
+                        "EXPIRY_RENEWAL",
+                        WORKFLOW_ID,
+                        null,
+                        confidence,
+                        AiConfidenceSource.BERT,
+                        confidence
+                )
+        );
+        AiCandidate candidate = new AiCandidate(
+                "candidate-bert",
+                WORKER_REF,
+                WORKFLOW_ID,
+                Map.of(),
+                List.of(),
+                new BigDecimal("0.84")
+        );
+
+        assertThatCode(() -> validator.validateResponse(request, responseWithCandidate(candidate)))
+                .doesNotThrowAnyException();
     }
 
     private AiAnalysisRequest requestWithDocumentStatuses() {
@@ -408,6 +533,27 @@ class AiRuntimeContractValidatorTest {
                 CONTRACT_VERSION,
                 KNOWLEDGE_VERSION,
                 10_000,
+                input
+        );
+    }
+
+    private AiAnalysisRequest requestWithPlanDecision(AiIntentDecision decision) {
+        AiAnalysisRequest base = validRequest();
+        AnalysisInput input = new AnalysisInput(
+                base.analysisInput().instruction(),
+                base.analysisInput().extractedSlots(),
+                base.analysisInput().requestedFieldKeys(),
+                base.analysisInput().workers(),
+                base.analysisInput().workflowConstraints(),
+                decision
+        );
+        return new AiAnalysisRequest(
+                base.requestId(),
+                base.attemptId(),
+                base.phase(),
+                base.contractVersion(),
+                base.requiredKnowledgeVersion(),
+                base.deadlineMs(),
                 input
         );
     }

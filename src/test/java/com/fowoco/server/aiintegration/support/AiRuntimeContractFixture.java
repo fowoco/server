@@ -171,7 +171,7 @@ public final class AiRuntimeContractFixture {
                 WORKFLOW_ID,
                 Map.of("stay_expiry_date", "2026-12-31"),
                 List.of("contract_end_date", "monthly_wage"),
-                new BigDecimal("0.92")
+                null
         );
     }
 

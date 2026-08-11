@@ -2,6 +2,7 @@ package com.fowoco.server.aiintegration.application.validation;
 
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
+import com.fowoco.server.aiintegration.application.model.AiAnalysisPhase;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiCandidate;
@@ -70,7 +71,12 @@ public class AiRuntimeContractValidator {
             reject(AiRuntimeFailureCode.REQUEST_ID_MISMATCH, "AI Runtime response requestId does not match.");
         }
         validateResponseVersions(request, response.versions());
-        if (response.providerAttemptCount() < 1 || response.providerAttemptCount() > 10) {
+        int minimumProviderAttempts = request.phase() == AiAnalysisPhase.ANALYZE
+                && request.analysisInput().plannedIntentDecision() != null
+                ? 0
+                : 1;
+        if (response.providerAttemptCount() < minimumProviderAttempts
+                || response.providerAttemptCount() > 10) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Provider attempt count is invalid.");
         }
         if (response.latencyMs() < 0 || response.latencyMs() > 86_400_000) {
@@ -104,7 +110,7 @@ public class AiRuntimeContractValidator {
             validateIdentifier(error.field(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         });
         switch (response.outcome()) {
-            case CONTEXT_REQUIRED -> validateContextRequiredResponse(response);
+            case CONTEXT_REQUIRED -> validateContextRequiredResponse(request, response);
             case NEEDS_INFO -> validateNeedsInfoResponse(request, response);
             case REVIEW_REQUIRED -> validateReviewRequiredResponse(response);
         }
@@ -132,6 +138,11 @@ public class AiRuntimeContractValidator {
         }
         validateIntentDecision(
                 request.analysisInput().plannedIntentDecision(),
+                AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
+        );
+        validateEvidence(
+                request.analysisInput().plannedIntentDecision().evidence(),
+                request.analysisInput().instruction(),
                 AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
         );
         if (request.analysisInput().requestedFieldKeys().isEmpty()) {
@@ -215,7 +226,10 @@ public class AiRuntimeContractValidator {
         }
     }
 
-    private void validateContextRequiredResponse(AiAnalysisResponse response) {
+    private void validateContextRequiredResponse(
+            AiAnalysisRequest request,
+            AiAnalysisResponse response
+    ) {
         if (response.contextRequirement() == null
                 || !response.candidates().isEmpty()
                 || !response.questions().isEmpty()) {
@@ -224,13 +238,20 @@ public class AiRuntimeContractValidator {
                     "CONTEXT_REQUIRED response must include only one context requirement."
             );
         }
-        validateContextRequirement(response.contextRequirement());
+        validateContextRequirement(request, response.contextRequirement());
     }
 
-    private void validateContextRequirement(AiContextRequirement requirement) {
+    private void validateContextRequirement(
+            AiAnalysisRequest request,
+            AiContextRequirement requirement
+    ) {
         validateIdentifier(requirement.detectedIntent(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
         validateIdentifier(requirement.workflowId(), AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
-        boundaryPolicy.validateText(requirement.evidence(), 1_000, true);
+        validateEvidence(
+                requirement.evidence(),
+                request.analysisInput().instruction(),
+                AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
+        );
         validateConfidence(
                 requirement.confidence(),
                 requirement.confidenceSource(),
@@ -353,7 +374,13 @@ public class AiRuntimeContractValidator {
                     "AI Runtime changed the Workflow selected during PLAN."
             );
         }
-        validateScore(candidate.confidence(), false, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+        validateScore(candidate.confidence(), true, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+        if (!sameScore(candidate.confidence(), plannedDecision.confidence())) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "AI Runtime candidate confidence differs from the PLAN decision."
+            );
+        }
         candidate.extractedSlots().forEach((key, value) -> {
             validateAllowedSlot(key, allowedSlots);
             boundaryPolicy.validateText(value, 4_000, true);
@@ -414,7 +441,7 @@ public class AiRuntimeContractValidator {
     private void validateIntentDecision(AiIntentDecision decision, AiRuntimeFailureCode failureCode) {
         validateIdentifier(decision.detectedIntent(), failureCode);
         validateIdentifier(decision.workflowId(), failureCode);
-        boundaryPolicy.validateText(decision.evidence(), 1_000, true);
+        boundaryPolicy.validateText(decision.evidence(), 1_000, false);
         validateConfidence(
                 decision.confidence(),
                 decision.confidenceSource(),
@@ -451,6 +478,24 @@ public class AiRuntimeContractValidator {
         }
         if (score.compareTo(BigDecimal.ZERO) < 0 || score.compareTo(BigDecimal.ONE) > 0) {
             reject(failureCode, "AI Runtime confidence is invalid.");
+        }
+    }
+
+    private boolean sameScore(BigDecimal left, BigDecimal right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.compareTo(right) == 0;
+    }
+
+    private void validateEvidence(
+            String evidence,
+            String instruction,
+            AiRuntimeFailureCode failureCode
+    ) {
+        boundaryPolicy.validateText(evidence, 1_000, false);
+        if (evidence != null && !evidence.isBlank() && !instruction.contains(evidence)) {
+            reject(failureCode, "AI Runtime evidence is not part of the original instruction.");
         }
     }
 

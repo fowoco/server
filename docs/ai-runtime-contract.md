@@ -137,6 +137,7 @@ MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택
 - `plannedIntent`, `plannedWorkflowId`: PLAN에서 Runtime이 정한 대표 결과입니다. Server가
   `ai_attempt.analysis_input_json`에 보존한 뒤 ANALYZE에 다시 전달합니다. Runtime은 이 값이
   있으면 Intent 모델을 다시 호출하지 않습니다.
+- ANALYZE가 PLAN 결정을 재사용해 Provider를 호출하지 않았다면 `providerAttemptCount=0`을 허용합니다.
 - `requestedFieldKeys`: Agent가 PLAN에서 요청했던 전체 key입니다. DB에 값이 없어도 목록에는 남습니다.
 - `requestedFields`: Agent가 요구한 field의 원본값입니다. Server가 가진 값만 넣습니다.
 
@@ -176,7 +177,7 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
         "contract_end_date",
         "monthly_wage"
       ],
-      "confidence": 0.92
+      "confidence": null
     }
   ],
   "validationErrors": [],
@@ -265,6 +266,7 @@ Server는 AI 응답의 허용 field와 confidence뿐 아니라 다음도 다시 
 - 요청과 다른 contract 또는 Workflow Catalog version
 - 요청에 없던 `workerRef`나 `workflowId`
 - PLAN에서 선택한 `plannedWorkflowId`와 다른 ANALYZE Candidate
+- PLAN과 다른 Candidate confidence (`null` 포함)
 - Workflow가 허용하지 않은 slot
 - 0 미만 또는 1 초과 confidence·BERT 라우팅 점수
 - `confidenceSource=UNAVAILABLE`인데 confidence가 들어 있는 응답
