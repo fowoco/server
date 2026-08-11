@@ -13,8 +13,12 @@ public final class WorkerLinkSmsProviderException extends RuntimeException {
         return new WorkerLinkSmsProviderException(FailureType.DISABLED, null);
     }
 
-    public static WorkerLinkSmsProviderException deliveryFailed(Throwable cause) {
-        return new WorkerLinkSmsProviderException(FailureType.DELIVERY_FAILED, cause);
+    public static WorkerLinkSmsProviderException rejected(Throwable cause) {
+        return new WorkerLinkSmsProviderException(FailureType.REJECTED, cause);
+    }
+
+    public static WorkerLinkSmsProviderException unknown(Throwable cause) {
+        return new WorkerLinkSmsProviderException(FailureType.UNKNOWN, cause);
     }
 
     public FailureType failureType() {
@@ -23,6 +27,7 @@ public final class WorkerLinkSmsProviderException extends RuntimeException {
 
     public enum FailureType {
         DISABLED,
-        DELIVERY_FAILED
+        REJECTED,
+        UNKNOWN
     }
 }

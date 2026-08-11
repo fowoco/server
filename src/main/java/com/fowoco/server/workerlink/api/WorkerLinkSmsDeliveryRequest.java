@@ -29,7 +29,7 @@ public final class WorkerLinkSmsDeliveryRequest {
     @JsonProperty("worker_link_token")
     @Schema(
             name = "worker_link_token",
-            description = "링크 발급 응답의 worker_url 값입니다. 발급 직후에만 받을 수 있습니다."
+            description = "링크 발급 응답의 worker_link_token 값입니다. 발급 직후에만 받을 수 있습니다."
     )
     private final String workerLinkToken;
 

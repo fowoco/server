@@ -93,16 +93,21 @@ public final class SolapiWorkerLinkSmsSender implements WorkerLinkSmsSender {
             );
             try (InputStream responseBody = response.body()) {
                 byte[] bytes = responseBody.readNBytes(properties.maxResponseBytes() + 1);
-                if (bytes.length > properties.maxResponseBytes() || response.statusCode() / 100 != 2) {
-                    throw WorkerLinkSmsProviderException.deliveryFailed(null);
+                if (response.statusCode() / 100 != 2) {
+                    throw WorkerLinkSmsProviderException.rejected(null);
+                }
+                if (bytes.length > properties.maxResponseBytes()) {
+                    throw WorkerLinkSmsProviderException.unknown(null);
                 }
                 verifyAcceptedResponse(bytes);
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw WorkerLinkSmsProviderException.deliveryFailed(exception);
-        } catch (IOException | GeneralSecurityException exception) {
-            throw WorkerLinkSmsProviderException.deliveryFailed(exception);
+            throw WorkerLinkSmsProviderException.unknown(exception);
+        } catch (IOException exception) {
+            throw WorkerLinkSmsProviderException.unknown(exception);
+        } catch (GeneralSecurityException exception) {
+            throw WorkerLinkSmsProviderException.rejected(exception);
         }
     }
 
@@ -110,11 +115,11 @@ public final class SolapiWorkerLinkSmsSender implements WorkerLinkSmsSender {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode failedMessages = root.get("failedMessageList");
         if (failedMessages != null && failedMessages.size() > 0) {
-            throw WorkerLinkSmsProviderException.deliveryFailed(null);
+            throw WorkerLinkSmsProviderException.rejected(null);
         }
         String groupId = root.path("groupInfo").path("groupId").asString("");
         if (groupId.isBlank()) {
-            throw WorkerLinkSmsProviderException.deliveryFailed(null);
+            throw WorkerLinkSmsProviderException.unknown(null);
         }
     }
 

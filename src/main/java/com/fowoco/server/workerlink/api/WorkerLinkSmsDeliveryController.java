@@ -47,17 +47,21 @@ public class WorkerLinkSmsDeliveryController {
             operationId = "sendWorkerLinkSms",
             summary = "근로자 보안 링크 SMS 발송",
             description = "발급 요청에 사용한 Idempotency-Key와 원본 token이 현재 링크와 일치할 때만 "
-                    + "SMS를 발송합니다. 실제 Provider 성공 후에만 SENT로 기록합니다."
+                    + "SMS를 발송합니다. SENT는 Provider가 요청을 접수했거나 HR이 수동 전달을 기록한 상태이며, "
+                    + "근로자 휴대전화의 최종 수신 성공을 의미하지 않습니다."
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "발송 성공 또는 이미 발송된 기존 결과 반환"),
+            @ApiResponse(responseCode = "200", description = "Provider 접수 성공 또는 이미 SENT인 기존 결과 반환"),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
             @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
             @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
             @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
-            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "요청 불일치 또는 이전 발송 결과 확인 필요. 자동 재발송 금지"
+            ),
             @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity"),
-            @ApiResponse(responseCode = "502", description = "SMS Provider 발송 실패"),
+            @ApiResponse(responseCode = "502", description = "SMS Provider가 발송 요청을 명확히 거부함"),
             @ApiResponse(responseCode = "503", description = "SMS Provider 비활성")
     })
     @PreAuthorize("hasAnyRole('ADMIN', 'HR')")

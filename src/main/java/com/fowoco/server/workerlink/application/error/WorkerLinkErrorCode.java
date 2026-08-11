@@ -34,6 +34,10 @@ public enum WorkerLinkErrorCode implements ApiErrorCode {
             HttpStatus.BAD_GATEWAY,
             "SMS를 발송하지 못했습니다. 잠시 후 다시 시도하거나 링크를 직접 전달해 주세요."
     ),
+    WORKER_LINK_SMS_DELIVERY_REVIEW_REQUIRED(
+            HttpStatus.CONFLICT,
+            "SMS 발송 결과를 확정할 수 없습니다. 자동 재발송하지 말고 발송 내역을 확인해 주세요."
+    ),
     WORKER_LINK_CONTENT_NOT_READY(
             HttpStatus.CONFLICT,
             "근로자에게 표시할 요청 안내가 아직 준비되지 않았습니다."
