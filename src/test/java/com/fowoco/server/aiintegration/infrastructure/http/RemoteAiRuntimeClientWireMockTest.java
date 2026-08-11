@@ -85,6 +85,14 @@ class RemoteAiRuntimeClientWireMockTest {
                         equalTo("NGUYEN VAN AN")
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.plannedIntent",
+                        equalTo("EXPIRY_RENEWAL")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.plannedWorkflowId",
+                        equalTo("WF-STY-001")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.attemptId",
                         absent()
                 ))
@@ -138,6 +146,14 @@ class RemoteAiRuntimeClientWireMockTest {
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.analysisInput.intentHint",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.plannedIntent",
+                        absent()
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.analysisInput.plannedWorkflowId",
                         absent()
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(

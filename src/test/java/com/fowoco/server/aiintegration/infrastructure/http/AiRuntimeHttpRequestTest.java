@@ -35,7 +35,15 @@ class AiRuntimeHttpRequestTest {
         assertThat(fieldNames(json))
                 .containsExactlyInAnyOrder("requestId", "phase", "analysisInput");
         assertThat(fieldNames(input))
-                .containsExactlyInAnyOrder("instruction", "requestedFieldKeys", "workers");
+                .containsExactlyInAnyOrder(
+                        "instruction",
+                        "plannedIntent",
+                        "plannedWorkflowId",
+                        "requestedFieldKeys",
+                        "workers"
+                );
+        assertThat(input.get("plannedIntent").textValue()).isEqualTo("EXPIRY_RENEWAL");
+        assertThat(input.get("plannedWorkflowId").textValue()).isEqualTo("WF-STY-001");
         assertThat(fieldNames(worker))
                 .containsExactlyInAnyOrder("workerRef", "requestedFields");
         assertThat(worker.get("requestedFields").get("legal_name").textValue())

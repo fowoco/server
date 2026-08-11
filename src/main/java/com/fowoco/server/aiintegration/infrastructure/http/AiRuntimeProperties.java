@@ -1,14 +1,16 @@
 package com.fowoco.server.aiintegration.infrastructure.http;
 
+import com.fowoco.server.aiintegration.application.port.AiRuntimeDeadlinePolicy;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.ai-runtime")
-public final class AiRuntimeProperties {
+public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
 
     private static final int MIN_RESPONSE_BYTES = 1_024;
     private static final int MAX_RESPONSE_BYTES = 10 * 1_024 * 1_024;
+    private static final Duration MAX_OVERALL_TIMEOUT = Duration.ofMinutes(5);
     private static final int MAX_DOCUMENT_RESPONSE_BYTES = 20 * 1_024 * 1_024;
 
     private boolean enabled;
@@ -17,7 +19,7 @@ public final class AiRuntimeProperties {
     private URI documentGenerationEndpoint = URI.create("http://127.0.0.1:8000/api/v1/documents/generate");
     private String serviceCredential;
     private Duration connectTimeout = Duration.ofSeconds(2);
-    private Duration overallTimeout = Duration.ofSeconds(15);
+    private Duration overallTimeout = Duration.ofMinutes(4);
     private int maxResponseBytes = 1_048_576;
     private int maxDocumentResponseBytes = MAX_DOCUMENT_RESPONSE_BYTES;
     private int maxConcurrentCalls = 8;
@@ -73,7 +75,16 @@ public final class AiRuntimeProperties {
     }
 
     public void setOverallTimeout(Duration overallTimeout) {
-        this.overallTimeout = requirePositive(overallTimeout, "overallTimeout");
+        Duration validated = requirePositive(overallTimeout, "overallTimeout");
+        if (validated.compareTo(MAX_OVERALL_TIMEOUT) > 0) {
+            throw new IllegalArgumentException("overallTimeout must not exceed 5m");
+        }
+        this.overallTimeout = validated;
+    }
+
+    @Override
+    public long attemptDeadlineMs() {
+        return overallTimeout.toMillis();
     }
 
     public int getMaxResponseBytes() {

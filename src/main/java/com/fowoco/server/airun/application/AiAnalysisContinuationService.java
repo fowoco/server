@@ -6,6 +6,7 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
+import com.fowoco.server.aiintegration.application.model.AiIntentDecision;
 import com.fowoco.server.aiintegration.application.model.WorkerContext;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.fowoco.server.airun.application.error.AiContextResolutionException;
@@ -128,7 +129,8 @@ public final class AiAnalysisContinuationService {
                 extractedSlots,
                 new ArrayList<>(requestedFieldKeys),
                 List.of(mergedWorker),
-                resolution.workflowConstraints()
+                resolution.workflowConstraints(),
+                AiIntentDecision.from(previousResponse.contextRequirement())
         );
     }
 

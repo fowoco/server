@@ -264,7 +264,7 @@ class PostgreSqlMigrationTests {
                 .containsEntry("ai_candidate_id", new ColumnSpec("uuid", false))
                 .containsEntry("ai_attempt_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_id", new ColumnSpec("uuid", false))
-                .containsEntry("confidence", new ColumnSpec("numeric", false));
+                .containsEntry("confidence", new ColumnSpec("numeric", true));
         assertThat(columnSpecs(connection, "ai_candidate_decision_batch"))
                 .containsEntry("decision_batch_id", new ColumnSpec("uuid", false))
                 .containsEntry("ai_run_id", new ColumnSpec("uuid", false))

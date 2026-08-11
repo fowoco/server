@@ -11,6 +11,7 @@ import com.fowoco.server.aiintegration.application.model.AiAnalysisPhase;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisRequest;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisResponse;
 import com.fowoco.server.aiintegration.application.model.AiContextRequirement;
+import com.fowoco.server.aiintegration.application.model.AiConfidenceSource;
 import com.fowoco.server.aiintegration.application.model.AiQuestion;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.fowoco.server.aiintegration.application.validation.AiRuntimeBoundaryPolicy;
@@ -96,6 +97,12 @@ class AiAnalysisContinuationServiceTest {
                 .isEqualTo(validPlanRequest().analysisInput().instruction());
         assertThat(analyzeRequest.analysisInput().instruction())
                 .isEqualTo("응웬반안 체류연장 준비해줘");
+        assertThat(analyzeRequest.analysisInput().plannedIntentDecision().detectedIntent())
+                .isEqualTo("EXPIRY_RENEWAL");
+        assertThat(analyzeRequest.analysisInput().plannedIntentDecision().workflowId())
+                .isEqualTo("WF-STY-001");
+        assertThat(analyzeRequest.analysisInput().plannedIntentDecision().evidence())
+                .isEqualTo("체류연장 준비해줘");
         assertThat(analyzeRequest.analysisInput().extractedSlots())
                 .containsEntry("document_type", "STAY_EXTENSION");
         assertThat(analyzeRequest.analysisInput().requestedFieldKeys())
@@ -170,7 +177,11 @@ class AiAnalysisContinuationServiceTest {
                                 "passport_status",
                                 "arc_status",
                                 "due_at"
-                        )
+                        ),
+                        "WF-STY-001",
+                        "체류연장 준비해줘",
+                        AiConfidenceSource.MODEL,
+                        null
                 ),
                 List.of(),
                 List.of(),

@@ -24,7 +24,7 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | 구분 | 현재 상태 |
 | --- | --- |
 | 핵심 업무 API | Auth·Worker·Document·Task·Approval·Worker Link·Case·Dashboard·Notification 구현 |
-| AI 연동 | PLAN → Slot 보충 → ANALYZE, Candidate 결정, Renewal Workflow 실행, AiRun·SSE 이력 구현 |
+| AI 연동 | PLAN에서 대표 Intent·Workflow를 한 번 결정하고, 허용 Slot을 보충한 뒤 같은 결정을 ANALYZE에 재사용하는 AiRun·SSE 흐름 구현 |
 | 문서 처리 | 파일 저장·다운로드, HWP/HWPX 검증·생성 결과 연계, OCR 실행·HR 검토 구현 |
 | 운영 기반 | Flyway, PostgreSQL 16, RLS, Transactional Outbox, 감사로그, Docker·Kubernetes·HTTPS 배포와 제품 E2E 검증 |
 
@@ -38,7 +38,7 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | Spring Boot modular monolith | 인증·Task·승인·감사로그가 하나의 업무 트랜잭션으로 연결됨 | Microservices의 분산 트랜잭션·배포 부담을 먼저 만들지 않고 데이터 일관성과 개발 속도를 확보했습니다. 대신 패키지와 Port로 경계를 나눠 AI 실행·파일 처리처럼 독립성이 커지는 영역부터 추후 분리할 수 있게 했습니다. |
 | PostgreSQL·Flyway·RLS | 사업장별 데이터와 상태 전이·승인 이력을 관계와 트랜잭션으로 보존해야 함 | PostgreSQL을 업무 상태의 단일 기준으로 두고, Flyway로 재현 가능한 변경 이력을 관리했습니다. 애플리케이션의 `company_id` 조건에만 의존하지 않고 복합 FK와 RLS로 DB 격리를 보강했습니다. |
 | Spring Security·JWT·RBAC | HR 사용자 역할과 사업장 권한을 모든 API에서 일관되게 검사해야 함 | Access Token은 stateless JWT로 검증하고 `ActorContext`에서 사용자·역할·사업장을 결정했습니다. 계정이 없는 근로자는 별도의 만료형 Worker Link로 제한된 기능만 사용하게 했습니다. |
-| Server–AI HTTP 경계와 allow-list Resolver | AI가 업무 DB를 직접 조회하면 권한 우회와 개인정보 과다 전달 위험이 있음 | AI Runtime의 DB 직접 접근을 허용하지 않고, PLAN에서 요청한 허용 field만 Server가 tenant 범위로 조회해 ANALYZE에 보충하도록 설계했습니다. 판단·권한·영속 상태는 Server가 소유합니다. |
+| Server–AI HTTP 경계와 allow-list Resolver | AI가 업무 DB를 직접 조회하면 권한 우회와 개인정보 과다 전달 위험이 있음 | AI Runtime의 DB 직접 접근을 허용하지 않고, PLAN에서 요청한 허용 field만 Server가 tenant 범위로 조회해 ANALYZE에 보충하도록 설계했습니다. PLAN의 대표 Intent·Workflow를 저장·재사용해 같은 발화문을 두 번 분류할 때 생길 수 있는 결과 불일치와 지연도 줄였습니다. 판단·권한·영속 상태는 Server가 소유합니다. |
 | REST + AiRun + SSE | AI 실행은 오래 걸리지만 Client가 보내야 하는 실시간 메시지는 없음 | 요청과 결과는 재조회 가능한 AiRun resource로 저장하고, 단방향 상태 알림은 WebSocket보다 단순한 SSE를 사용했습니다. 연결이 끊겨도 DB 상태를 다시 조회할 수 있게 했습니다. |
 | PostgreSQL Transactional Outbox | DB 변경 성공 후 알림·OCR 같은 후속 실행이 실패하면 업무가 유실될 수 있음 | 별도 Broker를 먼저 운영하는 대신 업무 변경과 Event를 같은 DB 트랜잭션에 저장했습니다. lease·backoff·멱등성·수동 재처리로 장애 후에도 처리 상태가 수렴하도록 했습니다. |
 
@@ -101,6 +101,25 @@ HR 로그인
 목표 결과는 재계약·취업활동기간 연장·체류기간 연장 Workflow를 분리해 만들고,
 누락정보를 담당자에게 질문하는 것입니다. FOWOCO가 기관에 자동 로그인하거나
 신청서를 대신 제출하지는 않습니다.
+
+### AI 분석 흐름
+
+```text
+Client가 HR 원문 전송
+→ Server가 AiRun 생성
+→ AI PLAN이 대표 Intent·Workflow 1회 결정
+→ Server가 결정을 검증·저장하고 허용된 업무정보만 조회
+→ AI ANALYZE가 저장된 결정을 재사용해 Candidate 생성
+→ Server가 Workflow 일치 여부를 다시 검증
+→ HR이 Candidate를 검토한 뒤 Task로 채택
+```
+
+PLAN과 ANALYZE에서 같은 문장을 각각 분류하면 실행 중 Workflow가 달라질 수 있고
+모델 호출 시간도 중복됩니다. 그래서 Server는 PLAN 결정을 실행 이력에 남기고,
+ANALYZE에는 `plannedIntent`와 `plannedWorkflowId`를 전달합니다. 확률을 제공하지 않는
+모델의 `confidence`는 `null`을 허용하며, BERT 라우팅 점수를 A.X의 확률처럼 사용하지
+않습니다. 상세 요청·응답과 검증 기준은
+[AI Runtime 계약](docs/ai-runtime-contract.md)을 확인합니다.
 
 ## 아키텍처
 
