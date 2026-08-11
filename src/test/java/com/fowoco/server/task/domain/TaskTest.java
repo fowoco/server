@@ -50,6 +50,18 @@ class TaskTest {
     }
 
     @Test
+    void waitsForWorkerAndResumesOnlyAfterReviewedSubmission() {
+        Task task = task(TaskStatus.APPROVED);
+
+        TaskStatus beforeWaiting = task.waitForWorker(0, ACTOR_ID, NOW.plusSeconds(1));
+        TaskStatus beforeResume = task.resumeAfterWorkerSubmission(0, ACTOR_ID, NOW.plusSeconds(2));
+
+        assertThat(beforeWaiting).isEqualTo(TaskStatus.APPROVED);
+        assertThat(beforeResume).isEqualTo(TaskStatus.WAITING_WORKER);
+        assertThat(task.status()).isEqualTo(TaskStatus.APPROVED);
+    }
+
+    @Test
     void requiresEvidenceForCompletion() {
         Task task = task(TaskStatus.WAITING_EXTERNAL);
 
