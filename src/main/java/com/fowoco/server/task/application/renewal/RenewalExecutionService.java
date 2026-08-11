@@ -54,8 +54,10 @@ public final class RenewalExecutionService {
             ActorContext actor,
             RequestMetadata metadata
     ) {
-        return telemetry.measure(metadata.requestId(), taskId, TOTAL, () ->
-                executeMeasured(taskId, command, actor, metadata)
+        UUID runtimeRequestId = uuidGenerator.generate();
+        UUID attemptId = uuidGenerator.generate();
+        return telemetry.measure(runtimeRequestId, metadata.requestId(), taskId, TOTAL, () ->
+                executeMeasured(taskId, command, actor, metadata, runtimeRequestId, attemptId)
         );
     }
 
@@ -63,17 +65,20 @@ public final class RenewalExecutionService {
             UUID taskId,
             RenewalExecutionCommand command,
             ActorContext actor,
-            RequestMetadata metadata
+            RequestMetadata metadata,
+            UUID runtimeRequestId,
+            UUID attemptId
     ) {
         RenewalExecutionContext context = telemetry.measure(
+                runtimeRequestId,
                 metadata.requestId(),
                 taskId,
                 CONTEXT_LOAD,
                 () -> contextReader.load(taskId, command.expectedVersion(), actor)
         );
         RenewalRunRequest request = new RenewalRunRequest(
-                uuidGenerator.generate(),
-                uuidGenerator.generate(),
+                runtimeRequestId,
+                attemptId,
                 command.instruction(),
                 context.workerId(),
                 context.companyId(),
@@ -87,6 +92,7 @@ public final class RenewalExecutionService {
         );
         try {
             RenewalRunResponse response = telemetry.measure(
+                    runtimeRequestId,
                     metadata.requestId(),
                     taskId,
                     RENEWAL_RUNTIME_CALL,
@@ -95,6 +101,7 @@ public final class RenewalExecutionService {
             List<PreparedRenewalDocument> generatedDocuments =
                     "generate".equals(response.scenario())
                             ? telemetry.measure(
+                                    runtimeRequestId,
                                     metadata.requestId(),
                                     taskId,
                                     DOCUMENT_GENERATION,
@@ -102,6 +109,7 @@ public final class RenewalExecutionService {
                             )
                             : List.of();
             return telemetry.measure(
+                    runtimeRequestId,
                     metadata.requestId(),
                     taskId,
                     RESULT_APPLY,

@@ -59,6 +59,7 @@ class RenewalExecutionIntegrationTest {
     private static final String HR_A_EMAIL = "renewal.hr.a@example.com";
     private static final String HR_B_EMAIL = "renewal.hr.b@example.com";
     private static final Pattern REQUEST_ID_LOG_VALUE = Pattern.compile("request_id=([^ ]+)");
+    private static final Pattern HTTP_REQUEST_ID_LOG_VALUE = Pattern.compile("http_request_id=([^ ]+)");
 
     @LocalServerPort
     private int port;
@@ -289,9 +290,11 @@ class RenewalExecutionIntegrationTest {
 
     @Test
     void recordsSafeServerStageDurationsForGeneratedDocumentFlow() throws Exception {
-        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
-                generateResponse(invocation.getArgument(0))
-        );
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation -> {
+            RenewalRunRequest request = invocation.getArgument(0);
+            capturedRequest.set(request);
+            return generateResponse(request);
+        });
         String token = login(HR_A_EMAIL);
 
         HttpResponse<String> response = postRenewal(token, 0);
@@ -310,7 +313,9 @@ class RenewalExecutionIntegrationTest {
         assertThat(logs).allMatch(value ->
                 value.matches(".*duration_ms=\\d+(?: error_code=[A-Z_]+)?$")
         );
-        assertThat(logs.stream().map(this::requestIdFromLog).distinct()).hasSize(1);
+        assertThat(logs.stream().map(this::requestIdFromLog).distinct())
+                .containsExactly(capturedRequest.get().requestId().toString());
+        assertThat(logs.stream().map(this::httpRequestIdFromLog).distinct()).hasSize(1);
         assertThat(String.join("\n", logs))
                 .doesNotContain(
                         "응웬반안",
@@ -371,6 +376,12 @@ class RenewalExecutionIntegrationTest {
 
     private String requestIdFromLog(String value) {
         Matcher matcher = REQUEST_ID_LOG_VALUE.matcher(value);
+        assertThat(matcher.find()).isTrue();
+        return matcher.group(1);
+    }
+
+    private String httpRequestIdFromLog(String value) {
+        Matcher matcher = HTTP_REQUEST_ID_LOG_VALUE.matcher(value);
         assertThat(matcher.find()).isTrue();
         return matcher.group(1);
     }

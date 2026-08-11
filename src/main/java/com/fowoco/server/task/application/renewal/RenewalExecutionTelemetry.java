@@ -20,7 +20,8 @@ final class RenewalExecutionTelemetry {
     private static final Logger log = LoggerFactory.getLogger(RenewalExecutionTelemetry.class);
 
     <T> T measure(
-            String requestId,
+            UUID requestId,
+            String httpRequestId,
             UUID taskId,
             Stage stage,
             Supplier<T> action
@@ -29,9 +30,11 @@ final class RenewalExecutionTelemetry {
         try {
             T result = action.get();
             log.info(
-                    "event=renewal_execution_stage request_id={} task_id={} stage={} "
+                    "event=renewal_execution_stage request_id={} http_request_id={} "
+                            + "task_id={} stage={} "
                             + "status=SUCCESS duration_ms={}",
                     requestId,
+                    httpRequestId,
                     taskId,
                     stage,
                     elapsedMillis(startedNanos)
@@ -39,9 +42,11 @@ final class RenewalExecutionTelemetry {
             return result;
         } catch (RuntimeException exception) {
             log.warn(
-                    "event=renewal_execution_stage request_id={} task_id={} stage={} "
+                    "event=renewal_execution_stage request_id={} http_request_id={} "
+                            + "task_id={} stage={} "
                             + "status=FAILED duration_ms={} error_code={}",
                     requestId,
+                    httpRequestId,
                     taskId,
                     stage,
                     elapsedMillis(startedNanos),

@@ -51,6 +51,7 @@ public final class RenewalRuntimeContractValidator {
     public void validateRequest(RenewalRunRequest request) {
         if (request == null
                 || request.requestId() == null
+                || request.attemptId() == null
                 || request.taskId() == null
                 || request.workerId() == null
                 || request.companyId() == null
@@ -87,6 +88,9 @@ public final class RenewalRuntimeContractValidator {
         }
         if (!request.requestId().equals(response.requestId())) {
             reject(AiRuntimeFailureCode.REQUEST_ID_MISMATCH, "Renewal response requestId does not match.");
+        }
+        if (!request.attemptId().equals(response.attemptId())) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal response attemptId does not match.");
         }
         if (!request.taskId().equals(response.taskId())) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal response taskId does not match.");

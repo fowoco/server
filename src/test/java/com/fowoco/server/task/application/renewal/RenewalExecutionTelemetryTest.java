@@ -16,7 +16,10 @@ import org.slf4j.LoggerFactory;
 
 class RenewalExecutionTelemetryTest {
 
-    private static final String REQUEST_ID = "renewal-request-1";
+    private static final UUID REQUEST_ID = UUID.fromString(
+            "20000000-0000-0000-0000-000000000001"
+    );
+    private static final String HTTP_REQUEST_ID = "renewal-http-request-1";
     private static final UUID TASK_ID = UUID.fromString(
             "10000000-0000-0000-0000-000000000001"
     );
@@ -43,6 +46,7 @@ class RenewalExecutionTelemetryTest {
     void failureLogContainsOnlyStableCodeAndNeverTheExceptionMessage() {
         assertThatThrownBy(() -> telemetry.measure(
                 REQUEST_ID,
+                HTTP_REQUEST_ID,
                 TASK_ID,
                 RenewalExecutionTelemetry.Stage.RENEWAL_RUNTIME_CALL,
                 () -> {
@@ -58,6 +62,7 @@ class RenewalExecutionTelemetryTest {
         assertThat(event.getFormattedMessage())
                 .contains(
                         "request_id=" + REQUEST_ID,
+                        "http_request_id=" + HTTP_REQUEST_ID,
                         "task_id=" + TASK_ID,
                         "stage=RENEWAL_RUNTIME_CALL",
                         "status=FAILED",

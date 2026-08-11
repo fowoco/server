@@ -51,6 +51,24 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
+    void rejectsAResponseFromAnotherAttempt() {
+        RenewalRunRequest request = request();
+        RenewalRunResponse valid = response(request);
+        RenewalRunResponse staleResponse = new RenewalRunResponse(
+                valid.requestId(), UUID.randomUUID(), valid.taskId(), valid.intent(),
+                valid.workflowId(), valid.confidence(), valid.status(), valid.outcome(),
+                valid.scenario(), valid.phase(), valid.step(), valid.slots(), valid.missingSlots(),
+                valid.requestedFields(), valid.guideMessage(), valid.workerRequestMessage(),
+                valid.languageAssistant(), valid.ocrResult(), valid.generatedDocuments(), valid.evidence(),
+                valid.documentValidation(), valid.caseSignals(), valid.progressEvents(),
+                valid.supervisorReason(), valid.supervisorSource(), valid.activeSubgraph(), valid.errors()
+        );
+
+        assertThatThrownBy(() -> validator.validateResponse(request, staleResponse))
+                .isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
     void acceptsAgentIdentitySignalsAndNullableLanguageFields() {
         RenewalRunRequest request = request();
         RenewalRunResponse valid = response(request);
