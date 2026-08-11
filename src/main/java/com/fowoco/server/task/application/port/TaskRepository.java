@@ -17,6 +17,7 @@ public interface TaskRepository {
     long countByCompanyIdAndStatus(UUID companyId, TaskStatus status);
     long countOpenTasksDueOn(UUID companyId, LocalDate dueDate);
     long countOpenTasksByCompanyId(UUID companyId);
+    List<Task> findOpenTasksDueBetween(UUID companyId, LocalDate from, LocalDate to);
     Task save(Task task);
 
     record TaskSearchCriteria(

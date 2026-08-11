@@ -88,6 +88,11 @@ class DashboardQueryServiceTest {
         public long countOpenTasksByCompanyId(UUID companyId) {
             return 0;
         }
+
+        @Override
+        public List<Task> findOpenTasksDueBetween(UUID companyId, LocalDate from, LocalDate to) {
+            return List.of();
+        }
     }
 
     private static final class NoopWorkerRepository implements WorkerRepository {

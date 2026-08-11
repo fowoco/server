@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -218,6 +219,11 @@ class DemoAuthSeedRunnerTest {
             if (companies.putIfAbsent(company.companyId(), company) != null) {
                 throw new IllegalStateException("duplicate company");
             }
+        }
+
+        @Override
+        public List<UUID> findAllIds() {
+            return List.copyOf(companies.keySet());
         }
     }
 
