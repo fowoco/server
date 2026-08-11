@@ -37,6 +37,21 @@ class WorkerLinkTest {
         assertThat(repeated).isSameAs(sent);
     }
 
+    @Test
+    void deliveryStateSeparatesRejectedAndUncertainProviderResults() {
+        Instant startedAt = ISSUED_AT.plusSeconds(10);
+        WorkerLink sending = issueLink().markSending(startedAt);
+
+        WorkerLink rejected = sending.markNotSentAfterRejectedDelivery(startedAt.plusSeconds(1));
+        WorkerLink uncertain = sending.markDeliveryReviewRequired(startedAt.plusSeconds(1));
+
+        assertThat(sending.deliveryStatus()).isEqualTo(WorkerLinkDeliveryStatus.SENDING);
+        assertThat(rejected.deliveryStatus()).isEqualTo(WorkerLinkDeliveryStatus.NOT_SENT);
+        assertThat(uncertain.deliveryStatus()).isEqualTo(WorkerLinkDeliveryStatus.REVIEW_REQUIRED);
+        assertThat(rejected.sentAt()).isNull();
+        assertThat(uncertain.sentAt()).isNull();
+    }
+
     private WorkerLink issueLink() {
         return WorkerLink.issue(
                 LINK_ID,

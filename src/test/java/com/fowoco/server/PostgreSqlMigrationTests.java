@@ -723,6 +723,21 @@ class PostgreSqlMigrationTests {
                 "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?::uuid",
                 "21000000-0000-0000-0000-000000000001"
         )).isEqualTo("NOT_SENT");
+        execute(connection, """
+                UPDATE worker_link
+                   SET delivery_status = 'SENDING'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """);
+        execute(connection, """
+                UPDATE worker_link
+                   SET delivery_status = 'REVIEW_REQUIRED'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """);
+        execute(connection, """
+                UPDATE worker_link
+                   SET delivery_status = 'NOT_SENT'
+                 WHERE worker_link_id = '21000000-0000-0000-0000-000000000001'
+                """);
         assertSqlState(connection, "23514", """
                 UPDATE worker_link
                    SET delivery_status = 'SENT'

@@ -4,9 +4,10 @@ import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
 import com.fowoco.server.workerlink.domain.WorkerLink;
 import com.fowoco.server.workerlink.domain.WorkerLinkStatus;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
@@ -70,6 +71,27 @@ public class JpaWorkerLinkRepository implements WorkerLinkRepository {
                 )
                 .setParameter("workerLinkId", workerLinkId)
                 .setParameter("companyId", companyId)
+                .getResultStream()
+                .findFirst()
+                .map(WorkerLinkJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<WorkerLink> findByIdAndCompanyIdForUpdate(UUID workerLinkId, UUID companyId) {
+        Objects.requireNonNull(workerLinkId, "workerLinkId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        return entityManager.createQuery(
+                        """
+                        select link
+                        from WorkerLinkJpaEntity link
+                        where link.workerLinkId = :workerLinkId
+                          and link.companyId = :companyId
+                        """,
+                        WorkerLinkJpaEntity.class
+                )
+                .setParameter("workerLinkId", workerLinkId)
+                .setParameter("companyId", companyId)
+                .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                 .getResultStream()
                 .findFirst()
                 .map(WorkerLinkJpaEntity::toDomain);

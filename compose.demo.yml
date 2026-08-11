@@ -51,6 +51,12 @@ services:
       AI_RUNTIME_ENABLED: ${AI_RUNTIME_ENABLED:-false}
       AI_RUNTIME_ENDPOINT: ${AI_RUNTIME_ENDPOINT:-http://host.docker.internal:8000/internal/v1/analyses}
       AI_RUNTIME_SERVICE_CREDENTIAL: ${AI_RUNTIME_SERVICE_CREDENTIAL:-}
+      WORKER_PORTAL_BASE_URL: ${WORKER_PORTAL_BASE_URL:-http://localhost:5173}
+      WORKER_LINK_SMS_PROVIDER: ${WORKER_LINK_SMS_PROVIDER:-none}
+      SOLAPI_ENDPOINT: ${SOLAPI_ENDPOINT:-https://api.solapi.com/messages/v4/send-many/detail}
+      SOLAPI_API_KEY: ${SOLAPI_API_KEY:-}
+      SOLAPI_API_SECRET: ${SOLAPI_API_SECRET:-}
+      SOLAPI_SENDER_NUMBER: ${SOLAPI_SENDER_NUMBER:-}
       AI_OCR_ENABLED: ${AI_OCR_ENABLED:-false}
       AI_OCR_ENDPOINT: ${AI_OCR_ENDPOINT:-http://host.docker.internal:8000/internal/v1/ocr/worker-documents}
       AI_OCR_SERVICE_CREDENTIAL: ${AI_OCR_SERVICE_CREDENTIAL:-}

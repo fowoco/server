@@ -44,6 +44,10 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | AI | `AI_RUNTIME_ENABLED=true` | 실제 Runtime 연동 활성화 |
 | AI | `AI_RUNTIME_ENDPOINT` | 예: `http://ai:8000/internal/v1/analyses` |
 | AI | `AI_RUNTIME_SERVICE_CREDENTIAL` | Server↔AI 내부 Bearer credential |
+| Worker Link | `WORKER_PORTAL_BASE_URL` | 문자에 넣을 실제 Client HTTPS 주소 |
+| Worker Link | `WORKER_LINK_SMS_PROVIDER=solapi` | SMS Adapter 활성화 |
+| Worker Link | `SOLAPI_API_KEY`, `SOLAPI_API_SECRET` | SMS Provider credential |
+| Worker Link | `SOLAPI_SENDER_NUMBER` | Provider에 등록·승인된 발신번호 |
 | OCR | `AI_OCR_ENABLED=true`, `DOCUMENT_OCR_ENABLED=true` | AI OCR 호출과 Server 저장 기능 활성화 |
 | OCR | `AI_OCR_ENDPOINT`, `AI_OCR_SERVICE_CREDENTIAL` | OCR 내부 endpoint와 Bearer credential |
 | OCR | `OCR_RESULT_ENCRYPTION_KEY_BASE64` | 32바이트 OCR 결과 암호화 키의 Base64 |
@@ -70,6 +74,22 @@ DB pool은 기본 최대 10개입니다. 클러스터 규모에 따라 `DB_MAX_P
 
 현재 Infra에 HTTPS/TLS와 `RELEASED` Workflow Catalog 배포가 없으면 `prod` 완료 조건을
 충족하지 못합니다. 임시 HTTP 주소와 DRAFT Catalog는 개발 Smoke에만 사용합니다.
+
+## HTTPS와 공유 Swagger 연결
+
+GitHub Pages의 공유 Swagger는 HTTPS 페이지이므로 HTTP 데모 Server를 직접 호출할 수
+없습니다. Infra에서 TLS가 준비된 뒤 다음 순서로 연결합니다.
+
+1. Infra Ingress에 TLS 인증서와 HTTPS host를 적용합니다.
+2. Server `CORS_ALLOWED_ORIGINS`에 실제 Client origin과
+   `https://fowoco.github.io`를 쉼표로 구분해 등록합니다.
+3. Server 저장소 Actions Variable `SERVER_PUBLIC_URL`에 HTTPS Server 주소를 등록합니다.
+4. `Database Documentation` Workflow를 재실행합니다.
+5. 공유 Swagger에서 Login → Authorize → 보호 API 호출을 확인합니다.
+
+현재 Infra가 HTTP만 제공하는 동안에는 `SERVER_PUBLIC_URL`을 등록하지 않고 공유
+Swagger를 읽기 전용으로 유지합니다. HTTP 주소를 임시로 넣어 브라우저 보안을 우회하지
+않습니다.
 
 ## 로컬 PostgreSQL 통합 실행
 
@@ -121,7 +141,8 @@ Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
 5. `POST /api/v1/ai-runs`의 실제 Server→AI 왕복 확인
 6. 후보 채택 후 Case·Task 조회 확인
 7. Worker Link 대표 흐름 확인
-8. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
+8. SMS가 활성화된 환경에서는 실제 수신·링크 접속·중복 발송 방지 확인
+9. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
 
 Runtime 장애 테스트에서는 가짜 AI 결과를 만들지 않고 안전한 오류 또는 수동 처리 상태로
 남아야 합니다.
