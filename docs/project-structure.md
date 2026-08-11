@@ -71,6 +71,11 @@ server/
 | `aiintegration` | AI Runtime HTTP 계약과 Client |
 | `reliability` | Outbox, event 전달과 복구 |
 
+관측 코드도 기능 소유권을 따릅니다. AiRun 단계 지표는 `airun`, Renewal 단계
+지표는 `task`가 기록합니다. `common`은 Actuator endpoint의 보안·공통 설정만
+담당하고, Prometheus의 배포·보존·알림은 `infra` 저장소가 소유합니다. 별도
+`observability` 도메인 패키지나 Metric 저장용 DB 테이블은 만들지 않습니다.
+
 ## 기능 내부 구조
 
 기능 코드가 커지면 아래 방향으로 확장합니다.
@@ -114,6 +119,9 @@ PostgreSQL   AI Runtime
 - `knowledge`는 Intent·Slot·Workflow Catalog와 공식 근거 release를 소유합니다.
 - `client`는 화면 상태와 사용자 상호작용을 소유합니다.
 - `infra`는 통합 배포, 네트워크, Secret과 관측 인프라를 소유합니다.
+
+Server가 기록하는 단계와 Infra가 수집하는 범위는
+[AI 파이프라인 관측 가이드](ai-pipeline-observability.md)를 기준으로 맞춥니다.
 
 따라서 `server`의 `aiintegration`에는 Provider SDK나 Prompt Builder를 넣지
 않습니다. `workflow`은 Knowledge projection을 읽지만 원본 정의를 수정하지

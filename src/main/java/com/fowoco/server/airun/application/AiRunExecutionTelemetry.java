@@ -1,7 +1,9 @@
-package com.fowoco.server.task.application.renewal;
+package com.fowoco.server.airun.application;
 
 import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
+import com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome;
+import com.fowoco.server.airun.application.error.AiContextResolutionException;
 import com.fowoco.server.common.error.ApiException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -14,23 +16,24 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * Records only Server-observable Renewal stages. Raw instructions, Slot values and Provider
- * responses must never be included in this log.
+ * Records only Server-observable AiRun stages. Instructions, Slot values and Runtime response
+ * bodies must never be included in logs or metric tags.
  */
 @Component
-final class RenewalExecutionTelemetry {
+final class AiRunExecutionTelemetry {
 
-    private static final Logger log = LoggerFactory.getLogger(RenewalExecutionTelemetry.class);
+    private static final Logger log = LoggerFactory.getLogger(AiRunExecutionTelemetry.class);
 
     private final MeterRegistry meterRegistry;
 
-    RenewalExecutionTelemetry(MeterRegistry meterRegistry) {
+    AiRunExecutionTelemetry(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
     }
 
     <T> T measure(
             UUID requestId,
-            String httpRequestId,
+            UUID attemptId,
+            Phase phase,
             Stage stage,
             Supplier<T> action
     ) {
@@ -38,12 +41,13 @@ final class RenewalExecutionTelemetry {
         try {
             T result = action.get();
             long elapsedNanos = elapsedNanos(startedNanos);
-            recordStage(stage, Status.SUCCESS, elapsedNanos);
+            recordStage(phase, stage, Status.SUCCESS, elapsedNanos);
             log.info(
-                    "event=renewal_execution_stage request_id={} http_request_id={} stage={} "
+                    "event=ai_run_stage request_id={} attempt_id={} phase={} stage={} "
                             + "status=SUCCESS duration_ms={}",
                     requestId,
-                    httpRequestId,
+                    attemptId,
+                    phase,
                     stage,
                     toMillis(elapsedNanos)
             );
@@ -51,13 +55,14 @@ final class RenewalExecutionTelemetry {
         } catch (RuntimeException exception) {
             long elapsedNanos = elapsedNanos(startedNanos);
             String failureCode = errorCode(exception);
-            recordStage(stage, Status.FAILED, elapsedNanos);
-            recordFailure(stage, failureCode);
+            recordStage(phase, stage, Status.FAILED, elapsedNanos);
+            recordFailure(phase, stage, failureCode);
             log.warn(
-                    "event=renewal_execution_stage request_id={} http_request_id={} stage={} "
+                    "event=ai_run_stage request_id={} attempt_id={} phase={} stage={} "
                             + "status=FAILED duration_ms={} error_code={}",
                     requestId,
-                    httpRequestId,
+                    attemptId,
+                    phase,
                     stage,
                     toMillis(elapsedNanos),
                     failureCode
@@ -66,32 +71,47 @@ final class RenewalExecutionTelemetry {
         }
     }
 
-    private void recordStage(Stage stage, Status status, long elapsedNanos) {
+    void recordOutcome(AiAnalysisOutcome outcome) {
         try {
-            Timer.builder("fowoco.renewal.stage")
-                    .description("Server-observed Renewal execution stage duration")
+            Counter.builder("fowoco.ai.analysis.outcomes")
+                    .description("Validated AI analysis response outcomes")
+                    .tag("outcome", outcome.name())
+                    .register(meterRegistry)
+                    .increment();
+        } catch (RuntimeException metricFailure) {
+            log.warn("event=ai_run_metric status=FAILED metric=analysis_outcomes");
+        }
+    }
+
+    private void recordStage(Phase phase, Stage stage, Status status, long elapsedNanos) {
+        try {
+            Timer.builder("fowoco.ai.pipeline.stage")
+                    .description("Server-observed AiRun pipeline stage duration")
+                    .tag("phase", phase.name())
                     .tag("stage", stage.name())
                     .tag("status", status.name())
                     .register(meterRegistry)
                     .record(elapsedNanos, TimeUnit.NANOSECONDS);
         } catch (RuntimeException metricFailure) {
             log.warn(
-                    "event=renewal_metric status=FAILED metric=execution_stage stage={}",
+                    "event=ai_run_metric status=FAILED metric=pipeline_stage phase={} stage={}",
+                    phase,
                     stage
             );
         }
     }
 
-    private void recordFailure(Stage stage, String failureCode) {
+    private void recordFailure(Phase phase, Stage stage, String failureCode) {
         try {
-            Counter.builder("fowoco.renewal.failures")
-                    .description("Server-observed Renewal execution stage failures")
+            Counter.builder("fowoco.ai.pipeline.failures")
+                    .description("Server-observed AI pipeline stage failures")
+                    .tag("phase", phase.name())
                     .tag("stage", stage.name())
                     .tag("failure_code", failureCode)
                     .register(meterRegistry)
                     .increment();
         } catch (RuntimeException metricFailure) {
-            log.warn("event=renewal_metric status=FAILED metric=failures");
+            log.warn("event=ai_run_metric status=FAILED metric=pipeline_failures");
         }
     }
 
@@ -110,17 +130,26 @@ final class RenewalExecutionTelemetry {
         if (exception instanceof AiRuntimeContractException contractFailure) {
             return contractFailure.failureCode().name();
         }
+        if (exception instanceof AiContextResolutionException contextFailure) {
+            return contextFailure.failureCode().name();
+        }
         if (exception instanceof ApiException apiFailure) {
             return apiFailure.errorCode().code();
         }
-        return "UNEXPECTED_ERROR";
+        return "UNEXPECTED_AI_RUN_FAILURE";
+    }
+
+    enum Phase {
+        PIPELINE,
+        PLAN,
+        ANALYZE
     }
 
     enum Stage {
-        CONTEXT_LOAD,
-        RENEWAL_RUNTIME_CALL,
-        DOCUMENT_GENERATION,
-        RESULT_APPLY,
+        PLAN_RUNTIME_CALL,
+        SLOT_RESOLUTION,
+        ANALYZE_RUNTIME_CALL,
+        RESULT_PERSIST,
         TOTAL
     }
 
