@@ -69,7 +69,7 @@ app:
     endpoint: ${AI_RUNTIME_ENDPOINT:http://127.0.0.1:8000/internal/v1/analyses}
     service-credential: ${AI_RUNTIME_SERVICE_CREDENTIAL:}
     connect-timeout: ${AI_RUNTIME_CONNECT_TIMEOUT:2s}
-    overall-timeout: ${AI_RUNTIME_OVERALL_TIMEOUT:15s}
+    overall-timeout: ${AI_RUNTIME_OVERALL_TIMEOUT:240s}
     max-response-bytes: ${AI_RUNTIME_MAX_RESPONSE_BYTES:1048576}
     max-concurrent-calls: ${AI_RUNTIME_MAX_CONCURRENT_CALLS:8}
     circuit-breaker-failure-threshold: ${AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}

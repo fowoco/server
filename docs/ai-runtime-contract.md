@@ -148,6 +148,11 @@ MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택
 `workflowConstraints`는 Server가 재시도·응답 검증·제한시간을 관리하기 위해 내부
 `AiAnalysisRequest`에 유지하지만 HTTP JSON에는 넣지 않습니다.
 
+한 번의 PLAN 또는 ANALYZE 호출 제한시간은 `AI_RUNTIME_OVERALL_TIMEOUT`을 단일 기준으로
+사용합니다. 기본값은 실제 A.X CPU 추론 시간을 수용하는 `240s`이고 계약상 최대값은
+`5m`입니다. Client 요청은 먼저 `202 + aiRunId`를 반환하므로 이 제한시간 동안 HTTP 화면
+요청을 붙잡지 않으며, 진행 상태는 SSE와 조회 API로 제공합니다.
+
 `modelVersion`과 `promptVersion`은 기존 `ai_attempt` 버전 컬럼에 저장합니다. PLAN 결정은
 ANALYZE attempt의 `analysis_input_json`에 함께 저장하므로 이번 계약 변경은 새 Flyway
 Migration을 만들지 않습니다.

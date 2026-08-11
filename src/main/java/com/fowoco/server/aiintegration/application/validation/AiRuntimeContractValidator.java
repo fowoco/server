@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
 public class AiRuntimeContractValidator {
 
     private static final long MIN_DEADLINE_MS = 100;
-    private static final long MAX_DEADLINE_MS = 60_000;
+    private static final long MAX_DEADLINE_MS = 300_000;
     private static final int MAX_WORKERS = 1;
     private static final int MAX_WORKFLOWS = 20;
     private static final int MAX_CANDIDATES = 50;

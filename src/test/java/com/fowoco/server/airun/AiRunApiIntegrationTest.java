@@ -2,7 +2,9 @@ package com.fowoco.server.airun;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome;
@@ -33,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -198,6 +201,10 @@ class AiRunApiIntegrationTest {
                 String.class,
                 aiRunId
         )).containsExactly("AI_RUN_CREATED", "AI_RUN_ANSWERS_SUBMITTED");
+        ArgumentCaptor<AiAnalysisRequest> requestCaptor = ArgumentCaptor.forClass(AiAnalysisRequest.class);
+        verify(runtimeClient, atLeast(3)).analyze(requestCaptor.capture(), any());
+        assertThat(requestCaptor.getAllValues())
+                .allSatisfy(request -> assertThat(request.deadlineMs()).isEqualTo(240_000L));
     }
 
     @Test

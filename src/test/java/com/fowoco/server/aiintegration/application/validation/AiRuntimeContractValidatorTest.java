@@ -55,6 +55,44 @@ class AiRuntimeContractValidatorTest {
     }
 
     @Test
+    void acceptsFourMinuteAttemptDeadlineForAxInference() {
+        AiAnalysisRequest base = validPlanRequest();
+        AiAnalysisRequest request = new AiAnalysisRequest(
+                base.requestId(),
+                base.attemptId(),
+                base.phase(),
+                base.contractVersion(),
+                base.requiredKnowledgeVersion(),
+                240_000,
+                base.analysisInput()
+        );
+
+        assertThatCode(() -> validator.validateRequest(request))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsAttemptDeadlineBeyondFiveMinuteContractMaximum() {
+        AiAnalysisRequest base = validPlanRequest();
+        AiAnalysisRequest request = new AiAnalysisRequest(
+                base.requestId(),
+                base.attemptId(),
+                base.phase(),
+                base.contractVersion(),
+                base.requiredKnowledgeVersion(),
+                300_001,
+                base.analysisInput()
+        );
+
+        assertThatThrownBy(() -> validator.validateRequest(request))
+                .isInstanceOfSatisfying(
+                        AiRuntimeContractException.class,
+                        exception -> assertThat(exception.failureCode())
+                                .isEqualTo(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT)
+                );
+    }
+
+    @Test
     void acceptsAnalyzeWithoutProviderAttemptWhenPlanDecisionIsReused() {
         AiAnalysisResponse valid = validResponse();
         AiAnalysisResponse withoutProviderCall = new AiAnalysisResponse(
