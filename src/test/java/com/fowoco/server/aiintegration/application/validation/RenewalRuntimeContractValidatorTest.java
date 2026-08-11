@@ -33,6 +33,40 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
+    void acceptsStayAndEmploymentExtensionWorkflowPairs() {
+        RenewalRunRequest stayRequest = request("STAY_PERIOD_EXTENSION", "WF-STY-001");
+        RenewalRunRequest employmentRequest = request(
+                "EMPLOYMENT_PERIOD_EXTENSION",
+                "WF-CON-001"
+        );
+
+        assertThatCode(() -> validator.validateResponse(stayRequest, response(stayRequest)))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validateResponse(
+                employmentRequest,
+                response(employmentRequest)
+        )).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsATaskTypeAndWorkflowMismatch() {
+        RenewalRunRequest request = request("STAY_PERIOD_EXTENSION", "WF-CON-001");
+
+        assertThatThrownBy(() -> validator.validateRequest(request))
+                .isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsAResponseThatChangesTheTaskWorkflow() {
+        RenewalRunRequest request = request();
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                response(request, "WF-STY-001")
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
     void rejectsAnIntentUsedAsAWorkflowId() {
         RenewalRunRequest request = request();
         RenewalRunResponse valid = response(request);
@@ -139,6 +173,10 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     private RenewalRunRequest request() {
+        return request("RECONTRACT", "WF-CON-001");
+    }
+
+    private RenewalRunRequest request(String taskType, String workflowId) {
         UUID requestId = UUID.randomUUID();
         UUID attemptId = UUID.randomUUID();
         UUID companyId = UUID.randomUUID();
@@ -154,7 +192,7 @@ class RenewalRuntimeContractValidatorTest {
                 ),
                 new RenewalCompanySnapshot(companyId, "테스트 사업장", "ACTIVE", now, now, 0),
                 new RenewalTaskSnapshot(
-                        taskId, companyId, workerId, UUID.randomUUID(), "RECONTRACT", "WF-STY-001",
+                        taskId, companyId, workerId, UUID.randomUUID(), taskType, workflowId,
                         "0.2.0", "재계약", null, Map.of(), 0, "AI_ANALYZED", "DRAFT", null,
                         UUID.randomUUID(), UUID.randomUUID(), now, now, 0
                 )
@@ -162,9 +200,13 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     private RenewalRunResponse response(RenewalRunRequest request) {
+        return response(request, request.task().workflowId());
+    }
+
+    private RenewalRunResponse response(RenewalRunRequest request, String workflowId) {
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
-                "WF-STY-001", new BigDecimal("0.91"), "NEEDS_INFO", "NEEDS_INFO", "ask_hr",
+                workflowId, new BigDecimal("0.91"), "NEEDS_INFO", "NEEDS_INFO", "ask_hr",
                 "PHASE_2", "STEP_5", Map.of(), List.of("wage"),
                 List.of(new RenewalRequestedField("wage", "USER_INPUT")),
                 "임금을 확인해 주세요.", null, null, null, List.of(), List.of(), null,
@@ -179,7 +221,8 @@ class RenewalRuntimeContractValidatorTest {
     ) {
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
-                "WF-STY-001", new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
+                request.task().workflowId(), new BigDecimal("0.94"),
+                "READY_FOR_REVIEW", "REVIEW_REQUIRED",
                 "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
                 null, null, null, null,
                 List.of(new RenewalGeneratedDocument(

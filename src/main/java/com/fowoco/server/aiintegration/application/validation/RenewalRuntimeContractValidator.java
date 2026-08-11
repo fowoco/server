@@ -6,6 +6,7 @@ import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocum
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
+import com.fowoco.server.aiintegration.application.renewal.RenewalWorkflowPolicy;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Component;
 public final class RenewalRuntimeContractValidator {
 
     private static final String RENEWAL_INTENT = "EXPIRY_RENEWAL";
-    private static final String RENEWAL_WORKFLOW = "WF-STY-001";
     private static final Set<String> SCENARIOS = Set.of(
             "ask_hr", "ask_worker", "generate", "ocr", "out_of_scope"
     );
@@ -67,7 +67,10 @@ public final class RenewalRuntimeContractValidator {
                 || !request.companyId().equals(request.worker().companyId())) {
             reject(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "Renewal request identifiers do not match.");
         }
-        if (!RENEWAL_WORKFLOW.equals(request.task().workflowId())) {
+        if (!RenewalWorkflowPolicy.supports(
+                request.task().taskType(),
+                request.task().workflowId()
+        )) {
             reject(AiRuntimeFailureCode.UNEXPECTED_WORKFLOW, "Renewal task Workflow is invalid.");
         }
         if (request.slots().size() > 100 || request.documents().size() > 20) {
@@ -96,7 +99,7 @@ public final class RenewalRuntimeContractValidator {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal response taskId does not match.");
         }
         boolean renewalResult = RENEWAL_INTENT.equals(response.intent())
-                && RENEWAL_WORKFLOW.equals(response.workflowId());
+                && request.task().workflowId().equals(response.workflowId());
         boolean outOfScopeResult = "out_of_scope".equals(response.scenario())
                 && "OUT_OF_SCOPE".equals(response.intent())
                 && (response.workflowId() == null || response.workflowId().isBlank());

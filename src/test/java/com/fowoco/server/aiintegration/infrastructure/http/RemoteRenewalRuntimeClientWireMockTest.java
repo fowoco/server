@@ -60,7 +60,7 @@ class RemoteRenewalRuntimeClientWireMockTest {
                         "$.worker.stayExpiryDate", equalTo("2027-08-31")
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
-                        "$.task.workflowId", equalTo("WF-STY-001")
+                        "$.task.workflowId", equalTo("WF-CON-001")
                 ))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -70,7 +70,7 @@ class RemoteRenewalRuntimeClientWireMockTest {
         RenewalRunResponse response = client().run(request, AiRuntimeCallContext.withoutTrace());
 
         assertThat(response.intent()).isEqualTo("EXPIRY_RENEWAL");
-        assertThat(response.workflowId()).isEqualTo("WF-STY-001");
+        assertThat(response.workflowId()).isEqualTo("WF-CON-001");
         assertThat(response.requestedFields()).extracting("key").containsExactly("wage");
     }
 
@@ -124,7 +124,7 @@ class RemoteRenewalRuntimeClientWireMockTest {
                 ),
                 new RenewalCompanySnapshot(companyId, "테스트 사업장", "ACTIVE", now, now, 0),
                 new RenewalTaskSnapshot(
-                        taskId, companyId, workerId, caseId, "RECONTRACT", "WF-STY-001", "0.2.0",
+                        taskId, companyId, workerId, caseId, "RECONTRACT", "WF-CON-001", "0.2.0",
                         "재계약", null, Map.of(), 0, "AI_CANDIDATE", "DRAFT", null,
                         actorId, actorId, now, now, 0
                 )
@@ -138,7 +138,7 @@ class RemoteRenewalRuntimeClientWireMockTest {
                   "attemptId":"%s",
                   "taskId":"%s",
                   "intent":"EXPIRY_RENEWAL",
-                  "workflowId":"WF-STY-001",
+                  "workflowId":"WF-CON-001",
                   "confidence":0.91,
                   "status":"NEEDS_INFO",
                   "outcome":"NEEDS_INFO",
@@ -172,7 +172,7 @@ class RemoteRenewalRuntimeClientWireMockTest {
                   "attemptId":"%s",
                   "taskId":"%s",
                   "intent":"EXPIRY_RENEWAL",
-                  "workflowId":"WF-STY-001",
+                  "workflowId":"WF-CON-001",
                   "confidence":0.94,
                   "status":"READY_FOR_REVIEW",
                   "outcome":"REVIEW_REQUIRED",

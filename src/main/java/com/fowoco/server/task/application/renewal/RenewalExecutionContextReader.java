@@ -4,6 +4,7 @@ import com.fowoco.server.aiintegration.application.renewal.RenewalCompanySnapsho
 import com.fowoco.server.aiintegration.application.renewal.RenewalDocumentInput;
 import com.fowoco.server.aiintegration.application.renewal.RenewalTaskSnapshot;
 import com.fowoco.server.aiintegration.application.renewal.RenewalWorkerSnapshot;
+import com.fowoco.server.aiintegration.application.renewal.RenewalWorkflowPolicy;
 import com.fowoco.server.auth.application.ActorAuthorizer;
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.common.error.ApiException;
@@ -20,7 +21,6 @@ import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskTargetType;
-import com.fowoco.server.task.domain.TaskType;
 import com.fowoco.server.worker.application.WorkerDocumentSearchQuery;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.application.port.WorkerRepository;
@@ -34,7 +34,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,13 +43,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @Service
 class RenewalExecutionContextReader {
-
-    private static final String RENEWAL_WORKFLOW = "WF-STY-001";
-    private static final Set<TaskType> RENEWAL_TASK_TYPES = Set.of(
-            TaskType.RECONTRACT,
-            TaskType.STAY_PERIOD_EXTENSION,
-            TaskType.EMPLOYMENT_PERIOD_EXTENSION
-    );
 
     private final ActorAuthorizer authorizer;
     private final TenantDatabaseContext tenantContext;
@@ -143,8 +135,7 @@ class RenewalExecutionContextReader {
         }
         if (task.targetType() != TaskTargetType.WORKER
                 || task.status().isTerminal()
-                || !RENEWAL_WORKFLOW.equals(task.workflowId())
-                || !RENEWAL_TASK_TYPES.contains(task.taskType())) {
+                || !RenewalWorkflowPolicy.supports(task.taskType().name(), task.workflowId())) {
             throw new ApiException(TaskErrorCode.RENEWAL_EXECUTION_NOT_ALLOWED);
         }
     }

@@ -311,6 +311,25 @@ Server 내부 요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧
 timeout으로 사용합니다. `deadlineMs` 자체는 Runtime JSON에 전송하지 않습니다. 따라서
 상위 AiRun이 허용한 시간보다 오래 기다리지 않습니다.
 
+## Renewal Task와 Workflow 연결
+
+`POST /internal/v1/workflows/renewal/run`에는 이미 생성된 Task의 canonical Workflow를
+`task.workflowId`로 전달합니다. Server가 허용하는 조합은 활성 Knowledge Catalog와 같습니다.
+
+| Task type | Workflow ID |
+| --- | --- |
+| `RECONTRACT` | `WF-CON-001` |
+| `EMPLOYMENT_PERIOD_EXTENSION` | `WF-CON-001` |
+| `STAY_PERIOD_EXTENSION` | `WF-STY-001` |
+
+Server는 Task type과 Workflow가 위 표와 다르면 AI를 호출하지 않습니다. 정상 Renewal
+응답의 `workflowId`도 요청의 `task.workflowId`와 반드시 같아야 합니다. 같은
+`EXPIRY_RENEWAL` Intent 안에서 Runtime이 첫 Workflow를 고르거나 발화만 다시 분류해 다른
+Workflow로 바꾼 응답은 `UNEXPECTED_WORKFLOW`로 거부합니다.
+
+`scenario=out_of_scope`, `intent=OUT_OF_SCOPE`인 종료 응답만 `workflowId`가 비어 있을 수
+있습니다. 이는 Workflow 실행 결과가 아니라 지원 범위 밖 정상 종료 신호이기 때문입니다.
+
 ## Renewal 생성 문서 연결
 
 Renewal 응답의 `generatedDocuments[]`는 다음 세 값을 문서 생성 기준으로 사용합니다.

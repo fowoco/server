@@ -148,7 +148,7 @@ class RenewalExecutionIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("NEEDS_INFO");
-        assertThat(JsonPath.<String>read(response.body(), "$.workflow_id")).isEqualTo("WF-STY-001");
+        assertThat(JsonPath.<String>read(response.body(), "$.workflow_id")).isEqualTo("WF-CON-001");
         assertThat(JsonPath.<List<String>>read(response.body(), "$.missing_slots")).containsExactly("wage");
         assertThat(JsonPath.<Boolean>read(response.body(), "$.human_review_required")).isTrue();
 
@@ -478,7 +478,7 @@ class RenewalExecutionIntegrationTest {
     private RenewalRunResponse generateResponse(RenewalRunRequest request) {
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
-                "WF-STY-001", new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
+                request.task().workflowId(), new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
                 "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
                 null, null, null, null,
                 List.of(new RenewalGeneratedDocument(
@@ -539,7 +539,7 @@ class RenewalExecutionIntegrationTest {
     ) {
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
-                "WF-STY-001", new BigDecimal("0.91"), status, outcome, scenario,
+                request.task().workflowId(), new BigDecimal("0.91"), status, outcome, scenario,
                 "PHASE_2", "STEP_5", Map.of(), missingSlots, requestedFields,
                 null, workerMessage, languageAssistant, null, List.of(), List.of(), null,
                 signals, List.of(), null, "rules", "main", List.of()
@@ -658,7 +658,7 @@ class RenewalExecutionIntegrationTest {
                     task_id,company_id,target_type,worker_id,case_id,task_type,workflow_id,
                     workflow_catalog_version,title,description,business_data_json,critical_fingerprint,
                     content_revision,source,status,due_date,created_by,updated_by,created_at,updated_at,version
-                ) VALUES (?,?, 'WORKER',?,?, 'RECONTRACT','WF-STY-001','0.2.0',
+                ) VALUES (?,?, 'WORKER',?,?, 'RECONTRACT','WF-CON-001','0.2.0',
                     '재계약 조건 확인','근로조건을 확인합니다.','{}',?,0,'AI_CANDIDATE','DRAFT',?,
                     ?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0)
                 """,
