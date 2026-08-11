@@ -7,6 +7,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
+import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
 import com.fowoco.server.aiintegration.application.model.AiAnalysisOutcome;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -110,6 +111,32 @@ class AiRunExecutionTelemetryTest {
                 .tag("failure_code", "DEADLINE_EXCEEDED")
                 .counter()
                 .count()).isEqualTo(1);
+    }
+
+    @Test
+    void contractFailureIsSeparatedFromRuntimeTimeout() {
+        assertThatThrownBy(() -> telemetry.measure(
+                REQUEST_ID,
+                ATTEMPT_ID,
+                AiRunExecutionTelemetry.Phase.PLAN,
+                AiRunExecutionTelemetry.Stage.PLAN_RUNTIME_CALL,
+                () -> {
+                    throw new AiRuntimeContractException(
+                            AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                            SENSITIVE_FAILURE_MESSAGE
+                    );
+                }
+        )).isInstanceOf(AiRuntimeContractException.class);
+
+        assertThat(meterRegistry.get("fowoco.ai.pipeline.failures")
+                .tag("phase", "PLAN")
+                .tag("stage", "PLAN_RUNTIME_CALL")
+                .tag("failure_code", "INVALID_RESPONSE_CONTRACT")
+                .counter()
+                .count()).isEqualTo(1);
+        assertThat(appender.list.get(0).getFormattedMessage())
+                .contains("error_code=INVALID_RESPONSE_CONTRACT")
+                .doesNotContain(SENSITIVE_FAILURE_MESSAGE);
     }
 
     @Test
