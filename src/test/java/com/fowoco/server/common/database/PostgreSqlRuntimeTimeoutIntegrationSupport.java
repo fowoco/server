@@ -2,6 +2,7 @@ package com.fowoco.server.common.database;
 
 import com.fowoco.server.ServerApplication;
 import com.fowoco.server.common.security.PostgreSqlRlsTestLock;
+import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -41,6 +42,7 @@ abstract class PostgreSqlRuntimeTimeoutIntegrationSupport {
     protected JdbcTemplate runtimeJdbc;
     protected HikariDataSource runtimeDataSource;
     protected TransactionTemplate transactionTemplate;
+    protected TenantDatabaseContext tenantDatabaseContext;
     private PostgreSqlRlsTestLock rlsTestLock;
 
     protected abstract String statementTimeout();
@@ -121,6 +123,9 @@ abstract class PostgreSqlRuntimeTimeoutIntegrationSupport {
             runtimeJdbc = new JdbcTemplate(runtimeDataSource);
             transactionTemplate = new TransactionTemplate(
                     applicationContext.getBean(PlatformTransactionManager.class)
+            );
+            tenantDatabaseContext = applicationContext.getBean(
+                    TenantDatabaseContext.class
             );
         } catch (Throwable setupFailure) {
             try {
