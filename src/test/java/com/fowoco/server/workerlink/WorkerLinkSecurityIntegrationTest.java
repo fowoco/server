@@ -131,6 +131,12 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(rawToken).isNotBlank();
         assertThat(workerUrl).isEqualTo("http://localhost:5173/worker-portal/" + rawToken);
 
+        HttpResponse<String> markSentResponse = postWithoutBody(
+                "/api/v1/worker-links/" + workerLinkId + "/sent",
+                hrToken
+        );
+        assertThat(markSentResponse.statusCode()).isEqualTo(200);
+
         HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/" + rawToken, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
         assertThat(viewResponse.headers().firstValue("Cache-Control")).contains("no-store");
