@@ -218,7 +218,9 @@ public class CaseQueryService {
                 task.taskType(),
                 task.title(),
                 task.status(),
-                task.dueDate()
+                task.dueDate(),
+                task.assigneeId(),
+                task.assigneeDisplayName()
         );
     }
 

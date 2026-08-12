@@ -1,10 +1,9 @@
 package com.fowoco.server.task.application;
 
-import com.fowoco.server.task.domain.Task;
 import java.util.List;
 
 public record TaskPageResult(
-        List<Task> items,
+        List<TaskSummaryView> items,
         int page,
         int size,
         long totalElements,

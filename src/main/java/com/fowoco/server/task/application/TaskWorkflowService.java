@@ -8,6 +8,8 @@ import com.fowoco.server.audit.domain.AuditEvent;
 import com.fowoco.server.audit.domain.AuditTargetType;
 import com.fowoco.server.auth.application.ActorAuthorizer;
 import com.fowoco.server.auth.application.ActorContext;
+import com.fowoco.server.auth.application.CompanyMemberAccount;
+import com.fowoco.server.auth.application.port.CompanyMemberDirectory;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
@@ -37,6 +39,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,6 +51,7 @@ public class TaskWorkflowService {
 
     private static final String AUDIT_EVENT_VERSION = "1";
     private final ActorAuthorizer actorAuthorizer;
+    private final CompanyMemberDirectory companyMemberDirectory;
     private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
     private final TaskChecklistRepository checklistRepository;
@@ -64,6 +68,7 @@ public class TaskWorkflowService {
 
     public TaskWorkflowService(
             ActorAuthorizer actorAuthorizer,
+            CompanyMemberDirectory companyMemberDirectory,
             TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
             TaskChecklistRepository checklistRepository,
@@ -79,6 +84,7 @@ public class TaskWorkflowService {
             Clock clock
     ) {
         this.actorAuthorizer = actorAuthorizer;
+        this.companyMemberDirectory = companyMemberDirectory;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
         this.checklistRepository = checklistRepository;
@@ -219,7 +225,7 @@ public class TaskWorkflowService {
                 size
         ));
         return new TaskPageResult(
-                result.items(),
+                taskSummaryViews(result.items(), actor.companyId()),
                 result.page(),
                 result.size(),
                 result.totalElements(),
@@ -330,6 +336,51 @@ public class TaskWorkflowService {
                 checklistItems,
                 worker,
                 workflow
+        );
+    }
+
+    @Transactional
+    public TaskResult changeAssignee(
+            UUID taskId,
+            ChangeTaskAssigneeCommand command,
+            ActorContext actor,
+            RequestMetadata metadata
+    ) {
+        bindTenant(actor);
+        actorAuthorizer.requireHrWrite(actor);
+        Task task = requireTask(taskId, actor.companyId());
+        TaskAssigneeView nextAssignee = requireAssignableAssignee(
+                actor.companyId(),
+                command.assigneeId()
+        );
+        UUID previousAssigneeId = task.assigneeId();
+        Instant now = Instant.now(clock);
+        boolean changed = task.changeAssignee(
+                command.assigneeId(),
+                command.expectedVersion(),
+                actor.actorId(),
+                now
+        );
+        Task savedTask = changed ? taskRepository.save(task) : task;
+        if (changed) {
+            appendAudit(
+                    savedTask,
+                    actor,
+                    AuditAction.TASK_ASSIGNEE_CHANGED,
+                    "업무 담당자를 변경함 (%s → %s)".formatted(
+                            previousAssigneeId,
+                            savedTask.assigneeId()
+                    ),
+                    metadata,
+                    now
+            );
+        }
+        return toResult(
+                savedTask,
+                checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId()),
+                findWorker(savedTask, actor.companyId()),
+                catalogService.requireWorkflow(savedTask.workflowId()),
+                nextAssignee
         );
     }
 
@@ -470,13 +521,76 @@ public class TaskWorkflowService {
             WorkerTaskContext worker,
             WorkflowDefinition workflow
     ) {
+        return toResult(
+                task,
+                checklistItems,
+                worker,
+                workflow,
+                requireAssignee(task, task.companyId())
+        );
+    }
+
+    private TaskResult toResult(
+            Task task,
+            List<TaskChecklistItem> checklistItems,
+            WorkerTaskContext worker,
+            WorkflowDefinition workflow,
+            TaskAssigneeView assignee
+    ) {
         Map<String, Object> businessData = contentCodec.decodeBusinessData(task.businessDataJson());
         return new TaskResult(
                 task,
+                assignee,
                 businessData,
                 checklistItems,
                 missingRequiredSlots(workflow, worker, task.dueDate(), businessData)
         );
+    }
+
+    private List<TaskSummaryView> taskSummaryViews(List<Task> tasks, UUID companyId) {
+        Map<UUID, TaskAssigneeView> assignees = new HashMap<>();
+        companyMemberDirectory.findByCompanyId(companyId, null, false)
+                .forEach(member -> assignees.put(member.userId(), toAssigneeView(member)));
+        return tasks.stream()
+                .map(task -> new TaskSummaryView(
+                        task,
+                        requireAssignee(task, assignees)
+                ))
+                .toList();
+    }
+
+    private TaskAssigneeView requireAssignableAssignee(UUID companyId, UUID assigneeId) {
+        CompanyMemberAccount member = requireCompanyMember(companyId, assigneeId);
+        if (!member.active() || member.role() == UserRole.VIEWER) {
+            throw new ApiException(TaskErrorCode.TASK_ASSIGNEE_NOT_ASSIGNABLE);
+        }
+        return toAssigneeView(member);
+    }
+
+    private TaskAssigneeView requireAssignee(Task task, UUID companyId) {
+        return toAssigneeView(requireCompanyMember(companyId, task.assigneeId()));
+    }
+
+    private TaskAssigneeView requireAssignee(
+            Task task,
+            Map<UUID, TaskAssigneeView> assignees
+    ) {
+        TaskAssigneeView assignee = assignees.get(task.assigneeId());
+        if (assignee == null) {
+            throw new IllegalStateException("Persisted task assignee is missing");
+        }
+        return assignee;
+    }
+
+    private CompanyMemberAccount requireCompanyMember(UUID companyId, UUID userId) {
+        return companyMemberDirectory.findByCompanyId(companyId, null, false).stream()
+                .filter(member -> member.userId().equals(userId))
+                .findFirst()
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_ASSIGNEE_NOT_FOUND));
+    }
+
+    private TaskAssigneeView toAssigneeView(CompanyMemberAccount member) {
+        return new TaskAssigneeView(member.userId(), member.displayName());
     }
 
     private List<String> missingRequiredSlots(

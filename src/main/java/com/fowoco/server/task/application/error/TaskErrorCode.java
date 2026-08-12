@@ -5,6 +5,11 @@ import org.springframework.http.HttpStatus;
 
 public enum TaskErrorCode implements ApiErrorCode {
     TASK_NOT_FOUND(HttpStatus.NOT_FOUND, "업무카드를 찾을 수 없습니다."),
+    TASK_ASSIGNEE_NOT_FOUND(HttpStatus.NOT_FOUND, "지정할 담당자를 찾을 수 없습니다."),
+    TASK_ASSIGNEE_NOT_ASSIGNABLE(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "활성 상태의 HR 또는 관리자만 업무 담당자로 지정할 수 있습니다."
+    ),
     WORKER_NOT_FOUND(HttpStatus.NOT_FOUND, "근로자를 찾을 수 없습니다."),
     WORKFLOW_NOT_FOUND(HttpStatus.NOT_FOUND, "Workflow를 찾을 수 없습니다."),
     WORKFLOW_TASK_TYPE_MISMATCH(

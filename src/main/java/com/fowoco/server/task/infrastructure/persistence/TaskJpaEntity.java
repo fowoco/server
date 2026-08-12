@@ -64,6 +64,8 @@ public class TaskJpaEntity {
     private TaskStatus status;
     @Column(name = "due_date")
     private LocalDate dueDate;
+    @Column(name = "assignee_id")
+    private UUID assigneeId;
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
     @Column(name = "updated_by", nullable = false)
@@ -92,6 +94,7 @@ public class TaskJpaEntity {
         this.contentRevision = task.contentRevision();
         this.status = task.status();
         this.dueDate = task.dueDate();
+        this.assigneeId = task.assigneeId();
         this.updatedBy = task.updatedBy();
         this.updatedAt = task.updatedAt();
     }
@@ -113,6 +116,7 @@ public class TaskJpaEntity {
         this.source = task.source();
         this.status = task.status();
         this.dueDate = task.dueDate();
+        this.assigneeId = task.assigneeId();
         this.createdBy = task.createdBy();
         this.updatedBy = task.updatedBy();
         this.createdAt = task.createdAt();
@@ -137,6 +141,7 @@ public class TaskJpaEntity {
                 source,
                 status,
                 dueDate,
+                assigneeId == null ? createdBy : assigneeId,
                 createdBy,
                 updatedBy,
                 createdAt,
