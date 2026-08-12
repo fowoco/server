@@ -68,6 +68,35 @@ public class AuditController {
     }
 
     @Operation(
+            operationId = "getWorkerActivities",
+            summary = "근로자 안내이력",
+            description = "여러 업무에 흩어진 근로자 안내·응답 기록 중 화면에 안전한 항목만 최신순으로 반환합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "근로자 안내이력 페이지"),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound")
+    })
+    @GetMapping(
+            path = "/workers/{workerId}/activities",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
+    public WorkerActivityPageResponse workerActivities(
+            @PathVariable UUID workerId,
+            @Parameter(description = "직전 응답의 next_cursor. 내용을 해석하거나 수정하지 않습니다.")
+            @RequestParam(required = false) String cursor,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit
+    ) {
+        return WorkerActivityPageResponse.from(auditQueryService.getWorkerActivities(
+                workerId,
+                cursor,
+                limit,
+                actorContextProvider.requireCurrentActor()
+        ));
+    }
+
+    @Operation(
             operationId = "searchAuditEvents",
             summary = "사업장 감사 이벤트 검색",
             description = "회사 audit_visibility 정책이 허용하는 ADMIN 또는 HR이 자신의 사업장 범위에서 검색합니다."

@@ -125,6 +125,7 @@ class WorkerLinkSecurityIntegrationTest {
                 "fullflow-issue-key"
         );
         assertThat(issueResponse.statusCode()).as("issue response body: %s", issueResponse.body()).isEqualTo(201);
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
         String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
         String workerUrl = JsonPath.read(issueResponse.body(), "$.worker_url");
         assertThat(rawToken).isNotBlank();
@@ -177,6 +178,61 @@ class WorkerLinkSecurityIntegrationTest {
         HttpResponse<String> activitiesResponse = getJson("/api/v1/tasks/" + taskId + "/activities", hrToken);
         assertThat(activitiesResponse.statusCode()).isEqualTo(200);
         assertThat(activitiesResponse.body()).contains("WORKER_LINK_RESPONSE_SUBMITTED");
+
+        HttpResponse<String> firstWorkerActivityPage = getJson(
+                "/api/v1/workers/" + workerId + "/activities?limit=1",
+                hrToken
+        );
+        assertThat(firstWorkerActivityPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(firstWorkerActivityPage.body(), "$.items[*].type"))
+                .containsExactly("WORKER_RESPONSE_SUBMITTED");
+        assertThat(JsonPath.<String>read(firstWorkerActivityPage.body(), "$.items[0].task_id"))
+                .isEqualTo(taskId);
+        assertThat(JsonPath.<String>read(firstWorkerActivityPage.body(), "$.items[0].task_title"))
+                .isEqualTo("재계약 준비");
+        String nextCursor = JsonPath.read(firstWorkerActivityPage.body(), "$.next_cursor");
+        assertThat(nextCursor).isNotBlank();
+
+        HttpResponse<String> secondWorkerActivityPage = getJson(
+                "/api/v1/workers/" + workerId + "/activities?limit=1&cursor=" + nextCursor,
+                hrToken
+        );
+        assertThat(secondWorkerActivityPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(secondWorkerActivityPage.body(), "$.items[*].type"))
+                .containsExactly("GUIDANCE_OPENED");
+        assertThat(secondWorkerActivityPage.body())
+                .doesNotContain("request_id")
+                .doesNotContain("trace_id")
+                .doesNotContain(rawToken);
+
+        HttpResponse<String> viewerActivities = getJson(
+                "/api/v1/workers/" + workerId + "/activities",
+                accessToken(login(VIEWER_A_EMAIL))
+        );
+        assertThat(viewerActivities.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(viewerActivities.body(), "$.items[*].type"))
+                .containsExactly("WORKER_RESPONSE_SUBMITTED", "GUIDANCE_OPENED", "GUIDANCE_SENT");
+
+        HttpResponse<String> otherCompanyActivities = getJson(
+                "/api/v1/workers/" + workerId + "/activities",
+                accessToken(login(HR_B_EMAIL))
+        );
+        assertThat(otherCompanyActivities.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void workerWithoutGuidanceReturnsEmptyActivityPage() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "안내이력없는근로자");
+
+        HttpResponse<String> response = getJson(
+                "/api/v1/workers/" + workerId + "/activities",
+                hrToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<Object>>read(response.body(), "$.items")).isEmpty();
+        assertThat(JsonPath.<Object>read(response.body(), "$.next_cursor")).isNull();
     }
 
     @Test
@@ -808,7 +864,7 @@ class WorkerLinkSecurityIntegrationTest {
     }
 
     @Test
-    void documentsWorkerLinkDeliveryEndpointsInOpenApi() throws Exception {
+    void documentsWorkerLinkAndWorkerActivityEndpointsInOpenApi() throws Exception {
         HttpResponse<String> response = getJson("/v3/api-docs", null);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -824,6 +880,10 @@ class WorkerLinkSecurityIntegrationTest {
                 response.body(),
                 "$.paths['/api/v1/worker-links/{workerLinkId}/sms-deliveries'].post.operationId"
         )).isEqualTo("sendWorkerLinkSms");
+        assertThat(JsonPath.<String>read(
+                response.body(),
+                "$.paths['/api/v1/workers/{workerId}/activities'].get.operationId"
+        )).isEqualTo("getWorkerActivities");
         assertThat(JsonPath.<Number>read(
                 response.body(),
                 "$.components.schemas.WorkerLinkIssueRequest.properties.expires_in_hours.minimum"
