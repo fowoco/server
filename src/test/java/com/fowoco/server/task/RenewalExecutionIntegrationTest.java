@@ -99,6 +99,8 @@ class RenewalExecutionIntegrationTest {
         ));
         capturedRequest.set(null);
         jdbcTemplate.update("DELETE FROM document_request_draft");
+        jdbcTemplate.update("DELETE FROM event_consumption");
+        jdbcTemplate.update("DELETE FROM event_publication");
         jdbcTemplate.update("DELETE FROM audit_event");
         jdbcTemplate.update("DELETE FROM approval_request");
         jdbcTemplate.update("DELETE FROM task_transition_history");
