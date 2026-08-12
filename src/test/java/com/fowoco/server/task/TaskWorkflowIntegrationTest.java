@@ -104,11 +104,10 @@ class TaskWorkflowIntegrationTest {
     }
 
     @Test
-    void changesTaskAssigneeAndReturnsItFromTaskAndCaseQueries() throws Exception {
+    void changesTaskAssigneeAndReturnsItFromTaskDetail() throws Exception {
         String hrToken = login(HR_A_EMAIL);
         HttpResponse<String> created = post("/api/v1/tasks", validCreateBody(), hrToken);
         UUID taskId = UUID.fromString(JsonPath.read(created.body(), "$.task_id"));
-        UUID caseId = UUID.fromString(JsonPath.read(created.body(), "$.case_id"));
         assertThat(JsonPath.<String>read(created.body(), "$.assignee.user_id"))
                 .isEqualTo(HR_A.toString());
         assertThat(JsonPath.<String>read(created.body(), "$.assignee.display_name"))
@@ -133,19 +132,8 @@ class TaskWorkflowIntegrationTest {
         assertThat(JsonPath.<Number>read(changed.body(), "$.version").longValue()).isEqualTo(1);
 
         HttpResponse<String> detail = get("/api/v1/tasks/" + taskId, hrToken);
-        HttpResponse<String> page = get("/api/v1/tasks?case_id=" + caseId, hrToken);
-        HttpResponse<String> caseProjection = get(
-                "/api/v1/cases/" + caseId + "/projection",
-                hrToken
-        );
         assertThat(JsonPath.<String>read(detail.body(), "$.assignee.user_id"))
                 .isEqualTo(HR_A_SECOND.toString());
-        assertThat(JsonPath.<String>read(page.body(), "$.items[0].assignee.display_name"))
-                .isEqualTo("담당자 B");
-        assertThat(JsonPath.<String>read(
-                caseProjection.body(),
-                "$.current_task.assignee.user_id"
-        )).isEqualTo(HR_A_SECOND.toString());
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT assignee_id FROM task WHERE task_id = ?",
                 UUID.class,

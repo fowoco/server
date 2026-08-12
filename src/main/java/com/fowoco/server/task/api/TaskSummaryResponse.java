@@ -7,7 +7,6 @@ import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
 import com.fowoco.server.task.domain.TaskTargetType;
 import com.fowoco.server.task.domain.TaskType;
-import com.fowoco.server.task.application.TaskSummaryView;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -25,14 +24,12 @@ public record TaskSummaryResponse(
         TaskSource source,
         TaskStatus status,
         LocalDate dueDate,
-        TaskAssigneeResponse assignee,
         long contentRevision,
         long version,
         Instant createdAt,
         Instant updatedAt
 ) {
-    static TaskSummaryResponse from(TaskSummaryView view) {
-        Task task = view.task();
+    static TaskSummaryResponse from(Task task) {
         return new TaskSummaryResponse(
                 task.taskId(),
                 task.targetType(),
@@ -45,7 +42,6 @@ public record TaskSummaryResponse(
                 task.source(),
                 task.status(),
                 task.dueDate(),
-                TaskAssigneeResponse.from(view.assignee()),
                 task.contentRevision(),
                 task.version(),
                 task.createdAt(),

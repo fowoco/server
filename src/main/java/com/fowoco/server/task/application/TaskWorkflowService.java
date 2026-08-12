@@ -39,7 +39,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -225,7 +224,7 @@ public class TaskWorkflowService {
                 size
         ));
         return new TaskPageResult(
-                taskSummaryViews(result.items(), actor.companyId()),
+                result.items(),
                 result.page(),
                 result.size(),
                 result.totalElements(),
@@ -547,18 +546,6 @@ public class TaskWorkflowService {
         );
     }
 
-    private List<TaskSummaryView> taskSummaryViews(List<Task> tasks, UUID companyId) {
-        Map<UUID, TaskAssigneeView> assignees = new HashMap<>();
-        companyMemberDirectory.findByCompanyId(companyId, null, false)
-                .forEach(member -> assignees.put(member.userId(), toAssigneeView(member)));
-        return tasks.stream()
-                .map(task -> new TaskSummaryView(
-                        task,
-                        requireAssignee(task, assignees)
-                ))
-                .toList();
-    }
-
     private TaskAssigneeView requireAssignableAssignee(UUID companyId, UUID assigneeId) {
         CompanyMemberAccount member = requireCompanyMember(companyId, assigneeId);
         if (!member.active() || member.role() == UserRole.VIEWER) {
@@ -569,17 +556,6 @@ public class TaskWorkflowService {
 
     private TaskAssigneeView requireAssignee(Task task, UUID companyId) {
         return toAssigneeView(requireCompanyMember(companyId, task.assigneeId()));
-    }
-
-    private TaskAssigneeView requireAssignee(
-            Task task,
-            Map<UUID, TaskAssigneeView> assignees
-    ) {
-        TaskAssigneeView assignee = assignees.get(task.assigneeId());
-        if (assignee == null) {
-            throw new IllegalStateException("Persisted task assignee is missing");
-        }
-        return assignee;
     }
 
     private CompanyMemberAccount requireCompanyMember(UUID companyId, UUID userId) {

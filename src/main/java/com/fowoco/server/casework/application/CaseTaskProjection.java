@@ -10,8 +10,6 @@ public record CaseTaskProjection(
         TaskType taskType,
         String title,
         TaskStatus status,
-        LocalDate dueDate,
-        UUID assigneeId,
-        String assigneeDisplayName
+        LocalDate dueDate
 ) {
 }

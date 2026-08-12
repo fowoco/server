@@ -222,21 +222,11 @@ public class JdbcCaseQueryRepository implements CaseQueryRepository {
         }
         return jdbcTemplate.query(
                 """
-                SELECT task.case_id,
-                       task.task_id,
-                       task.task_type,
-                       task.title,
-                       task.status,
-                       task.due_date,
-                       COALESCE(task.assignee_id, task.created_by) AS assignee_id,
-                       assignee.display_name AS assignee_display_name
+                SELECT case_id, task_id, task_type, title, status, due_date
                   FROM task
-                  JOIN user_account assignee
-                    ON assignee.user_id = COALESCE(task.assignee_id, task.created_by)
-                   AND assignee.company_id = task.company_id
-                 WHERE task.company_id = :companyId
-                   AND task.case_id IN (:caseIds)
-                 ORDER BY task.due_date ASC, task.created_at ASC
+                 WHERE company_id = :companyId
+                   AND case_id IN (:caseIds)
+                 ORDER BY due_date ASC, created_at ASC
                 """,
                 Map.of("companyId", companyId, "caseIds", caseIds),
                 (resultSet, rowNumber) -> new CaseTaskRecord(
@@ -245,9 +235,7 @@ public class JdbcCaseQueryRepository implements CaseQueryRepository {
                         TaskType.valueOf(resultSet.getString("task_type")),
                         resultSet.getString("title"),
                         TaskStatus.valueOf(resultSet.getString("status")),
-                        resultSet.getObject("due_date", java.time.LocalDate.class),
-                        resultSet.getObject("assignee_id", UUID.class),
-                        resultSet.getString("assignee_display_name")
+                        resultSet.getObject("due_date", java.time.LocalDate.class)
                 )
         );
     }
