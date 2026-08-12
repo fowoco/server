@@ -159,6 +159,38 @@ public class TaskController {
         ));
     }
 
+    @Operation(
+            operationId = "changeTaskAssignee",
+            summary = "업무카드 담당자 변경",
+            description = "같은 사업장의 활성 HR 또는 관리자를 담당자로 지정합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "담당자가 변경된 업무카드"),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+    })
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    @PatchMapping(
+            path = "/{taskId}/assignee",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public TaskDetailResponse changeAssignee(
+            @PathVariable UUID taskId,
+            @Valid @RequestBody ChangeTaskAssigneeRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        return TaskDetailResponse.from(taskService.changeAssignee(
+                taskId,
+                request.toCommand(),
+                actor(),
+                RequestMetadata.from(servletRequest)
+        ));
+    }
+
     @Operation(operationId = "updateTaskChecklistItem", summary = "체크리스트 항목 수정")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "체크리스트와 재평가된 업무 상태"),
