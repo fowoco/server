@@ -82,4 +82,19 @@ interface SpringDataTaskJpaRepository extends JpaRepository<TaskJpaEntity, UUID>
                AND task.status <> com.fowoco.server.task.domain.TaskStatus.CANCELLED
             """)
     long countOpenTasksByCompanyId(@Param("companyId") UUID companyId);
+
+    @Query("""
+            SELECT task
+              FROM TaskJpaEntity task
+             WHERE task.companyId = :companyId
+               AND task.dueDate BETWEEN :fromDate AND :toDate
+               AND task.status <> com.fowoco.server.task.domain.TaskStatus.COMPLETED
+               AND task.status <> com.fowoco.server.task.domain.TaskStatus.CANCELLED
+             ORDER BY task.dueDate ASC
+            """)
+    java.util.List<TaskJpaEntity> findOpenTasksDueBetween(
+            @Param("companyId") UUID companyId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate
+    );
 }

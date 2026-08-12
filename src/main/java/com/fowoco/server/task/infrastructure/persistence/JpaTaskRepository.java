@@ -79,6 +79,13 @@ public class JpaTaskRepository implements TaskRepository {
     }
 
     @Override
+    public List<Task> findOpenTasksDueBetween(UUID companyId, LocalDate from, LocalDate to) {
+        return repository.findOpenTasksDueBetween(companyId, from, to).stream()
+                .map(TaskJpaEntity::toDomain)
+                .toList();
+    }
+
+    @Override
     public Task save(Task task) {
         TaskJpaEntity entity = repository.findByTaskIdAndCompanyId(task.taskId(), task.companyId())
                 .map(existing -> {

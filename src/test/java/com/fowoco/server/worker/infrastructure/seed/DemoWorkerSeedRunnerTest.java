@@ -153,6 +153,11 @@ class DemoWorkerSeedRunnerTest {
                 throw new IllegalStateException("duplicate company");
             }
         }
+
+        @Override
+        public List<UUID> findAllIds() {
+            return List.copyOf(companies.keySet());
+        }
     }
 
     private static final class InMemoryWorkerRepository implements WorkerRepository {

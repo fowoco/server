@@ -28,6 +28,10 @@ final class TaskDomainEvents {
             "previous_status",
             "status"
     );
+    private static final Set<String> TASK_NEEDS_INFO_FIELDS = Set.of(
+            "task_title",
+            "task_type"
+    );
 
     private TaskDomainEvents() {
     }
@@ -80,6 +84,35 @@ final class TaskDomainEvents {
                         Map.of(
                                 "previous_status", previousStatus,
                                 "status", task.status()
+                        )
+                )
+        );
+    }
+
+    /**
+     * 필수 체크리스트 항목이 미완료로 바뀌거나 필수 슬롯이 채워지지 않아
+     * Task가 NEEDS_INFO로 전이될 때 발행한다. "문서 보완이 필요하다"는
+     * 신호를, 이 재평가를 트리거한 HR 본인에게 알림으로 전달하기 위함이다.
+     */
+    static DomainEventEnvelope taskNeedsInfo(
+            UUID eventId,
+            Task task,
+            ActorContext actor,
+            RequestMetadata metadata,
+            Instant occurredAt
+    ) {
+        return envelope(
+                eventId,
+                "TaskNeedsInfo",
+                task,
+                actor,
+                metadata,
+                occurredAt,
+                SafeEventPayload.of(
+                        TASK_NEEDS_INFO_FIELDS,
+                        Map.of(
+                                "task_title", task.title(),
+                                "task_type", task.taskType()
                         )
                 )
         );
