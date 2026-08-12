@@ -9,6 +9,7 @@ import java.util.Map;
 
 public record TaskResult(
         Task task,
+        TaskAssigneeView assignee,
         Map<String, Object> businessData,
         List<TaskChecklistItem> checklistItems,
         List<String> missingRequiredSlots
