@@ -130,7 +130,7 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(rawToken).isNotBlank();
         assertThat(workerUrl).isEqualTo("http://localhost:5173/worker-portal/" + rawToken);
 
-        HttpResponse<String> viewResponse = getJson("/public/worker-links/" + rawToken, null);
+        HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/" + rawToken, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
         assertThat(viewResponse.headers().firstValue("Cache-Control")).contains("no-store");
         assertThat(JsonPath.<String>read(viewResponse.body(), "$.guidance"))
@@ -160,7 +160,7 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(retryUploadId).isEqualTo(firstUploadId);
 
         HttpResponse<String> responseSubmit = postJson(
-                "/public/worker-links/" + rawToken + "/responses",
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
                 """
                 {"response_type":"DOCUMENT_SUBMITTED","upload_ids":["%s"],"idempotency_key":"key-1"}
                 """.formatted(uploadId),
@@ -263,7 +263,7 @@ class WorkerLinkSecurityIntegrationTest {
         String taskId = createApprovedTask(hrToken, workerId);
         String workerUrl = issueWorkerLink(hrToken, taskId, "content-not-ready-key");
 
-        HttpResponse<String> response = getJson("/public/worker-links/" + workerUrl, null);
+        HttpResponse<String> response = getJson("/api/v1/public/worker-links/" + workerUrl, null);
 
         assertThat(response.statusCode()).isEqualTo(409);
         assertThat(JsonPath.<String>read(response.body(), "$.code"))
@@ -278,7 +278,7 @@ class WorkerLinkSecurityIntegrationTest {
         String workerUrl = issueWorkerLink(hrToken, taskId, "response-management-key");
 
         HttpResponse<String> submitResponse = postJson(
-                "/public/worker-links/" + workerUrl + "/responses",
+                "/api/v1/public/worker-links/" + workerUrl + "/responses",
                 """
                 {"response_type":"QUESTION","message":"여권의 어느 면을 제출하나요?","idempotency_key":"question-key"}
                 """,
@@ -360,7 +360,7 @@ class WorkerLinkSecurityIntegrationTest {
         String contractFileId = JsonPath.read(contractUpload.body(), "$.upload_id");
 
         HttpResponse<String> submitResponse = postJson(
-                "/public/worker-links/" + rawToken + "/responses",
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
                 """
                 {
                   "response_type":"DOCUMENT_SUBMITTED",
@@ -873,12 +873,12 @@ class WorkerLinkSecurityIntegrationTest {
 
     @Test
     void viewReturns410ForNonExistentToken() throws Exception {
-        HttpResponse<String> viewResponse = getJson("/public/worker-links/nonexistenttoken12345", null);
+        HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/nonexistenttoken12345", null);
         assertThat(viewResponse.statusCode()).isEqualTo(410);
     }
     @Test
     void documentsEndpointAllowsIdempotencyKeyHeaderInCors() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/test-token/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/test-token/documents"))
                 .header("Origin", "http://localhost:3000")
                 .header("Access-Control-Request-Method", "POST")
                 .header("Access-Control-Request-Headers", "Idempotency-Key")
@@ -1008,7 +1008,7 @@ class WorkerLinkSecurityIntegrationTest {
         writeFieldPart(out, "clientRequestId", UUID.randomUUID().toString());
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();
@@ -1028,7 +1028,7 @@ class WorkerLinkSecurityIntegrationTest {
         writeFieldPart(out, "documentType", documentType);
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();
@@ -1043,7 +1043,7 @@ class WorkerLinkSecurityIntegrationTest {
         writeFieldPart(out, "clientRequestId", clientRequestId);
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();

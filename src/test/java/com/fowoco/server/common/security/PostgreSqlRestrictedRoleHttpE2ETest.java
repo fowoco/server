@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 class PostgreSqlRestrictedRoleHttpE2ETest {
 
     private static final String COOKIE_NAME = "fowoco_refresh_token";
-    private static final String PROBE_PATH = "/public/worker-links/rls-test/probes";
+    private static final String PROBE_PATH = "/api/v1/public/worker-links/rls-test/probes";
     private static final List<String> RLS_TABLES = List.of(
             "company",
             "user_account",
@@ -259,7 +259,7 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
     @Test
     void workerLinkBootstrapAcceptsOnlyActiveRegisteredLinks() throws Exception {
         HttpResponse<String> active = get(
-                "/public/worker-links/"
+                "/api/v1/public/worker-links/"
                         + PostgreSqlRestrictedRoleHttpDataFixture.ACTIVE_WORKER_LINK_TOKEN,
                 null
         );
@@ -277,7 +277,7 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
         );
 
         HttpResponse<String> responseWrite = postJson(
-                "/public/worker-links/"
+                "/api/v1/public/worker-links/"
                         + PostgreSqlRestrictedRoleHttpDataFixture.ACTIVE_WORKER_LINK_TOKEN
                         + "/responses",
                 """
@@ -298,16 +298,16 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
         );
 
         assertThat(get(
-                "/public/worker-links/"
+                "/api/v1/public/worker-links/"
                         + PostgreSqlRestrictedRoleHttpDataFixture.EXPIRED_WORKER_LINK_TOKEN,
                 null
         ).statusCode()).isEqualTo(410);
         assertThat(get(
-                "/public/worker-links/"
+                "/api/v1/public/worker-links/"
                         + PostgreSqlRestrictedRoleHttpDataFixture.REVOKED_WORKER_LINK_TOKEN,
                 null
         ).statusCode()).isEqualTo(410);
-        assertThat(get("/public/worker-links/unregistered-rls-http-token", null).statusCode())
+        assertThat(get("/api/v1/public/worker-links/unregistered-rls-http-token", null).statusCode())
                 .isEqualTo(410);
     }
 
