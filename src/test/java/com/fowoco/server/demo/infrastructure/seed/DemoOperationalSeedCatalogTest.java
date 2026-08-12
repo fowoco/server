@@ -69,15 +69,15 @@ class DemoOperationalSeedCatalogTest {
                 .containsExactlyInAnyOrderElementsOf(idsExcept(
                         "94300000-0000-0000-0000-000000000",
                         1,
-                        13,
+                        16,
                         Set.of(2)
                 ));
         assertThat(catalog.demoTransitions().stream().map(seed -> seed.transitionId()))
                 .containsExactlyInAnyOrderElementsOf(idsExcept(
                         "94400000-0000-0000-0000-000000000",
                         1,
-                        52,
-                        IntStream.rangeClosed(13, 16).boxed().collect(Collectors.toSet())
+                        60,
+                        IntStream.rangeClosed(15, 20).boxed().collect(Collectors.toSet())
                 ));
         assertThat(catalog.demoDocumentRequestDrafts().stream().map(seed -> seed.draftId()))
                 .containsExactlyInAnyOrderElementsOf(idsExcept(
@@ -90,8 +90,8 @@ class DemoOperationalSeedCatalogTest {
                 .containsExactlyInAnyOrderElementsOf(idsExcept(
                         "96000000-0000-0000-0000-000000000",
                         1,
-                        96,
-                        Set.of(24, 25, 26, 27, 28, 45, 83, 94)
+                        102,
+                        Set.of(24, 25, 26, 27, 28, 45, 89, 100)
                 ));
 
         Set<UUID> activeTaskIds = catalog.demoTasks().stream()

@@ -58,7 +58,7 @@ public class WorkerLinkDocumentController {
             @ApiResponse(responseCode = "429", description = "요청 과다")
     })
     @PostMapping(
-            path = "/public/worker-links/{token}/documents",
+            path = "/api/v1/public/worker-links/{token}/documents",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )

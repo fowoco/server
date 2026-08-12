@@ -50,8 +50,8 @@ final class DemoOperationalSeedCatalog {
             UUID.fromString("96000000-0000-0000-0000-000000000027"),
             UUID.fromString("96000000-0000-0000-0000-000000000028"),
             UUID.fromString("96000000-0000-0000-0000-000000000045"),
-            UUID.fromString("96000000-0000-0000-0000-000000000083"),
-            UUID.fromString("96000000-0000-0000-0000-000000000094")
+            UUID.fromString("96000000-0000-0000-0000-000000000089"),
+            UUID.fromString("96000000-0000-0000-0000-000000000100")
     );
     private static final UUID RETIRED_GOLDEN_FLOW_DRAFT_ID =
             UUID.fromString("94700000-0000-0000-0000-000000000002");
@@ -221,12 +221,12 @@ final class DemoOperationalSeedCatalog {
         requireSize(demoDocuments, 83, "Demo Company document");
         requireSize(testDocuments, 8, "Test Company document");
         requireSize(demoChecklists, 60, "Demo Company checklist item");
-        requireSize(demoApprovals, 12, "Demo Company approval request");
-        requireSize(demoTransitions, 48, "Demo Company task transition");
+        requireSize(demoApprovals, 15, "Demo Company approval request");
+        requireSize(demoTransitions, 54, "Demo Company task transition");
         requireSize(demoExternalSubmissions, 6, "Demo Company external submission");
         requireSize(demoEvidence, 10, "Demo Company completion evidence");
         requireSize(demoDocumentRequestDrafts, 4, "Demo Company document request draft");
-        requireSize(demoAudits, 88, "Demo Company audit event");
+        requireSize(demoAudits, 94, "Demo Company audit event");
         requireSize(testAudits, 8, "Test Company audit event");
         requireDistribution(
                 demoTasks.stream().map(TaskSeed::taskType).toList(),
@@ -264,7 +264,7 @@ final class DemoOperationalSeedCatalog {
                 demoApprovals.stream().map(ApprovalSeed::status).toList(),
                 Map.of(
                         ApprovalStatus.PENDING, 3L,
-                        ApprovalStatus.APPROVED, 7L,
+                        ApprovalStatus.APPROVED, 10L,
                         ApprovalStatus.REJECTED, 1L,
                         ApprovalStatus.INVALIDATED, 1L
                 ),
@@ -283,7 +283,7 @@ final class DemoOperationalSeedCatalog {
         requireDistribution(
                 demoAudits.stream().map(AuditSeed::actorType).toList(),
                 Map.of(
-                        ActorType.HR_USER, 77L,
+                        ActorType.HR_USER, 83L,
                         ActorType.AI_AGENT, 2L,
                         ActorType.SYSTEM_RULE, 6L,
                         ActorType.WORKER_LINK, 3L

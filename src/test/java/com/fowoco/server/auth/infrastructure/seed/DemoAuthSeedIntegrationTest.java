@@ -120,12 +120,12 @@ class DemoAuthSeedIntegrationTest {
             Map.entry("worker_document", 83),
             Map.entry("stored_file", 3),
             Map.entry("task_checklist_item", 60),
-            Map.entry("approval_request", 12),
-            Map.entry("task_transition_history", 48),
+            Map.entry("approval_request", 15),
+            Map.entry("task_transition_history", 54),
             Map.entry("external_submission", 6),
             Map.entry("task_evidence", 10),
             Map.entry("document_request_draft", 4),
-            Map.entry("audit_event", 88)
+            Map.entry("audit_event", 94)
     );
     private static final Map<String, Integer> EXPECTED_TEST_COUNTS = Map.of(
             "user_account", 3,
@@ -271,11 +271,11 @@ class DemoAuthSeedIntegrationTest {
                 );
         assertThat(distribution("approval_request", "status", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("PENDING", 3, "APPROVED", 7, "REJECTED", 1, "INVALIDATED", 1)
+                        Map.of("PENDING", 3, "APPROVED", 10, "REJECTED", 1, "INVALIDATED", 1)
                 );
         assertThat(distribution("audit_event", "actor_type", COMPANY_ID))
                 .containsExactlyInAnyOrderEntriesOf(
-                        Map.of("HR_USER", 77, "AI_AGENT", 2, "SYSTEM_RULE", 6, "WORKER_LINK", 3)
+                        Map.of("HR_USER", 83, "AI_AGENT", 2, "SYSTEM_RULE", 6, "WORKER_LINK", 3)
                 );
 
         assertThat(jdbcTemplate.queryForObject(
@@ -952,7 +952,7 @@ class DemoAuthSeedIntegrationTest {
         HttpResponse<String> testAudits = authorizedGet("/api/v1/audit-events?limit=100", testToken);
         assertOk(demoAudits);
         assertOk(testAudits);
-        assertThat(JsonPath.<List<?>>read(demoAudits.body(), "$.items")).hasSize(88);
+        assertThat(JsonPath.<List<?>>read(demoAudits.body(), "$.items")).hasSize(94);
         assertThat(JsonPath.<List<?>>read(testAudits.body(), "$.items")).hasSize(8);
 
         assertTenantApiCount(testToken, "/api/v1/workers?size=100", 5);

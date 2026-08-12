@@ -36,12 +36,12 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
             Map.entry("worker_document", 83),
             Map.entry("stored_file", 3),
             Map.entry("task_checklist_item", 60),
-            Map.entry("approval_request", 12),
-            Map.entry("task_transition_history", 48),
+            Map.entry("approval_request", 15),
+            Map.entry("task_transition_history", 54),
             Map.entry("external_submission", 6),
             Map.entry("task_evidence", 10),
             Map.entry("document_request_draft", 4),
-            Map.entry("audit_event", 88)
+            Map.entry("audit_event", 94)
     );
 
     @TempDir
