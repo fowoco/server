@@ -15,7 +15,11 @@ public class AuditCursorCodec {
     private static final String DELIMITER = "|";
 
     public String encode(AuditEvent event) {
-        String raw = event.createdAt() + DELIMITER + event.auditEventId();
+        return encode(event.createdAt(), event.auditEventId());
+    }
+
+    public String encode(Instant createdAt, UUID auditEventId) {
+        String raw = createdAt + DELIMITER + auditEventId;
         return Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(raw.getBytes(StandardCharsets.UTF_8));
