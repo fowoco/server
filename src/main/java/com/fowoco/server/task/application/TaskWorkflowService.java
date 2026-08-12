@@ -548,7 +548,8 @@ public class TaskWorkflowService {
 
     private TaskAssigneeView requireAssignableAssignee(UUID companyId, UUID assigneeId) {
         CompanyMemberAccount member = requireCompanyMember(companyId, assigneeId);
-        if (!member.active() || member.role() == UserRole.VIEWER) {
+        boolean assignableRole = member.role() == UserRole.ADMIN || member.role() == UserRole.HR;
+        if (!member.active() || !assignableRole) {
             throw new ApiException(TaskErrorCode.TASK_ASSIGNEE_NOT_ASSIGNABLE);
         }
         return toAssigneeView(member);
