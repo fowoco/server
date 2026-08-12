@@ -102,6 +102,38 @@ class TaskTest {
     }
 
     @Test
+    void changesAssigneeWithoutChangingTaskContentOrStatus() {
+        Task task = task(TaskStatus.APPROVED);
+        UUID nextAssigneeId = UUID.fromString("10000000-0000-0000-0000-000000000002");
+
+        boolean changed = task.changeAssignee(
+                nextAssigneeId,
+                0,
+                ACTOR_ID,
+                NOW.plusSeconds(1)
+        );
+
+        assertThat(changed).isTrue();
+        assertThat(task.assigneeId()).isEqualTo(nextAssigneeId);
+        assertThat(task.status()).isEqualTo(TaskStatus.APPROVED);
+        assertThat(task.contentRevision()).isZero();
+    }
+
+    @Test
+    void terminalTaskRejectsAssigneeChange() {
+        Task task = task(TaskStatus.COMPLETED);
+
+        assertThatThrownBy(() -> task.changeAssignee(
+                UUID.randomUUID(),
+                0,
+                ACTOR_ID,
+                NOW.plusSeconds(1)
+        )).isInstanceOfSatisfying(ApiException.class, exception ->
+                assertThat(exception.errorCode())
+                        .isEqualTo(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED));
+    }
+
+    @Test
     void terminalTaskCannotBeCancelledAgain() {
         Task task = task(TaskStatus.COMPLETED);
 

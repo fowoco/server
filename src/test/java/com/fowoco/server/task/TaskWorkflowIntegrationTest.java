@@ -1,6 +1,7 @@
 package com.fowoco.server.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jayway.jsonpath.JsonPath;
 import java.net.URI;
@@ -22,6 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -37,6 +39,10 @@ class TaskWorkflowIntegrationTest {
             UUID.fromString("c1000000-0000-0000-0000-000000000001");
     private static final UUID VIEWER_A =
             UUID.fromString("c2000000-0000-0000-0000-000000000001");
+    private static final UUID HR_A_SECOND =
+            UUID.fromString("c1000000-0000-0000-0000-000000000002");
+    private static final UUID SUSPENDED_HR_A =
+            UUID.fromString("c1000000-0000-0000-0000-000000000003");
     private static final UUID HR_B =
             UUID.fromString("d1000000-0000-0000-0000-000000000001");
     private static final UUID WORKER_A =
@@ -44,6 +50,7 @@ class TaskWorkflowIntegrationTest {
     private static final String PASSWORD = "Test-password-1!";
     private static final String HR_A_EMAIL = "task.hr.a@example.com";
     private static final String VIEWER_A_EMAIL = "task.viewer.a@example.com";
+    private static final String HR_A_SECOND_EMAIL = "task.hr.a.second@example.com";
     private static final String HR_B_EMAIL = "task.hr.b@example.com";
 
     @LocalServerPort
@@ -77,10 +84,120 @@ class TaskWorkflowIntegrationTest {
         insertCompany(COMPANY_A, "Task 테스트 사업장 A");
         insertCompany(COMPANY_B, "Task 테스트 사업장 B");
         String passwordHash = passwordEncoder.encode(PASSWORD);
-        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, passwordHash, "HR");
-        insertUser(VIEWER_A, COMPANY_A, VIEWER_A_EMAIL, passwordHash, "VIEWER");
-        insertUser(HR_B, COMPANY_B, HR_B_EMAIL, passwordHash, "HR");
+        insertUser(HR_A, COMPANY_A, HR_A_EMAIL, "담당자 A", passwordHash, "HR");
+        insertUser(HR_A_SECOND, COMPANY_A, HR_A_SECOND_EMAIL, "담당자 B", passwordHash, "HR");
+        insertUser(
+                SUSPENDED_HR_A,
+                COMPANY_A,
+                "task.hr.a.suspended@example.com",
+                "정지 담당자",
+                passwordHash,
+                "HR"
+        );
+        jdbcTemplate.update(
+                "UPDATE user_account SET status = 'SUSPENDED' WHERE user_id = ?",
+                SUSPENDED_HR_A
+        );
+        insertUser(VIEWER_A, COMPANY_A, VIEWER_A_EMAIL, "조회자 A", passwordHash, "VIEWER");
+        insertUser(HR_B, COMPANY_B, HR_B_EMAIL, "담당자 B사", passwordHash, "HR");
         insertWorker();
+    }
+
+    @Test
+    void changesTaskAssigneeAndReturnsItFromTaskDetail() throws Exception {
+        String hrToken = login(HR_A_EMAIL);
+        HttpResponse<String> created = post("/api/v1/tasks", validCreateBody(), hrToken);
+        UUID taskId = UUID.fromString(JsonPath.read(created.body(), "$.task_id"));
+        assertThat(JsonPath.<String>read(created.body(), "$.assignee.user_id"))
+                .isEqualTo(HR_A.toString());
+        assertThat(JsonPath.<String>read(created.body(), "$.assignee.display_name"))
+                .isEqualTo("담당자 A");
+
+        HttpResponse<String> changed = patch(
+                "/api/v1/tasks/" + taskId + "/assignee",
+                """
+                {
+                  "assignee_id":"%s",
+                  "expected_version":0
+                }
+                """.formatted(HR_A_SECOND),
+                hrToken
+        );
+
+        assertThat(changed.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(changed.body(), "$.assignee.user_id"))
+                .isEqualTo(HR_A_SECOND.toString());
+        assertThat(JsonPath.<String>read(changed.body(), "$.assignee.display_name"))
+                .isEqualTo("담당자 B");
+        assertThat(JsonPath.<Number>read(changed.body(), "$.version").longValue()).isEqualTo(1);
+
+        HttpResponse<String> detail = get("/api/v1/tasks/" + taskId, hrToken);
+        assertThat(JsonPath.<String>read(detail.body(), "$.assignee.user_id"))
+                .isEqualTo(HR_A_SECOND.toString());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT assignee_id FROM task WHERE task_id = ?",
+                UUID.class,
+                taskId
+        )).isEqualTo(HR_A_SECOND);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_event "
+                        + "WHERE target_id = ? AND action = 'TASK_ASSIGNEE_CHANGED'",
+                Integer.class,
+                taskId
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsUnauthorizedCrossCompanyInactiveViewerAndStaleAssigneeChanges() throws Exception {
+        String hrToken = login(HR_A_EMAIL);
+        UUID taskId = UUID.fromString(JsonPath.read(
+                post("/api/v1/tasks", validCreateBody(), hrToken).body(),
+                "$.task_id"
+        ));
+        String request = """
+                {"assignee_id":"%s","expected_version":0}
+                """.formatted(HR_A_SECOND);
+        assertThat(patch("/api/v1/tasks/" + taskId + "/assignee", request, hrToken).statusCode())
+                .isEqualTo(200);
+
+        assertThat(patch(
+                "/api/v1/tasks/" + taskId + "/assignee",
+                request,
+                hrToken
+        ).statusCode()).isEqualTo(409);
+        assertThat(patch(
+                "/api/v1/tasks/" + taskId + "/assignee",
+                """
+                {"assignee_id":"%s","expected_version":1}
+                """.formatted(HR_B),
+                hrToken
+        ).statusCode()).isEqualTo(404);
+        assertThat(patch(
+                "/api/v1/tasks/" + taskId + "/assignee",
+                """
+                {"assignee_id":"%s","expected_version":1}
+                """.formatted(SUSPENDED_HR_A),
+                hrToken
+        ).statusCode()).isEqualTo(422);
+        assertThat(patch(
+                "/api/v1/tasks/" + taskId + "/assignee",
+                """
+                {"assignee_id":"%s","expected_version":1}
+                """.formatted(VIEWER_A),
+                hrToken
+        ).statusCode()).isEqualTo(422);
+        assertThat(patch(
+                "/api/v1/tasks/" + taskId + "/assignee",
+                """
+                {"assignee_id":"%s","expected_version":1}
+                """.formatted(HR_A),
+                login(VIEWER_A_EMAIL)
+        ).statusCode()).isEqualTo(403);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE task SET assignee_id = ? WHERE task_id = ?",
+                HR_B,
+                taskId
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
@@ -694,18 +811,20 @@ class TaskWorkflowIntegrationTest {
             UUID userId,
             UUID companyId,
             String email,
+            String displayName,
             String passwordHash,
             String role
     ) {
         jdbcTemplate.update(
                 """
                 INSERT INTO user_account (
-                    user_id, company_id, email, normalized_email, password_hash,
+                    user_id, company_id, display_name, email, normalized_email, password_hash,
                     role, status, created_at, updated_at, version
-                ) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
                 """,
                 userId,
                 companyId,
+                displayName,
                 email,
                 email,
                 passwordHash,
