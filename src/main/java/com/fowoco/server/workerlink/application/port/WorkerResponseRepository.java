@@ -12,6 +12,12 @@ public interface WorkerResponseRepository {
 
     Optional<WorkerResponse> findByWorkerLinkIdAndIdempotencyKey(UUID workerLinkId, String idempotencyKey);
 
+    Optional<WorkerResponseItem> findByResponseIdAndTaskIdAndCompanyId(
+            UUID responseId,
+            UUID taskId,
+            UUID companyId
+    );
+
     void linkUpload(UUID responseId, UUID storedFileId, UUID companyId);
 
     boolean isUploadAlreadyLinked(UUID storedFileId, UUID companyId);

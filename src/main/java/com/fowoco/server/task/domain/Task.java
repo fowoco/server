@@ -237,12 +237,24 @@ public final class Task {
         return transition(TaskStatus.DRAFT, actorId, now);
     }
 
+    public TaskStatus waitForWorker(long expectedVersion, UUID actorId, Instant now) {
+        requireVersion(expectedVersion);
+        requireStatus(TaskStatus.APPROVED);
+        return transition(TaskStatus.WAITING_WORKER, actorId, now);
+    }
+
     public TaskStatus recordExternalSubmission(long expectedVersion, UUID actorId, Instant now) {
         requireVersion(expectedVersion);
         if (status != TaskStatus.APPROVED && status != TaskStatus.WAITING_WORKER) {
             throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         return transition(TaskStatus.WAITING_EXTERNAL, actorId, now);
+    }
+
+    public TaskStatus resumeAfterWorkerSubmission(long expectedVersion, UUID actorId, Instant now) {
+        requireVersion(expectedVersion);
+        requireStatus(TaskStatus.WAITING_WORKER);
+        return transition(TaskStatus.APPROVED, actorId, now);
     }
 
     public TaskStatus complete(

@@ -333,6 +333,126 @@ class WorkerLinkSecurityIntegrationTest {
     }
 
     @Test
+    void hrCanInspectAndAdoptSubmittedFilesThenResumeTask() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "제출서류채택테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "document-adoption-link-key");
+
+        HttpResponse<String> passportUpload = uploadFileAsType(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "passport-content".getBytes(StandardCharsets.UTF_8),
+                "PASSPORT_COPY"
+        );
+        HttpResponse<String> contractUpload = uploadFileAsType(
+                rawToken,
+                "contract.pdf",
+                "application/pdf",
+                "contract-content".getBytes(StandardCharsets.UTF_8),
+                "CONTRACT"
+        );
+        assertThat(passportUpload.statusCode()).isEqualTo(201);
+        assertThat(contractUpload.statusCode()).isEqualTo(201);
+        String passportFileId = JsonPath.read(passportUpload.body(), "$.upload_id");
+        String contractFileId = JsonPath.read(contractUpload.body(), "$.upload_id");
+
+        HttpResponse<String> submitResponse = postJson(
+                "/public/worker-links/" + rawToken + "/responses",
+                """
+                {
+                  "response_type":"DOCUMENT_SUBMITTED",
+                  "message":"요청하신 서류를 제출합니다.",
+                  "upload_ids":["%s","%s"],
+                  "idempotency_key":"document-adoption-response-key"
+                }
+                """.formatted(passportFileId, contractFileId),
+                null
+        );
+        assertThat(submitResponse.statusCode()).isEqualTo(201);
+        String responseId = JsonPath.read(submitResponse.body(), "$.response_id");
+
+        HttpResponse<String> beforeAdoption = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrToken
+        );
+        assertThat(beforeAdoption.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(beforeAdoption.body(), "$.items[0].message"))
+                .isEqualTo("요청하신 서류를 제출합니다.");
+        assertThat(JsonPath.<List<String>>read(beforeAdoption.body(), "$.items[0].uploads[*].file_name"))
+                .containsExactlyInAnyOrder("passport.pdf", "contract.pdf");
+        assertThat(JsonPath.<List<Boolean>>read(beforeAdoption.body(), "$.items[0].uploads[*].adopted"))
+                .containsOnly(false);
+
+        HttpResponse<String> taskBeforeAdoption = getJson("/api/v1/tasks/" + taskId, hrToken);
+        assertThat(JsonPath.<String>read(taskBeforeAdoption.body(), "$.status"))
+                .isEqualTo("WAITING_WORKER");
+        int expectedTaskVersion = ((Number) JsonPath.read(taskBeforeAdoption.body(), "$.version")).intValue();
+
+        String otherCompanyHrToken = accessToken(login(HR_B_EMAIL));
+        HttpResponse<String> crossTenantAdoption = postJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses/" + responseId + "/documents/adopt",
+                """
+                {"expected_task_version":%d}
+                """.formatted(expectedTaskVersion),
+                otherCompanyHrToken
+        );
+        assertThat(crossTenantAdoption.statusCode()).isEqualTo(404);
+
+        HttpResponse<String> adoption = postJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses/" + responseId + "/documents/adopt",
+                """
+                {"expected_task_version":%d}
+                """.formatted(expectedTaskVersion),
+                hrToken
+        );
+
+        assertThat(adoption.statusCode()).as("adoption response body: %s", adoption.body()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(adoption.body(), "$.task_status")).isEqualTo("APPROVED");
+        assertThat(JsonPath.<List<String>>read(adoption.body(), "$.adopted_documents[*].document_type"))
+                .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document WHERE task_id = ? AND submission_status = 'SUBMITTED'",
+                Integer.class,
+                UUID.fromString(taskId)
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM worker_link WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).isEqualTo("REVOKED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT conversation_status FROM worker_link WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).isEqualTo("REOPENED");
+
+        HttpResponse<String> afterAdoption = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrToken
+        );
+        assertThat(JsonPath.<List<Boolean>>read(afterAdoption.body(), "$.items[0].uploads[*].adopted"))
+                .containsOnly(true);
+
+        int currentTaskVersion = ((Number) JsonPath.read(adoption.body(), "$.task_version")).intValue();
+        HttpResponse<String> repeated = postJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses/" + responseId + "/documents/adopt",
+                """
+                {"expected_task_version":%d}
+                """.formatted(currentTaskVersion),
+                hrToken
+        );
+        assertThat(repeated.statusCode()).isEqualTo(200);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document WHERE task_id = ?",
+                Integer.class,
+                UUID.fromString(taskId)
+        )).isEqualTo(2);
+    }
+
+    @Test
     void workerResponsesAreHiddenFromOtherCompany() throws Exception {
         String hrTokenA = accessToken(login(HR_A_EMAIL));
         String hrTokenB = accessToken(login(HR_B_EMAIL));
@@ -886,6 +1006,26 @@ class WorkerLinkSecurityIntegrationTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writePart(out, "file", filename, mimeType, content);
         writeFieldPart(out, "clientRequestId", UUID.randomUUID().toString());
+        out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
+                .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> uploadFileAsType(
+            String token,
+            String filename,
+            String mimeType,
+            byte[] content,
+            String documentType
+    ) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writePart(out, "file", filename, mimeType, content);
+        writeFieldPart(out, "clientRequestId", UUID.randomUUID().toString());
+        writeFieldPart(out, "documentType", documentType);
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
         HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
