@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+server_dir="$(cd "${script_dir}/.." && pwd)"
+compose_file="${server_dir}/compose.demo.yml"
+command_name="${1:-}"
+
+case "${command_name}" in
+    import|verify|cleanup) ;;
+    *)
+        echo "사용법: ./scripts/demo-data {import|verify|cleanup}" >&2
+        exit 2
+        ;;
+esac
+
+required_variables=(
+    DEMO_DB_PASSWORD
+    JWT_SECRET_BASE64
+    DEMO_SEED_ADMIN_PASSWORD
+    OCR_RESULT_ENCRYPTION_KEY_BASE64
+)
+
+for variable_name in "${required_variables[@]}"; do
+    if [[ -z "${!variable_name:-}" ]]; then
+        echo "${variable_name} 환경변수가 필요합니다. 값은 로그나 Git에 남기지 마세요." >&2
+        exit 1
+    fi
+done
+
+cd "${server_dir}"
+docker compose -f "${compose_file}" up -d --wait postgres
+docker compose -f "${compose_file}" build server
+docker compose -f "${compose_file}" run --rm --no-deps \
+    --user root \
+    --entrypoint sh \
+    server \
+    -c 'mkdir -p /app/data/files && chown -R 10001:10001 /app/data'
+
+DEMO_SEED_ENABLED=true \
+DOCUMENT_OCR_ENABLED=true \
+DEMO_DOCUMENT_DATA_COMMAND="${command_name}" \
+docker compose -f "${compose_file}" run --rm --no-deps \
+    server \
+    --server.port=0 \
+    --app.reliability.outbox.enabled=false
+
+if [[ "${command_name}" == "import" ]]; then
+    DEMO_SEED_ENABLED=true \
+    DOCUMENT_OCR_ENABLED=true \
+    DEMO_DOCUMENT_DATA_COMMAND=none \
+    docker compose -f "${compose_file}" up -d --wait server
+fi
