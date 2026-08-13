@@ -468,7 +468,9 @@ public class DocumentOcrService {
         return switch (documentType) {
             case PASSPORT_COPY -> AiOcrDocumentType.PASSPORT_COPY;
             case ARC -> AiOcrDocumentType.ARC;
-            case CONTRACT, PERMIT -> throw new ApiException(DocumentErrorCode.DOCUMENT_OCR_UNSUPPORTED_TYPE);
+            case CONTRACT, PERMIT, EMPLOYMENT_EXTENSION_APPLICATION,
+                    INTEGRATED_APPLICATION, RESIDENCE_PROOF ->
+                    throw new ApiException(DocumentErrorCode.DOCUMENT_OCR_UNSUPPORTED_TYPE);
         };
     }
 
@@ -518,7 +520,8 @@ public class DocumentOcrService {
         Set<String> allowedFields = switch (documentType) {
             case PASSPORT_COPY -> PASSPORT_CORRECTABLE_FIELDS;
             case ARC -> ARC_CORRECTABLE_FIELDS;
-            case CONTRACT, PERMIT -> Set.of();
+            case CONTRACT, PERMIT, EMPLOYMENT_EXTENSION_APPLICATION,
+                    INTEGRATED_APPLICATION, RESIDENCE_PROOF -> Set.of();
         };
         Map<String, String> normalized = new LinkedHashMap<>();
         fields.entrySet().stream()

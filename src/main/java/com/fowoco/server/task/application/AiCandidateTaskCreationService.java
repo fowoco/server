@@ -397,7 +397,11 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
                 .map(documentType -> switch (documentType) {
                     case PASSPORT_COPY -> "여권";
                     case ARC -> "외국인등록증";
-                    default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
+                    case CONTRACT -> "근로계약서";
+                    case PERMIT -> "고용허가서";
+                    case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
+                    case INTEGRATED_APPLICATION -> "통합신청서";
+                    case RESIDENCE_PROOF -> "체류지 입증자료";
                 })
                 .collect(java.util.stream.Collectors.joining("·"));
     }

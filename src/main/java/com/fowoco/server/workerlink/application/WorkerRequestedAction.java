@@ -43,6 +43,9 @@ public record WorkerRequestedAction(
             case ARC -> "외국인등록증";
             case CONTRACT -> "근로계약서";
             case PERMIT -> "고용허가 관련 서류";
+            case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
+            case INTEGRATED_APPLICATION -> "통합신청서";
+            case RESIDENCE_PROOF -> "체류지 입증자료";
         };
     }
 }

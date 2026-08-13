@@ -84,6 +84,8 @@ final class DemoDocumentSeedCatalog {
             case PASSPORT_COPY, ARC -> TaskType.STAY_PERIOD_EXTENSION;
             case CONTRACT -> TaskType.RECONTRACT;
             case PERMIT -> TaskType.EMPLOYMENT_PERIOD_EXTENSION;
+            case EMPLOYMENT_EXTENSION_APPLICATION -> TaskType.EMPLOYMENT_PERIOD_EXTENSION;
+            case INTEGRATED_APPLICATION, RESIDENCE_PROOF -> TaskType.STAY_PERIOD_EXTENSION;
         };
         return tasks.stream()
                 .filter(task -> task.workerId().equals(document.workerId()))
@@ -159,6 +161,8 @@ final class DemoDocumentSeedCatalog {
                 case ARC -> null;
                 case CONTRACT -> 180;
                 case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
+                case EMPLOYMENT_EXTENSION_APPLICATION, INTEGRATED_APPLICATION, RESIDENCE_PROOF ->
+                        throw new IllegalStateException("worker 6 has no extended document seed");
             };
         }
         return EXPIRY_DAY_OFFSETS[additionIndex % EXPIRY_DAY_OFFSETS.length];
@@ -184,6 +188,8 @@ final class DemoDocumentSeedCatalog {
                 case ARC -> "외국인등록증 사본 요청 필요";
                 case CONTRACT -> "현재 근로계약서 확인 완료";
                 case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
+                case EMPLOYMENT_EXTENSION_APPLICATION, INTEGRATED_APPLICATION, RESIDENCE_PROOF ->
+                        throw new IllegalStateException("worker 6 has no extended document seed");
             };
         }
         return note(documentType, status);
@@ -194,6 +200,8 @@ final class DemoDocumentSeedCatalog {
             case PASSPORT_COPY, ARC -> "체류기간 연장";
             case CONTRACT -> "근로계약 갱신";
             case PERMIT -> "고용허가기간 연장";
+            case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장";
+            case INTEGRATED_APPLICATION, RESIDENCE_PROOF -> "체류기간 연장";
         };
     }
 
@@ -203,8 +211,12 @@ final class DemoDocumentSeedCatalog {
             case ARC -> "외국인등록증 사본";
             case CONTRACT -> "근로계약서";
             case PERMIT -> "고용허가서";
+            case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
+            case INTEGRATED_APPLICATION -> "통합신청서";
+            case RESIDENCE_PROOF -> "체류지 입증자료";
         };
         return switch (status) {
+            case DRAFT -> documentName + " 초안";
             case MISSING -> documentName + " 요청 필요";
             case SUBMITTED -> documentName + " 제출본 검토 대기";
             case VERIFIED -> documentName + " 확인 완료";
