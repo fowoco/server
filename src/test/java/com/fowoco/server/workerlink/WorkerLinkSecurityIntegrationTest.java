@@ -657,6 +657,11 @@ class WorkerLinkSecurityIntegrationTest {
                 UUID.fromString(taskId)
         )).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_publication "
+                        + "WHERE event_type = 'WorkerDocumentAdopted'",
+                Integer.class
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM worker_link WHERE task_id = ?",
                 String.class,
                 UUID.fromString(taskId)
@@ -688,6 +693,11 @@ class WorkerLinkSecurityIntegrationTest {
                 Integer.class,
                 UUID.fromString(taskId)
         )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_publication "
+                        + "WHERE event_type = 'WorkerDocumentAdopted'",
+                Integer.class
+        )).isEqualTo(1);
     }
 
     @Test
