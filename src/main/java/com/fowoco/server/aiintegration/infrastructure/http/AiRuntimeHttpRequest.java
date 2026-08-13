@@ -15,7 +15,8 @@ import java.util.UUID;
  *
  * <p>Attempt identifiers, version requirements, deadlines, extracted slots, and workflow
  * constraints remain Server-owned metadata. The PLAN decision is serialized only as
- * plannedIntent and plannedWorkflowId so ANALYZE does not classify the instruction again.</p>
+ * plannedIntent, plannedWorkflowId, and an optional agentTarget so ANALYZE reuses the PLAN
+ * decision instead of classifying or routing the instruction again.</p>
  */
 record AiRuntimeHttpRequest(
         UUID requestId,
@@ -36,6 +37,7 @@ record AiRuntimeHttpRequest(
             String instruction,
             String plannedIntent,
             String plannedWorkflowId,
+            String agentTarget,
             List<String> requestedFieldKeys,
             List<HttpWorkerContext> workers
     ) {
@@ -46,6 +48,7 @@ record AiRuntimeHttpRequest(
                     input.instruction(),
                     decision == null ? null : decision.detectedIntent(),
                     decision == null ? null : decision.workflowId(),
+                    decision == null ? null : decision.agentTarget(),
                     input.requestedFieldKeys(),
                     input.workers().stream().map(HttpWorkerContext::from).toList()
             );

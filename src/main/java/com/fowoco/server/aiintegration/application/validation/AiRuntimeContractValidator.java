@@ -275,6 +275,7 @@ public class AiRuntimeContractValidator {
                 requirement.bertRoutingScore(),
                 AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT
         );
+        boundaryPolicy.validateText(requirement.agentTarget(), 128, false);
         boundaryPolicy.validateText(requirement.targetDisplayName(), 120, true);
         if (requirement.extractedSlots().size() > MAX_CONTEXT_FIELDS
                 || requirement.requiredFieldKeys().isEmpty()
@@ -459,6 +460,7 @@ public class AiRuntimeContractValidator {
                 decision.bertRoutingScore(),
                 failureCode
         );
+        boundaryPolicy.validateText(decision.agentTarget(), 128, false);
     }
 
     private void validateConfidence(
