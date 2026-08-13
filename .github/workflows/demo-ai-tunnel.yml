@@ -1,0 +1,173 @@
+name: Demo AI Tunnel switch
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Apply the Mac Quick Tunnel or restore the previous server-env
+        required: true
+        default: apply
+        type: choice
+        options:
+          - apply
+          - restore
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-ai-tunnel-switch
+  cancel-in-progress: false
+
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NAMESPACE: fowoco
+      SERVER_SECRET: server-env
+      BACKUP_SECRET: server-env-before-mac-demo
+      AI_DEMO_BASE_URL: ${{ secrets.AI_DEMO_BASE_URL }}
+      AI_DEMO_INTERNAL_TOKEN: ${{ secrets.AI_DEMO_INTERNAL_TOKEN }}
+    steps:
+      - name: Configure kubectl
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_B64" ]; then
+            echo "::error::KUBE_CONFIG secret is missing."
+            exit 1
+          fi
+          mkdir -p ~/.kube
+          printf '%s' "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl cluster-info >/dev/null
+          kubectl -n "$NAMESPACE" get secret/"$SERVER_SECRET" deployment/server >/dev/null
+
+      - name: Validate demo inputs
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$AI_DEMO_BASE_URL" \
+            | grep -Eq '^https://[a-z0-9-]+\.trycloudflare\.com$'; then
+            echo "::error::AI_DEMO_BASE_URL must be one HTTPS trycloudflare.com origin without a trailing slash."
+            exit 1
+          fi
+          if [ "${#AI_DEMO_INTERNAL_TOKEN}" -lt 32 ]; then
+            echo "::error::AI_DEMO_INTERNAL_TOKEN must contain at least 32 characters."
+            exit 1
+          fi
+
+      - name: Back up current server-env
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          if kubectl -n "$NAMESPACE" get secret/"$BACKUP_SECRET" >/dev/null 2>&1; then
+            echo "Existing demo backup retained."
+            exit 0
+          fi
+          kubectl -n "$NAMESPACE" get secret/"$SERVER_SECRET" -o json \
+            | jq --arg namespace "$NAMESPACE" --arg name "$BACKUP_SECRET" '
+                {
+                  apiVersion: "v1",
+                  kind: "Secret",
+                  metadata: {namespace: $namespace, name: $name},
+                  type: .type,
+                  data: .data
+                }
+              ' \
+            | kubectl create -f - >/dev/null
+          echo "Original server-env backed up inside the cluster."
+
+      - name: Apply Mac AI Tunnel settings
+        id: apply_demo
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          patch_file="$(mktemp)"
+          trap 'rm -f "$patch_file"' EXIT
+          chmod 600 "$patch_file"
+          jq -n \
+            --arg baseUrl "$AI_DEMO_BASE_URL" \
+            --arg token "$AI_DEMO_INTERNAL_TOKEN" \
+            '{
+              stringData: {
+                AI_RUNTIME_ENABLED: "true",
+                AI_RUNTIME_ENDPOINT: ($baseUrl + "/internal/v1/analyses"),
+                AI_RUNTIME_SERVICE_CREDENTIAL: $token,
+                AI_RUNTIME_OVERALL_TIMEOUT: "240s",
+                FOWOCO_AI_BASE_URL: $baseUrl,
+                FOWOCO_AI_INTERNAL_TOKEN: $token
+              }
+            }' > "$patch_file"
+          kubectl -n "$NAMESPACE" patch secret "$SERVER_SECRET" \
+            --type merge --patch-file "$patch_file" >/dev/null
+          echo "applied=true" >> "$GITHUB_OUTPUT"
+          echo "Demo AI endpoint applied without printing Secret values."
+
+      - name: Restart Server with demo settings
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" rollout restart deployment/server >/dev/null
+          kubectl -n "$NAMESPACE" rollout status deployment/server --timeout=180s
+
+      - name: Verify Server and Mac AI
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" exec deployment/server -- \
+            curl --fail --silent --show-error \
+              http://127.0.0.1:8080/actuator/health/readiness >/dev/null
+          # Expansion must happen inside the Server Pod, where envFrom exposes these values.
+          # shellcheck disable=SC2016
+          kubectl -n "$NAMESPACE" exec deployment/server -- sh -eu -c '
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $FOWOCO_AI_INTERNAL_TOKEN" \
+              "$FOWOCO_AI_BASE_URL/internal/v1/health/ready" >/dev/null
+          '
+          echo "Server Pod can reach the authenticated Mac AI readiness endpoint."
+
+      - name: Roll back failed demo switch
+        if: failure() && inputs.operation == 'apply' && steps.apply_demo.outputs.applied == 'true'
+        run: |
+          set -euo pipefail
+          echo "::error::Demo switch failed after patching server-env; restoring the original values."
+          restore_file="$(mktemp)"
+          trap 'rm -f "$restore_file"' EXIT
+          chmod 600 "$restore_file"
+          kubectl -n "$NAMESPACE" get secret/"$BACKUP_SECRET" -o json \
+            | jq '[{"op":"replace", "path":"/data", "value":.data}]' > "$restore_file"
+          kubectl -n "$NAMESPACE" patch secret "$SERVER_SECRET" \
+            --type json --patch-file "$restore_file" >/dev/null
+          kubectl -n "$NAMESPACE" rollout restart deployment/server >/dev/null
+          kubectl -n "$NAMESPACE" rollout status deployment/server --timeout=180s
+          kubectl -n "$NAMESPACE" exec deployment/server -- \
+            curl --fail --silent --show-error \
+              http://127.0.0.1:8080/actuator/health/readiness >/dev/null
+          kubectl -n "$NAMESPACE" delete secret "$BACKUP_SECRET" >/dev/null
+          echo "Original server-env restored after failed demo switch."
+
+      - name: Restore original server-env
+        if: inputs.operation == 'restore'
+        run: |
+          set -euo pipefail
+          if ! kubectl -n "$NAMESPACE" get secret/"$BACKUP_SECRET" >/dev/null 2>&1; then
+            echo "::error::No demo backup Secret exists; refusing to guess previous values."
+            exit 1
+          fi
+          restore_file="$(mktemp)"
+          trap 'rm -f "$restore_file"' EXIT
+          chmod 600 "$restore_file"
+          kubectl -n "$NAMESPACE" get secret/"$BACKUP_SECRET" -o json \
+            | jq '[{"op":"replace", "path":"/data", "value":.data}]' > "$restore_file"
+          kubectl -n "$NAMESPACE" patch secret "$SERVER_SECRET" \
+            --type json --patch-file "$restore_file" >/dev/null
+          kubectl -n "$NAMESPACE" rollout restart deployment/server >/dev/null
+          kubectl -n "$NAMESPACE" rollout status deployment/server --timeout=180s
+          kubectl -n "$NAMESPACE" exec deployment/server -- \
+            curl --fail --silent --show-error \
+              http://127.0.0.1:8080/actuator/health/readiness >/dev/null
+          kubectl -n "$NAMESPACE" delete secret "$BACKUP_SECRET" >/dev/null
+          echo "Original server-env restored and demo backup removed."
