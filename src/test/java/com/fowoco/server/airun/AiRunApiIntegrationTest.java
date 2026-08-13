@@ -195,6 +195,8 @@ class AiRunApiIntegrationTest {
                 .isEqualTo("EXPIRY_RENEWAL");
         assertThat(persistedAnalyzeInput.plannedIntentDecision().workflowId())
                 .isEqualTo("WF-STY-001");
+        assertThat(persistedAnalyzeInput.plannedIntentDecision().agentTarget())
+                .isEqualTo("renewal-agent");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT model_version FROM ai_attempt WHERE ai_run_id = ? AND sequence_no = 1",
                 String.class,
@@ -720,7 +722,8 @@ class AiRunApiIntegrationTest {
                             "WF-STY-001",
                             "체류연장 준비",
                             AiConfidenceSource.UNAVAILABLE,
-                            new BigDecimal("0.3088")
+                            new BigDecimal("0.3088"),
+                            "renewal-agent"
                     ),
                     List.of(),
                     List.of(),

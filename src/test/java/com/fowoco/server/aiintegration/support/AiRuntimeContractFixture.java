@@ -29,6 +29,7 @@ public final class AiRuntimeContractFixture {
     public static final String KNOWLEDGE_VERSION = "0.2.0";
     public static final String INTENT = "EXPIRY_RENEWAL";
     public static final String WORKFLOW_ID = "WF-STY-001";
+    public static final String AGENT_TARGET = "renewal-agent";
 
     private AiRuntimeContractFixture() {
     }
@@ -102,7 +103,8 @@ public final class AiRuntimeContractFixture {
                                 "체류연장 준비",
                                 null,
                                 AiConfidenceSource.UNAVAILABLE,
-                                new BigDecimal("0.3088")
+                                new BigDecimal("0.3088"),
+                                AGENT_TARGET
                         )
                 )
         );
@@ -125,7 +127,8 @@ public final class AiRuntimeContractFixture {
                         WORKFLOW_ID,
                         "체류연장 준비해줘",
                         AiConfidenceSource.UNAVAILABLE,
-                        new BigDecimal("0.3088")
+                        new BigDecimal("0.3088"),
+                        AGENT_TARGET
                 ),
                 List.of(),
                 List.of(),

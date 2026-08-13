@@ -146,7 +146,8 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
     String authorizationHeader() {
         if (serviceCredential == null || serviceCredential.isBlank()) {
             throw new IllegalStateException(
-                    "AI_RUNTIME_SERVICE_CREDENTIAL must be configured when AI Runtime is enabled"
+                    "FOWOCO_AI_INTERNAL_TOKEN (or legacy AI_RUNTIME_SERVICE_CREDENTIAL) "
+                            + "must be configured when AI Runtime is enabled"
             );
         }
         if (serviceCredential.indexOf('\r') >= 0 || serviceCredential.indexOf('\n') >= 0) {

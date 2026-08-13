@@ -105,6 +105,8 @@ class AiAnalysisContinuationServiceTest {
                 .isEqualTo("WF-STY-001");
         assertThat(analyzeRequest.analysisInput().plannedIntentDecision().evidence())
                 .isEqualTo("체류연장 준비해줘");
+        assertThat(analyzeRequest.analysisInput().plannedIntentDecision().agentTarget())
+                .isEqualTo("renewal-agent");
         assertThat(analyzeRequest.analysisInput().extractedSlots())
                 .containsEntry("document_type", "STAY_EXTENSION");
         assertThat(analyzeRequest.analysisInput().requestedFieldKeys())
@@ -184,7 +186,8 @@ class AiAnalysisContinuationServiceTest {
                         "WF-STY-001",
                         "체류연장 준비해줘",
                         AiConfidenceSource.MODEL,
-                        null
+                        null,
+                        "renewal-agent"
                 ),
                 List.of(),
                 List.of(),

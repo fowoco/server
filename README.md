@@ -130,6 +130,11 @@ ANALYZE에는 `plannedIntent`와 `plannedWorkflowId`를 전달합니다. 확률�
 않습니다. 상세 요청·응답과 검증 기준은
 [AI Runtime 계약](docs/ai-runtime-contract.md)을 확인합니다.
 
+배포에서는 `FOWOCO_AI_BASE_URL`과 `FOWOCO_AI_INTERNAL_TOKEN`만 교체해 Mac Cloudflare
+Tunnel 또는 Kubernetes AI Service를 선택합니다. PLAN의 선택값과 선택적인 `agentTarget`은
+실행 이력에 남겨 ANALYZE가 같은 결정을 재사용하며, 연결 장애는 Client에
+`AI_UNAVAILABLE`로 전달합니다.
+
 ### 근로자 모바일 응답이 업무로 돌아오는 흐름
 
 ```text

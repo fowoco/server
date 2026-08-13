@@ -12,8 +12,28 @@ public record AiIntentDecision(
         String evidence,
         BigDecimal confidence,
         AiConfidenceSource confidenceSource,
-        BigDecimal bertRoutingScore
+        BigDecimal bertRoutingScore,
+        String agentTarget
 ) {
+
+    public AiIntentDecision(
+            String detectedIntent,
+            String workflowId,
+            String evidence,
+            BigDecimal confidence,
+            AiConfidenceSource confidenceSource,
+            BigDecimal bertRoutingScore
+    ) {
+        this(
+                detectedIntent,
+                workflowId,
+                evidence,
+                confidence,
+                confidenceSource,
+                bertRoutingScore,
+                null
+        );
+    }
 
     public AiIntentDecision {
         Objects.requireNonNull(detectedIntent, "detectedIntent must not be null");
@@ -29,7 +49,8 @@ public record AiIntentDecision(
                 requirement.evidence(),
                 requirement.confidence(),
                 requirement.confidenceSource(),
-                requirement.bertRoutingScore()
+                requirement.bertRoutingScore(),
+                requirement.agentTarget()
         );
     }
 }
