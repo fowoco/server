@@ -13,7 +13,9 @@ public final class WorkerResponse {
     private final UUID companyId;
     private final WorkerResponseType responseType;
     private final String message;
+    private final String answersJson;
     private final String idempotencyKey;
+    private final String requestFingerprint;
     private final Instant receivedAt;
 
     public WorkerResponse(
@@ -22,7 +24,9 @@ public final class WorkerResponse {
             UUID companyId,
             WorkerResponseType responseType,
             String message,
+            String answersJson,
             String idempotencyKey,
+            String requestFingerprint,
             Instant receivedAt
     ) {
         this.responseId = Objects.requireNonNull(responseId, "responseId must not be null");
@@ -30,7 +34,9 @@ public final class WorkerResponse {
         this.companyId = Objects.requireNonNull(companyId, "companyId must not be null");
         this.responseType = Objects.requireNonNull(responseType, "responseType must not be null");
         this.message = normalizeMessage(message);
+        this.answersJson = requireText(answersJson, "answersJson");
         this.idempotencyKey = requireText(idempotencyKey, "idempotencyKey");
+        this.requestFingerprint = normalizeFingerprint(requestFingerprint);
         this.receivedAt = Objects.requireNonNull(receivedAt, "receivedAt must not be null");
     }
 
@@ -40,10 +46,22 @@ public final class WorkerResponse {
             UUID companyId,
             WorkerResponseType responseType,
             String message,
+            String answersJson,
             String idempotencyKey,
+            String requestFingerprint,
             Instant now
     ) {
-        return new WorkerResponse(responseId, workerLinkId, companyId, responseType, message, idempotencyKey, now);
+        return new WorkerResponse(
+                responseId,
+                workerLinkId,
+                companyId,
+                responseType,
+                message,
+                answersJson,
+                idempotencyKey,
+                requestFingerprint,
+                now
+        );
     }
 
     private static String normalizeMessage(String value) {
@@ -60,6 +78,16 @@ public final class WorkerResponse {
     private static String requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+        return value;
+    }
+
+    private static String normalizeFingerprint(String value) {
+        if (value == null) {
+            return null;
+        }
+        if (!value.matches("[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("requestFingerprint must be a SHA-256 hex string");
         }
         return value;
     }
@@ -84,8 +112,16 @@ public final class WorkerResponse {
         return message;
     }
 
+    public String answersJson() {
+        return answersJson;
+    }
+
     public String idempotencyKey() {
         return idempotencyKey;
+    }
+
+    public String requestFingerprint() {
+        return requestFingerprint;
     }
 
     public Instant receivedAt() {

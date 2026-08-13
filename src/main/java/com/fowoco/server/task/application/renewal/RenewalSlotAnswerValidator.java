@@ -32,7 +32,19 @@ final class RenewalSlotAnswerValidator {
             "stay_expiry_date"
     );
 
-    Map<String, String> validate(Map<String, String> answers, Object previousExecution) {
+    Map<String, String> validateHrAnswers(Map<String, String> answers, Object previousExecution) {
+        return validate(answers, previousExecution, AnswerSource.HR);
+    }
+
+    Map<String, String> validateWorkerAnswers(Map<String, String> answers, Object previousExecution) {
+        return validate(answers, previousExecution, AnswerSource.WORKER);
+    }
+
+    private Map<String, String> validate(
+            Map<String, String> answers,
+            Object previousExecution,
+            AnswerSource answerSource
+    ) {
         if (answers == null || answers.isEmpty()) {
             return Map.of();
         }
@@ -42,7 +54,7 @@ final class RenewalSlotAnswerValidator {
             if (key == null
                     || !SLOT_KEY.matcher(key).matches()
                     || SENSITIVE_SLOTS.contains(key)
-                    || !"USER_INPUT".equals(requestedSources.get(key))) {
+                    || !answerSource.allows(key, requestedSources.get(key))) {
                 throw rejected();
             }
             String normalizedValue = normalizeValue(key, value);
@@ -127,5 +139,23 @@ final class RenewalSlotAnswerValidator {
 
     private ApiException rejected() {
         return new ApiException(TaskErrorCode.INVALID_RENEWAL_SLOT_ANSWER);
+    }
+
+    private enum AnswerSource {
+        HR {
+            @Override
+            boolean allows(String key, String sourceHint) {
+                return "USER_INPUT".equals(sourceHint);
+            }
+        },
+        WORKER {
+            @Override
+            boolean allows(String key, String sourceHint) {
+                return "WORKER_INPUT".equals(sourceHint)
+                        || ("USER_INPUT".equals(sourceHint) && "lodging".equals(key));
+            }
+        };
+
+        abstract boolean allows(String key, String sourceHint);
     }
 }

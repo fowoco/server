@@ -36,6 +36,7 @@ public class WorkerLinkViewService {
     private final WorkerLinkRepository workerLinkRepository;
     private final TaskRepository taskRepository;
     private final DocumentRequestDraftRepository documentRequestDraftRepository;
+    private final WorkerRequestedActionResolver requestedActionResolver;
     private final WorkerLinkHasher workerLinkHasher;
     private final AuditEventRepository auditRepository;
     private final UuidGenerator uuidGenerator;
@@ -47,6 +48,7 @@ public class WorkerLinkViewService {
             WorkerLinkRepository workerLinkRepository,
             TaskRepository taskRepository,
             DocumentRequestDraftRepository documentRequestDraftRepository,
+            WorkerRequestedActionResolver requestedActionResolver,
             WorkerLinkHasher workerLinkHasher,
             AuditEventRepository auditRepository,
             UuidGenerator uuidGenerator,
@@ -57,6 +59,7 @@ public class WorkerLinkViewService {
         this.workerLinkRepository = workerLinkRepository;
         this.taskRepository = taskRepository;
         this.documentRequestDraftRepository = documentRequestDraftRepository;
+        this.requestedActionResolver = requestedActionResolver;
         this.workerLinkHasher = workerLinkHasher;
         this.auditRepository = auditRepository;
         this.uuidGenerator = uuidGenerator;
@@ -109,7 +112,8 @@ public class WorkerLinkViewService {
                 draft.language(),
                 task.dueDate(),
                 draft.documentTypes(),
-                List.of(WorkerResponseType.values())
+                List.of(WorkerResponseType.values()),
+                requestedActionResolver.resolve(task, draft)
         );
     }
 }

@@ -9,8 +9,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-final class WorkerResponseDomainEvents {
+public final class WorkerResponseDomainEvents {
 
+    public static final String SLOT_ANSWERS_SUBMITTED = "WorkerSlotAnswersSubmitted";
+    public static final String DOCUMENT_SUBMITTED = "WorkerResponseSubmitted";
     private static final String PAYLOAD_VERSION = "1";
     private static final String AGGREGATE_TYPE = "Task";
     private static final Set<String> RESPONSE_SUBMITTED_FIELDS = Set.of(
@@ -21,22 +23,24 @@ final class WorkerResponseDomainEvents {
     private WorkerResponseDomainEvents() {
     }
 
-    static DomainEventEnvelope responseSubmitted(
+    static DomainEventEnvelope submitted(
             UUID eventId,
             UUID responseId,
             Task task,
             UUID companyId,
+            UUID delegatedActorId,
+            String eventType,
             Instant occurredAt
     ) {
         return new DomainEventEnvelope(
                 eventId,
-                "WorkerResponseSubmitted",
+                eventType,
                 PAYLOAD_VERSION,
                 AGGREGATE_TYPE,
                 task.taskId(),
                 companyId,
                 EventActorType.WORKER_LINK,
-                task.createdBy(),
+                delegatedActorId,
                 responseId.toString(),
                 null,
                 occurredAt,

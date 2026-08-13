@@ -10,6 +10,7 @@ public record WorkerLinkViewResult(
         String language,
         LocalDate dueDate,
         List<DocumentType> requestedDocumentTypes,
-        List<WorkerResponseType> allowedResponses
+        List<WorkerResponseType> allowedResponses,
+        List<WorkerRequestedAction> requestedActions
 ) {
 }

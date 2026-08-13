@@ -101,10 +101,46 @@ class RenewalExecutionContextReader {
         Map<String, Object> businessData = new LinkedHashMap<>(
                 taskContentCodec.decodeBusinessData(task.businessDataJson())
         );
-        Map<String, String> normalizedAnswers = slotAnswerValidator.validate(
+        Map<String, String> normalizedAnswers = slotAnswerValidator.validateHrAnswers(
                 submittedSlotAnswers,
                 businessData.get("renewal_execution")
         );
+        return context(task, worker, company, businessData, normalizedAnswers);
+    }
+
+    @Transactional(readOnly = true)
+    RenewalExecutionContext loadWorkerContinuation(
+            UUID taskId,
+            long expectedVersion,
+            Map<String, String> submittedSlotAnswers,
+            ActorContext delegatedActor
+    ) {
+        tenantContext.setCompanyIdForCurrentTransaction(delegatedActor.companyId());
+        Task task = taskRepository.findByIdAndCompanyId(taskId, delegatedActor.companyId())
+                .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
+        validateTask(task, expectedVersion);
+        Worker worker = workerRepository
+                .findByWorkerIdAndCompanyId(task.workerId(), delegatedActor.companyId())
+                .orElseThrow(() -> new ApiException(TaskErrorCode.WORKER_NOT_FOUND));
+        Company company = companyRepository.findById(delegatedActor.companyId())
+                .orElseThrow(() -> new ApiException(TaskErrorCode.RENEWAL_EXECUTION_NOT_ALLOWED));
+        Map<String, Object> businessData = new LinkedHashMap<>(
+                taskContentCodec.decodeBusinessData(task.businessDataJson())
+        );
+        Map<String, String> normalizedAnswers = slotAnswerValidator.validateWorkerAnswers(
+                submittedSlotAnswers,
+                businessData.get("renewal_execution")
+        );
+        return context(task, worker, company, businessData, normalizedAnswers);
+    }
+
+    private RenewalExecutionContext context(
+            Task task,
+            Worker worker,
+            Company company,
+            Map<String, Object> businessData,
+            Map<String, String> normalizedAnswers
+    ) {
         businessData.remove("renewal_execution");
         Map<String, Object> storedRenewalInputs = renewalInputs(businessData.remove("renewal_inputs"));
         Map<String, Object> slots = buildSlots(
@@ -114,7 +150,7 @@ class RenewalExecutionContextReader {
                 worker,
                 company
         );
-        OcrContext ocr = loadOcrContext(worker, actor.companyId());
+        OcrContext ocr = loadOcrContext(worker, task.companyId());
         return new RenewalExecutionContext(
                 task.taskId(),
                 task.companyId(),
