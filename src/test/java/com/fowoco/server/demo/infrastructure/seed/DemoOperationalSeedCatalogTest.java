@@ -77,7 +77,7 @@ class DemoOperationalSeedCatalogTest {
                         "94400000-0000-0000-0000-000000000",
                         1,
                         60,
-                        IntStream.rangeClosed(15, 20).boxed().collect(Collectors.toSet())
+                        Set.of(13, 14, 15, 16, 55, 56)
                 ));
         assertThat(catalog.demoDocumentRequestDrafts().stream().map(seed -> seed.draftId()))
                 .containsExactlyInAnyOrderElementsOf(idsExcept(
@@ -91,7 +91,7 @@ class DemoOperationalSeedCatalogTest {
                         "96000000-0000-0000-0000-000000000",
                         1,
                         102,
-                        Set.of(24, 25, 26, 27, 28, 45, 89, 100)
+                        Set.of(24, 25, 26, 27, 28, 45, 83, 94)
                 ));
 
         Set<UUID> activeTaskIds = catalog.demoTasks().stream()

@@ -29,7 +29,7 @@ class DemoCaseSeederPostgreSqlIntegrationTest {
     private static final Instant NOW = Instant.parse("2026-08-07T00:00:00.123456Z");
 
     @Test
-    void storesAndReloadsCaseTimestampsAndRemainsIdempotentOnPostgreSql17() throws SQLException {
+    void storesAndReloadsCaseTimestampsAndRemainsIdempotentOnPostgreSql16() throws SQLException {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String username = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         String password = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");

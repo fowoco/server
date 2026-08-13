@@ -15,6 +15,7 @@ import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 final class DemoAuditSeedCatalog {
@@ -22,6 +23,13 @@ final class DemoAuditSeedCatalog {
     private static final List<Integer> CHECKLIST_EVENT_TASKS = List.of(
             3, 4, 5, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
     );
+    private static final Set<UUID> APPROVAL_BACKFILL_IDS = Set.of(
+            UUID.fromString("94300000-0000-0000-0000-000000000014"),
+            UUID.fromString("94300000-0000-0000-0000-000000000015"),
+            UUID.fromString("94300000-0000-0000-0000-000000000016")
+    );
+    private static final UUID INITIAL_PENDING_APPROVAL_ID =
+            UUID.fromString("94300000-0000-0000-0000-000000000001");
 
     private DemoAuditSeedCatalog() {
     }
@@ -51,20 +59,9 @@ final class DemoAuditSeedCatalog {
                     "필수 체크리스트 준비 상태를 확인함",
                     Math.max((task.createdDaysAgo() - 1) * 24 + 2, 2));
         });
-        for (int index = 0; index < approvals.size(); index++) {
-            ApprovalSeed approval = approvals.get(index);
-            if (index != 0) {
-                add(seeds, ActorType.HR_USER, AuditAction.APPROVAL_REQUESTED,
-                        AuditTargetType.TASK, approval.taskId(),
-                        "현재 업무 내용에 대한 승인 검토를 요청함",
-                        approval.requestedHoursAgo());
-            }
-            if (approval.status() != ApprovalStatus.PENDING) {
-                add(seeds, ActorType.HR_USER, approvalAction(approval.status()),
-                        AuditTargetType.TASK, approval.taskId(), approvalSummary(approval.status()),
-                        approval.outcomeHoursAgo());
-            }
-        }
+        approvals.stream()
+                .filter(approval -> !APPROVAL_BACKFILL_IDS.contains(approval.approvalRequestId()))
+                .forEach(approval -> addApprovalAudits(seeds, approval));
         submissions.forEach(submission -> add(
                 seeds,
                 ActorType.HR_USER,
@@ -109,7 +106,27 @@ final class DemoAuditSeedCatalog {
                     "근로자 제출 문서 정보가 업무 준비 자료에 반영됨",
                     Math.max(draft.hoursAgo() - 12, 1));
         }
+        approvals.stream()
+                .filter(approval -> APPROVAL_BACKFILL_IDS.contains(approval.approvalRequestId()))
+                .forEach(approval -> addApprovalAudits(seeds, approval));
         return List.copyOf(seeds);
+    }
+
+    private static void addApprovalAudits(
+            List<AuditSeed> seeds,
+            ApprovalSeed approval
+    ) {
+        if (!INITIAL_PENDING_APPROVAL_ID.equals(approval.approvalRequestId())) {
+            add(seeds, ActorType.HR_USER, AuditAction.APPROVAL_REQUESTED,
+                    AuditTargetType.TASK, approval.taskId(),
+                    "현재 업무 내용에 대한 승인 검토를 요청함",
+                    approval.requestedHoursAgo());
+        }
+        if (approval.status() != ApprovalStatus.PENDING) {
+            add(seeds, ActorType.HR_USER, approvalAction(approval.status()),
+                    AuditTargetType.TASK, approval.taskId(), approvalSummary(approval.status()),
+                    approval.outcomeHoursAgo());
+        }
     }
 
     private static void addCompoundDraftTrace(List<AuditSeed> seeds, List<TaskSeed> tasks) {
