@@ -5,15 +5,22 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
+import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
+import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
+import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
+import com.fowoco.server.reliability.application.OutboxProcessor;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsMessage;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsProviderException;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsSender;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -66,6 +73,12 @@ class WorkerLinkSecurityIntegrationTest {
     @MockitoBean
     private WorkerLinkSmsSender workerLinkSmsSender;
 
+    @MockitoBean
+    private RenewalRuntimeClient renewalRuntimeClient;
+
+    @Autowired
+    private OutboxProcessor outboxProcessor;
+
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @BeforeAll
@@ -81,6 +94,7 @@ class WorkerLinkSecurityIntegrationTest {
 
     @BeforeEach
     void resetState() {
+        reset(renewalRuntimeClient);
         jdbcTemplate.update("DELETE FROM worker_response_upload");
         jdbcTemplate.update("DELETE FROM worker_response");
         jdbcTemplate.update("DELETE FROM worker_document_upload_idempotency");
@@ -282,6 +296,21 @@ class WorkerLinkSecurityIntegrationTest {
                 UUID.fromString(responseId)
         )).contains("사업장 건물 숙소 제공");
 
+        doAnswer(invocation -> continuationResponse(invocation.getArgument(0)))
+                .when(renewalRuntimeClient).run(any(), any());
+        assertThat(outboxProcessor.processAvailable()).isGreaterThanOrEqualTo(1);
+        ArgumentCaptor<RenewalRunRequest> renewalRequest =
+                ArgumentCaptor.forClass(RenewalRunRequest.class);
+        verify(renewalRuntimeClient).run(renewalRequest.capture(), any());
+        assertThat(renewalRequest.getValue().slots())
+                .containsEntry("lodging", "사업장 건물 숙소 제공");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT business_data_json FROM task WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).contains("renewal_inputs", "사업장 건물 숙소 제공");
+        assertThat(outboxProcessor.processAvailable()).isZero();
+
         HttpResponse<String> retry = postJson(
                 "/api/v1/public/worker-links/" + rawToken + "/responses",
                 body,
@@ -311,6 +340,38 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<String>read(page.body(), "$.items[0].answers.lodging"))
                 .isEqualTo("사업장 건물 숙소 제공");
+    }
+
+    private RenewalRunResponse continuationResponse(RenewalRunRequest request) {
+        return new RenewalRunResponse(
+                request.requestId(),
+                request.attemptId(),
+                request.taskId(),
+                "EXPIRY_RENEWAL",
+                request.task().workflowId(),
+                new BigDecimal("0.91"),
+                "NEEDS_INFO",
+                "NEEDS_INFO",
+                "ask_hr",
+                "PHASE_1",
+                "STEP_2",
+                Map.of(),
+                List.of("wage"),
+                List.of(new RenewalRequestedField("wage", "USER_INPUT")),
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                null,
+                List.of(),
+                List.of(),
+                null,
+                "rules",
+                "main",
+                List.of()
+        );
     }
 
     @Test

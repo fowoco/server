@@ -85,7 +85,7 @@ Event payload는 `SafeEventPayload.of(allowedFields, values)`를 통과해야 �
 | `OUTBOX_ENABLED` | `true` | scheduler 실행 여부 |
 | `OUTBOX_POLL_INTERVAL` | `1s` | 처리할 이벤트를 확인하는 간격 |
 | `OUTBOX_BATCH_SIZE` | `20` | 한 번에 lease할 최대 row 수 |
-| `OUTBOX_LEASE_DURATION` | `30s` | 한 서버의 처리 권한 유효시간 |
+| `OUTBOX_LEASE_DURATION` | `5m` | 한 서버의 처리 권한 유효시간. Renewal 재분석 240초보다 길게 유지 |
 | `OUTBOX_MAX_ATTEMPTS` | `8` | 자동 시도 한도 |
 | `OUTBOX_INITIAL_BACKOFF` | `1s` | 첫 재시도 대기시간 |
 | `OUTBOX_MAX_BACKOFF` | `5m` | 재시도 대기시간 상한 |
@@ -102,11 +102,11 @@ lease는 정상 handler 최대 처리시간보다 길어야 합니다. 값을 �
   `OUTBOX_LEASE_DURATION`보다 짧게 둡니다.
 - 한 batch에서 여러 이벤트를 순서대로 처리하므로 staging에서 handler 최대 처리시간을
   측정한 뒤 `OUTBOX_BATCH_SIZE`와 lease를 함께 조정합니다.
-- 30초를 넘길 수 있는 handler를 추가할 때는 timeout만 늘리지 않습니다. 현재
+- Renewal 자동 재분석은 최대 240초 Runtime 호출만 수행하고, HWP/HWPX 생성은 자동
+  continuation에서 실행하지 않습니다. 문서 생성은 HR의 수동 검토 실행에서만 수행합니다.
+- 5분을 넘길 수 있는 handler를 추가할 때는 timeout만 늘리지 않습니다. 현재
   `lease_owner`가 여전히 유효한지 확인하며 lease를 연장하는 heartbeat와, 만료된
   worker가 완료 상태를 덮어쓰지 못하게 하는 fencing 검증을 먼저 구현합니다.
-- heartbeat 도입 전에는 장시간 AI 추론이나 파일 변환을 Outbox handler 안에서 직접
-  기다리지 않고, 별도의 durable 작업을 생성하는 짧은 command로 연결합니다.
 
 ## 장애 확인
 

@@ -26,6 +26,7 @@ import com.fowoco.server.workerlink.infrastructure.security.WorkerLinkHasher;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -106,10 +107,11 @@ public class WorkerResponseService {
                 .findByIdAndCompanyId(link.taskId(), companyId)
                 .orElseThrow(() -> new ApiException(WorkerLinkErrorCode.WORKER_LINK_NOT_FOUND));
         List<UUID> uploadIds = command.uploadIds() != null ? List.copyOf(command.uploadIds()) : List.of();
-        Map<String, String> answers = validateAnswers(command, task, companyId);
-        validateResponseShape(command.responseType(), answers);
+        Map<String, String> submittedAnswers = command.answers() == null
+                ? Map.of()
+                : new LinkedHashMap<>(command.answers());
         String requestFingerprint = payloadCodec.fingerprint(
-                command.responseType(), command.message(), uploadIds, answers
+                command.responseType(), command.message(), uploadIds, submittedAnswers
         );
         Optional<WorkerResponse> existing = workerResponseRepository
                 .findByWorkerLinkIdAndIdempotencyKey(link.workerLinkId(), command.idempotencyKey());
@@ -121,6 +123,8 @@ public class WorkerResponseService {
             }
             return new WorkerResponseSubmitResult(previous.responseId(), previous.receivedAt());
         }
+        Map<String, String> answers = validateAnswers(command, task, companyId);
+        validateResponseShape(command.responseType(), answers);
 
         for (UUID uploadId : uploadIds) {
             StoredFile storedFile = storedFileRepository.findByIdAndCompanyId(uploadId, companyId)
@@ -174,8 +178,9 @@ public class WorkerResponseService {
                 auditSummary(command.responseType(), answers),
                 now
         ));
-        if (command.responseType() == WorkerResponseType.DOCUMENT_SUBMITTED) {
-            publishResponseSubmittedEvent(link, responseId, companyId, now);
+        if (command.responseType() == WorkerResponseType.DOCUMENT_SUBMITTED
+                || command.responseType() == WorkerResponseType.SLOT_ANSWERS_SUBMITTED) {
+            publishContinuationEvent(link, responseId, task, companyId, command.responseType(), now);
         }
         return new WorkerResponseSubmitResult(responseId, now);
     }
@@ -217,14 +222,20 @@ public class WorkerResponseService {
         return "근로자 Slot 답변 제출: " + answers.keySet().stream().sorted().toList();
     }
 
-    private void publishResponseSubmittedEvent(
-            WorkerLink link, UUID responseId, UUID companyId, Instant now
+    private void publishContinuationEvent(
+            WorkerLink link,
+            UUID responseId,
+            com.fowoco.server.task.domain.Task task,
+            UUID companyId,
+            WorkerResponseType responseType,
+            Instant now
     ) {
-        taskRepository.findByIdAndCompanyId(link.taskId(), companyId).ifPresent(task ->
-                eventPublisher.publish(WorkerResponseDomainEvents.responseSubmitted(
-                        uuidGenerator.generate(), responseId, task, companyId, now
-                ))
-        );
+        String eventType = responseType == WorkerResponseType.SLOT_ANSWERS_SUBMITTED
+                ? WorkerResponseDomainEvents.SLOT_ANSWERS_SUBMITTED
+                : WorkerResponseDomainEvents.DOCUMENT_SUBMITTED;
+        eventPublisher.publish(WorkerResponseDomainEvents.submitted(
+                uuidGenerator.generate(), responseId, task, companyId, link.issuedBy(), eventType, now
+        ));
     }
 
     private boolean requiresHrReview(WorkerResponseType responseType) {
