@@ -39,13 +39,11 @@ class AiRuntimeHttpRequestTest {
                         "instruction",
                         "plannedIntent",
                         "plannedWorkflowId",
-                        "agentTarget",
                         "requestedFieldKeys",
                         "workers"
                 );
         assertThat(input.get("plannedIntent").textValue()).isEqualTo("EXPIRY_RENEWAL");
         assertThat(input.get("plannedWorkflowId").textValue()).isEqualTo("WF-STY-001");
-        assertThat(input.get("agentTarget").textValue()).isEqualTo("renewal-agent");
         assertThat(fieldNames(worker))
                 .containsExactlyInAnyOrder("workerRef", "requestedFields");
         assertThat(worker.get("requestedFields").get("legal_name").textValue())

@@ -62,7 +62,6 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
   "contextRequirement": {
     "detectedIntent": "EXPIRY_RENEWAL",
     "workflowId": "WF-STY-001",
-    "agentTarget": "renewal-agent",
     "evidence": "체류연장 준비해줘",
     "confidence": null,
     "confidenceSource": "UNAVAILABLE",
@@ -142,7 +141,6 @@ Slot 조회와 ANALYZE 호출은 수행하지 않습니다. 따라서 지원하�
     "instruction": "응웬반안 체류연장 준비해줘",
     "plannedIntent": "EXPIRY_RENEWAL",
     "plannedWorkflowId": "WF-STY-001",
-    "agentTarget": "renewal-agent",
     "requestedFieldKeys": [
       "legal_name",
       "stay_expiry_date"
@@ -169,8 +167,6 @@ Slot 조회와 ANALYZE 호출은 수행하지 않습니다. 따라서 지원하�
 - `plannedIntent`, `plannedWorkflowId`: PLAN에서 Runtime이 정한 대표 결과입니다. Server가
   `ai_attempt.analysis_input_json`에 보존한 뒤 ANALYZE에 다시 전달합니다. Runtime은 이 값이
   있으면 Intent 모델을 다시 호출하지 않습니다.
-- `agentTarget`: PLAN에서 선택한 Agent 실행 대상입니다. 전환 기간에는 선택값이며, 값이
-  있으면 같은 실행 이력에 보존하고 ANALYZE에 그대로 전달합니다.
 - ANALYZE가 PLAN 결정을 재사용해 Provider를 호출하지 않았다면 `providerAttemptCount=0`을 허용합니다.
 - PLAN confidence는 Intent 분류 이력이며 ANALYZE HTTP에 다시 보내지 않습니다. Candidate
   confidence는 별도의 선택값으로 취급하고 PLAN 값과 비교하지 않습니다. 모델을 다시 호출하지
@@ -356,18 +352,18 @@ AI Runtime 계약이 배포된 통합 환경에서는 배포 Secret과 함께 �
 
 ```dotenv
 AI_RUNTIME_ENABLED=true
-FOWOCO_AI_BASE_URL=https://ai.example.com
-FOWOCO_AI_INTERNAL_TOKEN=<배포 환경 Secret>
+AI_RUNTIME_ENDPOINT=https://ai.example.com/internal/v1/analyses
+AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 ```
 
-`FOWOCO_AI_INTERNAL_TOKEN`은 Git, 로그, 오류 응답에 남기지 않습니다. Server가 표준
+`AI_RUNTIME_SERVICE_CREDENTIAL`은 Git, 로그, 오류 응답에 남기지 않습니다. Server가 표준
 `Authorization: Bearer ...` 형식으로 조립합니다. `X-Request-Id`는 분석 요청의
 `requestId`와 같고, 상위 요청의 유효한 W3C `traceparent`가 있으면 그대로 전달합니다.
 
 | 설정 | 기본값 | 의미 |
 | --- | --- | --- |
 | `AI_RUNTIME_CONNECT_TIMEOUT` | `2s` | AI 서버에 TCP 연결을 맺을 수 있는 최대 시간 |
-| `AI_RUNTIME_OVERALL_TIMEOUT` | `240s` | 최초 모델 로딩을 포함한 연결·요청·응답 수신 전체의 Server 상한 |
+| `AI_RUNTIME_OVERALL_TIMEOUT` | `15s` | 연결·요청·응답 수신 전체의 Server 상한 |
 | `AI_RUNTIME_MAX_RESPONSE_BYTES` | `1048576` | 응답을 메모리에 받기 전 적용하는 최대 크기 |
 | `AI_DOCUMENT_GENERATION_ENDPOINT` | `http://127.0.0.1:8000/api/v1/documents/generate` | Renewal 문서 생성 API |
 | `AI_DOCUMENT_GENERATION_MAX_RESPONSE_BYTES` | `20971520` | 생성 파일을 메모리에 받기 전 적용하는 최대 크기 |
@@ -378,15 +374,6 @@ FOWOCO_AI_INTERNAL_TOKEN=<배포 환경 Secret>
 Server 내부 요청의 `deadlineMs`와 `AI_RUNTIME_OVERALL_TIMEOUT` 중 더 짧은 값을 HTTP
 timeout으로 사용합니다. `deadlineMs` 자체는 Runtime JSON에 전송하지 않습니다. 따라서
 상위 AiRun이 허용한 시간보다 오래 기다리지 않습니다.
-
-PLAN이 `agentTarget`을 반환하면 Server는 `plannedIntent`, `plannedWorkflowId`와 함께
-ANALYZE attempt의 `analysis_input_json`에 저장하고 다음 ANALYZE 요청에 그대로 전달합니다.
-이 필드는 AI 계약 전환 기간에는 선택값이며, 값이 없으면 기존 Intent·Workflow 재사용
-흐름이 유지됩니다.
-
-AI 연결·인증·timeout·응답 파싱 장애의 상세 코드는 DB와 Server 로그에 보존합니다. Client가
-`GET /api/v1/ai-runs/{aiRunId}`로 확인하는 공개 `error_code`는 `AI_UNAVAILABLE`로 통일하여
-재시도 또는 담당자 확인이 필요한 상태임을 안정적으로 표현합니다.
 
 ## Renewal Task와 Workflow 연결
 

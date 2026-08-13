@@ -42,9 +42,8 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | Web | `CORS_ALLOWED_ORIGINS` | 실제 Client HTTPS origin만 허용 |
 | Catalog | `WORKFLOW_CATALOG_LOCATION` | 검증된 `RELEASED` projection 위치 |
 | AI | `AI_RUNTIME_ENABLED=true` | 실제 Runtime 연동 활성화 |
-| AI | `FOWOCO_AI_BASE_URL` | 끝에 `/`가 없는 Agent 공통 주소 |
-| AI | `FOWOCO_AI_INTERNAL_TOKEN` | Server↔AI 내부 Bearer credential |
-| AI | `AI_RUNTIME_OVERALL_TIMEOUT` | 최초 모델 로딩까지 포함한 호출 상한, 데모 기본 `240s` |
+| AI | `AI_RUNTIME_ENDPOINT` | 예: `http://ai:8000/internal/v1/analyses` |
+| AI | `AI_RUNTIME_SERVICE_CREDENTIAL` | Server↔AI 내부 Bearer credential |
 | Worker Link | `WORKER_PORTAL_BASE_URL` | 문자에 넣을 실제 Client HTTPS 주소 |
 | Worker Link | `WORKER_LINK_SMS_PROVIDER=solapi` | SMS Adapter 활성화 |
 | Worker Link | `SOLAPI_API_KEY`, `SOLAPI_API_SECRET` | SMS Provider credential |
@@ -53,20 +52,6 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | OCR | `AI_OCR_ENDPOINT`, `AI_OCR_SERVICE_CREDENTIAL` | OCR 내부 endpoint와 Bearer credential |
 | OCR | `OCR_RESULT_ENCRYPTION_KEY_BASE64` | 32바이트 OCR 결과 암호화 키의 Base64 |
 | OCR | `OCR_RESULT_KEY_VERSION` | 암호화 키 식별 version |
-
-Kubernetes AI Agent가 준비되기 전에는 `FOWOCO_AI_BASE_URL`에 Mac의 고정 Cloudflare
-Tunnel HTTPS 주소를 넣습니다. Tunnel은 로컬 AI의 `127.0.0.1:8000`으로 연결하고,
-`FOWOCO_AI_INTERNAL_TOKEN`은 AI의 내부 Bearer Token과 같은 Secret을 사용합니다.
-Kubernetes 배포 후에는 코드나 image를 다시 만들지 않고 다음처럼 환경변수만 바꿉니다.
-
-```dotenv
-FOWOCO_AI_BASE_URL=http://ai-agent.fowoco.svc.cluster.local:8000
-FOWOCO_AI_INTERNAL_TOKEN=<k8s-agent-token>
-```
-
-기존 `AI_RUNTIME_ENDPOINT`, `AI_RUNTIME_RENEWAL_ENDPOINT`,
-`AI_DOCUMENT_GENERATION_ENDPOINT`, `AI_RUNTIME_SERVICE_CREDENTIAL`은 이전 배포 호환을 위한
-개별 override입니다. 새 배포는 공통 Base URL과 Token을 사용합니다.
 
 비밀번호 재설정 메일을 실제로 발송할 때만 다음 값을 `server-env`에 추가합니다. 기본
 `PASSWORD_RESET_NOTIFICATION_PROVIDER=none`에서는 메일을 발송하지 않습니다.
