@@ -12,6 +12,7 @@ public record WorkerResponseItemResponse(
         WorkerResponseType responseType,
         String message,
         List<UUID> uploadIds,
+        List<WorkerResponseUploadItemResponse> uploads,
         ConversationStatus conversationStatus,
         boolean unread,
         Instant receivedAt
@@ -22,6 +23,7 @@ public record WorkerResponseItemResponse(
                 result.responseType(),
                 result.message(),
                 result.uploadIds(),
+                result.uploads().stream().map(WorkerResponseUploadItemResponse::from).toList(),
                 result.conversationStatus(),
                 result.unread(),
                 result.receivedAt()

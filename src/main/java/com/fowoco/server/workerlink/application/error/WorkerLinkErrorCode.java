@@ -47,6 +47,19 @@ public enum WorkerLinkErrorCode implements ApiErrorCode {
     UPLOAD_NOT_AVAILABLE(
             HttpStatus.UNPROCESSABLE_CONTENT,
             "업로드된 파일을 찾을 수 없거나 이미 사용된 파일입니다."
+    ),
+    WORKER_RESPONSE_NOT_FOUND(HttpStatus.NOT_FOUND, "근로자 응답을 찾을 수 없습니다."),
+    WORKER_RESPONSE_NOT_DOCUMENT_SUBMISSION(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "서류 제출 응답만 공식 근로자 서류로 등록할 수 있습니다."
+    ),
+    WORKER_RESPONSE_DOCUMENT_TYPE_INVALID(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "제출 파일의 서류 유형을 확인할 수 없습니다."
+    ),
+    WORKER_RESPONSE_DOCUMENTS_INCOMPLETE(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "요청한 서류가 모두 제출된 뒤 공식 서류로 등록할 수 있습니다."
     );
 
     private final HttpStatus status;

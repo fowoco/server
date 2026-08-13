@@ -38,6 +38,22 @@ public class SecurityConfig {
 
     @Bean
     @Order(1)
+    @Profile("observability & !prod")
+    public SecurityFilterChain prometheusSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/actuator/prometheus")
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
+                .csrf(csrf -> csrf.disable())
+                .requestCache(cache -> cache.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
+                .logout(logout -> logout.disable());
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
     @Profile("local")
     public SecurityFilterChain h2ConsoleSecurityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -49,7 +65,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    @Order(2)
+    @Order(3)
     public SecurityFilterChain applicationSecurityFilterChain(
             HttpSecurity http,
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
@@ -93,8 +109,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/password-resets"
                         ).permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/public/worker-links/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/public/worker-links/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/public/worker-links/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/public/worker-links/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/**")
                         .hasAnyRole("ADMIN", "HR", "VIEWER")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/**")

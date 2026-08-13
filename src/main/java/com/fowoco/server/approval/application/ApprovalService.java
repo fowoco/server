@@ -19,6 +19,7 @@ import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.error.ErrorCode;
 import com.fowoco.server.common.id.UuidGenerator;
+import com.fowoco.server.reliability.application.port.DomainEventPublisher;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.settings.application.port.CompanySettingsRepository;
@@ -58,6 +59,7 @@ public class ApprovalService implements ApprovalControlPort {
     private final SafeJsonService safeJsonService;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
+    private final DomainEventPublisher eventPublisher;
 
     public ApprovalService(
             ActorAuthorizer actorAuthorizer,
@@ -72,7 +74,8 @@ public class ApprovalService implements ApprovalControlPort {
             AuditEventRepository auditRepository,
             SafeJsonService safeJsonService,
             UuidGenerator uuidGenerator,
-            Clock clock
+            Clock clock,
+            DomainEventPublisher eventPublisher
     ) {
         this.actorAuthorizer = actorAuthorizer;
         this.tenantDatabaseContext = tenantDatabaseContext;
@@ -87,6 +90,7 @@ public class ApprovalService implements ApprovalControlPort {
         this.safeJsonService = safeJsonService;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -144,6 +148,13 @@ public class ApprovalService implements ApprovalControlPort {
                 metadata,
                 now
         );
+        eventPublisher.publish(ApprovalDomainEvents.approvalRequested(
+                uuidGenerator.generate(),
+                savedTask,
+                actor,
+                metadata,
+                now
+        ));
         return result(savedApproval, savedTask);
     }
 

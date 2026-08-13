@@ -25,6 +25,7 @@ public final class Task {
     private final TaskSource source;
     private TaskStatus status;
     private LocalDate dueDate;
+    private UUID assigneeId;
     private final UUID createdBy;
     private UUID updatedBy;
     private final Instant createdAt;
@@ -48,6 +49,7 @@ public final class Task {
             TaskSource source,
             TaskStatus status,
             LocalDate dueDate,
+            UUID assigneeId,
             UUID createdBy,
             UUID updatedBy,
             Instant createdAt,
@@ -74,6 +76,7 @@ public final class Task {
         this.source = Objects.requireNonNull(source);
         this.status = Objects.requireNonNull(status);
         this.dueDate = dueDate;
+        this.assigneeId = Objects.requireNonNull(assigneeId);
         this.createdBy = Objects.requireNonNull(createdBy);
         this.updatedBy = Objects.requireNonNull(updatedBy);
         this.createdAt = Objects.requireNonNull(createdAt);
@@ -121,6 +124,7 @@ public final class Task {
                 status,
                 dueDate,
                 createdBy,
+                createdBy,
                 updatedBy,
                 createdAt,
                 updatedAt,
@@ -167,6 +171,7 @@ public final class Task {
                 source,
                 initialStatus,
                 dueDate,
+                actorId,
                 actorId,
                 actorId,
                 now,
@@ -237,12 +242,24 @@ public final class Task {
         return transition(TaskStatus.DRAFT, actorId, now);
     }
 
+    public TaskStatus waitForWorker(long expectedVersion, UUID actorId, Instant now) {
+        requireVersion(expectedVersion);
+        requireStatus(TaskStatus.APPROVED);
+        return transition(TaskStatus.WAITING_WORKER, actorId, now);
+    }
+
     public TaskStatus recordExternalSubmission(long expectedVersion, UUID actorId, Instant now) {
         requireVersion(expectedVersion);
         if (status != TaskStatus.APPROVED && status != TaskStatus.WAITING_WORKER) {
             throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         return transition(TaskStatus.WAITING_EXTERNAL, actorId, now);
+    }
+
+    public TaskStatus resumeAfterWorkerSubmission(long expectedVersion, UUID actorId, Instant now) {
+        requireVersion(expectedVersion);
+        requireStatus(TaskStatus.WAITING_WORKER);
+        return transition(TaskStatus.APPROVED, actorId, now);
     }
 
     public TaskStatus complete(
@@ -273,6 +290,26 @@ public final class Task {
             throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
         }
         return transition(TaskStatus.CANCELLED, actorId, now);
+    }
+
+    public boolean changeAssignee(
+            UUID assigneeId,
+            long expectedVersion,
+            UUID actorId,
+            Instant now
+    ) {
+        requireVersion(expectedVersion);
+        if (status.isTerminal()) {
+            throw new ApiException(TaskErrorCode.TASK_TRANSITION_NOT_ALLOWED);
+        }
+        UUID nextAssigneeId = Objects.requireNonNull(assigneeId);
+        if (this.assigneeId.equals(nextAssigneeId)) {
+            return false;
+        }
+        this.assigneeId = nextAssigneeId;
+        this.updatedBy = Objects.requireNonNull(actorId);
+        this.updatedAt = Objects.requireNonNull(now);
+        return true;
     }
 
     public UpdateOutcome updateContent(
@@ -467,6 +504,10 @@ public final class Task {
 
     public LocalDate dueDate() {
         return dueDate;
+    }
+
+    public UUID assigneeId() {
+        return assigneeId;
     }
 
     public UUID createdBy() {

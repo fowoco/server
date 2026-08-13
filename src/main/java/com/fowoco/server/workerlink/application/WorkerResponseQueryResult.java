@@ -11,11 +11,13 @@ public record WorkerResponseQueryResult(
         WorkerResponseType responseType,
         String message,
         List<UUID> uploadIds,
+        List<WorkerResponseUploadResult> uploads,
         ConversationStatus conversationStatus,
         boolean unread,
         Instant receivedAt
 ) {
     public WorkerResponseQueryResult {
         uploadIds = List.copyOf(uploadIds);
+        uploads = List.copyOf(uploads);
     }
 }

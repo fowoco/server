@@ -117,6 +117,29 @@ Server는 AI에 보낼 수 있는 필드를 typed DTO로 제한하고 요청 전
 
 상세 계약은 [AI Runtime 계약 문서](ai-runtime-contract.md)를 확인합니다.
 
+## AI 파이프라인 로컬 관측
+
+Server는 AI 내부 Node를 추측하지 않고 자신이 실제로 관측할 수 있는 구간만
+구조화 로그와 Micrometer 지표로 기록합니다.
+
+- AiRun: PLAN 호출, Slot 조회, ANALYZE 호출, 결과 저장, 전체 자동 실행
+- Renewal: Context 조회, Runtime 호출, 문서 생성, 결과 반영, 전체 실행
+- `request_id`와 `attempt_id`는 로그 추적에만 사용합니다.
+- Metric tag에는 종류가 제한된 `phase`, `stage`, `status`, `outcome`,
+  `failure_code`만 사용합니다.
+- 발화문, Slot 값, 근로자·Task ID와 개인정보는 로그 본문과 Metric tag에 넣지
+  않습니다.
+
+로컬 Prometheus를 함께 실행할 때는 다음과 같이 별도 profile을 명시합니다.
+
+```bash
+SERVER_ADDRESS=0.0.0.0 SPRING_PROFILES_ACTIVE=local,observability ./gradlew bootRun
+docker compose -f compose.observability.yml up -d
+```
+
+운영 `prod`에서는 위 공개 profile을 사용하지 않습니다. 단계 정의, PromQL과 반복
+측정 방법은 [AI 파이프라인 관측 가이드](ai-pipeline-observability.md)를 확인합니다.
+
 ## 이벤트 유실 방지와 재처리
 
 Task 생성·취소처럼 후속 처리가 필요한 변경은 업무 데이터와
@@ -270,5 +293,6 @@ Client가 안전한 형식의 `X-Request-Id`를 보내면 Server가 응답과 �
 - [프로젝트 구조](project-structure.md)
 - [Transactional Outbox 운영 가이드](reliability/transactional-outbox.md)
 - [PostgreSQL Runtime Timeout 운영 가이드](reliability/postgresql-runtime-timeouts.md)
+- [AI 파이프라인 관측·Prometheus 가이드](ai-pipeline-observability.md)
 - [ADR 목록](adr/README.md)
 - [PostgreSQL RLS 적용 가이드](database/postgresql-rls-rollout.md)

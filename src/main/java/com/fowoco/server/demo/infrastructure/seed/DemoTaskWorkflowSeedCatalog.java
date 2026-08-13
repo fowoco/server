@@ -77,7 +77,10 @@ final class DemoTaskWorkflowSeedCatalog {
                 approval(11, tasks, 23, ApprovalStatus.APPROVED, "신청 결과 확인 후 승인"),
                 approval(12, tasks, 9, ApprovalStatus.REJECTED, "필수 고용 정보 보완 필요"),
                 approval(13, tasks, 1, ApprovalStatus.INVALIDATED,
-                        "마감일 변경으로 기존 승인 snapshot을 무효화")
+                        "마감일 변경으로 기존 승인 snapshot을 무효화"),
+                approval(14, tasks, 3, ApprovalStatus.APPROVED, "여권 사본 요청 전 승인 확인"),
+                approval(15, tasks, 10, ApprovalStatus.APPROVED, "체류서류 요청 전 승인 확인"),
+                approval(16, tasks, 11, ApprovalStatus.APPROVED, "외국인등록증 요청 전 승인 확인")
         );
     }
 
@@ -282,6 +285,8 @@ final class DemoTaskWorkflowSeedCatalog {
             case 3, 8, 10, 11 -> List.of(
                     TaskStatus.NEEDS_INFO,
                     TaskStatus.DRAFT,
+                    TaskStatus.READY_FOR_REVIEW,
+                    TaskStatus.APPROVED,
                     TaskStatus.WAITING_WORKER
             );
             case 4, 18, 19 -> List.of(

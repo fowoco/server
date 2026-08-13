@@ -1,7 +1,10 @@
 package com.fowoco.server.audit.application.port;
 
 import com.fowoco.server.audit.application.AuditSearchCriteria;
+import com.fowoco.server.audit.application.WorkerActivitySearchCriteria;
 import com.fowoco.server.audit.domain.AuditEvent;
+import com.fowoco.server.audit.domain.AuditAction;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,4 +18,15 @@ public interface AuditEventRepository {
     List<AuditEvent> findTaskActivities(UUID companyId, UUID taskId);
 
     List<AuditEvent> search(AuditSearchCriteria criteria);
+
+    List<WorkerActivityRecord> findWorkerActivities(WorkerActivitySearchCriteria criteria);
+
+    record WorkerActivityRecord(
+            UUID auditEventId,
+            AuditAction action,
+            UUID taskId,
+            String taskTitle,
+            Instant occurredAt
+    ) {
+    }
 }

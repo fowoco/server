@@ -1,6 +1,7 @@
 package com.fowoco.server.worker.infrastructure.persistence;
 
 import com.fowoco.server.worker.application.WorkerDocumentSearchQuery;
+import com.fowoco.server.worker.application.port.WorkerDocumentFileLookup;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.domain.WorkerDocument;
 import jakarta.persistence.EntityManager;
@@ -13,7 +14,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public class JpaWorkerDocumentRepository implements WorkerDocumentRepository {
+public class JpaWorkerDocumentRepository implements WorkerDocumentRepository, WorkerDocumentFileLookup {
 
     private final EntityManager entityManager;
 
@@ -69,6 +70,26 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository {
                         WorkerDocumentJpaEntity.class
                 )
                 .setParameter("workerDocumentId", workerDocumentId)
+                .setParameter("companyId", companyId)
+                .getResultStream()
+                .findFirst()
+                .map(WorkerDocumentJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<WorkerDocument> findByFileIdAndCompanyId(UUID fileId, UUID companyId) {
+        Objects.requireNonNull(fileId, "fileId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        return entityManager.createQuery(
+                        """
+                        select document
+                        from WorkerDocumentJpaEntity document
+                        where document.fileId = :fileId
+                          and document.companyId = :companyId
+                        """,
+                        WorkerDocumentJpaEntity.class
+                )
+                .setParameter("fileId", fileId)
                 .setParameter("companyId", companyId)
                 .getResultStream()
                 .findFirst()

@@ -3,6 +3,7 @@ package com.fowoco.server.company.infrastructure.persistence;
 import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.domain.Company;
 import jakarta.persistence.EntityManager;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,5 +30,12 @@ public class JpaCompanyRepository implements CompanyRepository {
         Objects.requireNonNull(company, "company must not be null");
         entityManager.persist(CompanyJpaEntity.fromDomain(company));
         entityManager.flush();
+    }
+
+    @Override
+    public List<UUID> findAllIds() {
+        return entityManager
+                .createQuery("SELECT company.companyId FROM CompanyJpaEntity company", UUID.class)
+                .getResultList();
     }
 }

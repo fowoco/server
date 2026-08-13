@@ -18,6 +18,8 @@ import com.fowoco.server.aiintegration.application.model.AiRuntimeVersions;
 import com.fowoco.server.aiintegration.application.model.AnalysisInput;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
 import com.jayway.jsonpath.JsonPath;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -73,6 +75,9 @@ class AiRunApiIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @MockitoBean
     private AiRuntimeClient runtimeClient;
 
@@ -123,6 +128,10 @@ class AiRunApiIntegrationTest {
 
     @Test
     void createsQueriesAnswersAndFinishesOneWorkerAnalysis() throws Exception {
+        long planBefore = stageCount("PLAN", "PLAN_RUNTIME_CALL", "SUCCESS");
+        long slotBefore = stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS");
+        long analyzeBefore = stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS");
+        double reviewRequiredBefore = outcomeCount("REVIEW_REQUIRED");
         String token = login(HR_A_EMAIL);
         HttpResponse<String> created = post(
                 "/api/v1/ai-runs",
@@ -205,10 +214,21 @@ class AiRunApiIntegrationTest {
         verify(runtimeClient, atLeast(3)).analyze(requestCaptor.capture(), any());
         assertThat(requestCaptor.getAllValues())
                 .allSatisfy(request -> assertThat(request.deadlineMs()).isEqualTo(240_000L));
+        assertThat(stageCount("PLAN", "PLAN_RUNTIME_CALL", "SUCCESS") - planBefore)
+                .isEqualTo(1);
+        assertThat(stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS") - slotBefore)
+                .isEqualTo(1);
+        assertThat(stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS") - analyzeBefore)
+                .isEqualTo(2);
+        assertThat(outcomeCount("REVIEW_REQUIRED") - reviewRequiredBefore)
+                .isEqualTo(1.0);
     }
 
     @Test
     void finishesOutOfScopeAfterPlanWithoutResolvingSlotsOrCallingAnalyze() throws Exception {
+        long slotBefore = stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS");
+        long analyzeBefore = stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS");
+        double outOfScopeBefore = outcomeCount("OUT_OF_SCOPE");
         reset(runtimeClient);
         runtimeCalls.set(0);
         when(runtimeClient.analyze(any(), any())).thenAnswer(invocation -> {
@@ -255,6 +275,26 @@ class AiRunApiIntegrationTest {
         assertThat(events.body())
                 .contains("event:COMPLETED", "\"analysis_outcome\":\"OUT_OF_SCOPE\"")
                 .doesNotContain("event:SLOT_CHECKING");
+        assertThat(stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS"))
+                .isEqualTo(slotBefore);
+        assertThat(stageCount("ANALYZE", "ANALYZE_RUNTIME_CALL", "SUCCESS"))
+                .isEqualTo(analyzeBefore);
+        assertThat(outcomeCount("OUT_OF_SCOPE") - outOfScopeBefore)
+                .isEqualTo(1.0);
+    }
+
+    private long stageCount(String phase, String stage, String status) {
+        Timer timer = meterRegistry.find("fowoco.ai.pipeline.stage")
+                .tags("phase", phase, "stage", stage, "status", status)
+                .timer();
+        return timer == null ? 0L : timer.count();
+    }
+
+    private double outcomeCount(String outcome) {
+        var counter = meterRegistry.find("fowoco.ai.analysis.outcomes")
+                .tag("outcome", outcome)
+                .counter();
+        return counter == null ? 0.0 : counter.count();
     }
 
     @Test

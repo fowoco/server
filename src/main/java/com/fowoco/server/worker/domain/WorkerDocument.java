@@ -90,6 +90,35 @@ public final class WorkerDocument {
         );
     }
 
+    public static WorkerDocument createSubmittedWithFile(
+            UUID workerDocumentId,
+            UUID workerId,
+            UUID companyId,
+            UUID taskId,
+            DocumentType documentType,
+            String note,
+            UUID fileId,
+            Instant now
+    ) {
+        Objects.requireNonNull(fileId, "fileId must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+        return new WorkerDocument(
+                workerDocumentId,
+                workerId,
+                companyId,
+                taskId,
+                documentType,
+                SubmissionStatus.SUBMITTED,
+                null,
+                null,
+                note,
+                fileId,
+                now,
+                now,
+                0L
+        );
+    }
+
     public UUID workerDocumentId() {
         return workerDocumentId;
     }

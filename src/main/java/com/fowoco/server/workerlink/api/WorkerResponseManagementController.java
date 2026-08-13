@@ -4,6 +4,7 @@ import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.workerlink.application.WorkerResponseManagementService;
+import com.fowoco.server.workerlink.application.WorkerResponseDocumentAdoptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.util.UUID;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,13 +37,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkerResponseManagementController {
 
     private final WorkerResponseManagementService service;
+    private final WorkerResponseDocumentAdoptionService documentAdoptionService;
     private final ActorContextProvider actorContextProvider;
 
     public WorkerResponseManagementController(
             WorkerResponseManagementService service,
+            WorkerResponseDocumentAdoptionService documentAdoptionService,
             ActorContextProvider actorContextProvider
     ) {
         this.service = service;
+        this.documentAdoptionService = documentAdoptionService;
         this.actorContextProvider = actorContextProvider;
     }
 
@@ -85,6 +91,42 @@ public class WorkerResponseManagementController {
     ) {
         service.markReviewed(taskId, actor(), RequestMetadata.from(servletRequest));
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+
+    @Operation(
+            operationId = "adoptWorkerResponseDocuments",
+            summary = "근로자 제출 파일을 공식 서류로 채택",
+            description = "HR이 제출 파일을 확인한 뒤 WorkerDocument(SUBMITTED)로 등록합니다. "
+                    + "요청 서류가 모두 채택되면 WAITING_WORKER 업무를 APPROVED로 되돌려 다음 행동을 엽니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "공식 서류 채택 성공"),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity")
+    })
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    @PostMapping(
+            path = "/{responseId}/documents/adopt",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    public WorkerResponseDocumentAdoptionResponse adoptDocuments(
+            @PathVariable UUID taskId,
+            @PathVariable UUID responseId,
+            @Valid @RequestBody WorkerResponseDocumentAdoptionRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        return WorkerResponseDocumentAdoptionResponse.from(documentAdoptionService.adopt(
+                taskId,
+                responseId,
+                request.getExpectedTaskVersion(),
+                actor(),
+                RequestMetadata.from(servletRequest)
+        ));
     }
 
     private ActorContext actor() {

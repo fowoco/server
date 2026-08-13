@@ -5,6 +5,7 @@ import com.fowoco.server.workerlink.application.port.WorkerResponseRepository;
 import com.fowoco.server.workerlink.domain.WorkerResponse;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import java.nio.ByteBuffer;
 import java.sql.SQLException;
 import java.util.Locale;
 import java.util.List;
@@ -51,6 +52,42 @@ public class JpaWorkerResponseRepository implements WorkerResponseRepository {
                 .getResultStream()
                 .findFirst()
                 .map(WorkerResponseJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<WorkerResponseItem> findByResponseIdAndTaskIdAndCompanyId(
+            UUID responseId,
+            UUID taskId,
+            UUID companyId
+    ) {
+        Objects.requireNonNull(responseId, "responseId must not be null");
+        Objects.requireNonNull(taskId, "taskId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        return entityManager.createQuery(
+                        """
+                        select response, link.conversationStatus
+                        from WorkerResponseJpaEntity response, WorkerLinkJpaEntity link
+                        where response.workerLinkId = link.workerLinkId
+                          and response.responseId = :responseId
+                          and response.companyId = :companyId
+                          and link.companyId = :companyId
+                          and link.taskId = :taskId
+                        """,
+                        Object[].class
+                )
+                .setParameter("responseId", responseId)
+                .setParameter("taskId", taskId)
+                .setParameter("companyId", companyId)
+                .getResultStream()
+                .findFirst()
+                .map(row -> {
+                    WorkerResponse response = ((WorkerResponseJpaEntity) row[0]).toDomain();
+                    return new WorkerResponseItem(
+                            response,
+                            (com.fowoco.server.workerlink.domain.ConversationStatus) row[1],
+                            findUploadIds(response.responseId(), companyId)
+                    );
+                });
     }
 
     @Override
@@ -160,8 +197,19 @@ public class JpaWorkerResponseRepository implements WorkerResponseRepository {
                 .setParameter(2, companyId)
                 .getResultList()
                 .stream()
-                .map(value -> value instanceof UUID uuid ? uuid : UUID.fromString(value.toString()))
+                .map(this::toUuid)
                 .toList();
+    }
+
+    private UUID toUuid(Object value) {
+        if (value instanceof UUID uuid) {
+            return uuid;
+        }
+        if (value instanceof byte[] bytes && bytes.length == 16) {
+            ByteBuffer buffer = ByteBuffer.wrap(bytes);
+            return new UUID(buffer.getLong(), buffer.getLong());
+        }
+        return UUID.fromString(value.toString());
     }
 
     static boolean isUniqueUploadFileViolation(Throwable failure) {

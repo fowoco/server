@@ -125,12 +125,19 @@ class WorkerLinkSecurityIntegrationTest {
                 "fullflow-issue-key"
         );
         assertThat(issueResponse.statusCode()).as("issue response body: %s", issueResponse.body()).isEqualTo(201);
+        String workerLinkId = JsonPath.read(issueResponse.body(), "$.worker_link_id");
         String rawToken = JsonPath.read(issueResponse.body(), "$.worker_link_token");
         String workerUrl = JsonPath.read(issueResponse.body(), "$.worker_url");
         assertThat(rawToken).isNotBlank();
         assertThat(workerUrl).isEqualTo("http://localhost:5173/worker-portal/" + rawToken);
 
-        HttpResponse<String> viewResponse = getJson("/public/worker-links/" + rawToken, null);
+        HttpResponse<String> markSentResponse = postWithoutBody(
+                "/api/v1/worker-links/" + workerLinkId + "/sent",
+                hrToken
+        );
+        assertThat(markSentResponse.statusCode()).isEqualTo(200);
+
+        HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/" + rawToken, null);
         assertThat(viewResponse.statusCode()).isEqualTo(200);
         assertThat(viewResponse.headers().firstValue("Cache-Control")).contains("no-store");
         assertThat(JsonPath.<String>read(viewResponse.body(), "$.guidance"))
@@ -160,7 +167,7 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(retryUploadId).isEqualTo(firstUploadId);
 
         HttpResponse<String> responseSubmit = postJson(
-                "/public/worker-links/" + rawToken + "/responses",
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
                 """
                 {"response_type":"DOCUMENT_SUBMITTED","upload_ids":["%s"],"idempotency_key":"key-1"}
                 """.formatted(uploadId),
@@ -177,6 +184,61 @@ class WorkerLinkSecurityIntegrationTest {
         HttpResponse<String> activitiesResponse = getJson("/api/v1/tasks/" + taskId + "/activities", hrToken);
         assertThat(activitiesResponse.statusCode()).isEqualTo(200);
         assertThat(activitiesResponse.body()).contains("WORKER_LINK_RESPONSE_SUBMITTED");
+
+        HttpResponse<String> firstWorkerActivityPage = getJson(
+                "/api/v1/workers/" + workerId + "/activities?limit=1",
+                hrToken
+        );
+        assertThat(firstWorkerActivityPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(firstWorkerActivityPage.body(), "$.items[*].type"))
+                .containsExactly("WORKER_RESPONSE_SUBMITTED");
+        assertThat(JsonPath.<String>read(firstWorkerActivityPage.body(), "$.items[0].task_id"))
+                .isEqualTo(taskId);
+        assertThat(JsonPath.<String>read(firstWorkerActivityPage.body(), "$.items[0].task_title"))
+                .isEqualTo("재계약 준비");
+        String nextCursor = JsonPath.read(firstWorkerActivityPage.body(), "$.next_cursor");
+        assertThat(nextCursor).isNotBlank();
+
+        HttpResponse<String> secondWorkerActivityPage = getJson(
+                "/api/v1/workers/" + workerId + "/activities?limit=1&cursor=" + nextCursor,
+                hrToken
+        );
+        assertThat(secondWorkerActivityPage.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(secondWorkerActivityPage.body(), "$.items[*].type"))
+                .containsExactly("GUIDANCE_OPENED");
+        assertThat(secondWorkerActivityPage.body())
+                .doesNotContain("request_id")
+                .doesNotContain("trace_id")
+                .doesNotContain(rawToken);
+
+        HttpResponse<String> viewerActivities = getJson(
+                "/api/v1/workers/" + workerId + "/activities",
+                accessToken(login(VIEWER_A_EMAIL))
+        );
+        assertThat(viewerActivities.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(viewerActivities.body(), "$.items[*].type"))
+                .containsExactly("WORKER_RESPONSE_SUBMITTED", "GUIDANCE_OPENED", "GUIDANCE_SENT");
+
+        HttpResponse<String> otherCompanyActivities = getJson(
+                "/api/v1/workers/" + workerId + "/activities",
+                accessToken(login(HR_B_EMAIL))
+        );
+        assertThat(otherCompanyActivities.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void workerWithoutGuidanceReturnsEmptyActivityPage() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "안내이력없는근로자");
+
+        HttpResponse<String> response = getJson(
+                "/api/v1/workers/" + workerId + "/activities",
+                hrToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<Object>>read(response.body(), "$.items")).isEmpty();
+        assertThat(JsonPath.<Object>read(response.body(), "$.next_cursor")).isNull();
     }
 
     @Test
@@ -263,7 +325,7 @@ class WorkerLinkSecurityIntegrationTest {
         String taskId = createApprovedTask(hrToken, workerId);
         String workerUrl = issueWorkerLink(hrToken, taskId, "content-not-ready-key");
 
-        HttpResponse<String> response = getJson("/public/worker-links/" + workerUrl, null);
+        HttpResponse<String> response = getJson("/api/v1/public/worker-links/" + workerUrl, null);
 
         assertThat(response.statusCode()).isEqualTo(409);
         assertThat(JsonPath.<String>read(response.body(), "$.code"))
@@ -278,7 +340,7 @@ class WorkerLinkSecurityIntegrationTest {
         String workerUrl = issueWorkerLink(hrToken, taskId, "response-management-key");
 
         HttpResponse<String> submitResponse = postJson(
-                "/public/worker-links/" + workerUrl + "/responses",
+                "/api/v1/public/worker-links/" + workerUrl + "/responses",
                 """
                 {"response_type":"QUESTION","message":"여권의 어느 면을 제출하나요?","idempotency_key":"question-key"}
                 """,
@@ -330,6 +392,126 @@ class WorkerLinkSecurityIntegrationTest {
                 Integer.class,
                 UUID.fromString(taskId)
         )).isEqualTo(1);
+    }
+
+    @Test
+    void hrCanInspectAndAdoptSubmittedFilesThenResumeTask() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "제출서류채택테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "document-adoption-link-key");
+
+        HttpResponse<String> passportUpload = uploadFileAsType(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "passport-content".getBytes(StandardCharsets.UTF_8),
+                "PASSPORT_COPY"
+        );
+        HttpResponse<String> contractUpload = uploadFileAsType(
+                rawToken,
+                "contract.pdf",
+                "application/pdf",
+                "contract-content".getBytes(StandardCharsets.UTF_8),
+                "CONTRACT"
+        );
+        assertThat(passportUpload.statusCode()).isEqualTo(201);
+        assertThat(contractUpload.statusCode()).isEqualTo(201);
+        String passportFileId = JsonPath.read(passportUpload.body(), "$.upload_id");
+        String contractFileId = JsonPath.read(contractUpload.body(), "$.upload_id");
+
+        HttpResponse<String> submitResponse = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                """
+                {
+                  "response_type":"DOCUMENT_SUBMITTED",
+                  "message":"요청하신 서류를 제출합니다.",
+                  "upload_ids":["%s","%s"],
+                  "idempotency_key":"document-adoption-response-key"
+                }
+                """.formatted(passportFileId, contractFileId),
+                null
+        );
+        assertThat(submitResponse.statusCode()).isEqualTo(201);
+        String responseId = JsonPath.read(submitResponse.body(), "$.response_id");
+
+        HttpResponse<String> beforeAdoption = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrToken
+        );
+        assertThat(beforeAdoption.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(beforeAdoption.body(), "$.items[0].message"))
+                .isEqualTo("요청하신 서류를 제출합니다.");
+        assertThat(JsonPath.<List<String>>read(beforeAdoption.body(), "$.items[0].uploads[*].file_name"))
+                .containsExactlyInAnyOrder("passport.pdf", "contract.pdf");
+        assertThat(JsonPath.<List<Boolean>>read(beforeAdoption.body(), "$.items[0].uploads[*].adopted"))
+                .containsOnly(false);
+
+        HttpResponse<String> taskBeforeAdoption = getJson("/api/v1/tasks/" + taskId, hrToken);
+        assertThat(JsonPath.<String>read(taskBeforeAdoption.body(), "$.status"))
+                .isEqualTo("WAITING_WORKER");
+        int expectedTaskVersion = ((Number) JsonPath.read(taskBeforeAdoption.body(), "$.version")).intValue();
+
+        String otherCompanyHrToken = accessToken(login(HR_B_EMAIL));
+        HttpResponse<String> crossTenantAdoption = postJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses/" + responseId + "/documents/adopt",
+                """
+                {"expected_task_version":%d}
+                """.formatted(expectedTaskVersion),
+                otherCompanyHrToken
+        );
+        assertThat(crossTenantAdoption.statusCode()).isEqualTo(404);
+
+        HttpResponse<String> adoption = postJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses/" + responseId + "/documents/adopt",
+                """
+                {"expected_task_version":%d}
+                """.formatted(expectedTaskVersion),
+                hrToken
+        );
+
+        assertThat(adoption.statusCode()).as("adoption response body: %s", adoption.body()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(adoption.body(), "$.task_status")).isEqualTo("APPROVED");
+        assertThat(JsonPath.<List<String>>read(adoption.body(), "$.adopted_documents[*].document_type"))
+                .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document WHERE task_id = ? AND submission_status = 'SUBMITTED'",
+                Integer.class,
+                UUID.fromString(taskId)
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM worker_link WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).isEqualTo("REVOKED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT conversation_status FROM worker_link WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).isEqualTo("REOPENED");
+
+        HttpResponse<String> afterAdoption = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrToken
+        );
+        assertThat(JsonPath.<List<Boolean>>read(afterAdoption.body(), "$.items[0].uploads[*].adopted"))
+                .containsOnly(true);
+
+        int currentTaskVersion = ((Number) JsonPath.read(adoption.body(), "$.task_version")).intValue();
+        HttpResponse<String> repeated = postJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses/" + responseId + "/documents/adopt",
+                """
+                {"expected_task_version":%d}
+                """.formatted(currentTaskVersion),
+                hrToken
+        );
+        assertThat(repeated.statusCode()).isEqualTo(200);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document WHERE task_id = ?",
+                Integer.class,
+                UUID.fromString(taskId)
+        )).isEqualTo(2);
     }
 
     @Test
@@ -688,7 +870,7 @@ class WorkerLinkSecurityIntegrationTest {
     }
 
     @Test
-    void documentsWorkerLinkDeliveryEndpointsInOpenApi() throws Exception {
+    void documentsWorkerLinkAndWorkerActivityEndpointsInOpenApi() throws Exception {
         HttpResponse<String> response = getJson("/v3/api-docs", null);
 
         assertThat(response.statusCode()).isEqualTo(200);
@@ -704,6 +886,10 @@ class WorkerLinkSecurityIntegrationTest {
                 response.body(),
                 "$.paths['/api/v1/worker-links/{workerLinkId}/sms-deliveries'].post.operationId"
         )).isEqualTo("sendWorkerLinkSms");
+        assertThat(JsonPath.<String>read(
+                response.body(),
+                "$.paths['/api/v1/workers/{workerId}/activities'].get.operationId"
+        )).isEqualTo("getWorkerActivities");
         assertThat(JsonPath.<Number>read(
                 response.body(),
                 "$.components.schemas.WorkerLinkIssueRequest.properties.expires_in_hours.minimum"
@@ -753,12 +939,12 @@ class WorkerLinkSecurityIntegrationTest {
 
     @Test
     void viewReturns410ForNonExistentToken() throws Exception {
-        HttpResponse<String> viewResponse = getJson("/public/worker-links/nonexistenttoken12345", null);
+        HttpResponse<String> viewResponse = getJson("/api/v1/public/worker-links/nonexistenttoken12345", null);
         assertThat(viewResponse.statusCode()).isEqualTo(410);
     }
     @Test
     void documentsEndpointAllowsIdempotencyKeyHeaderInCors() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/test-token/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/test-token/documents"))
                 .header("Origin", "http://localhost:3000")
                 .header("Access-Control-Request-Method", "POST")
                 .header("Access-Control-Request-Headers", "Idempotency-Key")
@@ -888,7 +1074,27 @@ class WorkerLinkSecurityIntegrationTest {
         writeFieldPart(out, "clientRequestId", UUID.randomUUID().toString());
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
+                .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> uploadFileAsType(
+            String token,
+            String filename,
+            String mimeType,
+            byte[] content,
+            String documentType
+    ) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writePart(out, "file", filename, mimeType, content);
+        writeFieldPart(out, "clientRequestId", UUID.randomUUID().toString());
+        writeFieldPart(out, "documentType", documentType);
+        out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();
@@ -903,7 +1109,7 @@ class WorkerLinkSecurityIntegrationTest {
         writeFieldPart(out, "clientRequestId", clientRequestId);
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = HttpRequest.newBuilder(uri("/public/worker-links/" + token + "/documents"))
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();

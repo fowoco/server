@@ -2,6 +2,7 @@ package com.fowoco.server.workerlink.api;
 
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.workerlink.application.WorkerLinkIssueCommand;
 import com.fowoco.server.workerlink.application.WorkerLinkIssueResult;
 import com.fowoco.server.workerlink.application.WorkerLinkService;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -74,8 +76,8 @@ public class WorkerLinkController {
     public ResponseEntity<WorkerLinkIssueResponse> issue(
             @Parameter(description = "업무 ID") @PathVariable UUID taskId,
             @Valid @RequestBody WorkerLinkIssueRequest request,
-            //: 나중에 확인 필요
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            HttpServletRequest servletRequest
     ) {
         ActorContext actor = actorContextProvider.requireCurrentActor();
         WorkerLinkIssueCommand command = new WorkerLinkIssueCommand(
@@ -84,7 +86,11 @@ public class WorkerLinkController {
                 request.isRotateExisting(),
                 idempotencyKey
         );
-        WorkerLinkIssueResult result = workerLinkService.issue(command, actor);
+        WorkerLinkIssueResult result = workerLinkService.issue(
+                command,
+                actor,
+                RequestMetadata.from(servletRequest)
+        );
         String workerUrl = result.rawToken() == null
                 ? null
                 : workerPortalUrlFactory.create(result.rawToken()).toString();
