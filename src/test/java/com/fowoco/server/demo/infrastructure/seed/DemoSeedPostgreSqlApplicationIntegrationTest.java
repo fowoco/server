@@ -48,7 +48,8 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
     Path fileStoragePath;
 
     @Test
-    void bootsFullDemoSeedAndRestartsIdempotentlyOnPostgreSql17() throws Exception {
+    void bootsFullDemoSeedUpgradesPreviousReleaseAndRestartsIdempotentlyOnPostgreSql17()
+            throws Exception {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String username = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
         String password = requiredEnvironmentVariable("POSTGRES_TEST_PASSWORD");
@@ -67,6 +68,7 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
                 JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
                 assertGoldenFlowStartState(jdbcTemplate);
                 firstBoot = snapshot(jdbcTemplate);
+                emulatePreviousReleaseSeed(jdbcTemplate);
             }
 
             try (ConfigurableApplicationContext context = startApplication(
@@ -78,7 +80,58 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
                 assertGoldenFlowStartState(jdbcTemplate);
                 assertThat(snapshot(jdbcTemplate)).isEqualTo(firstBoot);
             }
+
+            try (ConfigurableApplicationContext context = startApplication(
+                    url,
+                    username,
+                    password
+            )) {
+                assertThat(snapshot(context.getBean(JdbcTemplate.class))).isEqualTo(firstBoot);
+            }
         }
+    }
+
+    private void emulatePreviousReleaseSeed(JdbcTemplate jdbcTemplate) {
+        jdbcTemplate.update(
+                "DELETE FROM audit_event WHERE company_id = ? AND audit_event_id IN (?, ?, ?, ?, ?, ?)",
+                COMPANY_ID,
+                UUID.fromString("96000000-0000-0000-0000-000000000097"),
+                UUID.fromString("96000000-0000-0000-0000-000000000098"),
+                UUID.fromString("96000000-0000-0000-0000-000000000099"),
+                UUID.fromString("96000000-0000-0000-0000-000000000100"),
+                UUID.fromString("96000000-0000-0000-0000-000000000101"),
+                UUID.fromString("96000000-0000-0000-0000-000000000102")
+        );
+        jdbcTemplate.update(
+                "DELETE FROM approval_request WHERE company_id = ? AND approval_request_id IN (?, ?, ?)",
+                COMPANY_ID,
+                UUID.fromString("94300000-0000-0000-0000-000000000014"),
+                UUID.fromString("94300000-0000-0000-0000-000000000015"),
+                UUID.fromString("94300000-0000-0000-0000-000000000016")
+        );
+        jdbcTemplate.update(
+                "DELETE FROM task_transition_history WHERE company_id = ? "
+                        + "AND transition_id IN (?, ?, ?, ?, ?, ?)",
+                COMPANY_ID,
+                UUID.fromString("94400000-0000-0000-0000-000000000053"),
+                UUID.fromString("94400000-0000-0000-0000-000000000054"),
+                UUID.fromString("94400000-0000-0000-0000-000000000057"),
+                UUID.fromString("94400000-0000-0000-0000-000000000058"),
+                UUID.fromString("94400000-0000-0000-0000-000000000059"),
+                UUID.fromString("94400000-0000-0000-0000-000000000060")
+        );
+        jdbcTemplate.update(
+                "UPDATE task_transition_history SET from_status = 'DRAFT' "
+                        + "WHERE company_id = ? AND transition_id IN (?, ?, ?)",
+                COMPANY_ID,
+                UUID.fromString("94400000-0000-0000-0000-000000000006"),
+                UUID.fromString("94400000-0000-0000-0000-000000000022"),
+                UUID.fromString("94400000-0000-0000-0000-000000000025")
+        );
+
+        assertThat(countByCompany(jdbcTemplate, "approval_request", COMPANY_ID)).isEqualTo(12);
+        assertThat(countByCompany(jdbcTemplate, "task_transition_history", COMPANY_ID)).isEqualTo(48);
+        assertThat(countByCompany(jdbcTemplate, "audit_event", COMPANY_ID)).isEqualTo(88);
     }
 
     private ConfigurableApplicationContext startApplication(

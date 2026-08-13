@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 final class DemoTaskWorkflowSeedCatalog {
@@ -30,6 +31,7 @@ final class DemoTaskWorkflowSeedCatalog {
             12, 1,
             13, 1
     );
+    private static final Set<Integer> APPROVAL_BACKFILL_TASKS = Set.of(3, 8, 10, 11);
 
     private DemoTaskWorkflowSeedCatalog() {
     }
@@ -86,8 +88,10 @@ final class DemoTaskWorkflowSeedCatalog {
 
     static List<TransitionSeed> demoTransitions(List<TaskSeed> tasks) {
         List<TransitionSeed> seeds = new ArrayList<>();
+        TransitionSequence sequence = new TransitionSequence(legacyTransitionCount(tasks) + 1);
         for (int taskIndex = 0; taskIndex < tasks.size(); taskIndex++) {
-            history(seeds, tasks.get(taskIndex), transitionPath(taskIndex + 1));
+            int taskNumber = taskIndex + 1;
+            history(seeds, taskNumber, tasks.get(taskIndex), transitionPath(taskNumber), sequence);
         }
         return List.copyOf(seeds);
     }
@@ -198,25 +202,43 @@ final class DemoTaskWorkflowSeedCatalog {
 
     private static void history(
             List<TransitionSeed> seeds,
+            int taskNumber,
             TaskSeed task,
-            List<TaskStatus> statuses
+            List<TaskStatus> statuses,
+            TransitionSequence sequence
     ) {
         TaskStatus fromStatus = TaskStatus.DRAFT;
         List<TransitionPoint> points = transitionPoints(task, statuses);
         for (TransitionPoint point : points) {
             TaskStatus toStatus = point.status();
-            int sequence = seeds.size() + 1;
+            int transitionNumber = sequence.next(isApprovalBackfill(taskNumber, toStatus));
             seeds.add(new TransitionSeed(
-                    demoUuid("94400000-0000-0000-0000-000000000", sequence),
+                    demoUuid("94400000-0000-0000-0000-000000000", transitionNumber),
                     task.taskId(),
                     fromStatus,
                     toStatus,
                     transitionReason(toStatus),
-                    "demo-seed-task-transition-%03d".formatted(sequence),
+                    "demo-seed-task-transition-%03d".formatted(transitionNumber),
                     point.hoursAgo()
             ));
             fromStatus = toStatus;
         }
+    }
+
+    private static int legacyTransitionCount(List<TaskSeed> tasks) {
+        int currentCount = 0;
+        for (int taskNumber = 1; taskNumber <= tasks.size(); taskNumber++) {
+            currentCount += transitionPath(taskNumber).size();
+            if (APPROVAL_BACKFILL_TASKS.contains(taskNumber)) {
+                currentCount -= 2;
+            }
+        }
+        return currentCount;
+    }
+
+    private static boolean isApprovalBackfill(int taskNumber, TaskStatus status) {
+        return APPROVAL_BACKFILL_TASKS.contains(taskNumber)
+                && (status == TaskStatus.READY_FOR_REVIEW || status == TaskStatus.APPROVED);
     }
 
     private static int completedHoursAgo(int taskNumber, TaskSeed task) {
@@ -336,6 +358,23 @@ final class DemoTaskWorkflowSeedCatalog {
     }
 
     private record ChecklistTemplate(String itemCode, String label) {
+    }
+
+    private static final class TransitionSequence {
+
+        private int legacySequence = 1;
+        private int extensionSequence;
+
+        private TransitionSequence(int extensionSequence) {
+            this.extensionSequence = extensionSequence;
+        }
+
+        private int next(boolean extension) {
+            if (extension) {
+                return extensionSequence++;
+            }
+            return legacySequence++;
+        }
     }
 
     private record TransitionPoint(TaskStatus status, int hoursAgo) {

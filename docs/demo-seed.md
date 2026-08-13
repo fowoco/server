@@ -140,12 +140,12 @@ Golden Flow Seed 검증값으로 유지하지만 AI Context 계약에는 포함�
 | Task | 21 | 체류연장 9, 재계약 7, 고용기간 연장 5 |
 | 근로자 문서 | 83 | 여권 26, ARC 28, 계약서 21, 허가서 8 |
 | 체크리스트 항목 | 60 | Showcase Task에 연결 |
-| 승인 요청 | 12 | `PENDING` 3, `APPROVED` 7, `REJECTED` 1, `INVALIDATED` 1 |
-| 상태 전이 이력 | 48 | Showcase Task 상태 이력 |
+| 승인 요청 | 15 | `PENDING` 3, `APPROVED` 10, `REJECTED` 1, `INVALIDATED` 1 |
+| 상태 전이 이력 | 54 | Showcase Task 상태 이력 |
 | 외부 제출 | 6 | 합성 제출처와 안전한 참조 번호 |
 | 완료 증빙 | 10 | 문서·접수증·공식 결과·HR 확인 |
 | 문서 요청 초안 | 4 | 다른 근로자의 Showcase 초안 |
-| Audit Event | 88 | HR 77, AI 2, 시스템 6, Worker Link 3 |
+| Audit Event | 94 | HR 83, AI 2, 시스템 6, Worker Link 3 |
 | StoredFile | 3 | 합성 계약서·접수증·결과 PDF |
 
 Task 상태는 `DRAFT` 2, `NEEDS_INFO` 2, `READY_FOR_REVIEW` 3,
@@ -185,6 +185,12 @@ filter한다. 이 방식은 목록 위치로 파생되는 다른 Showcase ID가 
 JPA version을 다시 쓰지 않는다. PostgreSQL에서 서버를 종료하고 동일 DB로 재기동해도
 수량과 고정 ID가 변하지 않아야 한다.
 
+WAITING_WORKER 업무에 승인 이력을 보강한 Seed는 기존 Showcase 고정 ID를 다시 번호화하지
+않는다. 이전 릴리스가 만든 직접 `DRAFT → WAITING_WORKER` 전이 3건은 Seed 기동 시 정확한
+예약 ID와 기존 필드가 모두 일치할 때만 `APPROVED → WAITING_WORKER`로 보정한다. 이후 필요한
+READY_FOR_REVIEW·APPROVED 전이, Approval과 Audit을 새 예약 ID로 추가한다. 사용자 생성
+데이터나 일치하지 않는 전이는 수정하지 않고 기존 검증대로 기동을 중단한다.
+
 구버전 Demo Seed가 응웬반A의 제거 대상 예약 ID를 이미 저장한 DB는 자동 정리하지 않는다.
 서버는 다음 메시지로 fail-fast한다.
 
@@ -221,6 +227,7 @@ $env:POSTGRES_TEST_PASSWORD = "<test-password>"
 - PostgreSQL `dev` profile Application Context 전체 기동
 - 빈 DB의 전체 Demo Seed 실행
 - 같은 DB에서 Application Context 재기동과 전체 Seed 재실행
+- 승인 이력 보강 전 수량(Approval 12, Transition 48, Audit 88)에서 최신 Seed로 호환 갱신
 - 응웬반A Golden Flow 시작 상태
 - 전체 수량과 Showcase Case timestamp 불변
 
@@ -258,7 +265,7 @@ ORDER BY document_type;
 기대 로그의 핵심 수량은 다음과 같다.
 
 ```text
-demo_task_count=21 demo_stored_file_count=3 demo_document_count=83 demo_audit_count=88
+demo_task_count=21 demo_stored_file_count=3 demo_document_count=83 demo_audit_count=94
 test_task_count=3 test_document_count=8 test_audit_count=8
 ```
 

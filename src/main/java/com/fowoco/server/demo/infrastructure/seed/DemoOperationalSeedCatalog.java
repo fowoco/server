@@ -50,8 +50,8 @@ final class DemoOperationalSeedCatalog {
             UUID.fromString("96000000-0000-0000-0000-000000000027"),
             UUID.fromString("96000000-0000-0000-0000-000000000028"),
             UUID.fromString("96000000-0000-0000-0000-000000000045"),
-            UUID.fromString("96000000-0000-0000-0000-000000000089"),
-            UUID.fromString("96000000-0000-0000-0000-000000000100")
+            UUID.fromString("96000000-0000-0000-0000-000000000083"),
+            UUID.fromString("96000000-0000-0000-0000-000000000094")
     );
     private static final UUID RETIRED_GOLDEN_FLOW_DRAFT_ID =
             UUID.fromString("94700000-0000-0000-0000-000000000002");

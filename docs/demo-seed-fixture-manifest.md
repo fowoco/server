@@ -82,12 +82,12 @@ Worker Link와 Worker Response API가 구현되어 있어도 Seed는 응웬반A�
 | Task | 21 | 체류연장 9, 재계약 7, 고용기간 연장 5 |
 | WorkerDocument | 83 | 여권 26, ARC 28, 계약서 21, 허가서 8 |
 | Checklist | 60 | Showcase Task 연결 |
-| Approval | 12 | 대기 3, 승인 7, 반려 1, 무효 1 |
-| Transition | 48 | Showcase 상태 전이 |
+| Approval | 15 | 대기 3, 승인 10, 반려 1, 무효 1 |
+| Transition | 54 | Showcase 상태 전이 |
 | ExternalSubmission | 6 | 합성 참조 번호만 사용 |
 | Evidence | 10 | 합성 문서와 안전한 메모 |
 | Document Request Draft | 4 | 다른 근로자의 다국어 초안 |
-| Audit Event | 88 | HR 77, AI 2, 시스템 6, Worker Link 3 |
+| Audit Event | 94 | HR 83, AI 2, 시스템 6, Worker Link 3 |
 | StoredFile | 3 | 합성 PDF |
 
 Catalog는 구버전 전체 목록의 순번을 유지한 채 응웬반A의 여권·ARC는 Task 연결을 제거해
