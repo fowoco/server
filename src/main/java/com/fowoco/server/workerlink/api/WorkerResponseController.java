@@ -67,6 +67,7 @@ public class WorkerResponseController {
                 request.getResponseType(),
                 request.getMessage(),
                 request.getUploadIds(),
+                request.getAnswers(),
                 request.getIdempotencyKey()
         );
         WorkerResponseSubmitResult result = workerResponseService.submit(

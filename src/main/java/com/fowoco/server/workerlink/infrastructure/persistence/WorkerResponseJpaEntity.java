@@ -33,8 +33,14 @@ public class WorkerResponseJpaEntity {
     @Column(name = "message", updatable = false, length = 1000)
     private String message;
 
+    @Column(name = "answers_json", nullable = false, updatable = false)
+    private String answersJson;
+
     @Column(name = "idempotency_key", nullable = false, updatable = false, length = 100)
     private String idempotencyKey;
+
+    @Column(name = "request_fingerprint", updatable = false, length = 64)
+    private String requestFingerprint;
 
     @Column(name = "received_at", nullable = false, updatable = false)
     private Instant receivedAt;
@@ -48,7 +54,9 @@ public class WorkerResponseJpaEntity {
             UUID companyId,
             WorkerResponseType responseType,
             String message,
+            String answersJson,
             String idempotencyKey,
+            String requestFingerprint,
             Instant receivedAt
     ) {
         this.responseId = responseId;
@@ -56,7 +64,9 @@ public class WorkerResponseJpaEntity {
         this.companyId = companyId;
         this.responseType = responseType;
         this.message = message;
+        this.answersJson = answersJson;
         this.idempotencyKey = idempotencyKey;
+        this.requestFingerprint = requestFingerprint;
         this.receivedAt = receivedAt;
     }
 
@@ -68,7 +78,9 @@ public class WorkerResponseJpaEntity {
                 response.companyId(),
                 response.responseType(),
                 response.message(),
+                response.answersJson(),
                 response.idempotencyKey(),
+                response.requestFingerprint(),
                 response.receivedAt()
         );
     }
@@ -80,7 +92,9 @@ public class WorkerResponseJpaEntity {
                 companyId,
                 responseType,
                 message,
+                answersJson,
                 idempotencyKey,
+                requestFingerprint,
                 receivedAt
         );
     }

@@ -292,7 +292,9 @@ class PostgreSqlMigrationTests {
         assertThat(columnSpecs(connection, "worker_response"))
                 .containsEntry("response_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
-                .containsEntry("company_id", new ColumnSpec("uuid", false));
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("answers_json", new ColumnSpec("text", false))
+                .containsEntry("request_fingerprint", new ColumnSpec("varchar", true));
         assertThat(columnSpecs(connection, "worker_response_upload"))
                 .containsEntry("response_id", new ColumnSpec("uuid", false))
                 .containsEntry("stored_file_id", new ColumnSpec("uuid", false))

@@ -31,18 +31,24 @@ public final class WorkerLinkViewResponse {
     @Schema(name = "allowed_responses", description = "이 링크에서 허용되는 응답 유형")
     private final List<WorkerResponseType> allowedResponses;
 
+    @JsonProperty("requested_actions")
+    @Schema(name = "requested_actions", description = "모바일 화면에 표시할 구조화 작업")
+    private final List<WorkerRequestedActionResponse> requestedActions;
+
     private WorkerLinkViewResponse(
             String guidance,
             String language,
             LocalDate dueDate,
             List<DocumentType> requestedDocumentTypes,
-            List<WorkerResponseType> allowedResponses
+            List<WorkerResponseType> allowedResponses,
+            List<WorkerRequestedActionResponse> requestedActions
     ) {
         this.guidance = guidance;
         this.language = language;
         this.dueDate = dueDate;
         this.requestedDocumentTypes = List.copyOf(requestedDocumentTypes);
-        this.allowedResponses = allowedResponses;
+        this.allowedResponses = List.copyOf(allowedResponses);
+        this.requestedActions = List.copyOf(requestedActions);
     }
 
     public static WorkerLinkViewResponse from(WorkerLinkViewResult result) {
@@ -51,7 +57,8 @@ public final class WorkerLinkViewResponse {
                 result.language(),
                 result.dueDate(),
                 result.requestedDocumentTypes(),
-                result.allowedResponses()
+                result.allowedResponses(),
+                result.requestedActions().stream().map(WorkerRequestedActionResponse::from).toList()
         );
     }
 
@@ -73,5 +80,9 @@ public final class WorkerLinkViewResponse {
 
     public List<WorkerResponseType> getAllowedResponses() {
         return allowedResponses;
+    }
+
+    public List<WorkerRequestedActionResponse> getRequestedActions() {
+        return requestedActions;
     }
 }

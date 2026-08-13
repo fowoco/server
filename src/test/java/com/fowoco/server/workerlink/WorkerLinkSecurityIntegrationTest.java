@@ -146,6 +146,8 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(viewResponse.body(), "$.due_date")).isEqualTo("2026-08-20");
         assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_document_types"))
                 .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_actions[*].type"))
+                .containsExactly("UPLOAD_DOCUMENT", "UPLOAD_DOCUMENT");
 
         HttpResponse<String> uploadResponse = uploadFile(rawToken, "passport.pdf", "application/pdf", "content".getBytes(StandardCharsets.UTF_8));
         assertThat(uploadResponse.statusCode()).isEqualTo(201);
@@ -224,6 +226,119 @@ class WorkerLinkSecurityIntegrationTest {
                 accessToken(login(HR_B_EMAIL))
         );
         assertThat(otherCompanyActivities.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void requestedSlotAnswerIsStoredAndDifferentIdempotentPayloadIsRejected() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "구조화답변테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        jdbcTemplate.update(
+                "UPDATE task SET business_data_json = ? WHERE task_id = ?",
+                """
+                {
+                  "monthly_wage":2500000,
+                  "renewal_execution":{
+                    "requested_fields":[
+                      {"key":"lodging","source_hint":"USER_INPUT"},
+                      {"key":"passport_number","source_hint":"DOCUMENT_OCR"}
+                    ]
+                  }
+                }
+                """,
+                UUID.fromString(taskId)
+        );
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "slot-answer-link-key");
+
+        HttpResponse<String> viewResponse = getJson(
+                "/api/v1/public/worker-links/" + rawToken,
+                null
+        );
+        assertThat(viewResponse.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_actions[*].type"))
+                .containsExactly("ANSWER_FIELD", "UPLOAD_DOCUMENT", "UPLOAD_DOCUMENT");
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_actions[*].field_key"))
+                .contains("lodging");
+        assertThat(viewResponse.body()).doesNotContain("passport_number");
+
+        String body = """
+                {
+                  "response_type":"SLOT_ANSWERS_SUBMITTED",
+                  "answers":{"lodging":"사업장 건물 숙소 제공"},
+                  "idempotency_key":"slot-answer-1"
+                }
+                """;
+        HttpResponse<String> submitted = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                body,
+                null
+        );
+        assertThat(submitted.statusCode()).as(submitted.body()).isEqualTo(201);
+        String responseId = JsonPath.read(submitted.body(), "$.response_id");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT answers_json FROM worker_response WHERE response_id = ?",
+                String.class,
+                UUID.fromString(responseId)
+        )).contains("사업장 건물 숙소 제공");
+
+        HttpResponse<String> retry = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                body,
+                null
+        );
+        assertThat(retry.statusCode()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(retry.body(), "$.response_id")).isEqualTo(responseId);
+
+        HttpResponse<String> conflict = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                """
+                {
+                  "response_type":"SLOT_ANSWERS_SUBMITTED",
+                  "answers":{"lodging":"다른 숙소 조건"},
+                  "idempotency_key":"slot-answer-1"
+                }
+                """,
+                null
+        );
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(conflict.body()).contains("WORKER_RESPONSE_IDEMPOTENCY_CONFLICT");
+
+        HttpResponse<String> page = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrToken
+        );
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(page.body(), "$.items[0].answers.lodging"))
+                .isEqualTo("사업장 건물 숙소 제공");
+    }
+
+    @Test
+    void unrequestedOrSensitiveSlotAnswerIsRejected() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "미요청답변차단근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "slot-answer-reject-link-key");
+
+        HttpResponse<String> response = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                """
+                {
+                  "response_type":"SLOT_ANSWERS_SUBMITTED",
+                  "answers":{"passport_number":"M12345678"},
+                  "idempotency_key":"slot-answer-reject-1"
+                }
+                """,
+                null
+        );
+
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains("WORKER_SLOT_ANSWER_INVALID");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_response",
+                Integer.class
+        )).isZero();
     }
 
     @Test
