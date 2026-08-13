@@ -46,10 +46,11 @@ public class WorkerResponseController {
                     )
             ),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "409", description = "같은 멱등성 키에 다른 요청 내용 사용"),
             @ApiResponse(responseCode = "410", description = "링크를 찾을 수 없거나 더 이상 사용할 수 없음"),
             @ApiResponse(responseCode = "413", description = "요청 크기 초과"),
             @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType"),
-            @ApiResponse(responseCode = "422", description = "허용되지 않은 upload_id"),
+            @ApiResponse(responseCode = "422", description = "허용되지 않은 upload_id 또는 Slot 답변"),
             @ApiResponse(responseCode = "429", description = "요청 과다")
     })
     @PostMapping(

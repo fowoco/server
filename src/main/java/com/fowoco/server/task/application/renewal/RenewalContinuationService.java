@@ -1,7 +1,6 @@
 package com.fowoco.server.task.application.renewal;
 
 import com.fowoco.server.aiintegration.application.renewal.RenewalWorkflowPolicy;
-import com.fowoco.server.airun.application.port.AiRunRepository;
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.security.TenantDatabaseContext;
@@ -33,7 +32,7 @@ public class RenewalContinuationService {
     private final WorkerResponseRepository workerResponseRepository;
     private final WorkerResponsePayloadCodec responsePayloadCodec;
     private final TaskContentCodec taskContentCodec;
-    private final AiRunRepository aiRunRepository;
+    private final RenewalInstructionLookup instructionLookup;
     private final RenewalExecutionService executionService;
 
     public RenewalContinuationService(
@@ -42,7 +41,7 @@ public class RenewalContinuationService {
             WorkerResponseRepository workerResponseRepository,
             WorkerResponsePayloadCodec responsePayloadCodec,
             TaskContentCodec taskContentCodec,
-            AiRunRepository aiRunRepository,
+            RenewalInstructionLookup instructionLookup,
             RenewalExecutionService executionService
     ) {
         this.tenantContext = tenantContext;
@@ -50,7 +49,7 @@ public class RenewalContinuationService {
         this.workerResponseRepository = workerResponseRepository;
         this.responsePayloadCodec = responsePayloadCodec;
         this.taskContentCodec = taskContentCodec;
-        this.aiRunRepository = aiRunRepository;
+        this.instructionLookup = instructionLookup;
         this.executionService = executionService;
     }
 
@@ -163,10 +162,7 @@ public class RenewalContinuationService {
         Object value = businessData(task).get("ai_run_id");
         if (value instanceof String aiRunId) {
             try {
-                return aiRunRepository.findByIdAndCompanyId(
-                                UUID.fromString(aiRunId), task.companyId()
-                        )
-                        .map(result -> result.instruction())
+                return instructionLookup.findInstruction(UUID.fromString(aiRunId), task.companyId())
                         .orElse(FALLBACK_INSTRUCTION);
             } catch (IllegalArgumentException ignored) {
                 return FALLBACK_INSTRUCTION;

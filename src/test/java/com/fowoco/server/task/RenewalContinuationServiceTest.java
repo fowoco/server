@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fowoco.server.airun.application.port.AiRunRepository;
 import com.fowoco.server.common.security.TenantDatabaseContext;
 import com.fowoco.server.reliability.domain.DomainEventEnvelope;
 import com.fowoco.server.reliability.domain.EventActorType;
@@ -15,6 +14,7 @@ import com.fowoco.server.task.application.TaskContentCodec;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.application.renewal.RenewalContinuationService;
 import com.fowoco.server.task.application.renewal.RenewalExecutionService;
+import com.fowoco.server.task.application.renewal.RenewalInstructionLookup;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
@@ -45,7 +45,7 @@ class RenewalContinuationServiceTest {
     private final WorkerResponseRepository responseRepository = mock(WorkerResponseRepository.class);
     private final WorkerResponsePayloadCodec responseCodec = mock(WorkerResponsePayloadCodec.class);
     private final TaskContentCodec taskContentCodec = mock(TaskContentCodec.class);
-    private final AiRunRepository aiRunRepository = mock(AiRunRepository.class);
+    private final RenewalInstructionLookup instructionLookup = mock(RenewalInstructionLookup.class);
     private final RenewalExecutionService executionService = mock(RenewalExecutionService.class);
     private RenewalContinuationService service;
 
@@ -57,7 +57,7 @@ class RenewalContinuationServiceTest {
                 responseRepository,
                 responseCodec,
                 taskContentCodec,
-                aiRunRepository,
+                instructionLookup,
                 executionService
         );
     }
