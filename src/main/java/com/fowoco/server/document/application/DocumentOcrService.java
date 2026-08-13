@@ -205,7 +205,7 @@ public class DocumentOcrService {
         requireFeatureEnabled();
         return requiredTransaction(() -> {
             bindTenant(actor.companyId());
-            requireDocument(documentId, actor.companyId());
+            WorkerDocument document = requireDocument(documentId, actor.companyId());
             DocumentOcrRun current = ocrRunRepository.findByIdAndCompanyId(ocrRunId, actor.companyId())
                     .filter(found -> found.workerDocumentId().equals(documentId))
                     .orElseThrow(() -> new ApiException(DocumentErrorCode.DOCUMENT_OCR_RUN_NOT_FOUND));
@@ -238,6 +238,17 @@ public class DocumentOcrService {
                     metadata,
                     reviewAuditSummary(command.decision(), correctedFields)
             );
+            if (command.decision() == DocumentOcrReviewDecision.APPROVE
+                    && document.taskId() != null) {
+                eventPublisher.publish(DocumentOcrDomainEvents.approved(
+                        uuidGenerator.generate(),
+                        saved,
+                        document.taskId(),
+                        actor,
+                        metadata,
+                        clock.instant()
+                ));
+            }
             return result(saved, false);
         });
     }

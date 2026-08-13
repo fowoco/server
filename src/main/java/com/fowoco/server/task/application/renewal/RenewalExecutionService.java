@@ -18,7 +18,9 @@ import com.fowoco.server.common.error.ApiException;
 import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.task.application.error.TaskErrorCode;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -57,7 +59,66 @@ public final class RenewalExecutionService {
         UUID runtimeRequestId = uuidGenerator.generate();
         UUID attemptId = uuidGenerator.generate();
         return telemetry.measure(runtimeRequestId, metadata.requestId(), TOTAL, () ->
-                executeMeasured(taskId, command, actor, metadata, runtimeRequestId, attemptId)
+                executeMeasured(
+                        taskId, command, actor, metadata, runtimeRequestId, attemptId, false, true
+                )
+        );
+    }
+
+    public RenewalExecutionResult executeWorkerContinuation(
+            UUID taskId,
+            String instruction,
+            long expectedVersion,
+            Map<String, String> slotAnswers,
+            ActorContext delegatedActor,
+            RequestMetadata metadata,
+            UUID continuationEventId
+    ) {
+        UUID attemptId = UUID.nameUUIDFromBytes(
+                (continuationEventId + ":renewal-attempt").getBytes(StandardCharsets.UTF_8)
+        );
+        RenewalExecutionCommand command = new RenewalExecutionCommand(
+                instruction, expectedVersion, slotAnswers
+        );
+        return telemetry.measure(continuationEventId, metadata.requestId(), TOTAL, () ->
+                executeMeasured(
+                        taskId,
+                        command,
+                        delegatedActor,
+                        metadata,
+                        continuationEventId,
+                        attemptId,
+                        true,
+                        false
+                )
+        );
+    }
+
+    public RenewalExecutionResult executeOcrContinuation(
+            UUID taskId,
+            String instruction,
+            long expectedVersion,
+            ActorContext approvingActor,
+            RequestMetadata metadata,
+            UUID continuationEventId
+    ) {
+        UUID attemptId = UUID.nameUUIDFromBytes(
+                (continuationEventId + ":renewal-attempt").getBytes(StandardCharsets.UTF_8)
+        );
+        RenewalExecutionCommand command = new RenewalExecutionCommand(
+                instruction, expectedVersion, Map.of()
+        );
+        return telemetry.measure(continuationEventId, metadata.requestId(), TOTAL, () ->
+                executeMeasured(
+                        taskId,
+                        command,
+                        approvingActor,
+                        metadata,
+                        continuationEventId,
+                        attemptId,
+                        false,
+                        false
+                )
         );
     }
 
@@ -67,18 +128,27 @@ public final class RenewalExecutionService {
             ActorContext actor,
             RequestMetadata metadata,
             UUID runtimeRequestId,
-            UUID attemptId
+            UUID attemptId,
+            boolean workerContinuation,
+            boolean generateDocuments
     ) {
         RenewalExecutionContext context = telemetry.measure(
                 runtimeRequestId,
                 metadata.requestId(),
                 CONTEXT_LOAD,
-                () -> contextReader.load(
-                        taskId,
-                        command.expectedVersion(),
-                        command.slotAnswers(),
-                        actor
-                )
+                () -> workerContinuation
+                        ? contextReader.loadWorkerContinuation(
+                                taskId,
+                                command.expectedVersion(),
+                                command.slotAnswers(),
+                                actor
+                        )
+                        : contextReader.load(
+                                taskId,
+                                command.expectedVersion(),
+                                command.slotAnswers(),
+                                actor
+                        )
         );
         RenewalRunRequest request = new RenewalRunRequest(
                 runtimeRequestId,
@@ -102,7 +172,7 @@ public final class RenewalExecutionService {
                     () -> runtimeClient.run(request, AiRuntimeCallContext.withoutTrace())
             );
             List<PreparedRenewalDocument> generatedDocuments =
-                    "generate".equals(response.scenario())
+                    generateDocuments && "generate".equals(response.scenario())
                             ? telemetry.measure(
                                     runtimeRequestId,
                                     metadata.requestId(),

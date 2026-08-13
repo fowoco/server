@@ -13,6 +13,7 @@ import com.fowoco.server.reliability.application.OutboxReadService;
 import com.fowoco.server.reliability.application.RetryableEventHandlingException;
 import com.fowoco.server.reliability.application.port.DomainEventHandler;
 import com.fowoco.server.reliability.application.port.OutboxBacklogReader;
+import com.fowoco.server.reliability.config.OutboxProperties;
 import com.fowoco.server.reliability.domain.DomainEventEnvelope;
 import com.fowoco.server.reliability.domain.EventPublication;
 import jakarta.persistence.EntityManager;
@@ -22,6 +23,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -478,7 +480,8 @@ class PostgreSqlTenantDatabaseContextTest {
             assertClaimLeaseUsesDatabaseClock(
                     OUTBOX_EVENT_A,
                     databaseTimeBeforeClaim,
-                    databaseTimeAfterClaim
+                    databaseTimeAfterClaim,
+                    applicationContext.getBean(OutboxProperties.class).getLeaseDuration()
             );
 
             OutboxReadService readService =
@@ -674,7 +677,8 @@ class PostgreSqlTenantDatabaseContextTest {
     private void assertClaimLeaseUsesDatabaseClock(
             UUID eventId,
             OffsetDateTime databaseTimeBeforeClaim,
-            OffsetDateTime databaseTimeAfterClaim
+            OffsetDateTime databaseTimeAfterClaim,
+            Duration leaseDuration
     ) {
         OffsetDateTime leaseExpiresAt = migrationJdbc.queryForObject(
                 """
@@ -687,8 +691,8 @@ class PostgreSqlTenantDatabaseContextTest {
         );
         assertThat(leaseExpiresAt).isNotNull();
         assertThat(leaseExpiresAt.toInstant()).isBetween(
-                databaseTimeBeforeClaim.toInstant().plusSeconds(30),
-                databaseTimeAfterClaim.toInstant().plusSeconds(30)
+                databaseTimeBeforeClaim.toInstant().plus(leaseDuration),
+                databaseTimeAfterClaim.toInstant().plus(leaseDuration)
         );
     }
 

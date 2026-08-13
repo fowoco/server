@@ -157,6 +157,35 @@ class CaseQueryIntegrationTest {
     }
 
     @Test
+    void dependentTaskBecomesCurrentOnlyAfterItsPredecessorCompletes() throws Exception {
+        jdbcTemplate.update(
+                "UPDATE task SET status = 'DRAFT' WHERE task_id = ?",
+                TASK_A_DONE
+        );
+        String token = login();
+
+        HttpResponse<String> beforeCompletion = get(
+                "/api/v1/cases/" + CASE_A + "/projection",
+                token
+        );
+        assertThat(beforeCompletion.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(beforeCompletion.body(), "$.current_task.task_id"))
+                .isEqualTo(TASK_A_DONE.toString());
+
+        jdbcTemplate.update(
+                "UPDATE task SET status = 'COMPLETED' WHERE task_id = ?",
+                TASK_A_DONE
+        );
+        HttpResponse<String> afterCompletion = get(
+                "/api/v1/cases/" + CASE_A + "/projection",
+                token
+        );
+        assertThat(afterCompletion.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(afterCompletion.body(), "$.current_task.task_id"))
+                .isEqualTo(TASK_A_WAITING.toString());
+    }
+
+    @Test
     void documentsCaseEndpointsInOpenApi() throws Exception {
         HttpResponse<String> response = getWithoutToken("/v3/api-docs");
 

@@ -5,12 +5,14 @@ import com.fowoco.server.workerlink.domain.ConversationStatus;
 import com.fowoco.server.workerlink.domain.WorkerResponseType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public record WorkerResponseItemResponse(
         UUID responseId,
         WorkerResponseType responseType,
         String message,
+        Map<String, String> answers,
         List<UUID> uploadIds,
         List<WorkerResponseUploadItemResponse> uploads,
         ConversationStatus conversationStatus,
@@ -22,6 +24,7 @@ public record WorkerResponseItemResponse(
                 result.responseId(),
                 result.responseType(),
                 result.message(),
+                result.answers(),
                 result.uploadIds(),
                 result.uploads().stream().map(WorkerResponseUploadItemResponse::from).toList(),
                 result.conversationStatus(),

@@ -9,9 +9,10 @@ import com.fowoco.server.reliability.domain.SafeEventPayload;
 import java.time.Instant;
 import java.util.UUID;
 
-final class DocumentOcrDomainEvents {
+public final class DocumentOcrDomainEvents {
 
     static final String EXECUTION_REQUESTED = "DocumentOcrExecutionRequested";
+    public static final String APPROVED = "DocumentOcrApproved";
     private static final String PAYLOAD_VERSION = "1";
     private static final String AGGREGATE_TYPE = "DocumentOcrRun";
 
@@ -31,6 +32,30 @@ final class DocumentOcrDomainEvents {
                 PAYLOAD_VERSION,
                 AGGREGATE_TYPE,
                 run.ocrRunId(),
+                run.companyId(),
+                EventActorType.HR_USER,
+                actor.actorId(),
+                metadata.requestId(),
+                metadata.traceId(),
+                occurredAt,
+                SafeEventPayload.empty()
+        );
+    }
+
+    static DomainEventEnvelope approved(
+            UUID eventId,
+            DocumentOcrRun run,
+            UUID taskId,
+            ActorContext actor,
+            RequestMetadata metadata,
+            Instant occurredAt
+    ) {
+        return new DomainEventEnvelope(
+                eventId,
+                APPROVED,
+                PAYLOAD_VERSION,
+                "Task",
+                taskId,
                 run.companyId(),
                 EventActorType.HR_USER,
                 actor.actorId(),
