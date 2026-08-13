@@ -80,7 +80,8 @@ jobs:
         run: |
           set -euo pipefail
           kubectl -n fowoco set image deployment/server \
-            server=ghcr.io/fowoco/server:${{ github.sha }}
+            server=ghcr.io/fowoco/server:${{ github.sha }} \
+            --record=false
           kubectl -n fowoco rollout status deployment/server --timeout=180s
 
       - name: Smoke health endpoints
@@ -96,10 +97,5 @@ jobs:
         run: |
           kubectl -n fowoco get pods -o wide || true
           kubectl -n fowoco describe deployment/server || true
-          for pod in $(kubectl -n fowoco get pods -l app=server -o name); do
-            echo "===== $pod current logs ====="
-            kubectl -n fowoco logs "$pod" --tail=150 --all-containers || true
-            echo "===== $pod previous logs ====="
-            kubectl -n fowoco logs "$pod" --previous --tail=150 --all-containers || true
-          done
+          kubectl -n fowoco logs deployment/server --tail=150 --all-containers || true
           kubectl -n fowoco get events --sort-by=.lastTimestamp | tail -n 80 || true
