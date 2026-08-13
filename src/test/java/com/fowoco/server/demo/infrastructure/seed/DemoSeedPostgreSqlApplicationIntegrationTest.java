@@ -48,7 +48,7 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
     Path fileStoragePath;
 
     @Test
-    void bootsFullDemoSeedUpgradesPreviousReleaseAndRestartsIdempotentlyOnPostgreSql17()
+    void bootsFullDemoSeedUpgradesPreviousReleaseAndRestartsIdempotentlyOnPostgreSql16()
             throws Exception {
         String url = requiredEnvironmentVariable("POSTGRES_TEST_URL");
         String username = requiredEnvironmentVariable("POSTGRES_TEST_USERNAME");
