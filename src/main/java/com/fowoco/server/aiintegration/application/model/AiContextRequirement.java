@@ -17,34 +17,8 @@ public record AiContextRequirement(
         String workflowId,
         String evidence,
         AiConfidenceSource confidenceSource,
-        BigDecimal bertRoutingScore,
-        String agentTarget
+        BigDecimal bertRoutingScore
 ) {
-
-    public AiContextRequirement(
-            String detectedIntent,
-            BigDecimal confidence,
-            String targetDisplayName,
-            Map<String, String> extractedSlots,
-            List<String> requiredFieldKeys,
-            String workflowId,
-            String evidence,
-            AiConfidenceSource confidenceSource,
-            BigDecimal bertRoutingScore
-    ) {
-        this(
-                detectedIntent,
-                confidence,
-                targetDisplayName,
-                extractedSlots,
-                requiredFieldKeys,
-                workflowId,
-                evidence,
-                confidenceSource,
-                bertRoutingScore,
-                null
-        );
-    }
 
     public AiContextRequirement(
             String detectedIntent,
@@ -62,7 +36,6 @@ public record AiContextRequirement(
                 null,
                 null,
                 confidence == null ? AiConfidenceSource.UNAVAILABLE : AiConfidenceSource.MODEL,
-                null,
                 null
         );
     }

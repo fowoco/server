@@ -30,7 +30,7 @@ public record AiRunResponse(
                 result.status(),
                 result.analysisOutcome(),
                 result.detectedIntent(),
-                AiRunPublicErrorCode.fromInternal(result.errorCode()),
+                result.errorCode(),
                 result.attemptCount(),
                 result.version(),
                 result.questions().stream().map(AiRunQuestionResponse::from).toList(),
