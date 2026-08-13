@@ -6,10 +6,17 @@ import java.sql.Timestamp;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 final class DemoTaskTransitionSeeder {
+
+    private static final Set<UUID> APPROVAL_BACKFILL_TRANSITION_IDS = Set.of(
+            UUID.fromString("94400000-0000-0000-0000-000000000006"),
+            UUID.fromString("94400000-0000-0000-0000-000000000022"),
+            UUID.fromString("94400000-0000-0000-0000-000000000025")
+    );
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -20,6 +27,9 @@ final class DemoTaskTransitionSeeder {
     void seed(TransitionSeed seed, DemoOperationalSeedContext context) {
         List<StoredTransition> existing = find(seed.transitionId());
         if (!existing.isEmpty()) {
+            if (upgradeLegacyApprovalBypass(existing.get(0), seed, context)) {
+                return;
+            }
             verifyExisting(existing.get(0), seed, context);
             return;
         }
@@ -37,6 +47,46 @@ final class DemoTaskTransitionSeeder {
                 seed.requestId(),
                 Timestamp.from(context.now().minus(seed.hoursAgo(), ChronoUnit.HOURS))
         );
+    }
+
+    private boolean upgradeLegacyApprovalBypass(
+            StoredTransition transition,
+            TransitionSeed seed,
+            DemoOperationalSeedContext context
+    ) {
+        if (!APPROVAL_BACKFILL_TRANSITION_IDS.contains(seed.transitionId())
+                || transition.fromStatus() != TaskStatus.DRAFT
+                || seed.fromStatus() != TaskStatus.APPROVED
+                || transition.toStatus() != TaskStatus.WAITING_WORKER
+                || seed.toStatus() != TaskStatus.WAITING_WORKER
+                || !seed.taskId().equals(transition.taskId())
+                || !context.companyId().equals(transition.companyId())
+                || !context.actorId().equals(transition.actorId())
+                || !seed.reason().equals(transition.reason())
+                || !seed.requestId().equals(transition.requestId())) {
+            return false;
+        }
+        int updated = jdbcTemplate.update(
+                "UPDATE task_transition_history SET from_status = ? "
+                        + "WHERE transition_id = ? AND task_id = ? AND company_id = ? "
+                        + "AND from_status = ? AND to_status = ? AND actor_id = ? "
+                        + "AND reason = ? AND request_id = ?",
+                TaskStatus.APPROVED.name(),
+                seed.transitionId(),
+                seed.taskId(),
+                context.companyId(),
+                TaskStatus.DRAFT.name(),
+                TaskStatus.WAITING_WORKER.name(),
+                context.actorId(),
+                seed.reason(),
+                seed.requestId()
+        );
+        if (updated != 1) {
+            throw new IllegalStateException(
+                    "legacy demo task transition approval backfill was not applied"
+            );
+        }
+        return true;
     }
 
     void verifyExisting(TransitionSeed seed, DemoOperationalSeedContext context) {
