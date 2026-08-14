@@ -11,6 +11,10 @@ Demo Seed에는 목적이 다른 두 종류의 데이터가 함께 있다.
 - **Showcase Seed**: 목록·업무함·문서함·대시보드의 다양한 상태와 화면 밀도를 위한
   다른 근로자의 예시 데이터
 
+원본 이미지·PDF·HWP·HWPX와 암호화된 합성 OCR 결과가 필요한 문서 저장소 시나리오는
+[합성 근로자 문서 영구 적재](demo-document-data.md)의 별도 멱등 명령을 사용한다. 이 명령은
+기존 수량과 Golden Flow 시작 상태를 바꾸지 않도록 별도 예약 ID 영역을 사용한다.
+
 예약 ID와 Figma 대응 관계는
 [Demo Fixture Manifest](demo-seed-fixture-manifest.md)에서 확인한다.
 
