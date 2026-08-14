@@ -21,17 +21,19 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 final class PostgreSqlRestrictedRoleHttpEnvironment implements AutoCloseable {
 
-    private static final Map<String, String> TABLE_PRIVILEGES = Map.of(
-            "company", "SELECT",
-            "user_account", "SELECT",
-            "refresh_token", "SELECT, INSERT, UPDATE",
-            "worker", "SELECT, INSERT, UPDATE",
-            "task", "SELECT",
-            "worker_link", "SELECT",
-            "worker_response", "SELECT, INSERT",
-            "document_request_draft", "SELECT",
-            "document_request_draft_type", "SELECT",
-            "audit_event", "SELECT, INSERT"
+    private static final Map<String, String> TABLE_PRIVILEGES = Map.ofEntries(
+            Map.entry("company", "SELECT"),
+            Map.entry("user_account", "SELECT"),
+            Map.entry("refresh_token", "SELECT, INSERT, UPDATE"),
+            Map.entry("worker", "SELECT, INSERT, UPDATE"),
+            Map.entry("task", "SELECT"),
+            Map.entry("worker_link", "SELECT"),
+            Map.entry("worker_response", "SELECT, INSERT"),
+            Map.entry("document_request_draft", "SELECT"),
+            Map.entry("document_request_draft_type", "SELECT"),
+            Map.entry("audit_event", "SELECT, INSERT"),
+            Map.entry("user_login_event", "SELECT, INSERT"),
+            Map.entry("notification_preference", "SELECT, INSERT, UPDATE")
     );
     private static final String[] BOOTSTRAP_FUNCTIONS = {
             "public.bootstrap_company_id_by_normalized_email(TEXT)",
