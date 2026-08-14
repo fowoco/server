@@ -10,10 +10,12 @@ public final class UserAccount {
     private static final int MAX_EMAIL_LENGTH = 254;
     private static final int MAX_DISPLAY_NAME_LENGTH = 80;
     private static final int MAX_PASSWORD_HASH_LENGTH = 255;
+    private static final int MAX_PHONE_LENGTH = 30;
 
     private final UUID userId;
     private final UUID companyId;
     private final String displayName;
+    private final String phone;
     private final String email;
     private final String normalizedEmail;
     private final String passwordHash;
@@ -27,6 +29,7 @@ public final class UserAccount {
             UUID userId,
             UUID companyId,
             String displayName,
+            String phone,
             String email,
             String normalizedEmail,
             String passwordHash,
@@ -39,6 +42,7 @@ public final class UserAccount {
         this.userId = Objects.requireNonNull(userId, "userId must not be null");
         this.companyId = Objects.requireNonNull(companyId, "companyId must not be null");
         this.displayName = requireDisplayName(displayName);
+        this.phone = requirePhone(phone);
         this.email = requireEmail(email);
         String expectedNormalizedEmail = normalizeEmail(this.email);
         if (!expectedNormalizedEmail.equals(normalizedEmail)) {
@@ -63,6 +67,7 @@ public final class UserAccount {
             UUID userId,
             UUID companyId,
             String displayName,
+            String phone,
             String email,
             String passwordHash,
             UserRole role,
@@ -73,6 +78,7 @@ public final class UserAccount {
                 userId,
                 companyId,
                 displayName,
+                phone,
                 email,
                 normalizeEmail(email),
                 passwordHash,
@@ -105,9 +111,31 @@ public final class UserAccount {
                 userId,
                 companyId,
                 displayName,
+                phone,
                 email,
                 normalizedEmail,
                 newPasswordHash,
+                role,
+                status,
+                createdAt,
+                now,
+                version + 1
+        );
+    }
+
+    public UserAccount updateProfile(String newDisplayName, String newPhone, Instant now) {
+        Objects.requireNonNull(now, "now must not be null");
+        if (now.isBefore(updatedAt)) {
+            throw new IllegalArgumentException("now must not be before updatedAt");
+        }
+        return new UserAccount(
+                userId,
+                companyId,
+                newDisplayName,
+                newPhone,
+                email,
+                normalizedEmail,
+                passwordHash,
                 role,
                 status,
                 createdAt,
@@ -126,6 +154,10 @@ public final class UserAccount {
 
     public String displayName() {
         return displayName;
+    }
+
+    public String phone() {
+        return phone;
     }
 
     public String email() {
@@ -185,6 +217,23 @@ public final class UserAccount {
             throw new IllegalArgumentException("displayName must not contain control characters");
         }
         return normalized;
+    }
+
+    private static String requirePhone(String phone) {
+        if (phone == null) {
+            return null;
+        }
+        String stripped = phone.strip();
+        if (stripped.isEmpty()) {
+            return null;
+        }
+        if (stripped.length() > MAX_PHONE_LENGTH) {
+            throw new IllegalArgumentException("phone must not exceed " + MAX_PHONE_LENGTH + " characters");
+        }
+        if (!stripped.matches("^[0-9+()\\-\\s]+$")) {
+            throw new IllegalArgumentException("phone format is invalid");
+        }
+        return stripped;
     }
 
     private static String requirePasswordHash(String passwordHash) {
