@@ -134,6 +134,9 @@ app:
     local-path: ${FILE_STORAGE_LOCAL_PATH:./data/files}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  observability:
+    # 비어 있으면(기본값) /actuator/prometheus는 SecurityConfig에서 전부 거부된다.
+    prometheus-scrape-password: ${PROMETHEUS_SCRAPE_PASSWORD:}
   demo-seed:
     enabled: ${DEMO_SEED_ENABLED:false}
     company-id: ${DEMO_SEED_COMPANY_ID:90000000-0000-0000-0000-000000000001}
