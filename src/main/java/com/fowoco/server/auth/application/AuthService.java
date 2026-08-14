@@ -155,6 +155,21 @@ public class AuthService {
         return outcome.result().orElseThrow(InvalidRefreshTokenException::new);
     }
 
+    @Transactional(readOnly = true)
+    public UserAccount currentProfile(UUID userId, UUID companyId) {
+        return userAccountRepository.findByUserIdAndCompanyId(userId, companyId)
+                .orElseThrow(() -> new IllegalStateException("authenticated user account was not found"));
+    }
+
+    @Transactional
+    public UserAccount updateProfile(UUID userId, UUID companyId, String displayName, String phone) {
+        UserAccount current = userAccountRepository.findByUserIdAndCompanyIdWithLock(userId, companyId)
+                .orElseThrow(() -> new IllegalStateException("authenticated user account was not found"));
+        UserAccount updated = current.updateProfile(displayName, phone, clock.instant());
+        userAccountRepository.update(updated);
+        return updated;
+    }
+
     public void logout(String rawRefreshToken) {
         if (!RefreshTokenFormat.isValidRawValue(rawRefreshToken)) {
             authAuditPort.record(AuthAuditEvent.anonymous(

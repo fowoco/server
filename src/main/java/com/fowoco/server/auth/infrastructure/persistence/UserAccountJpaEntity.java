@@ -41,6 +41,9 @@ public class UserAccountJpaEntity {
     @Column(name = "display_name", nullable = false, length = 80)
     private String displayName;
 
+    @Column(name = "phone", length = 30)
+    private String phone;
+
     @Column(name = "email", nullable = false, length = 254)
     private String email;
 
@@ -75,6 +78,7 @@ public class UserAccountJpaEntity {
             UUID userId,
             UUID companyId,
             String displayName,
+            String phone,
             String email,
             String normalizedEmail,
             String passwordHash,
@@ -87,6 +91,7 @@ public class UserAccountJpaEntity {
         this.userId = userId;
         this.companyId = companyId;
         this.displayName = displayName;
+        this.phone = phone;
         this.email = email;
         this.normalizedEmail = normalizedEmail;
         this.passwordHash = passwordHash;
@@ -103,6 +108,7 @@ public class UserAccountJpaEntity {
                 userAccount.userId(),
                 userAccount.companyId(),
                 userAccount.displayName(),
+                userAccount.phone(),
                 userAccount.email(),
                 userAccount.normalizedEmail(),
                 userAccount.passwordHash(),
@@ -119,6 +125,7 @@ public class UserAccountJpaEntity {
                 userId,
                 companyId,
                 displayName,
+                phone,
                 email,
                 normalizedEmail,
                 passwordHash,
@@ -135,6 +142,8 @@ public class UserAccountJpaEntity {
         if (!userId.equals(userAccount.userId()) || version + 1 != userAccount.version()) {
             throw new IllegalArgumentException("user account version transition is invalid");
         }
+        displayName = userAccount.displayName();
+        phone = userAccount.phone();
         passwordHash = userAccount.passwordHash();
         updatedAt = userAccount.updatedAt();
     }

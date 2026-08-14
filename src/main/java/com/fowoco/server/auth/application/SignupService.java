@@ -92,6 +92,7 @@ public class SignupService {
                 uuidGenerator.generate(),
                 company.companyId(),
                 command.displayName(),
+                command.phone(),
                 command.email(),
                 passwordHasher.hash(command.password()),
                 UserRole.ADMIN,

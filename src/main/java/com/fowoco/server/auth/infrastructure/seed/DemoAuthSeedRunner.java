@@ -169,6 +169,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
                 demoUser.userId(),
                 companyId,
                 demoUser.displayName(),
+                null,
                 demoUser.email(),
                 passwordEncoder.encode(properties.adminPassword()),
                 demoUser.role(),
