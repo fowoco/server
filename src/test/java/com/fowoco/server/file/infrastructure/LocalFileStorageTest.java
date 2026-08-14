@@ -81,7 +81,7 @@ class LocalFileStorageTest {
     }
 
     @Test
-    void doesNotReplaceExistingFinalFile() throws Exception {
+    void doesNotReplaceAlreadyExistingFinalFile() throws Exception {
         LocalFileStorage storage = storage();
         byte[] existing = "existing".getBytes(StandardCharsets.UTF_8);
         byte[] replacement = "replacement".getBytes(StandardCharsets.UTF_8);

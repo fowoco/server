@@ -4,7 +4,6 @@ import com.fowoco.server.file.application.port.FileStorage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -83,11 +82,7 @@ public class LocalFileStorage implements FileStorage {
     }
 
     private void moveToFinalPath(Path temporary, Path target) throws IOException {
-        try {
-            Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(temporary, target);
-        }
+        Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
     }
 
     private void deleteTemporaryAfterFailure(Path temporary, Throwable failure) {
