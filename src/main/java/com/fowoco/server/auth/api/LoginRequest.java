@@ -53,7 +53,7 @@ public final class LoginRequest {
         return password;
     }
 
-    public LoginCommand toCommand() {
-        return new LoginCommand(email, password);
+    public LoginCommand toCommand(String deviceSummary) {
+        return new LoginCommand(email, password, deviceSummary);
     }
 }

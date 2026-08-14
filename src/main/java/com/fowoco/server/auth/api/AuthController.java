@@ -8,6 +8,7 @@ import com.fowoco.server.auth.application.SignupResult;
 import com.fowoco.server.auth.application.SignupService;
 import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.auth.infrastructure.web.UserAgentDeviceSummarizer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -216,8 +218,13 @@ public class AuthController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        LoginResult result = authService.login(request.toCommand());
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent
+    ) {
+        LoginResult result = authService.login(
+                request.toCommand(UserAgentDeviceSummarizer.summarize(userAgent))
+        );
         ResponseCookie refreshTokenCookie = refreshTokenCookieFactory.create(result.refreshToken());
 
         return ResponseEntity.ok()
