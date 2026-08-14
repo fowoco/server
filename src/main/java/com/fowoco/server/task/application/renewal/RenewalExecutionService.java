@@ -89,7 +89,7 @@ public final class RenewalExecutionService {
                         continuationEventId,
                         attemptId,
                         true,
-                        false
+                        true
                 )
         );
     }
@@ -117,7 +117,7 @@ public final class RenewalExecutionService {
                         continuationEventId,
                         attemptId,
                         false,
-                        false
+                        true
                 )
         );
     }

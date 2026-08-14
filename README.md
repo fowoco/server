@@ -98,7 +98,8 @@ HR 로그인
 → 근로자 보안 링크 발급·모바일 안내
 → 근로자 응답·서류 제출
 → HR 제출자료 확인·공식 서류 채택
-→ Task 재개
+→ OCR 실행·HR 결과 검토
+→ 승인된 OCR Context로 기존 Task 재개·문서 초안 생성
 → 외부 제출·처리결과 기록
 → 완료·감사로그
 ```
@@ -139,14 +140,18 @@ HR이 승인된 Task의 Worker Link 발급
 → Server가 WorkerResponse와 StoredFile로 보관
 → HR이 제출 파일의 이름·형식·크기·서류 유형 확인
 → HR이 채택한 파일만 WorkerDocument(SUBMITTED)로 등록
-→ 요청 서류가 모두 채택되면 Task: WAITING_WORKER → APPROVED
-→ 다음 제출·승인 단계 진행
+→ 여권·외국인등록증 채택 이벤트가 Outbox를 통해 OCR 실행 요청
+→ HR이 OCR 추출값을 원본과 대조해 수정·승인
+→ 승인된 OCR 값을 Context에 병합해 기존 Renewal Task 재실행
+→ 모든 필수정보가 갖춰지면 HWP/HWPX 초안을 저장하고 HR 검토로 이동
 ```
 
 근로자의 제출만으로 개인정보와 공식 서류 상태를 자동 확정하지 않습니다.
 `SUBMITTED`와 `VERIFIED`를 분리하고, HR이 확인한 파일만 기존 업무와 연결합니다.
 같은 파일을 다시 채택해도 문서가 중복 생성되지 않으며, 링크 발급·상태 전이·채택은
-감사로그와 Task 전이 이력으로 추적합니다.
+감사로그와 Task 전이 이력으로 추적합니다. OCR 결과도 Worker 원본 개인정보를 자동으로
+덮어쓰지 않고, HR이 승인한 결과만 Renewal Context에서 사용합니다. 생성된 문서는
+자동 발송하지 않으며 다시 HR 검토를 거칩니다.
 
 ### 업무 이벤트가 알림으로 이어지는 흐름
 

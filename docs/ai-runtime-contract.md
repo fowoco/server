@@ -277,6 +277,16 @@ HR 화면은 AI를 직접 호출하지 않고 다음 Server API를 사용합니�
 | `GET /api/v1/documents/{documentId}/ocr-runs/latest` | 해당 문서의 최신 실행 조회 |
 | `POST /api/v1/documents/{documentId}/ocr-runs/{ocrRunId}/review` | HR의 수정값과 검토 완료·반려 기록 |
 
+근로자 모바일 제출물을 HR이 공식 `WorkerDocument`로 채택하면 여권·외국인등록증은
+`WorkerDocumentAdopted` Outbox 이벤트를 통해 OCR 실행이 자동 접수됩니다. 파일 채택과
+외부 OCR 호출을 같은 HTTP transaction에 묶지 않으므로, Runtime 장애가 발생해도 채택
+결과는 유지되고 OCR 실행 상태를 별도로 재처리할 수 있습니다.
+
+OCR 결과는 자동으로 Worker 개인정보를 수정하지 않습니다. HR이 결과를 대조해 승인하면
+`DocumentOcrApproved` 이벤트가 기존 Case의 Renewal Task를 다시 실행합니다. Server는
+승인된 OCR 원본과 HR 수정값을 Context에서 병합하고, Agent 결과가 `generate`이면 생성
+파일을 기존 `stored_file`과 `worker_document`에 HR 검토용 초안으로 저장합니다.
+
 Server는 연결된 `stored_file`을 읽어 AI의
 `POST /internal/v1/ocr/worker-documents/{workerDocumentId}`로 multipart 전송합니다.
 AI는 DB에 접근하거나 결과를 저장하지 않습니다. OCR 요청은 실행 이력과 같은 트랜잭션에서

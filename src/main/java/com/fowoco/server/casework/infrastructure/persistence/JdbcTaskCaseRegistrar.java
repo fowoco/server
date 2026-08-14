@@ -5,6 +5,7 @@ import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskCaseRegistrar;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.workflow.domain.WorkflowDefinition;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -82,8 +83,8 @@ public class JdbcTaskCaseRegistrar implements TaskCaseRegistrar {
                 first.workflowCatalogVersion(),
                 snapshot(orderedTasks),
                 first.createdBy(),
-                first.createdAt(),
-                first.updatedAt()
+                Timestamp.from(first.createdAt()),
+                Timestamp.from(first.updatedAt())
         );
     }
 
