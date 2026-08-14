@@ -209,6 +209,76 @@ class NotificationSecurityIntegrationTest {
         assertThat(JsonPath.<java.util.List<?>>read(unreadPage.body(), "$.items")).hasSize(1);
     }
 
+    @Test
+    void listPreferencesReturnsDefaultsWhenNothingStored() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedGet("/api/v1/notifications/preferences", accessToken);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<java.util.List<?>>read(response.body(), "$")).hasSize(7);
+        assertThat(preferenceEnabled(response.body(), "security-permission")).isTrue();
+        assertThat(preferenceRequired(response.body(), "security-permission")).isTrue();
+        assertThat(preferenceEnabled(response.body(), "assigned")).isFalse();
+    }
+
+    @Test
+    void updatePreferencePersistsAcrossRequests() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> updateResponse = authorizedPatch(
+                "/api/v1/notifications/preferences/due-soon", "{\"enabled\":false}", accessToken
+        );
+        assertThat(updateResponse.statusCode()).isEqualTo(200);
+        assertThat(preferenceEnabled(updateResponse.body(), "due-soon")).isFalse();
+
+        HttpResponse<String> listResponse = authorizedGet("/api/v1/notifications/preferences", accessToken);
+        assertThat(preferenceEnabled(listResponse.body(), "due-soon")).isFalse();
+    }
+
+    @Test
+    void updatingRequiredPreferenceToDisabledIsRejected() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedPatch(
+                "/api/v1/notifications/preferences/security-permission", "{\"enabled\":false}", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(422);
+    }
+
+    @Test
+    void updatingUnknownPreferenceKeyReturnsNotFound() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+
+        HttpResponse<String> response = authorizedPatch(
+                "/api/v1/notifications/preferences/not-a-real-key", "{\"enabled\":false}", accessToken
+        );
+
+        assertThat(response.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void preferencesAreIsolatedPerUser() throws Exception {
+        String hrAToken = accessToken(login(HR_A_EMAIL));
+        String hrA2Token = accessToken(login(HR_A2_EMAIL));
+        authorizedPatch("/api/v1/notifications/preferences/agent-ready", "{\"enabled\":false}", hrAToken);
+
+        HttpResponse<String> otherUserList = authorizedGet("/api/v1/notifications/preferences", hrA2Token);
+
+        assertThat(preferenceEnabled(otherUserList.body(), "agent-ready")).isTrue();
+    }
+
+    private boolean preferenceEnabled(String body, String key) {
+        java.util.List<Boolean> matches = JsonPath.read(body, "$[?(@.key=='" + key + "')].enabled");
+        return matches.get(0);
+    }
+
+    private boolean preferenceRequired(String body, String key) {
+        java.util.List<Boolean> matches = JsonPath.read(body, "$[?(@.key=='" + key + "')].required");
+        return matches.get(0);
+    }
+
     private UUID insertNotification(UUID companyId, String targetType, boolean read, Instant occurredAt) {
         return insertNotification(companyId, HR_A, targetType, read, occurredAt);
     }
@@ -288,6 +358,15 @@ class NotificationSecurityIntegrationTest {
             requestBuilder.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken);
         }
         return httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> authorizedPatch(String path, String body, String accessToken) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri(path))
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private URI uri(String path) {

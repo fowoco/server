@@ -10,6 +10,7 @@ import com.fowoco.server.auth.application.port.RefreshTokenGenerator;
 import com.fowoco.server.auth.application.port.RefreshTokenHashPort;
 import com.fowoco.server.auth.application.port.RefreshTokenRepository;
 import com.fowoco.server.auth.application.port.UserAccountRepository;
+import com.fowoco.server.auth.application.port.UserLoginEventRepository;
 import com.fowoco.server.auth.domain.RefreshToken;
 import com.fowoco.server.auth.domain.UserAccount;
 import com.fowoco.server.common.error.ApiException;
@@ -19,6 +20,7 @@ import com.fowoco.server.company.application.CompanyAuthenticationReader;
 import com.fowoco.server.company.application.CompanyAuthenticationSnapshot;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -39,8 +41,11 @@ public class AuthService {
     private final RefreshTokenRotationTransaction refreshTokenRotationTransaction;
     private final RefreshTokenLogoutTransaction refreshTokenLogoutTransaction;
     private final AuthAuditPort authAuditPort;
+    private final UserLoginEventRepository userLoginEventRepository;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
+
+    private static final int LOGIN_HISTORY_LOOKBACK = 20;
 
     public AuthService(
             UserAccountRepository userAccountRepository,
@@ -55,6 +60,7 @@ public class AuthService {
             RefreshTokenRotationTransaction refreshTokenRotationTransaction,
             RefreshTokenLogoutTransaction refreshTokenLogoutTransaction,
             AuthAuditPort authAuditPort,
+            UserLoginEventRepository userLoginEventRepository,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -70,6 +76,7 @@ public class AuthService {
         this.refreshTokenRotationTransaction = refreshTokenRotationTransaction;
         this.refreshTokenLogoutTransaction = refreshTokenLogoutTransaction;
         this.authAuditPort = authAuditPort;
+        this.userLoginEventRepository = userLoginEventRepository;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -126,6 +133,13 @@ public class AuthService {
                 userAccount.companyId(),
                 issuedAt
         ));
+        userLoginEventRepository.insert(
+                uuidGenerator.generate(),
+                userAccount.userId(),
+                userAccount.companyId(),
+                command.deviceSummary(),
+                issuedAt
+        );
 
         return new LoginResult(
                 userAccount.userId(),
@@ -156,18 +170,34 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public UserAccount currentProfile(UUID userId, UUID companyId) {
-        return userAccountRepository.findByUserIdAndCompanyId(userId, companyId)
+    public ProfileSnapshot currentProfile(UUID userId, UUID companyId) {
+        UserAccount account = userAccountRepository.findByUserIdAndCompanyId(userId, companyId)
                 .orElseThrow(() -> new IllegalStateException("authenticated user account was not found"));
+        return withLoginHistory(account);
     }
 
     @Transactional
-    public UserAccount updateProfile(UUID userId, UUID companyId, String displayName, String phone) {
+    public ProfileSnapshot updateProfile(UUID userId, UUID companyId, String displayName, String phone) {
         UserAccount current = userAccountRepository.findByUserIdAndCompanyIdWithLock(userId, companyId)
                 .orElseThrow(() -> new IllegalStateException("authenticated user account was not found"));
         UserAccount updated = current.updateProfile(displayName, phone, clock.instant());
         userAccountRepository.update(updated);
-        return updated;
+        return withLoginHistory(updated);
+    }
+
+    private ProfileSnapshot withLoginHistory(UserAccount account) {
+        List<UserLoginEventRepository.LoginEventRecord> recentLogins = userLoginEventRepository.findRecent(
+                account.userId(), account.companyId(), LOGIN_HISTORY_LOOKBACK
+        );
+        if (recentLogins.isEmpty()) {
+            return new ProfileSnapshot(account, null, null, 0);
+        }
+        UserLoginEventRepository.LoginEventRecord latest = recentLogins.get(0);
+        long distinctDevices = recentLogins.stream()
+                .map(UserLoginEventRepository.LoginEventRecord::deviceSummary)
+                .distinct()
+                .count();
+        return new ProfileSnapshot(account, latest.loggedInAt(), latest.deviceSummary(), (int) distinctDevices);
     }
 
     public void logout(String rawRefreshToken) {
