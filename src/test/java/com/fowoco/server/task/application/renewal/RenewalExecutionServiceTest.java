@@ -64,7 +64,7 @@ class RenewalExecutionServiceTest {
                 EVENT_ID, UUID.randomUUID(), TASK_ID,
                 "EXPIRY_RENEWAL", "WF-STY-001", new BigDecimal("0.95"),
                 "READY_FOR_REVIEW", "ARTIFACT_READY", "generate", "ACT", "GENERATE",
-                Map.of(), List.of(), List.of(), null, null, null, null,
+                Map.of(), List.of(), List.of(), null, null, false, null, null, null,
                 List.of(document), List.of(), null, List.of(), List.of(), null, null, null, List.of()
         );
         preparedDocuments = List.of(mock(PreparedRenewalDocument.class));

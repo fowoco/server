@@ -24,6 +24,8 @@ public record RenewalRunResponse(
         List<RenewalRequestedField> requestedFields,
         String guideMessage,
         String workerRequestMessage,
+        Boolean guideReviewRequired,
+        String guideFailureCode,
         Map<String, Object> languageAssistant,
         Map<String, Object> ocrResult,
         List<RenewalGeneratedDocument> generatedDocuments,
@@ -37,6 +39,7 @@ public record RenewalRunResponse(
         List<String> errors
 ) {
     public RenewalRunResponse {
+        guideReviewRequired = Boolean.TRUE.equals(guideReviewRequired);
         slots = copyMap(slots);
         missingSlots = copyList(missingSlots);
         requestedFields = requestedFields == null ? List.of() : List.copyOf(requestedFields);

@@ -404,6 +404,32 @@ Workflow로 바꾼 응답은 `UNEXPECTED_WORKFLOW`로 거부합니다.
 `scenario=out_of_scope`, `intent=OUT_OF_SCOPE`인 종료 응답만 `workflowId`가 비어 있을 수
 있습니다. 이는 Workflow 실행 결과가 아니라 지원 범위 밖 정상 종료 신호이기 때문입니다.
 
+## 근로자 안내 실패와 HR 검토
+
+Language Assistant가 비활성화됐거나 안내문을 안전하게 생성하지 못하면 Runtime은 임시
+문장을 만들지 않고 다음과 같이 HR 검토를 요청합니다.
+
+```json
+{
+  "scenario": "ask_worker",
+  "status": "READY_FOR_REVIEW",
+  "outcome": "REVIEW_REQUIRED",
+  "workerRequestMessage": null,
+  "guideReviewRequired": true,
+  "guideFailureCode": "LANGUAGE_ASSISTANT_NOT_CONFIGURED",
+  "caseSignals": ["REVIEW_WORKER_GUIDE"]
+}
+```
+
+Server는 `guideFailureCode`를 안전한 허용 목록으로 검증하고 Task의
+`renewal_execution` 메타데이터와 감사로그에 보존합니다. 이 경로에서는 근로자 안내
+초안, Worker Link, SMS를 자동으로 생성하거나 발송하지 않습니다. Task는 누락정보 입력
+상태로 회귀하지 않고 HR 검토 대상으로 남습니다. HR이 안전한 안내문을 작성하고 기존
+승인 절차를 마친 뒤에만 Worker Link 발급과 전달 흐름을 진행합니다.
+
+기존 Runtime이 신규 필드를 보내지 않으면 `guideReviewRequired=false`,
+`guideFailureCode=null`로 해석하므로 정상 `ask_worker` 계약은 그대로 유지됩니다.
+
 ## Renewal 생성 문서 연결
 
 Renewal 응답의 `generatedDocuments[]`는 다음 세 값을 문서 생성 기준으로 사용합니다.

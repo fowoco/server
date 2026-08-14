@@ -360,6 +360,8 @@ class WorkerLinkSecurityIntegrationTest {
                 List.of(new RenewalRequestedField("wage", "USER_INPUT")),
                 null,
                 null,
+                false,
+                null,
                 null,
                 null,
                 List.of(),
