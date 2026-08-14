@@ -152,6 +152,7 @@ public class JdbcAiRunRepository implements AiRunRepository {
                 row.status(),
                 row.outcome(),
                 row.detectedIntent(),
+                row.evidence(),
                 row.errorCode(),
                 row.attemptCount(),
                 row.version(),
@@ -283,16 +284,19 @@ public class JdbcAiRunRepository implements AiRunRepository {
             throw new IllegalStateException("running AI attempt was not found");
         }
         String detectedIntent = detectedIntent(response);
+        String evidence = evidence(response);
         jdbcTemplate.update(
                 """
                 UPDATE ai_run
                 SET status = 'SUCCEEDED', analysis_outcome = ?,
                     detected_intent = COALESCE(?, detected_intent),
+                    evidence = COALESCE(?, evidence),
                     last_error_code = NULL, updated_at = ?, version = version + 1
                 WHERE ai_run_id = ? AND company_id = ?
                 """,
                 response.outcome().name(),
                 detectedIntent,
+                evidence,
                 timestamp(completedAt),
                 aiRunId,
                 companyId
@@ -441,7 +445,7 @@ public class JdbcAiRunRepository implements AiRunRepository {
         return jdbcTemplate.query(
                 """
                 SELECT ai_run_id, request_id, instruction, status, analysis_outcome,
-                       detected_intent, last_error_code, attempt_count, version,
+                       detected_intent, evidence, last_error_code, attempt_count, version,
                        created_at, updated_at
                 FROM ai_run
                 WHERE ai_run_id = ? AND company_id = ?
@@ -453,6 +457,7 @@ public class JdbcAiRunRepository implements AiRunRepository {
                         AiRunStatus.valueOf(resultSet.getString("status")),
                         nullableOutcome(resultSet.getString("analysis_outcome")),
                         resultSet.getString("detected_intent"),
+                        resultSet.getString("evidence"),
                         resultSet.getString("last_error_code"),
                         resultSet.getInt("attempt_count"),
                         resultSet.getLong("version"),
@@ -611,6 +616,15 @@ public class JdbcAiRunRepository implements AiRunRepository {
         return null;
     }
 
+    private String evidence(AiAnalysisResponse response) {
+        if (response.contextRequirement() != null) {
+            return response.contextRequirement().evidence();
+        }
+        // Same PLAN-only reasoning as detectedIntent(): ANALYZE has no contextRequirement,
+        // so COALESCE keeps the evidence captured during PLAN.
+        return null;
+    }
+
     private String encode(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
@@ -675,6 +689,7 @@ public class JdbcAiRunRepository implements AiRunRepository {
             AiRunStatus status,
             AiAnalysisOutcome outcome,
             String detectedIntent,
+            String evidence,
             String errorCode,
             int attemptCount,
             long version,
