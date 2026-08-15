@@ -48,6 +48,7 @@ class DemoDocumentDataService {
     private final Clock clock;
     private final SyntheticDocumentGenerator generator = new SyntheticDocumentGenerator();
     private final DemoDocumentFileInstaller fileInstaller;
+    private final DemoLegacyDocumentFileMaterializer legacyFileMaterializer;
 
     DemoDocumentDataService(
             JdbcTemplate jdbcTemplate,
@@ -67,6 +68,11 @@ class DemoDocumentDataService {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.fileInstaller = new DemoDocumentFileInstaller(localFileStoragePath);
+        this.legacyFileMaterializer = new DemoLegacyDocumentFileMaterializer(
+                jdbcTemplate,
+                fileInstaller,
+                generator
+        );
     }
 
     @Transactional
@@ -85,6 +91,7 @@ class DemoDocumentDataService {
             }
             seedWorkerDocument(fixture, anchorDate, now);
         }
+        legacyFileMaterializer.importFiles(anchorDate, now);
         seedOcrReview(now);
         return verifyInternal(anchorDate);
     }
@@ -103,6 +110,7 @@ class DemoDocumentDataService {
         requireBaseSeed();
         LocalDate anchorDate = anchorDate();
         verifyOwnedRowsBeforeCleanup(anchorDate);
+        legacyFileMaterializer.cleanupFiles(anchorDate, clock.instant());
 
         jdbcTemplate.update(
                 "DELETE FROM document_ocr_run WHERE ocr_run_id = ? AND company_id = ?",
@@ -126,7 +134,7 @@ class DemoDocumentDataService {
             );
             fileInstaller.cleanup(fixture.storageKey(), content);
         }
-        return new DemoDocumentDataReport(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        return new DemoDocumentDataReport(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     private void seedStoredFile(DemoDocumentFixture fixture, byte[] content, Instant now) {
@@ -276,23 +284,25 @@ class DemoDocumentDataService {
                 )
                 .orElseThrow(() -> new IllegalStateException("demo OCR review fixture is missing"));
         verifyOcrRun(ocrRun);
+        DemoLegacyDocumentFileMaterializer.MaterializedFiles legacyFiles =
+                legacyFileMaterializer.verifyFiles(anchorDate);
         int taskLinked = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker_document WHERE source = ? AND company_id = ? AND task_id IS NOT NULL",
+                "SELECT COUNT(*) FROM worker_document WHERE source IN ('DEMO_SEED', 'LEGACY') "
+                        + "AND company_id = ? AND task_id IS NOT NULL",
                 Integer.class,
-                SOURCE,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
         int missing = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker_document WHERE source = ? AND company_id = ? AND submission_status = 'MISSING'",
+                "SELECT COUNT(*) FROM worker_document WHERE source IN ('DEMO_SEED', 'LEGACY') "
+                        + "AND company_id = ? AND submission_status = 'MISSING'",
                 Integer.class,
-                SOURCE,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
         int passportWorkers = jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(DISTINCT worker_id)
                   FROM worker_document
-                 WHERE source = ?
+                 WHERE source IN ('DEMO_SEED', 'LEGACY')
                    AND company_id = ?
                    AND document_type = 'PASSPORT_COPY'
                    AND submission_status = 'VERIFIED'
@@ -300,7 +310,6 @@ class DemoDocumentDataService {
                    AND expiry_date > ?
                 """,
                 Integer.class,
-                SOURCE,
                 DemoDocumentFixtureCatalog.COMPANY_ID,
                 Date.valueOf(anchorDate)
         );
@@ -309,15 +318,16 @@ class DemoDocumentDataService {
             throw new IllegalStateException("demo passport fixtures are not unique or do not cover every worker");
         }
         return new DemoDocumentDataReport(
-                DemoDocumentFixtureCatalog.fixtures().size(),
-                fileCount,
-                imageCount,
-                pdfCount,
+                DemoDocumentFixtureCatalog.fixtures().size() + 83,
+                fileCount + legacyFiles.fileCount(),
+                imageCount + legacyFiles.imageCount(),
+                pdfCount + legacyFiles.pdfCount(),
                 hwpCount,
                 hwpxCount,
                 taskLinked,
                 missing,
-                passportWorkers
+                passportWorkers,
+                legacyFiles.fileCount()
         );
     }
 
@@ -457,14 +467,30 @@ class DemoDocumentDataService {
     }
 
     private void requireWorkerAndTask(DemoDocumentFixture fixture) {
-        Integer worker = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker WHERE worker_id = ? AND company_id = ?",
-                Integer.class,
+        List<Map<String, Object>> workers = jdbcTemplate.queryForList(
+                """
+                SELECT worker_id, company_id, display_name, nationality_code,
+                       preferred_language, visa_type
+                  FROM worker
+                 WHERE worker_id = ? AND company_id = ?
+                """,
                 fixture.workerId(),
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
-        if (worker != 1) {
+        if (workers.size() != 1) {
             throw new IllegalStateException("demo document worker is missing");
+        }
+        Map<String, Object> worker = workers.get(0);
+        var identity = Objects.requireNonNull(fixture.passportIdentity());
+        if (!fixture.workerId().equals(worker.get("worker_id"))
+                || !DemoDocumentFixtureCatalog.COMPANY_ID.equals(worker.get("company_id"))
+                || !identity.displayName().equals(worker.get("display_name"))
+                || !identity.nationalityCode().equals(worker.get("nationality_code"))
+                || !identity.preferredLanguage().equals(worker.get("preferred_language"))
+                || !identity.visaType().equals(worker.get("visa_type"))) {
+            throw new IllegalStateException(
+                    "demo document identity metadata does not match its worker row"
+            );
         }
         if (fixture.taskId() == null) {
             return;
@@ -557,7 +583,8 @@ class DemoDocumentDataService {
             int hwpxCount,
             int taskLinkedDocumentCount,
             int missingDocumentCount,
-            int passportWorkerCount
+            int passportWorkerCount,
+            int legacyMaterializedFileCount
     ) {
     }
 }

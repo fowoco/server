@@ -14,6 +14,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -24,6 +25,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 import javax.imageio.ImageIO;
 import org.apache.poi.poifs.filesystem.POIFSFileSystem;
@@ -34,23 +36,13 @@ final class SyntheticDocumentGenerator {
     private static final DateTimeFormatter PASSPORT_DATE =
             DateTimeFormatter.ofPattern("dd MMM uuuu", Locale.ENGLISH);
 
-    private static final List<String> IDENTITY_LINES = List.of(
-            "DISPLAY NAME: NGUYEN VAN AN",
-            "NATIONALITY: VIET NAM (VN)",
-            "PREFERRED LANGUAGE: vi",
-            "VISA: E-9",
-            "SYNTHETIC REFERENCE: DEMO-VN-FOWOCO-0001",
-            "DATE OF BIRTH: 1995-04-12 (SYNTHETIC)",
-            "ADDRESS: DEMO ADDRESS 14, SAMPLE-RO, FOWOCO"
-    );
-
     byte[] generate(DemoDocumentFixture fixture, LocalDate issueDate, LocalDate expiryDate) {
         return switch (fixture.format()) {
             case PNG -> image(fixture, issueDate, expiryDate, "png");
             case JPEG -> image(fixture, issueDate, expiryDate, "jpg");
-            case PDF -> pdf(fixture);
-            case HWP -> hwp(fixture);
-            case HWPX -> hwpx(fixture);
+            case PDF -> pdf(fixture, issueDate, expiryDate);
+            case HWP -> hwp(fixture, issueDate, expiryDate);
+            case HWPX -> hwpx(fixture, issueDate, expiryDate);
             case NONE -> throw new IllegalArgumentException("missing fixtures do not have file content");
         };
     }
@@ -62,9 +54,11 @@ final class SyntheticDocumentGenerator {
             String format
     ) {
         if (fixture.passportIdentity() != null) {
-            return passportBiographicalPage(fixture, issueDate, expiryDate, format);
+            if (fixture.documentType() == com.fowoco.server.worker.domain.DocumentType.PASSPORT_COPY) {
+                return passportBiographicalPage(fixture, issueDate, expiryDate, format);
+            }
         }
-        return genericImage(fixture, format);
+        return genericImage(fixture, issueDate, expiryDate, format);
     }
 
     private byte[] passportBiographicalPage(
@@ -115,7 +109,7 @@ final class SyntheticDocumentGenerator {
             drawField(graphics, "Date of birth", passportDate(identity.birthDate()), 800, 325);
             drawField(graphics, "Sex", identity.sex(), 1180, 325);
             drawField(graphics, "Place of birth", "DEMO CITY", 440, 420);
-            drawField(graphics, "Visa / Stay", "E-9", 735, 420);
+            drawField(graphics, "Visa / Stay", identity.visaType(), 735, 420);
             drawField(graphics, "Fictional authority", "FOWOCO QA LAB", 940, 420);
             drawField(graphics, "Date of issue", passportDate(issueDate), 440, 515);
             drawField(graphics, "Date of expiry", passportDate(expiryDate), 760, 515);
@@ -179,7 +173,13 @@ final class SyntheticDocumentGenerator {
         return encodeImage(image, format);
     }
 
-    private byte[] genericImage(DemoDocumentFixture fixture, String format) {
+    private byte[] genericImage(
+            DemoDocumentFixture fixture,
+            LocalDate issueDate,
+            LocalDate expiryDate,
+            String format
+    ) {
+        PassportIdentity identity = Objects.requireNonNull(fixture.passportIdentity());
         int width = 1200;
         int height = 760;
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -188,29 +188,36 @@ final class SyntheticDocumentGenerator {
             enableHighQualityRendering(graphics);
             graphics.setColor(new Color(248, 250, 252));
             graphics.fillRect(0, 0, width, height);
-            graphics.setColor(new Color(185, 28, 28));
+            graphics.setColor(new Color(20, 61, 104));
             graphics.fillRect(0, 0, width, 92);
             graphics.setColor(Color.WHITE);
             graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 30));
             graphics.drawString("DEMO / SAMPLE - NOT FOR OFFICIAL SUBMISSION", 48, 58);
 
             graphics.setColor(new Color(15, 23, 42));
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 36));
-            graphics.drawString(fixture.title(), 58, 164);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 34));
+            graphics.drawString(documentHeading(fixture), 58, 154);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 17));
+            graphics.setColor(new Color(71, 85, 105));
+            graphics.drawString(fixture.title(), 58, 184);
             graphics.setStroke(new BasicStroke(2f));
             graphics.setColor(new Color(148, 163, 184));
-            graphics.drawRoundRect(48, 195, width - 96, height - 255, 18, 18);
+            graphics.drawRoundRect(48, 205, width - 96, height - 275, 18, 18);
 
-            graphics.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 23));
-            graphics.setColor(new Color(30, 41, 59));
-            int y = 250;
-            for (String line : IDENTITY_LINES) {
-                graphics.drawString(line, 82, y);
-                y += 55;
-            }
+            drawCompactField(graphics, "Holder", identity.englishName(), 82, 245);
+            drawCompactField(graphics, "Nationality", identity.nationality()
+                    + " (" + identity.nationalityCode() + ")", 610, 245);
+            drawCompactField(graphics, "Date of birth", identity.birthDate().toString(), 82, 335);
+            drawCompactField(graphics, "Visa / Stay", identity.visaType(), 610, 335);
+            drawCompactField(graphics, "Document type", fixture.documentType().name(), 82, 425);
+            drawCompactField(graphics, "Submission status", fixture.status().name(), 610, 425);
+            drawCompactField(graphics, "Issue date", metadataDate(issueDate), 82, 515);
+            drawCompactField(graphics, "Expiry date", metadataDate(expiryDate), 610, 515);
+            drawCompactField(graphics, documentNumberLabel(fixture), documentNumber(fixture), 82, 605);
+            drawCompactField(graphics, "Worker document ID", fixture.documentId().toString(), 610, 605);
             graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
             graphics.setColor(new Color(185, 28, 28));
-            graphics.drawString("SYNTHETIC DATA ONLY / NO GOVERNMENT SECURITY FEATURES", 82, height - 82);
+            graphics.drawString("SYNTHETIC DATA ONLY / NOT VALID / NO OFFICIAL SECURITY FEATURES", 82, height - 48);
         } finally {
             graphics.dispose();
         }
@@ -219,7 +226,7 @@ final class SyntheticDocumentGenerator {
 
     private void drawPortrait(Graphics2D graphics, DemoDocumentFixture fixture) {
         PassportIdentity identity = Objects.requireNonNull(fixture.passportIdentity());
-        String portraitResource = fixture.documentId().equals(DemoDocumentFixtureCatalog.PASSPORT_BIO_DOCUMENT_ID)
+        String portraitResource = identity.portraitSeed() == 6
                 ? GOLD_WORKER_PORTRAIT
                 : "/demo-data/passport-portraits/worker-%02d.png".formatted(identity.portraitSeed());
         try (var input = SyntheticDocumentGenerator.class.getResourceAsStream(portraitResource)) {
@@ -276,6 +283,15 @@ final class SyntheticDocumentGenerator {
         graphics.setColor(new Color(15, 23, 42));
         graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
         graphics.drawString(value, x, y + 29);
+    }
+
+    private void drawCompactField(Graphics2D graphics, String label, String value, int x, int y) {
+        graphics.setColor(new Color(48, 79, 112));
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        graphics.drawString(label, x, y);
+        graphics.setColor(new Color(15, 23, 42));
+        graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, value.length() > 40 ? 16 : 21));
+        graphics.drawString(value, x, y + 30);
     }
 
     private void drawPassportBackdrop(Graphics2D graphics, int width, int height) {
@@ -343,31 +359,38 @@ final class SyntheticDocumentGenerator {
         }
     }
 
-    private byte[] pdf(DemoDocumentFixture fixture) {
-        List<String> lines = new ArrayList<>();
-        lines.add("DEMO / SAMPLE - NOT FOR OFFICIAL SUBMISSION");
-        lines.add(fixture.title());
-        lines.addAll(IDENTITY_LINES);
-        lines.add("NO GOVERNMENT LOGO, SECURITY PATTERN, OR OFFICIAL SIGNATURE");
-
-        StringBuilder stream = new StringBuilder("BT\n/F1 12 Tf\n50 790 Td\n");
-        for (int index = 0; index < lines.size(); index++) {
-            if (index > 0) {
-                stream.append("0 -42 Td\n");
-            }
-            stream.append('(').append(pdfEscape(lines.get(index))).append(") Tj\n");
+    private byte[] pdf(DemoDocumentFixture fixture, LocalDate issueDate, LocalDate expiryDate) {
+        List<String> lines = metadataLines(fixture, issueDate, expiryDate, false);
+        StringBuilder stream = new StringBuilder();
+        stream.append("q\n0.078 0.239 0.408 rg\n0 748 595 94 re f\nQ\n");
+        stream.append("1 1 1 rg\n");
+        appendPdfText(stream, "F2", 10, 42, 812,
+                "FOWOCO SYNTHETIC DOCUMENT / DEMO ONLY");
+        appendPdfText(stream, "F2", 21, 42, 778, documentHeading(fixture));
+        stream.append("0.06 0.09 0.16 rg\n");
+        stream.append("q\n0.94 0.96 0.98 rg\n34 112 527 612 re f\n")
+                .append("0.58 0.68 0.78 RG\n34 112 527 612 re S\nQ\n");
+        appendPdfText(stream, "F2", 12, 52, 695, fixture.title());
+        int y = 660;
+        for (String line : lines) {
+            appendPdfText(stream, "F1", 10, 52, y, line);
+            y -= 31;
         }
-        stream.append("ET\n");
+        appendPdfText(stream, "F2", 11, 52, 145,
+                "DEMO SAMPLE ONLY / NOT VALID / NO GOVERNMENT SECURITY FEATURES");
+        appendPdfText(stream, "F1", 8, 52, 126,
+                "Generated deterministically from the linked worker and worker_document metadata.");
         byte[] streamBytes = stream.toString().getBytes(StandardCharsets.US_ASCII);
 
         List<byte[]> objects = List.of(
                 ascii("<< /Type /Catalog /Pages 2 0 R >>"),
                 ascii("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
                 ascii("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-                        + "/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>"),
+                        + "/Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>"),
                 concat(ascii("<< /Length " + streamBytes.length + " >>\nstream\n"),
                         streamBytes, ascii("endstream")),
-                ascii("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+                ascii("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+                ascii("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>")
         );
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
@@ -388,17 +411,19 @@ final class SyntheticDocumentGenerator {
         return output.toByteArray();
     }
 
-    private byte[] hwp(DemoDocumentFixture fixture) {
-        try (POIFSFileSystem fileSystem = new POIFSFileSystem();
+    private byte[] hwp(DemoDocumentFixture fixture, LocalDate issueDate, LocalDate expiryDate) {
+        String resource = "/demo-data/document-templates/employment-contract-template.hwp";
+        try (InputStream template = Objects.requireNonNull(
+                     SyntheticDocumentGenerator.class.getResourceAsStream(resource),
+                     "missing synthetic HWP template: " + resource
+             );
+             POIFSFileSystem fileSystem = new POIFSFileSystem(template);
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-            byte[] header = new byte[256];
-            byte[] signature = "HWP Document File".getBytes(StandardCharsets.US_ASCII);
-            System.arraycopy(signature, 0, header, 0, signature.length);
-            fileSystem.getRoot().createDocument("FileHeader", new ByteArrayInputStream(header));
-            var body = fileSystem.getRoot().createDirectory("BodyText");
-            String text = fixture.title() + "\nDEMO / SAMPLE - NOT FOR OFFICIAL SUBMISSION\n"
-                    + String.join("\n", IDENTITY_LINES);
-            body.createDocument("Section0", new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)));
+            String text = String.join("\n", metadataLines(fixture, issueDate, expiryDate, true));
+            fileSystem.getRoot().createDocument(
+                    "FOWOCO-Metadata",
+                    new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8))
+            );
             fileSystem.writeFilesystem(output);
             return output.toByteArray();
         } catch (IOException exception) {
@@ -406,49 +431,38 @@ final class SyntheticDocumentGenerator {
         }
     }
 
-    private byte[] hwpx(DemoDocumentFixture fixture) {
-        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+    private byte[] hwpx(DemoDocumentFixture fixture, LocalDate issueDate, LocalDate expiryDate) {
+        String resource = switch (fixture.documentType()) {
+            case CONTRACT -> "/demo-data/document-templates/employment-contract-template.hwpx";
+            case EMPLOYMENT_EXTENSION_APPLICATION ->
+                    "/demo-data/document-templates/employment-extension-template.hwpx";
+            case INTEGRATED_APPLICATION ->
+                    "/demo-data/document-templates/integrated-application-template.hwpx";
+            default -> throw new IllegalArgumentException(
+                    "no HWPX template is registered for " + fixture.documentType()
+            );
+        };
+        try (InputStream template = Objects.requireNonNull(
+                     SyntheticDocumentGenerator.class.getResourceAsStream(resource),
+                     "missing synthetic HWPX template: " + resource
+             );
+             ZipInputStream input = new ZipInputStream(template, StandardCharsets.UTF_8);
+             ByteArrayOutputStream output = new ByteArrayOutputStream();
              ZipOutputStream zip = new ZipOutputStream(output, StandardCharsets.UTF_8)) {
-            byte[] mime = "application/hwp+zip".getBytes(StandardCharsets.US_ASCII);
-            CRC32 crc = new CRC32();
-            crc.update(mime);
-            ZipEntry mimeEntry = new ZipEntry("mimetype");
-            mimeEntry.setMethod(ZipEntry.STORED);
-            mimeEntry.setSize(mime.length);
-            mimeEntry.setCompressedSize(mime.length);
-            mimeEntry.setCrc(crc.getValue());
-            mimeEntry.setTime(0L);
-            zip.putNextEntry(mimeEntry);
-            zip.write(mime);
-            zip.closeEntry();
-
-            addZipEntry(zip, "META-INF/container.xml", """
-                    <?xml version="1.0" encoding="UTF-8"?>
-                    <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-                      <rootfiles><rootfile full-path="Contents/content.hpf" media-type="application/xml"/></rootfiles>
-                    </container>
-                    """);
-            addZipEntry(zip, "Contents/content.hpf", """
-                    <?xml version="1.0" encoding="UTF-8"?>
-                    <package xmlns="http://www.hancom.co.kr/hwpml/2011/package">
-                      <metadata><title>FOWOCO synthetic document fixture</title></metadata>
-                    </package>
-                    """);
-            addZipEntry(zip, "Contents/header.xml", """
-                    <?xml version="1.0" encoding="UTF-8"?>
-                    <hh:head xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" version="1.0"/>
-                    """);
-            String body = fixture.title() + " | DEMO / SAMPLE - NOT FOR OFFICIAL SUBMISSION | "
-                    + String.join(" | ", IDENTITY_LINES);
-            addZipEntry(zip, "Contents/section0.xml", """
-                    <?xml version="1.0" encoding="UTF-8"?>
-                    <hs:sec xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section">
-                      <hp:p xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">
-                        <hp:run><hp:t>%s</hp:t></hp:run>
-                      </hp:p>
-                    </hs:sec>
-                    """.formatted(xmlEscape(body)));
-            addZipEntry(zip, "Preview/PrvText.txt", body);
+            for (ZipEntry source = input.getNextEntry(); source != null; source = input.getNextEntry()) {
+                byte[] content = input.readAllBytes();
+                if (source.getName().equals("Preview/PrvText.txt")) {
+                    content = String.join("\n", metadataLines(fixture, issueDate, expiryDate, true))
+                            .getBytes(StandardCharsets.UTF_8);
+                } else if (source.getName().endsWith(".xml")
+                        || source.getName().endsWith(".hpf")
+                        || source.getName().endsWith(".rdf")) {
+                    String text = new String(content, StandardCharsets.UTF_8);
+                    content = applyHwpxTemplateValues(text, fixture, issueDate, expiryDate)
+                            .getBytes(StandardCharsets.UTF_8);
+                }
+                addZipEntry(zip, source.getName(), content, source.getName().equals("mimetype"));
+            }
             zip.finish();
             return output.toByteArray();
         } catch (IOException exception) {
@@ -456,12 +470,152 @@ final class SyntheticDocumentGenerator {
         }
     }
 
-    private void addZipEntry(ZipOutputStream zip, String name, String content) throws IOException {
+    private List<String> metadataLines(
+            DemoDocumentFixture fixture,
+            LocalDate issueDate,
+            LocalDate expiryDate,
+            boolean includeDisplayName
+    ) {
+        PassportIdentity identity = Objects.requireNonNull(fixture.passportIdentity());
+        List<String> lines = new ArrayList<>();
+        lines.add("DEMO / SAMPLE - NOT FOR OFFICIAL SUBMISSION");
+        lines.add("DOCUMENT TITLE: " + fixture.title());
+        lines.add("WORKER DOCUMENT ID: " + fixture.documentId());
+        lines.add("WORKER ID: " + fixture.workerId());
+        if (includeDisplayName) {
+            lines.add("DB DISPLAY NAME: " + identity.displayName());
+        }
+        lines.add("HOLDER ENGLISH NAME: " + identity.englishName());
+        lines.add("NATIONALITY: " + identity.nationality() + " (" + identity.nationalityCode() + ")");
+        lines.add("PREFERRED LANGUAGE: " + identity.preferredLanguage());
+        lines.add("VISA / STAY: " + identity.visaType());
+        lines.add("DATE OF BIRTH: " + identity.birthDate() + " / SYNTHETIC");
+        lines.add(documentNumberLabel(fixture).toUpperCase(Locale.ENGLISH) + ": " + documentNumber(fixture));
+        lines.add("DOCUMENT TYPE: " + fixture.documentType().name());
+        lines.add("SUBMISSION STATUS: " + fixture.status().name());
+        lines.add("ISSUE DATE: " + metadataDate(issueDate));
+        lines.add("EXPIRY DATE: " + metadataDate(expiryDate));
+        lines.add("STORAGE FILE: " + fixture.storageFilename());
+        lines.add("SYNTHETIC ADDRESS: " + identity.syntheticAddress());
+        lines.add("NOT VALID / NO OFFICIAL LOGO, SIGNATURE, OR SECURITY PATTERN");
+        return lines;
+    }
+
+    private String documentHeading(DemoDocumentFixture fixture) {
+        return switch (fixture.documentType()) {
+            case PASSPORT_COPY -> "PASSPORT COPY";
+            case ARC -> fixture.storageFilename().contains("back")
+                    ? "RESIDENCE CARD - BACK"
+                    : "RESIDENCE CARD";
+            case CONTRACT -> "STANDARD EMPLOYMENT CONTRACT";
+            case PERMIT -> "EMPLOYMENT PERMIT";
+            case EMPLOYMENT_EXTENSION_APPLICATION -> "EMPLOYMENT PERIOD EXTENSION APPLICATION";
+            case INTEGRATED_APPLICATION -> "INTEGRATED APPLICATION";
+            case RESIDENCE_PROOF -> "RESIDENCE PROOF";
+        };
+    }
+
+    private String documentNumberLabel(DemoDocumentFixture fixture) {
+        return fixture.documentType() == com.fowoco.server.worker.domain.DocumentType.ARC
+                ? "Synthetic ARC No."
+                : "Synthetic reference No.";
+    }
+
+    private String documentNumber(DemoDocumentFixture fixture) {
+        PassportIdentity identity = Objects.requireNonNull(fixture.passportIdentity());
+        return switch (fixture.documentType()) {
+            case PASSPORT_COPY -> identity.documentNumber();
+            case ARC -> identity.alienRegistrationNumber();
+            case CONTRACT -> "DEMO-CONTRACT-%02d-NOT-VALID".formatted(identity.portraitSeed());
+            case PERMIT -> "DEMO-PERMIT-%02d-NOT-VALID".formatted(identity.portraitSeed());
+            case EMPLOYMENT_EXTENSION_APPLICATION ->
+                    "DEMO-EXT-%02d-DRAFT".formatted(identity.portraitSeed());
+            case INTEGRATED_APPLICATION -> "DEMO-INT-%02d-DRAFT".formatted(identity.portraitSeed());
+            case RESIDENCE_PROOF -> "DEMO-ADDR-%02d-NOT-VALID".formatted(identity.portraitSeed());
+        };
+    }
+
+    private String metadataDate(LocalDate value) {
+        return value == null ? "NOT SET" : value.toString();
+    }
+
+    private void appendPdfText(
+            StringBuilder stream,
+            String font,
+            int size,
+            int x,
+            int y,
+            String value
+    ) {
+        stream.append("BT\n/").append(font).append(' ').append(size)
+                .append(" Tf\n1 0 0 1 ").append(x).append(' ').append(y)
+                .append(" Tm\n(").append(pdfEscape(value)).append(") Tj\nET\n");
+    }
+
+    private void addZipEntry(
+            ZipOutputStream zip,
+            String name,
+            byte[] content,
+            boolean stored
+    ) throws IOException {
         ZipEntry entry = new ZipEntry(name);
         entry.setTime(0L);
+        if (stored) {
+            CRC32 crc = new CRC32();
+            crc.update(content);
+            entry.setMethod(ZipEntry.STORED);
+            entry.setSize(content.length);
+            entry.setCompressedSize(content.length);
+            entry.setCrc(crc.getValue());
+        }
         zip.putNextEntry(entry);
-        zip.write(content.strip().getBytes(StandardCharsets.UTF_8));
+        zip.write(content);
         zip.closeEntry();
+    }
+
+    private String applyHwpxTemplateValues(
+            String source,
+            DemoDocumentFixture fixture,
+            LocalDate issueDate,
+            LocalDate expiryDate
+    ) {
+        PassportIdentity identity = Objects.requireNonNull(fixture.passportIdentity());
+        String result = source
+                .replace("FOWOCO_DEMO_COMPANY", "FOWOCO DEMO COMPANY")
+                .replace("DEMO_HOLDER_NAME", xmlEscape(identity.englishName()))
+                .replace("DEMO_NATIONALITY", xmlEscape(identity.nationality()))
+                .replace("DEMO_PASSPORT_NO", xmlEscape(identity.documentNumber()))
+                .replace("DEMO_SURNAME", xmlEscape(identity.surname()))
+                .replace("DEMO_GIVEN_NAMES", xmlEscape(identity.givenNames()))
+                .replace("DEMO-WORKER-06", "DEMO-WORKER-%02d".formatted(identity.portraitSeed()))
+                .replace("DEMO_WORKPLACE_ADDRESS", xmlEscape(identity.syntheticAddress()))
+                .replace("DEMO_HOME_COUNTRY_ADDRESS", xmlEscape(identity.syntheticAddress()))
+                .replace("DEMO_HOME_ADDRESS", xmlEscape(identity.syntheticAddress()))
+                .replace("9912315999999", "9999995%06d".formatted(identity.portraitSeed()))
+                .replace("2098-01-01", metadataDate(issueDate))
+                .replace("2099-01-01", metadataDate(expiryDate))
+                .replace("2098. 01. 01.", dotDate(issueDate))
+                .replace("2099. 01. 01.", dotDate(expiryDate))
+                .replace("2097. 01. 01.", dotDate(identity.birthDate()))
+                .replace(">2097<", ">" + identity.birthDate().getYear() + "<")
+                .replace(">97<", ">%02d<".formatted(identity.birthDate().getMonthValue()))
+                .replace(">98<", ">%02d<".formatted(identity.birthDate().getDayOfMonth()));
+        if (result.contains("DEMO_HOLDER_NAME")
+                || result.contains("DEMO_NATIONALITY")
+                || result.contains("9912315999999")
+                || result.contains("2098-01-01")
+                || result.contains("2099-01-01")) {
+            throw new IllegalStateException("synthetic HWPX template contains unresolved metadata tokens");
+        }
+        return result;
+    }
+
+    private String dotDate(LocalDate value) {
+        return value == null
+                ? "NOT SET"
+                : "%04d. %02d. %02d.".formatted(
+                        value.getYear(), value.getMonthValue(), value.getDayOfMonth()
+                );
     }
 
     private String pdfEscape(String value) {

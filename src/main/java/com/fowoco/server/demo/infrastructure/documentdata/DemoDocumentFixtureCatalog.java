@@ -21,17 +21,7 @@ final class DemoDocumentFixtureCatalog {
             passportImageFixture(1, 6, -365, 365,
                     "여권_인적사항면_응웬반A.png", "passport-bio.png",
                     "Passport biographical page",
-                    new PassportIdentity(
-                            "NGUYEN VAN AN",
-                            "NGUYEN",
-                            "VAN AN",
-                            "VIET NAM",
-                            "VN",
-                            LocalDate.of(1995, 4, 12),
-                            "M",
-                            "DEMO-0001-NOT-VALID",
-                            6
-                    )),
+                    identityForWorker(6)),
             fixture(2, 6, null, DocumentType.PASSPORT_COPY, SubmissionStatus.VERIFIED,
                     -365, 365, "여권_사본_응웬반A.pdf", "passport-copy.pdf",
                     "application/pdf", FixtureFormat.PDF, "Passport copy"),
@@ -150,6 +140,17 @@ final class DemoDocumentFixtureCatalog {
         return PASSPORT_COVERAGE_FIXTURES;
     }
 
+    static PassportIdentity identityForWorkerId(UUID workerId) {
+        return FIXTURES.stream()
+                .filter(fixture -> fixture.workerId().equals(workerId))
+                .map(DemoDocumentFixture::passportIdentity)
+                .distinct()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "demo worker identity is not defined: " + workerId
+                ));
+    }
+
     private static DemoDocumentFixture passportCoverageFixture(
             int documentNumber,
             int workerNumber,
@@ -171,6 +172,7 @@ final class DemoDocumentFixtureCatalog {
                 "passport-copy-worker-%02d.png".formatted(workerNumber),
                 "Passport copy - " + englishName,
                 identity(
+                        displayName,
                         englishName,
                         surname,
                         givenNames,
@@ -243,11 +245,12 @@ final class DemoDocumentFixtureCatalog {
                 title,
                 destination(documentType),
                 "DEMO/SAMPLE fixture - not for official submission",
-                null
+                identityForWorker(workerNumber)
         );
     }
 
     private static PassportIdentity identity(
+            String displayName,
             String englishName,
             String surname,
             String givenNames,
@@ -258,16 +261,64 @@ final class DemoDocumentFixtureCatalog {
             int portraitSeed
     ) {
         return new PassportIdentity(
+                displayName,
                 englishName,
                 surname,
                 givenNames,
                 nationality,
                 nationalityCode,
+                preferredLanguage(portraitSeed, nationalityCode),
                 birthDate,
                 sex,
-                "DEMO-%02d-NOT-VALID".formatted(portraitSeed),
+                "E-9",
+                "DEMO-P%02d-NOT-VALID".formatted(portraitSeed),
+                "DEMO-ARC-%02d-NOT-VALID".formatted(portraitSeed),
+                "DEMO RESIDENCE %02d, SAMPLE-RO, FOWOCO CITY".formatted(portraitSeed),
                 portraitSeed
         );
+    }
+
+    private static PassportIdentity identityForWorker(int workerNumber) {
+        return switch (workerNumber) {
+            case 1 -> identity("리웨이", "LI WEI", "LI", "WEI", "CHINA", "CN",
+                    LocalDate.of(1992, 3, 14), "M", 1);
+            case 2 -> identity("속 체아", "SOK CHEA", "SOK", "CHEA", "CAMBODIA", "KH",
+                    LocalDate.of(1996, 7, 21), "M", 2);
+            case 3 -> identity("아르준 타파", "ARJUN THAPA", "THAPA", "ARJUN", "NEPAL", "NP",
+                    LocalDate.of(1991, 11, 8), "M", 3);
+            case 4 -> identity("부디 산토소", "BUDI SANTOSO", "SANTOSO", "BUDI", "INDONESIA", "ID",
+                    LocalDate.of(1994, 2, 17), "M", 4);
+            case 6 -> identity("응웬반A", "NGUYEN VAN AN", "NGUYEN", "VAN AN", "VIET NAM", "VN",
+                    LocalDate.of(1995, 4, 12), "M", 6);
+            default -> throw new IllegalArgumentException(
+                    "base document fixture worker identity is not defined: " + workerNumber
+            );
+        };
+    }
+
+    private static String preferredLanguage(int workerNumber, String nationalityCode) {
+        if (workerNumber == 22) {
+            return "fil";
+        }
+        return switch (nationalityCode) {
+            case "CN" -> "zh-Hans";
+            case "KH" -> "km";
+            case "NP", "PH", "MM" -> "en";
+            case "ID" -> "id";
+            case "MN" -> "mn";
+            case "VN" -> "vi";
+            case "KG" -> "ky";
+            case "LK" -> "si";
+            case "PK" -> "ur";
+            case "BD" -> "bn";
+            case "UZ" -> "uz";
+            case "RU" -> "ru";
+            case "TH" -> "th";
+            case "TL" -> "tet";
+            default -> throw new IllegalArgumentException(
+                    "demo worker language is not defined for nationality: " + nationalityCode
+            );
+        };
     }
 
     private static String destination(DocumentType type) {
@@ -336,14 +387,19 @@ final class DemoDocumentFixtureCatalog {
     }
 
     record PassportIdentity(
+            String displayName,
             String englishName,
             String surname,
             String givenNames,
             String nationality,
             String nationalityCode,
+            String preferredLanguage,
             LocalDate birthDate,
             String sex,
+            String visaType,
             String documentNumber,
+            String alienRegistrationNumber,
+            String syntheticAddress,
             int portraitSeed
     ) {
     }

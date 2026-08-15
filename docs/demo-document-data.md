@@ -40,11 +40,38 @@ export OCR_RESULT_ENCRYPTION_KEY_BASE64='<32-byte-base64-secret>'
   fixture를 적재·검증한다. 성공하면 API Server도 기동한다.
 - `verify`: 고정 ID, 회사·근로자·업무 연결, 날짜·상태, MIME·크기·SHA-256, 실제 파일,
   OCR 원본 계보를 읽기 검증한다.
-- `cleanup`: 이 기능이 예약한 ID와 해시가 모두 일치할 때만 OCR·문서·파일을 제거한다.
-  기존 Demo Company, Worker, Task와 기존 Showcase 문서는 삭제하지 않는다.
+- `cleanup`: 이 기능이 예약한 ID와 해시가 모두 일치할 때만 OCR·신규 문서·생성 파일을
+  제거한다. 기존 `LEGACY` 문서 83건은 삭제하지 않고, 이 명령이 추가한 파일 연결만
+  원래 상태로 복원한다. 기존 Demo Company, Worker, Task와 Showcase 메타데이터는 유지한다.
 
 같은 `import`를 다시 실행하면 DB row와 파일 수가 증가하지 않는다. 예약 ID 또는 저장 키에
-다른 내용이 있으면 덮어쓰지 않고 즉시 실패한다.
+다른 내용이 있으면 덮어쓰지 않고 즉시 실패한다. 서버 재시작 때 Operational Seed가 다시
+검증되어도 결정적 파일 ID를 허용하므로 문서 연결이 원복되거나 시작이 실패하지 않는다.
+
+## 메타데이터와 파일 본문 일치
+
+`import`는 신규 `DEMO_SEED` 문서 43건뿐 아니라 기존 문서함의 `LEGACY` 메타데이터
+83건도 함께 읽는다. 이 중 `MISSING` 16건은 파일이 없는 상태를 의도적으로 유지하고,
+나머지 67건에는 근로자와 문서 행을 기준으로 합성 이미지 또는 PDF를 생성해 연결한다.
+
+적재 완료 기준은 다음과 같다.
+
+```text
+문서 메타데이터 126건 = DEMO_SEED 43 + LEGACY 83
+파일 연결 109건 = DEMO_SEED 42 + LEGACY 비누락 67
+파일 형식 = 이미지 71 + PDF 34 + HWP 1 + HWPX 3
+파일 없는 누락 상태 = 17건
+```
+
+모든 파일은 연결된 `worker_id`의 표시 이름, 영문 이름, 국적·국가 코드, 선호 언어,
+체류자격, 합성 생년월일·문서번호·주소를 사용한다. 문서 행의 `document_type`,
+`submission_status`, `issue_date`, `expiry_date`, `worker_document_id`도 파일 본문 또는
+컨테이너 메타데이터에 그대로 기록한다. Import 전에 실제 Worker 행의 이름·국적 코드·언어·
+체류자격이 fixture와 일치하는지 확인하므로 서로 다른 사람의 파일을 잘못 연결할 수 없다.
+
+PDF와 이미지는 결정적으로 생성하고, HWP/HWPX는 AI 저장소에서 사용하는 실제 템플릿
+구조에 합성값을 주입한다. HWP에는 `FOWOCO-Metadata` 스트림, HWPX에는 미리보기 텍스트와
+본문 XML에 연결 정보를 남겨 원본 문서까지 역추적할 수 있다.
 
 ## 대표 fixture
 
@@ -63,8 +90,9 @@ export OCR_RESULT_ENCRYPTION_KEY_BASE64='<32-byte-base64-secret>'
 
 Demo Company의 나머지 근로자 27명에게는 각각 다른 합성 여권 사본 PNG를 추가한다.
 각 파일은 영문 이름, 국적, 생년월일, 무효 문서번호, 발급·만료일, 실사형 합성 증명사진과
-저장 키가 서로 다르며 SHA-256도 27개 모두 달라야 한다. 응웬반A의 기존 유효 여권은
-그대로 유지하고, 아르준 타파의 과거 만료 파일과 기존 `LEGACY` 메타데이터도 덮어쓰지 않는다.
+저장 키가 서로 다르며 SHA-256도 27개 모두 달라야 한다. 응웬반A의 기존 유효 여권과
+아르준 타파의 과거 만료 파일도 해당 근로자 DB 값과 동일한 합성 정보로 생성한다.
+기존 `LEGACY` 메타데이터 자체는 덮어쓰지 않고 비누락 행에만 결정적 파일 연결을 추가한다.
 
 ```text
 Demo Company Worker 28명

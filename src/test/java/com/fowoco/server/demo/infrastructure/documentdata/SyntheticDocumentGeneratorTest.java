@@ -10,9 +10,16 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.zip.ZipInputStream;
 import javax.imageio.ImageIO;
+import org.apache.poi.poifs.filesystem.DocumentEntry;
+import org.apache.poi.poifs.filesystem.DocumentInputStream;
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;
 import org.junit.jupiter.api.Test;
 
 class SyntheticDocumentGeneratorTest {
@@ -86,15 +93,104 @@ class SyntheticDocumentGeneratorTest {
         assertThat(workerIds).hasSize(27);
     }
 
+    @Test
+    void assignsOneConsistentSyntheticIdentityToEveryWorkerDocumentFixture() {
+        Map<UUID, Object> identitiesByWorker = new HashMap<>();
+
+        for (DemoDocumentFixture fixture : DemoDocumentFixtureCatalog.fixtures()) {
+            assertThat(fixture.passportIdentity()).isNotNull();
+            Object previous = identitiesByWorker.putIfAbsent(
+                    fixture.workerId(), fixture.passportIdentity()
+            );
+            if (previous != null) {
+                assertThat(fixture.passportIdentity()).isEqualTo(previous);
+            }
+        }
+
+        assertThat(identitiesByWorker).hasSize(28);
+    }
+
+    @Test
+    void embedsWorkerAndDocumentMetadataInPdfHwpAndHwpxContent() throws IOException {
+        LocalDate issueDate = LocalDate.of(2026, 7, 16);
+        LocalDate expiryDate = LocalDate.of(2027, 2, 11);
+
+        DemoDocumentFixture pdfFixture = fixture(FixtureFormat.PDF);
+        String pdf = new String(
+                generator.generate(pdfFixture, issueDate, expiryDate),
+                StandardCharsets.US_ASCII
+        );
+        assertMetadataText(pdf, pdfFixture, issueDate, expiryDate);
+
+        DemoDocumentFixture hwpFixture = fixture(FixtureFormat.HWP);
+        byte[] hwp = generator.generate(hwpFixture, issueDate, expiryDate);
+        try (POIFSFileSystem fileSystem = new POIFSFileSystem(new ByteArrayInputStream(hwp));
+             var stream = new DocumentInputStream(
+                     (DocumentEntry) fileSystem.getRoot().getEntry("FOWOCO-Metadata")
+             )) {
+            assertMetadataText(
+                    new String(stream.readAllBytes(), StandardCharsets.UTF_8),
+                    hwpFixture,
+                    issueDate,
+                    expiryDate
+            );
+        }
+
+        DemoDocumentFixture hwpxFixture = fixture(FixtureFormat.HWPX);
+        byte[] hwpx = generator.generate(hwpxFixture, issueDate, expiryDate);
+        String preview = hwpxEntry(hwpx, "Preview/PrvText.txt");
+        assertMetadataText(preview, hwpxFixture, issueDate, expiryDate);
+        assertThat(hwpxEntry(hwpx, "Contents/section0.xml"))
+                .contains(hwpxFixture.passportIdentity().englishName())
+                .contains(issueDate.toString())
+                .contains(expiryDate.toString())
+                .doesNotContain("DEMO_HOLDER_NAME", "2098-01-01", "2099-01-01");
+    }
+
+    private void assertMetadataText(
+            String content,
+            DemoDocumentFixture fixture,
+            LocalDate issueDate,
+            LocalDate expiryDate
+    ) {
+        assertThat(content)
+                .contains(fixture.documentId().toString())
+                .contains(fixture.workerId().toString())
+                .contains(fixture.passportIdentity().englishName())
+                .contains(fixture.passportIdentity().nationalityCode())
+                .contains(fixture.passportIdentity().preferredLanguage())
+                .contains(fixture.passportIdentity().visaType())
+                .contains(fixture.documentType().name())
+                .contains(fixture.status().name())
+                .contains(issueDate.toString())
+                .contains(expiryDate.toString())
+                .contains(fixture.storageFilename());
+    }
+
+    private String hwpxEntry(byte[] content, String expectedName) throws IOException {
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(content))) {
+            for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+                if (entry.getName().equals(expectedName)) {
+                    return new String(zip.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+        }
+        throw new AssertionError("HWPX entry is missing: " + expectedName);
+    }
+
     private byte[] generate(FixtureFormat format) {
-        DemoDocumentFixture template = DemoDocumentFixtureCatalog.fixtures().stream()
-                .filter(fixture -> fixture.format() == format)
-                .findFirst()
-                .orElseThrow();
+        DemoDocumentFixture template = fixture(format);
         return generator.generate(
                 template,
                 LocalDate.of(2025, 8, 15),
                 LocalDate.of(2027, 8, 15)
         );
+    }
+
+    private DemoDocumentFixture fixture(FixtureFormat format) {
+        return DemoDocumentFixtureCatalog.fixtures().stream()
+                .filter(fixture -> fixture.format() == format)
+                .findFirst()
+                .orElseThrow();
     }
 }
