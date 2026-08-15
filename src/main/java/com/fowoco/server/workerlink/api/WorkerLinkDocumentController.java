@@ -69,7 +69,23 @@ public class WorkerLinkDocumentController {
     public ResponseEntity<WorkerLinkDocumentUploadResponse> upload(
             @Parameter(description = "근로자 링크 토큰") @PathVariable String token,
             @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
-            @Parameter(description = "문서 유형") @RequestParam(value = "documentType", required = false) String documentType,
+            @Parameter(
+                    name = "documentType",
+                    description = "문서 유형",
+                    schema = @Schema(
+                            type = "string",
+                            allowableValues = {
+                                    "PASSPORT_COPY",
+                                    "ARC",
+                                    "CONTRACT",
+                                    "PERMIT",
+                                    "EMPLOYMENT_EXTENSION_APPLICATION",
+                                    "INTEGRATED_APPLICATION",
+                                    "RESIDENCE_PROOF"
+                            }
+                    )
+            )
+            @RequestParam(value = "documentType", required = false) String documentType,
             @Parameter(
                     description = "더 이상 멱등성 판단에 사용하지 않는 이전 클라이언트 요청 식별자",
                     deprecated = true

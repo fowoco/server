@@ -187,6 +187,15 @@ kubectl -n fowoco get events --sort-by=.lastTimestamp
 애플리케이션 문제이며 DB migration이 이전 이미지와 호환될 때만 승인 후 이전 image SHA로
 되돌립니다.
 
+Worker Link 문서 멱등성 V51을 적용한 뒤 이전 Server image로 되돌릴 때는 schema 호환과
+멱등성 의미 호환을 구분합니다. 이전 image는 nullable hash column을 무시하고 기동할 수
+있지만, 새 version이 `canonical:<stored_file_id>`로 기록한 성공 결과를 기존
+`clientRequestId` 조회로 재사용하지 못합니다. rollback 가능한 기간에는 Client가
+`Idempotency-Key`와 multipart `clientRequestId`를 함께 보내는 동작을 유지하고, rollback
+후에는 새 version에서 성공한 문서 업로드를 자동 재시도하지 않습니다. 상세 점검은
+[File Storage rollback 보상 운영 가이드](reliability/file-storage-rollback-compensation.md)의
+Rollback 원칙을 따릅니다.
+
 ```bash
 kubectl -n fowoco set image deployment/server server=ghcr.io/fowoco/server:<previous-sha>
 kubectl -n fowoco rollout status deployment/server --timeout=180s

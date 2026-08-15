@@ -280,6 +280,24 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(invalidHeader.statusCode()).isEqualTo(400);
         assertThat(JsonPath.<String>read(invalidHeader.body(), "$.code")).isEqualTo("VALIDATION_FAILED");
 
+        HttpResponse<String> invalidDocumentType = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8),
+                null,
+                "canonical-invalid-document-type",
+                "CUSTOM_DOCUMENT"
+        );
+        assertThat(invalidDocumentType.statusCode()).isEqualTo(400);
+        assertThat(JsonPath.<String>read(invalidDocumentType.body(), "$.code"))
+                .isEqualTo("VALIDATION_FAILED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE company_id = ?",
+                Integer.class,
+                COMPANY_A
+        )).isZero();
+
         HttpResponse<String> first = uploadFileWithIdempotencyKey(
                 rawToken,
                 "passport.pdf",
@@ -1262,6 +1280,19 @@ class WorkerLinkSecurityIntegrationTest {
                 "$.paths['/api/v1/public/worker-links/{token}/documents'].post.parameters"
                         + "[?(@.name == 'Idempotency-Key')].required"
         )).containsExactly(true);
+        assertThat(JsonPath.<List<List<String>>>read(
+                response.body(),
+                "$.paths['/api/v1/public/worker-links/{token}/documents'].post.parameters"
+                        + "[?(@.name == 'documentType')].schema.enum"
+        )).containsExactly(List.of(
+                "PASSPORT_COPY",
+                "ARC",
+                "CONTRACT",
+                "PERMIT",
+                "EMPLOYMENT_EXTENSION_APPLICATION",
+                "INTEGRATED_APPLICATION",
+                "RESIDENCE_PROOF"
+        ));
         assertThat(JsonPath.<Number>read(
                 response.body(),
                 "$.components.schemas.WorkerLinkIssueRequest.properties.expires_in_hours.minimum"
@@ -1483,10 +1514,33 @@ class WorkerLinkSecurityIntegrationTest {
             String clientRequestId,
             String idempotencyKey
     ) throws Exception {
+        return uploadFileWithIdempotencyKey(
+                token,
+                filename,
+                mimeType,
+                content,
+                clientRequestId,
+                idempotencyKey,
+                null
+        );
+    }
+
+    private HttpResponse<String> uploadFileWithIdempotencyKey(
+            String token,
+            String filename,
+            String mimeType,
+            byte[] content,
+            String clientRequestId,
+            String idempotencyKey,
+            String documentType
+    ) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writePart(out, "file", filename, mimeType, content);
         if (clientRequestId != null) {
             writeFieldPart(out, "clientRequestId", clientRequestId);
+        }
+        if (documentType != null) {
+            writeFieldPart(out, "documentType", documentType);
         }
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 

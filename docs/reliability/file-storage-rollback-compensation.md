@@ -88,7 +88,18 @@ PostgreSQL 16 동시성 검증은
 ## Rollback 원칙
 
 - 적용된 Flyway migration을 수정하거나 schema history를 조작하지 않는다.
-- 애플리케이션 rollback 전에 새 version이 기록한 hash column을 이전 version이 읽지
-  않아도 되는지와 migration 호환성을 확인한다.
+- V51의 hash column은 nullable이므로 이전 image가 같은 schema에서 기동하고 legacy 행을
+  기록할 수 있다. 이는 schema 하위 호환을 의미하며, 신·구 version 사이의 멱등성 결과
+  재사용까지 보장한다는 뜻은 아니다.
+- 새 version은 `client_request_id`에 `canonical:<stored_file_id>`를 기록하지만 이전
+  version은 multipart `clientRequestId` 원문으로 기존 결과를 조회한다. 따라서 새 version이
+  성공시킨 업로드를 이전 image로 rollback한 뒤 재시도하면 기존 결과를 찾지 못하고 중복
+  업로드할 수 있다.
+- rollback 가능한 배포 기간에는 Client가 `Idempotency-Key`와 `clientRequestId`를 함께
+  보내는 현재 동작을 유지한다. 이전 Server version을 지원하지 않기로 확정하기 전에는
+  `clientRequestId` 전송을 제거하지 않는다.
+- 이전 image로 rollback한 경우 새 version에서 성공한 Worker Link 문서 요청의 자동 재시도를
+  피하고, 재시도가 발생했다면 `worker_document_upload_idempotency`, `stored_file`과 실제
+  volume을 대조해 중복 여부를 확인한다.
 - 이전 image로 되돌린 뒤에도 orphan 후보는 위 reconciliation 표로 판단한다.
 - cleanup 실패를 숨기기 위해 `stored_file` 행이나 파일을 일괄 삭제하지 않는다.
