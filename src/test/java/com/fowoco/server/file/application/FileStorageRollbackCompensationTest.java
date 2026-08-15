@@ -40,7 +40,9 @@ class FileStorageRollbackCompensationTest {
 
     @Test
     void keepsFileAfterCommit() {
-        compensation.register(STORAGE_KEY, METADATA, ACTION);
+        FileStorageRollbackCompensation.Registration registration =
+                compensation.register(STORAGE_KEY, METADATA, ACTION);
+        registration.markCreated();
 
         synchronization().afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
 
@@ -49,7 +51,9 @@ class FileStorageRollbackCompensationTest {
 
     @Test
     void deletesFileAfterRollback() {
-        compensation.register(STORAGE_KEY, METADATA, ACTION);
+        FileStorageRollbackCompensation.Registration registration =
+                compensation.register(STORAGE_KEY, METADATA, ACTION);
+        registration.markCreated();
 
         synchronization().afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
 
@@ -57,8 +61,19 @@ class FileStorageRollbackCompensationTest {
     }
 
     @Test
-    void keepsFileWhenTransactionCompletionIsUnknown() {
+    void keepsFileWhenStoreDidNotCreateIt() {
         compensation.register(STORAGE_KEY, METADATA, ACTION);
+
+        synchronization().afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+
+        verify(fileStorage, never()).deleteIfExists(STORAGE_KEY);
+    }
+
+    @Test
+    void keepsFileWhenTransactionCompletionIsUnknown() {
+        FileStorageRollbackCompensation.Registration registration =
+                compensation.register(STORAGE_KEY, METADATA, ACTION);
+        registration.markCreated();
 
         synchronization().afterCompletion(TransactionSynchronization.STATUS_UNKNOWN);
 
@@ -69,7 +84,9 @@ class FileStorageRollbackCompensationTest {
     void cleanupFailureDoesNotEscapeTransactionCompletionCallback() {
         RuntimeException cleanupFailure = new IllegalStateException("cleanup unavailable");
         doThrow(cleanupFailure).when(fileStorage).deleteIfExists(STORAGE_KEY);
-        compensation.register(STORAGE_KEY, METADATA, ACTION);
+        FileStorageRollbackCompensation.Registration registration =
+                compensation.register(STORAGE_KEY, METADATA, ACTION);
+        registration.markCreated();
 
         assertThatCode(() -> synchronization().afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK))
                 .doesNotThrowAnyException();

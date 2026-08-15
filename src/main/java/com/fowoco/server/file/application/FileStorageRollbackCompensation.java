@@ -3,6 +3,7 @@ package com.fowoco.server.file.application;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.port.FileStorage;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -21,7 +22,7 @@ public class FileStorageRollbackCompensation {
         this.fileStorage = fileStorage;
     }
 
-    public void register(String storageKey, RequestMetadata metadata, String action) {
+    public Registration register(String storageKey, RequestMetadata metadata, String action) {
         requireText(storageKey, "storageKey");
         Objects.requireNonNull(metadata, "metadata must not be null");
         requireText(action, "action");
@@ -32,15 +33,26 @@ public class FileStorageRollbackCompensation {
             );
         }
 
+        Registration registration = new Registration();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
-                handleCompletion(status, storageKey, metadata.requestId(), action);
+                handleCompletion(status, storageKey, metadata.requestId(), action, registration.fileCreated());
             }
         });
+        return registration;
     }
 
-    private void handleCompletion(int status, String storageKey, String requestId, String action) {
+    private void handleCompletion(
+            int status,
+            String storageKey,
+            String requestId,
+            String action,
+            boolean fileCreated
+    ) {
+        if (!fileCreated) {
+            return;
+        }
         if (status == TransactionSynchronization.STATUS_COMMITTED) {
             return;
         }
@@ -102,6 +114,19 @@ public class FileStorageRollbackCompensation {
     private void requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");
+        }
+    }
+
+    public static final class Registration {
+
+        private final AtomicBoolean fileCreated = new AtomicBoolean();
+
+        public void markCreated() {
+            fileCreated.set(true);
+        }
+
+        private boolean fileCreated() {
+            return fileCreated.get();
         }
     }
 }

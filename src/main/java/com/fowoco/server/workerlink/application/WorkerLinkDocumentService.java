@@ -147,8 +147,9 @@ public class WorkerLinkDocumentService {
                 now
         ).verify();
 
-        rollbackCompensation.register(storageKey, metadata, ROLLBACK_ACTION);
-        String contentChecksum = storeAndChecksum(storageKey, command.content(), request);
+        FileStorageRollbackCompensation.Registration rollbackRegistration =
+                rollbackCompensation.register(storageKey, metadata, ROLLBACK_ACTION);
+        String contentChecksum = storeAndChecksum(storageKey, command.content(), request, rollbackRegistration);
         String requestHash = calculateRequestHash(request, contentChecksum);
 
         storedFileRepository.insert(verifiedFile);
@@ -261,12 +262,14 @@ public class WorkerLinkDocumentService {
     private String storeAndChecksum(
             String storageKey,
             InputStream content,
-            NormalizedUploadRequest request
+            NormalizedUploadRequest request,
+            FileStorageRollbackCompensation.Registration rollbackRegistration
     ) {
         MessageDigest digest = newSha256Digest();
         CountingInputStream countingContent = new CountingInputStream(content);
         try (DigestInputStream digestContent = new DigestInputStream(countingContent, digest)) {
             fileStorage.store(storageKey, digestContent, request.size(), request.mimeType());
+            rollbackRegistration.markCreated();
         } catch (IOException exception) {
             throw new UncheckedIOException("failed to close uploaded file", exception);
         }

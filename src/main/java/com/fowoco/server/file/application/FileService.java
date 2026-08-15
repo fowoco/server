@@ -132,8 +132,10 @@ public class FileService {
                 now
         );
 
-        rollbackCompensation.register(storageKey, metadata, FILE_UPLOAD_ACTION);
+        FileStorageRollbackCompensation.Registration rollbackRegistration =
+                rollbackCompensation.register(storageKey, metadata, FILE_UPLOAD_ACTION);
         fileStorage.store(storageKey, new java.io.ByteArrayInputStream(contentBytes), command.size(), command.mimeType());
+        rollbackRegistration.markCreated();
         storedFileRepository.insert(storedFile);
 
         appendAudit(

@@ -5,15 +5,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.fowoco.server.audit.application.port.AuditEventRepository;
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
+import com.fowoco.server.common.id.UuidGenerator;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.FileCreateCommand;
 import com.fowoco.server.file.application.FileService;
@@ -22,6 +25,8 @@ import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.file.domain.StoredFile;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -64,12 +69,16 @@ class FileRollbackIntegrationTest {
     @MockitoBean
     private AuditEventRepository auditRepository;
 
+    @MockitoBean
+    private UuidGenerator uuidGenerator;
+
     private final Map<String, byte[]> storedContents = new HashMap<>();
 
     @BeforeEach
     void setUpStorage() throws Exception {
-        reset(fileStorage, storedFileRepository, auditRepository);
+        reset(fileStorage, storedFileRepository, auditRepository, uuidGenerator);
         storedContents.clear();
+        when(uuidGenerator.generate()).thenAnswer(invocation -> UUID.randomUUID());
         doAnswer(invocation -> {
             String storageKey = invocation.getArgument(0);
             InputStream content = invocation.getArgument(1);
@@ -80,6 +89,26 @@ class FileRollbackIntegrationTest {
             storedContents.remove(invocation.<String>getArgument(0));
             return null;
         }).when(fileStorage).deleteIfExists(anyString());
+    }
+
+    @Test
+    void keepsPreexistingFileWhenGeneratedStorageKeyCollides() {
+        UUID existingStoredFileId = UUID.fromString("74200000-0000-0000-0000-000000000001");
+        String storageKey = existingStoredFileId.toString();
+        byte[] existingContent = "previously-committed-content".getBytes(StandardCharsets.UTF_8);
+        storedContents.put(storageKey, existingContent);
+        when(uuidGenerator.generate()).thenReturn(existingStoredFileId);
+        doThrow(new UncheckedIOException(
+                "failed to store file: " + storageKey,
+                new FileAlreadyExistsException(storageKey)
+        )).when(fileStorage).store(eq(storageKey), any(InputStream.class), anyLong(), anyString());
+
+        assertThatThrownBy(() -> fileService.upload(command(), ACTOR, METADATA))
+                .isInstanceOf(UncheckedIOException.class);
+
+        assertThat(storedContents).containsEntry(storageKey, existingContent);
+        verify(fileStorage, never()).deleteIfExists(storageKey);
+        verify(storedFileRepository, never()).insert(any());
     }
 
     @Test
