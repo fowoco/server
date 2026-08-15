@@ -124,6 +124,25 @@ class SyntheticDocumentGeneratorTest {
                 .isNotEqualTo(DemoDocumentFileInstaller.sha256(back));
         assertThat(arcFixtures.get(0).passportIdentity())
                 .isEqualTo(arcFixtures.get(1).passportIdentity());
+        assertThat(redOverlayPixelCount(frontImage, 70, 150, 790, 630)).isZero();
+        assertThat(redOverlayPixelCount(backImage, 70, 150, 1130, 630)).isZero();
+    }
+
+    @Test
+    void keepsPassportOcrFieldsFreeOfRedOverlay() throws IOException {
+        DemoDocumentFixture passport = DemoDocumentFixtureCatalog.fixtures().stream()
+                .filter(fixture -> fixture.documentId()
+                        .equals(DemoDocumentFixtureCatalog.PASSPORT_BIO_DOCUMENT_ID))
+                .findFirst()
+                .orElseThrow();
+
+        var image = ImageIO.read(new ByteArrayInputStream(generator.generate(
+                passport,
+                LocalDate.of(2025, 8, 15),
+                LocalDate.of(2027, 8, 15)
+        )));
+
+        assertThat(redOverlayPixelCount(image, 420, 110, 1360, 700)).isZero();
     }
 
     @Test
@@ -304,6 +323,28 @@ class SyntheticDocumentGeneratorTest {
                 LocalDate.of(2025, 8, 15),
                 LocalDate.of(2027, 8, 15)
         );
+    }
+
+    private int redOverlayPixelCount(
+            java.awt.image.BufferedImage image,
+            int startX,
+            int startY,
+            int endX,
+            int endY
+    ) {
+        int count = 0;
+        for (int y = startY; y < endY; y++) {
+            for (int x = startX; x < endX; x++) {
+                int rgb = image.getRGB(x, y);
+                int red = (rgb >> 16) & 0xff;
+                int green = (rgb >> 8) & 0xff;
+                int blue = rgb & 0xff;
+                if (red > 130 && green < 105 && blue < 105) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     private DemoDocumentFixture fixture(FixtureFormat format) {

@@ -3,7 +3,6 @@ package com.fowoco.server.demo.infrastructure.documentdata;
 import com.fowoco.server.demo.infrastructure.documentdata.DemoDocumentFixtureCatalog.DemoDocumentFixture;
 import com.fowoco.server.demo.infrastructure.documentdata.DemoDocumentFixtureCatalog.PassportIdentity;
 import com.fowoco.server.worker.domain.DocumentType;
-import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
@@ -11,7 +10,6 @@ import java.awt.FontFormatException;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -163,15 +161,6 @@ final class SyntheticDocumentGenerator {
                     962
             );
 
-            AffineTransform originalTransform = graphics.getTransform();
-            var originalComposite = graphics.getComposite();
-            graphics.rotate(Math.toRadians(-16), 760, 420);
-            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.10f));
-            graphics.setColor(new Color(188, 53, 44));
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 125));
-            graphics.drawString("DEMO · NOT VALID", 220, 485);
-            graphics.setTransform(originalTransform);
-            graphics.setComposite(originalComposite);
         } finally {
             graphics.dispose();
         }
@@ -261,7 +250,6 @@ final class SyntheticDocumentGenerator {
                     146,
                     686
             );
-            drawPermanentDemoWatermark(graphics, width, height);
         } finally {
             graphics.dispose();
         }
@@ -329,7 +317,6 @@ final class SyntheticDocumentGenerator {
                     146,
                     686
             );
-            drawPermanentDemoWatermark(graphics, width, height);
         } finally {
             graphics.dispose();
         }
@@ -378,18 +365,6 @@ final class SyntheticDocumentGenerator {
         } catch (IOException exception) {
             throw new UncheckedIOException("failed to load synthetic residence-card portrait", exception);
         }
-    }
-
-    private void drawPermanentDemoWatermark(Graphics2D graphics, int width, int height) {
-        AffineTransform originalTransform = graphics.getTransform();
-        var originalComposite = graphics.getComposite();
-        graphics.rotate(Math.toRadians(-17), width / 2.0, height / 2.0);
-        graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.20f));
-        graphics.setColor(new Color(190, 38, 44));
-        graphics.setFont(demoFont(Font.BOLD, 76));
-        graphics.drawString("FOWOCO DEMO · NOT VALID", 105, 445);
-        graphics.setTransform(originalTransform);
-        graphics.setComposite(originalComposite);
     }
 
     private byte[] genericImage(
@@ -514,22 +489,7 @@ final class SyntheticDocumentGenerator {
     }
 
     private void drawPassportBackdrop(Graphics2D graphics, int width, int height) {
-        var originalComposite = graphics.getComposite();
-        graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.10f));
-        graphics.setColor(new Color(57, 146, 154));
-        graphics.fillOval(900, 120, 350, 350);
-        graphics.fillOval(245, 430, 250, 250);
-        graphics.setColor(new Color(230, 122, 99));
-        graphics.fillOval(1030, 420, 420, 420);
-        graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.08f));
-        graphics.setColor(new Color(20, 61, 104));
-        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 118));
-        graphics.drawString("D  E  M  O", 500, 390);
-        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 72));
-        graphics.drawString("SYNTHETIC", 520, 600);
-        graphics.setComposite(originalComposite);
-
-        graphics.setColor(new Color(255, 255, 255, 125));
+        graphics.setColor(new Color(255, 255, 255, 238));
         graphics.fillRoundRect(28, 125, width - 56, height - 410, 24, 24);
     }
 
@@ -667,7 +627,6 @@ final class SyntheticDocumentGenerator {
             ));
             graphics.drawImage(passport, 82, 315, 1076, 754, null);
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } catch (IOException exception) {
             throw new UncheckedIOException("failed to render synthetic passport PDF", exception);
         } finally {
@@ -692,7 +651,6 @@ final class SyntheticDocumentGenerator {
             graphics.drawImage(front, 90, 280, 1060, 670, null);
             graphics.drawImage(back, 90, 995, 1060, 670, null);
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } finally {
             graphics.dispose();
         }
@@ -745,7 +703,6 @@ final class SyntheticDocumentGenerator {
                     ));
             drawSignatureBlock(graphics, y + 18, issueDate, demoEmployerName(), identity.englishName(), true);
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } finally {
             graphics.dispose();
         }
@@ -796,7 +753,6 @@ final class SyntheticDocumentGenerator {
                             field("휴일", "매주 일요일 및 법정 공휴일 / 유급")
                     ));
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } finally {
             graphics.dispose();
         }
@@ -833,7 +789,6 @@ final class SyntheticDocumentGenerator {
                     ));
             drawSignatureBlock(graphics, y + 35, issueDate, demoEmployerName(), identity.englishName(), true);
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } finally {
             graphics.dispose();
         }
@@ -881,7 +836,6 @@ final class SyntheticDocumentGenerator {
             ));
             drawSignatureBlock(graphics, y + 20, issueDate, demoEmployerName(), identity.englishName(), false);
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } finally {
             graphics.dispose();
         }
@@ -927,7 +881,6 @@ final class SyntheticDocumentGenerator {
             ));
             drawSignatureBlock(graphics, y + 18, issueDate, "신청인 미서명", identity.englishName(), false);
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } finally {
             graphics.dispose();
         }
@@ -966,7 +919,6 @@ final class SyntheticDocumentGenerator {
             ));
             drawSignatureBlock(graphics, y + 35, issueDate, demoEmployerName(), identity.englishName(), true);
             drawMetadataFooter(graphics, fixture);
-            drawPageWatermark(graphics);
         } finally {
             graphics.dispose();
         }
@@ -1070,18 +1022,6 @@ final class SyntheticDocumentGenerator {
                 119,
                 1731
         );
-    }
-
-    private void drawPageWatermark(Graphics2D graphics) {
-        AffineTransform originalTransform = graphics.getTransform();
-        var originalComposite = graphics.getComposite();
-        graphics.rotate(Math.toRadians(-25), 620, 900);
-        graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.08f));
-        graphics.setColor(new Color(190, 38, 44));
-        graphics.setFont(demoFont(Font.BOLD, 105));
-        graphics.drawString("DEMO · NOT VALID", 145, 930);
-        graphics.setTransform(originalTransform);
-        graphics.setComposite(originalComposite);
     }
 
     private void drawWrappedText(
