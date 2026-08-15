@@ -17,6 +17,7 @@ import com.fowoco.server.reliability.application.OutboxProcessor;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsMessage;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsProviderException;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsSender;
+import com.fowoco.server.workerlink.infrastructure.security.WorkerLinkHasher;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -69,6 +70,9 @@ class WorkerLinkSecurityIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private WorkerLinkHasher workerLinkHasher;
 
     @MockitoBean
     private WorkerLinkSmsSender workerLinkSmsSender;
@@ -334,7 +338,8 @@ class WorkerLinkSecurityIntegrationTest {
         )).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(DISTINCT client_request_id) FROM worker_document_upload_idempotency "
-                        + "WHERE worker_link_id = ? AND CHAR_LENGTH(client_request_id) = 64 "
+                        + "WHERE worker_link_id = ? "
+                        + "AND client_request_id = CONCAT('canonical:', CAST(stored_file_id AS VARCHAR)) "
                         + "AND idempotency_key_hash IS NOT NULL AND request_hash IS NOT NULL",
                 Integer.class,
                 workerLinkId
@@ -343,6 +348,72 @@ class WorkerLinkSecurityIntegrationTest {
                 "SELECT COUNT(*) FROM stored_file WHERE company_id = ?",
                 Integer.class,
                 COMPANY_A
+        )).isEqualTo(2);
+    }
+
+    @Test
+    void canonicalUploadDoesNotCollideWithLegacyClientRequestIdEqualToItsKeyHash() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "legacy충돌테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "legacy-collision-link-key");
+        UUID workerLinkId = jdbcTemplate.queryForObject(
+                "SELECT worker_link_id FROM worker_link WHERE task_id = ?",
+                UUID.class,
+                UUID.fromString(taskId)
+        );
+        String idempotencyKey = "legacy-collision-upload-key";
+        String idempotencyKeyHash = workerLinkHasher.hash(idempotencyKey);
+        UUID legacyStoredFileId = UUID.randomUUID();
+
+        jdbcTemplate.update(
+                """
+                INSERT INTO stored_file (
+                    stored_file_id, company_id, name, mime_type, size, purpose,
+                    task_id, storage_key, scan_status, verified
+                ) VALUES (?, ?, 'legacy.pdf', 'application/pdf', 1, 'WORKER_LINK_SUBMISSION',
+                          ?, ?, 'NOT_SCANNED', FALSE)
+                """,
+                legacyStoredFileId,
+                COMPANY_A,
+                UUID.fromString(taskId),
+                "legacy-collision-" + legacyStoredFileId
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_document_upload_idempotency (
+                    worker_link_id, company_id, client_request_id, stored_file_id
+                ) VALUES (?, ?, ?, ?)
+                """,
+                workerLinkId,
+                COMPANY_A,
+                idempotencyKeyHash,
+                legacyStoredFileId
+        );
+
+        HttpResponse<String> response = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "canonical-content".getBytes(StandardCharsets.UTF_8),
+                null,
+                idempotencyKey
+        );
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(201);
+        UUID canonicalStoredFileId = UUID.fromString(JsonPath.read(response.body(), "$.upload_id"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT client_request_id FROM worker_document_upload_idempotency "
+                        + "WHERE worker_link_id = ? AND idempotency_key_hash = ?",
+                String.class,
+                workerLinkId,
+                idempotencyKeyHash
+        )).isEqualTo("canonical:" + canonicalStoredFileId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document_upload_idempotency WHERE worker_link_id = ?",
+                Integer.class,
+                workerLinkId
         )).isEqualTo(2);
     }
 

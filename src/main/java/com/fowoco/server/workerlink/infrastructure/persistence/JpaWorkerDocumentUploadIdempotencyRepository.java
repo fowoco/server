@@ -12,6 +12,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class JpaWorkerDocumentUploadIdempotencyRepository implements WorkerDocumentUploadIdempotencyRepository {
 
+    private static final String CANONICAL_CLIENT_REQUEST_ID_PREFIX = "canonical:";
+
     private final EntityManager entityManager;
 
     public JpaWorkerDocumentUploadIdempotencyRepository(EntityManager entityManager) {
@@ -60,17 +62,19 @@ public class JpaWorkerDocumentUploadIdempotencyRepository implements WorkerDocum
         Objects.requireNonNull(idempotencyKeyHash, "idempotencyKeyHash must not be null");
         Objects.requireNonNull(requestHash, "requestHash must not be null");
         Objects.requireNonNull(storedFileId, "storedFileId must not be null");
+        String compatibilityClientRequestId = CANONICAL_CLIENT_REQUEST_ID_PREFIX + storedFileId;
         Query query = entityManager.createNativeQuery(
                 "INSERT INTO worker_document_upload_idempotency "
                         + "(worker_link_id, company_id, client_request_id, stored_file_id, "
                         + "idempotency_key_hash, request_hash) "
-                        + "VALUES (?1, ?2, ?3, ?4, ?3, ?5)"
+                        + "VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
         );
         query.setParameter(1, workerLinkId);
         query.setParameter(2, companyId);
-        query.setParameter(3, idempotencyKeyHash);
+        query.setParameter(3, compatibilityClientRequestId);
         query.setParameter(4, storedFileId);
-        query.setParameter(5, requestHash);
+        query.setParameter(5, idempotencyKeyHash);
+        query.setParameter(6, requestHash);
         query.executeUpdate();
     }
 }
