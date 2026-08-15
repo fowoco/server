@@ -77,7 +77,7 @@ class DemoDocumentDataService {
         Instant now = clock.instant();
         for (DemoDocumentFixture fixture : DemoDocumentFixtureCatalog.fixtures()) {
             requireWorkerAndTask(fixture);
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content != null) {
                 fileInstaller.install(fixture.storageKey(), content);
                 seedStoredFile(fixture, content, now);
@@ -100,7 +100,8 @@ class DemoDocumentDataService {
     DemoDocumentDataReport cleanupData() {
         bindTenant();
         requireBaseSeed();
-        verifyOwnedRowsBeforeCleanup(anchorDate());
+        LocalDate anchorDate = anchorDate();
+        verifyOwnedRowsBeforeCleanup(anchorDate);
 
         jdbcTemplate.update(
                 "DELETE FROM document_ocr_run WHERE ocr_run_id = ? AND company_id = ?",
@@ -114,7 +115,7 @@ class DemoDocumentDataService {
             );
         }
         for (DemoDocumentFixture fixture : DemoDocumentFixtureCatalog.fixtures()) {
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content == null) {
                 continue;
             }
@@ -242,7 +243,7 @@ class DemoDocumentDataService {
                 throw new IllegalStateException("demo worker document fixture is missing");
             }
             verifyWorkerDocument(fixture, anchorDate, documentRows.get(0));
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content == null) {
                 continue;
             }
@@ -303,7 +304,7 @@ class DemoDocumentDataService {
             if (!documents.isEmpty()) {
                 verifyWorkerDocument(fixture, anchorDate, documents.get(0));
             }
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content == null) {
                 continue;
             }
@@ -466,8 +467,14 @@ class DemoDocumentDataService {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(DemoDocumentFixtureCatalog.COMPANY_ID);
     }
 
-    private byte[] content(DemoDocumentFixture fixture) {
-        return fixture.format() == FixtureFormat.NONE ? null : generator.generate(fixture);
+    private byte[] content(DemoDocumentFixture fixture, LocalDate anchorDate) {
+        return fixture.format() == FixtureFormat.NONE
+                ? null
+                : generator.generate(
+                        fixture,
+                        relativeDate(anchorDate, fixture.issueDays()),
+                        relativeDate(anchorDate, fixture.expiryDays())
+                );
     }
 
     private DemoDocumentFixture fixtureById(UUID documentId) {

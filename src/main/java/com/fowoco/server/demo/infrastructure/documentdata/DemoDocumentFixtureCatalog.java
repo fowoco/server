@@ -10,6 +10,7 @@ final class DemoDocumentFixtureCatalog {
     static final UUID COMPANY_ID = uuid("90000000-0000-0000-0000-000000000001");
     static final UUID ADMIN_USER_ID = uuid("90000000-0000-0000-0000-000000000002");
     static final UUID GOLD_WORKER_ID = workerId(6);
+    static final UUID PASSPORT_BIO_DOCUMENT_ID = documentId(1);
     static final UUID OCR_DOCUMENT_ID = documentId(3);
     static final UUID OCR_RUN_ID = uuid("95300000-0000-0000-0000-000000000001");
     static final UUID OCR_RUNTIME_REQUEST_ID = uuid("95310000-0000-0000-0000-000000000001");

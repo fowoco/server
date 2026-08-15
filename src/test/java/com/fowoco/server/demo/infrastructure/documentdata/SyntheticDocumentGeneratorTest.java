@@ -6,7 +6,11 @@ import com.fowoco.server.demo.infrastructure.documentdata.DemoDocumentFixtureCat
 import com.fowoco.server.demo.infrastructure.documentdata.DemoDocumentFixtureCatalog.FixtureFormat;
 import com.fowoco.server.file.application.validation.HwpSignatureValidator;
 import com.fowoco.server.file.application.validation.HwpxSignatureValidator;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 
 class SyntheticDocumentGeneratorTest {
@@ -23,11 +27,43 @@ class SyntheticDocumentGeneratorTest {
         assertThat(new HwpxSignatureValidator().isValidHwpx(generate(FixtureFormat.HWPX))).isTrue();
     }
 
+    @Test
+    void generatesPassportLikeGoldWorkerFixtureWithSyntheticPortrait() throws IOException {
+        DemoDocumentFixture passport = DemoDocumentFixtureCatalog.fixtures().stream()
+                .filter(fixture -> fixture.documentId()
+                        .equals(DemoDocumentFixtureCatalog.PASSPORT_BIO_DOCUMENT_ID))
+                .findFirst()
+                .orElseThrow();
+
+        var image = ImageIO.read(new ByteArrayInputStream(generator.generate(
+                passport,
+                LocalDate.of(2025, 8, 15),
+                LocalDate.of(2027, 8, 15)
+        )));
+
+        assertThat(image.getWidth()).isEqualTo(1400);
+        assertThat(image.getHeight()).isEqualTo(900);
+        assertThat(image.getRGB(200, 350)).isNotEqualTo(image.getRGB(500, 350));
+        assertThat(generator.generate(
+                passport,
+                LocalDate.of(2025, 8, 16),
+                LocalDate.of(2027, 8, 16)
+        )).isNotEqualTo(generator.generate(
+                passport,
+                LocalDate.of(2025, 8, 15),
+                LocalDate.of(2027, 8, 15)
+        ));
+    }
+
     private byte[] generate(FixtureFormat format) {
         DemoDocumentFixture template = DemoDocumentFixtureCatalog.fixtures().stream()
                 .filter(fixture -> fixture.format() == format)
                 .findFirst()
                 .orElseThrow();
-        return generator.generate(template);
+        return generator.generate(
+                template,
+                LocalDate.of(2025, 8, 15),
+                LocalDate.of(2027, 8, 15)
+        );
     }
 }
