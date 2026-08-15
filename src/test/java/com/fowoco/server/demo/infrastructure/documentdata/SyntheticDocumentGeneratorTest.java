@@ -10,6 +10,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +55,35 @@ class SyntheticDocumentGeneratorTest {
                 LocalDate.of(2025, 8, 15),
                 LocalDate.of(2027, 8, 15)
         ));
+    }
+
+    @Test
+    void generatesTwentySevenDifferentPassportCopiesForRemainingWorkers() throws IOException {
+        LocalDate anchorDate = LocalDate.of(2026, 8, 15);
+        var fixtures = DemoDocumentFixtureCatalog.passportCoverageFixtures();
+        Set<String> checksums = new HashSet<>();
+        Set<Object> workerIds = new HashSet<>();
+
+        assertThat(fixtures).hasSize(27);
+        for (DemoDocumentFixture fixture : fixtures) {
+            byte[] content = generator.generate(
+                    fixture,
+                    anchorDate.plusDays(fixture.issueDays()),
+                    anchorDate.plusDays(fixture.expiryDays())
+            );
+            var image = ImageIO.read(new ByteArrayInputStream(content));
+
+            assertThat(fixture.passportIdentity()).isNotNull();
+            assertThat(fixture.originalFilename()).endsWith(".png");
+            assertThat(fixture.contentType()).isEqualTo("image/png");
+            assertThat(image.getWidth()).isEqualTo(1400);
+            assertThat(image.getHeight()).isEqualTo(900);
+            checksums.add(DemoDocumentFileInstaller.sha256(content));
+            workerIds.add(fixture.workerId());
+        }
+
+        assertThat(checksums).hasSize(27);
+        assertThat(workerIds).hasSize(27);
     }
 
     private byte[] generate(FixtureFormat format) {

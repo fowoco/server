@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -125,7 +126,7 @@ class DemoDocumentDataService {
             );
             fileInstaller.cleanup(fixture.storageKey(), content);
         }
-        return new DemoDocumentDataReport(0, 0, 0, 0, 0, 0, 0, 0);
+        return new DemoDocumentDataReport(0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     private void seedStoredFile(DemoDocumentFixture fixture, byte[] content, Instant now) {
@@ -233,6 +234,7 @@ class DemoDocumentDataService {
         int pdfCount = 0;
         int hwpCount = 0;
         int hwpxCount = 0;
+        var passportCoverageHashes = new HashSet<String>();
         for (DemoDocumentFixture fixture : DemoDocumentFixtureCatalog.fixtures()) {
             requireWorkerAndTask(fixture);
             List<Map<String, Object>> documentRows = jdbcTemplate.queryForList(
@@ -256,6 +258,9 @@ class DemoDocumentDataService {
             }
             verifyStoredFile(fixture, content, fileRows.get(0));
             fileInstaller.verify(fixture.storageKey(), content);
+            if (DemoDocumentFixtureCatalog.passportCoverageFixtures().contains(fixture)) {
+                passportCoverageHashes.add(DemoDocumentFileInstaller.sha256(content));
+            }
             fileCount++;
             switch (fixture.format()) {
                 case PNG, JPEG -> imageCount++;
@@ -283,6 +288,26 @@ class DemoDocumentDataService {
                 SOURCE,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
+        int passportWorkers = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(DISTINCT worker_id)
+                  FROM worker_document
+                 WHERE source = ?
+                   AND company_id = ?
+                   AND document_type = 'PASSPORT_COPY'
+                   AND submission_status = 'VERIFIED'
+                   AND file_id IS NOT NULL
+                   AND expiry_date > ?
+                """,
+                Integer.class,
+                SOURCE,
+                DemoDocumentFixtureCatalog.COMPANY_ID,
+                Date.valueOf(anchorDate)
+        );
+        int expectedCoverageFiles = DemoDocumentFixtureCatalog.passportCoverageFixtures().size();
+        if (passportCoverageHashes.size() != expectedCoverageFiles || passportWorkers != 28) {
+            throw new IllegalStateException("demo passport fixtures are not unique or do not cover every worker");
+        }
         return new DemoDocumentDataReport(
                 DemoDocumentFixtureCatalog.fixtures().size(),
                 fileCount,
@@ -291,7 +316,8 @@ class DemoDocumentDataService {
                 hwpCount,
                 hwpxCount,
                 taskLinked,
-                missing
+                missing,
+                passportWorkers
         );
     }
 
@@ -530,7 +556,8 @@ class DemoDocumentDataService {
             int hwpCount,
             int hwpxCount,
             int taskLinkedDocumentCount,
-            int missingDocumentCount
+            int missingDocumentCount,
+            int passportWorkerCount
     ) {
     }
 }

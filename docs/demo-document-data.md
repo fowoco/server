@@ -61,6 +61,21 @@ export OCR_RESULT_ENCRYPTION_KEY_BASE64='<32-byte-base64-secret>'
 - 통합신청서 초안 HWPX
 - 체류지 입증자료 PDF
 
+Demo Company의 나머지 근로자 27명에게는 각각 다른 합성 여권 사본 PNG를 추가한다.
+각 파일은 영문 이름, 국적, 생년월일, 무효 문서번호, 발급·만료일, 합성 인물 도형과
+저장 키가 서로 다르며 SHA-256도 27개 모두 달라야 한다. 응웬반A의 기존 유효 여권은
+그대로 유지하고, 아르준 타파의 과거 만료 파일과 기존 `LEGACY` 메타데이터도 덮어쓰지 않는다.
+
+```text
+Demo Company Worker 28명
+= 응웬반A 기존 유효 여권 1명
++ 신규 합성 여권 27명(활성 24명, 휴직 3명 포함)
+```
+
+신규 파일명은 `여권사본_{합성이름}.png`, 저장 파일명은
+`passport-copy-worker-{worker_number}.png` 형식이다. 모든 이미지는 실제 여권 문양 대신
+FOWOCO QA 레이아웃과 `DEMO SAMPLE / NOT A TRAVEL DOCUMENT` 표식을 사용한다.
+
 여권 인적사항면은 실제 인물이나 실제 여권 원본을 사용하지 않는다. 프로젝트에 포함된
 `demo-data/nguyen-van-an-portrait.png`는 이미지 생성 모델로 만든 완전한 합성 인물이며,
 생성기에서 사진·영문 인적사항·발급일·만료일을 조합한다. 실제 국가 문장과 보안문양은

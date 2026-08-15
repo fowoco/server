@@ -44,37 +44,51 @@ class DemoDocumentDataIntegrationTest {
     void importsVerifiesCleansAndReimportsWithoutDuplicates() {
         assertReport(service.importData());
         assertReport(service.verifyData());
-        assertCounts(16, 15, 1);
+        assertCounts(43, 42, 1);
 
         assertReport(service.importData());
-        assertCounts(16, 15, 1);
+        assertCounts(43, 42, 1);
 
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM stored_file WHERE company_id = ? AND checksum_sha256 IS NOT NULL",
                 Integer.class,
                 DemoDocumentFixtureCatalog.COMPANY_ID
-        )).isEqualTo(15);
+        )).isEqualTo(42);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM worker_document WHERE company_id = ? AND source = 'DEMO_SEED' "
                         + "AND issue_date IS NOT NULL",
                 Integer.class,
                 DemoDocumentFixtureCatalog.COMPANY_ID
-        )).isEqualTo(15);
+        )).isEqualTo(42);
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM worker_document WHERE company_id = ? AND submission_status = 'DRAFT'",
                 Integer.class,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT checksum_sha256) FROM stored_file "
+                        + "WHERE company_id = ? AND storage_key LIKE '%/passport-copy-worker-%'",
+                Integer.class,
+                DemoDocumentFixtureCatalog.COMPANY_ID
+        )).isEqualTo(27);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT worker_id) FROM worker_document "
+                        + "WHERE company_id = ? AND source = 'DEMO_SEED' "
+                        + "AND document_type = 'PASSPORT_COPY' AND file_id IS NOT NULL "
+                        + "AND submission_status = 'VERIFIED' AND expiry_date > CURRENT_DATE",
+                Integer.class,
+                DemoDocumentFixtureCatalog.COMPANY_ID
+        )).isEqualTo(28);
 
         service.cleanupData();
         assertCounts(0, 0, 0);
 
         assertReport(service.importData());
-        assertCounts(16, 15, 1);
+        assertCounts(43, 42, 1);
     }
 
     private void assertReport(DemoDocumentDataReport report) {
-        assertThat(report).isEqualTo(new DemoDocumentDataReport(16, 15, 4, 7, 1, 3, 4, 1));
+        assertThat(report).isEqualTo(new DemoDocumentDataReport(43, 42, 31, 7, 1, 3, 4, 1, 28));
     }
 
     private void assertCounts(int documents, int files, int ocrRuns) {

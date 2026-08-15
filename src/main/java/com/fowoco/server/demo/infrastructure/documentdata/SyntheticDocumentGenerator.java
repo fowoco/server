@@ -1,6 +1,7 @@
 package com.fowoco.server.demo.infrastructure.documentdata;
 
 import com.fowoco.server.demo.infrastructure.documentdata.DemoDocumentFixtureCatalog.DemoDocumentFixture;
+import com.fowoco.server.demo.infrastructure.documentdata.DemoDocumentFixtureCatalog.PassportIdentity;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -59,17 +60,20 @@ final class SyntheticDocumentGenerator {
             LocalDate expiryDate,
             String format
     ) {
-        if (fixture.documentId().equals(DemoDocumentFixtureCatalog.PASSPORT_BIO_DOCUMENT_ID)) {
-            return passportBiographicalPage(issueDate, expiryDate, format);
+        if (fixture.passportIdentity() != null) {
+            return passportBiographicalPage(fixture, issueDate, expiryDate, format);
         }
         return genericImage(fixture, format);
     }
 
     private byte[] passportBiographicalPage(
+            DemoDocumentFixture fixture,
             LocalDate issueDate,
             LocalDate expiryDate,
             String format
     ) {
+        PassportIdentity identity = Objects.requireNonNull(fixture.passportIdentity());
+        boolean goldPassport = fixture.documentId().equals(DemoDocumentFixtureCatalog.PASSPORT_BIO_DOCUMENT_ID);
         int width = 1400;
         int height = 900;
         BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -93,7 +97,7 @@ final class SyntheticDocumentGenerator {
             graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
             graphics.drawString("SAMPLE ONLY - NOT A TRAVEL DOCUMENT - NOT FOR OFFICIAL SUBMISSION", 48, 156);
 
-            drawPortrait(graphics);
+            drawPortrait(graphics, fixture);
 
             graphics.setColor(new Color(25, 55, 94));
             graphics.setStroke(new BasicStroke(3f));
@@ -101,12 +105,14 @@ final class SyntheticDocumentGenerator {
 
             drawField(graphics, "TYPE", "SAMPLE", 430, 235);
             drawField(graphics, "ISSUING CODE", "XDM (FICTIONAL)", 690, 235);
-            drawField(graphics, "DOCUMENT NO.", "DEMO-0001-NOT-VALID", 1010, 235);
-            drawField(graphics, "SURNAME", "NGUYEN", 430, 325);
-            drawField(graphics, "GIVEN NAMES", "VAN AN", 840, 325);
-            drawField(graphics, "NATIONALITY", "VIET NAM (VN)", 430, 415);
-            drawField(graphics, "DATE OF BIRTH", "12 APR 1995 / SYNTHETIC", 840, 415);
-            drawField(graphics, "SEX", "M", 430, 505);
+            drawField(graphics, "DOCUMENT NO.", identity.documentNumber(), 1010, 235);
+            drawField(graphics, "SURNAME", identity.surname(), 430, 325);
+            drawField(graphics, "GIVEN NAMES", identity.givenNames(), 840, 325);
+            drawField(graphics, "NATIONALITY",
+                    "%s (%s)".formatted(identity.nationality(), identity.nationalityCode()), 430, 415);
+            drawField(graphics, "DATE OF BIRTH",
+                    passportDate(identity.birthDate()) + " / SYNTHETIC", 840, 415);
+            drawField(graphics, "SEX", identity.sex(), 430, 505);
             drawField(graphics, "PLACE OF BIRTH", "DEMO CITY", 610, 505);
             drawField(graphics, "VISA / STAY", "E-9", 1010, 505);
             drawField(graphics, "DATE OF ISSUE", passportDate(issueDate), 430, 595);
@@ -115,14 +121,27 @@ final class SyntheticDocumentGenerator {
 
             graphics.setColor(new Color(71, 85, 105));
             graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
-            graphics.drawString("Holder label: NGUYEN VAN AN / synthetic identity", 430, 660);
+            String holderLabel = goldPassport
+                    ? "Holder label: NGUYEN VAN AN / synthetic identity"
+                    : "Holder label: %s / synthetic identity / profile %02d".formatted(
+                            identity.englishName(), identity.portraitSeed()
+                    );
+            graphics.drawString(holderLabel, 430, 660);
 
             graphics.setColor(new Color(25, 55, 94));
             graphics.setStroke(new BasicStroke(2f));
             graphics.drawRoundRect(42, 704, width - 84, 142, 16, 16);
             graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, 28));
-            graphics.drawString("P<XDMNGUYEN<<VAN<AN<<DEMO<SAMPLE<ONLY<<<<", 70, 760);
-            graphics.drawString("NOTVALID<<FOWOCO<QA<FIXTURE<<NO<TRAVEL<USE", 70, 812);
+            String mrzLine1 = goldPassport
+                    ? "P<XDMNGUYEN<<VAN<AN<<DEMO<SAMPLE<ONLY<<<<"
+                    : "P<XDM" + mrz(identity.surname()) + "<<" + mrz(identity.givenNames())
+                            + "<<DEMO<SAMPLE<ONLY";
+            String mrzLine2 = goldPassport
+                    ? "NOTVALID<<FOWOCO<QA<FIXTURE<<NO<TRAVEL<USE"
+                    : "NOTVALID<" + identity.nationalityCode() + "<PROFILE<"
+                            + "%02d".formatted(identity.portraitSeed()) + "<NO<TRAVEL<USE";
+            graphics.drawString(mrzLine1, 70, 760);
+            graphics.drawString(mrzLine2, 70, 812);
             graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
             graphics.setColor(new Color(188, 53, 44));
             graphics.drawString("INTENTIONALLY INVALID MACHINE-READABLE SAMPLE", 925, 836);
@@ -180,7 +199,11 @@ final class SyntheticDocumentGenerator {
         return encodeImage(image, format);
     }
 
-    private void drawPortrait(Graphics2D graphics) {
+    private void drawPortrait(Graphics2D graphics, DemoDocumentFixture fixture) {
+        if (!fixture.documentId().equals(DemoDocumentFixtureCatalog.PASSPORT_BIO_DOCUMENT_ID)) {
+            drawProceduralPortrait(graphics, Objects.requireNonNull(fixture.passportIdentity()));
+            return;
+        }
         try (var input = SyntheticDocumentGenerator.class.getResourceAsStream(GOLD_WORKER_PORTRAIT)) {
             BufferedImage portrait = ImageIO.read(Objects.requireNonNull(
                     input,
@@ -195,6 +218,85 @@ final class SyntheticDocumentGenerator {
         }
     }
 
+    private void drawProceduralPortrait(Graphics2D graphics, PassportIdentity identity) {
+        int seed = identity.portraitSeed();
+        int x = 58;
+        int y = 214;
+        int width = 314;
+        int height = 392;
+        Color background = Color.getHSBColor((seed * 0.083f) % 1f, 0.24f, 0.88f);
+        Color[] skinTones = {
+                new Color(244, 205, 169),
+                new Color(226, 178, 137),
+                new Color(201, 145, 105),
+                new Color(173, 116, 82),
+                new Color(133, 85, 61),
+                new Color(236, 190, 154)
+        };
+        Color skin = skinTones[Math.floorMod(seed, skinTones.length)];
+        Color hair = new Color(28 + seed % 3 * 13, 24 + seed % 4 * 9, 25 + seed % 2 * 11);
+        Color shirt = Color.getHSBColor((seed * 0.137f) % 1f, 0.55f, 0.57f);
+
+        graphics.setColor(background);
+        graphics.fillRoundRect(x, y, width, height, 12, 12);
+
+        int faceWidth = 174 + seed % 5 * 8;
+        int faceHeight = 224 + seed % 4 * 7;
+        int faceX = x + (width - faceWidth) / 2 + seed % 3 - 1;
+        int faceY = y + 64 + seed % 4 * 3;
+
+        graphics.setColor(shirt);
+        graphics.fillOval(x + 42, y + 286, width - 84, 170);
+        graphics.setColor(skin);
+        graphics.fillRoundRect(x + 128, y + 250, 60, 78, 24, 24);
+        graphics.fillOval(faceX - 12, faceY + 94, 30, 54);
+        graphics.fillOval(faceX + faceWidth - 18, faceY + 94, 30, 54);
+        graphics.setColor(hair);
+        graphics.fillOval(faceX - 7, faceY - 20, faceWidth + 14, faceHeight - 35);
+        graphics.setColor(skin);
+        graphics.fillOval(faceX, faceY, faceWidth, faceHeight);
+
+        graphics.setColor(hair);
+        int hairDepth = 42 + seed % 4 * 9;
+        graphics.fillArc(faceX - 2, faceY - 11, faceWidth + 4, hairDepth * 2, 0, 180);
+        if (seed % 3 == 0) {
+            graphics.fillRoundRect(faceX - 3, faceY + 18, 22, 90, 14, 14);
+        } else if (seed % 3 == 1) {
+            graphics.fillRoundRect(faceX + faceWidth - 19, faceY + 18, 22, 88, 14, 14);
+        }
+
+        int eyeY = faceY + 98 + seed % 3 * 2;
+        int eyeOffset = 48 + seed % 4 * 3;
+        graphics.setStroke(new BasicStroke(5f));
+        graphics.setColor(new Color(47, 37, 34));
+        graphics.drawLine(faceX + 32, eyeY - 14, faceX + 72, eyeY - 17 - seed % 4);
+        graphics.drawLine(faceX + faceWidth - 72, eyeY - 17 - (seed + 1) % 4,
+                faceX + faceWidth - 32, eyeY - 14);
+        graphics.fillOval(faceX + eyeOffset, eyeY, 13, 9);
+        graphics.fillOval(faceX + faceWidth - eyeOffset - 13, eyeY, 13, 9);
+
+        graphics.setStroke(new BasicStroke(3f));
+        graphics.setColor(new Color(126, 83, 62));
+        graphics.drawLine(faceX + faceWidth / 2, eyeY + 18,
+                faceX + faceWidth / 2 - 6 + seed % 11, eyeY + 61);
+        graphics.drawArc(faceX + faceWidth / 2 - 32, eyeY + 79,
+                64, 26 + seed % 7, 195, 150);
+
+        if (seed % 5 == 0) {
+            graphics.setColor(new Color(51, 65, 85));
+            graphics.setStroke(new BasicStroke(3f));
+            graphics.drawRoundRect(faceX + 28, eyeY - 9, 62, 34, 12, 12);
+            graphics.drawRoundRect(faceX + faceWidth - 90, eyeY - 9, 62, 34, 12, 12);
+            graphics.drawLine(faceX + 90, eyeY + 4, faceX + faceWidth - 90, eyeY + 4);
+        }
+
+        graphics.setColor(new Color(255, 255, 255, 215));
+        graphics.fillRoundRect(x + 18, y + height - 51, width - 36, 34, 10, 10);
+        graphics.setColor(new Color(30, 41, 59));
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+        graphics.drawString("SYNTHETIC PORTRAIT / PROFILE %02d".formatted(seed), x + 29, y + height - 28);
+    }
+
     private void drawField(Graphics2D graphics, String label, String value, int x, int y) {
         graphics.setColor(new Color(71, 85, 105));
         graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
@@ -206,6 +308,10 @@ final class SyntheticDocumentGenerator {
 
     private String passportDate(LocalDate value) {
         return value == null ? "NOT SET" : PASSPORT_DATE.format(value).toUpperCase(Locale.ENGLISH);
+    }
+
+    private String mrz(String value) {
+        return value.toUpperCase(Locale.ENGLISH).replaceAll("[^A-Z ]", "").replace(' ', '<');
     }
 
     private void enableHighQualityRendering(Graphics2D graphics) {
