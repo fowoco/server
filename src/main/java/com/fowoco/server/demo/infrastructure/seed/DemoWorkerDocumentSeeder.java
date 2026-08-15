@@ -1,5 +1,6 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
+import com.fowoco.server.demo.infrastructure.DemoDocumentFileIds;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentSeed;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.domain.WorkerDocument;
@@ -92,10 +93,20 @@ final class DemoWorkerDocumentSeeder {
                 || seed.submissionStatus() != document.submissionStatus()
                 || !Objects.equals(seed.destination(), document.destination())
                 || !Objects.equals(seed.note(), document.note())
-                || !Objects.equals(seed.fileId(), document.fileId())) {
+                || !fileMatches(document, seed)) {
             throw new IllegalStateException(
                     "a reserved demo worker document id already belongs to different document data"
             );
         }
+    }
+
+    private boolean fileMatches(WorkerDocument document, DocumentSeed seed) {
+        if (Objects.equals(seed.fileId(), document.fileId())) {
+            return true;
+        }
+        return seed.submissionStatus()
+                != com.fowoco.server.worker.domain.SubmissionStatus.MISSING
+                && DemoDocumentFileIds.isOperationalDemoDocumentId(seed.documentId())
+                && DemoDocumentFileIds.materializedFileId(seed.documentId()).equals(document.fileId());
     }
 }

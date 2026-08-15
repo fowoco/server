@@ -17,6 +17,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,6 +48,7 @@ class DemoDocumentDataService {
     private final Clock clock;
     private final SyntheticDocumentGenerator generator = new SyntheticDocumentGenerator();
     private final DemoDocumentFileInstaller fileInstaller;
+    private final DemoLegacyDocumentFileMaterializer legacyFileMaterializer;
 
     DemoDocumentDataService(
             JdbcTemplate jdbcTemplate,
@@ -66,6 +68,11 @@ class DemoDocumentDataService {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.fileInstaller = new DemoDocumentFileInstaller(localFileStoragePath);
+        this.legacyFileMaterializer = new DemoLegacyDocumentFileMaterializer(
+                jdbcTemplate,
+                fileInstaller,
+                generator
+        );
     }
 
     @Transactional
@@ -77,14 +84,15 @@ class DemoDocumentDataService {
         Instant now = clock.instant();
         for (DemoDocumentFixture fixture : DemoDocumentFixtureCatalog.fixtures()) {
             requireWorkerAndTask(fixture);
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content != null) {
                 fileInstaller.install(fixture.storageKey(), content);
                 seedStoredFile(fixture, content, now);
             }
             seedWorkerDocument(fixture, anchorDate, now);
         }
-        seedOcrReview(now);
+        legacyFileMaterializer.importFiles(anchorDate, now);
+        seedOcrReview(now, anchorDate);
         return verifyInternal(anchorDate);
     }
 
@@ -100,7 +108,9 @@ class DemoDocumentDataService {
     DemoDocumentDataReport cleanupData() {
         bindTenant();
         requireBaseSeed();
-        verifyOwnedRowsBeforeCleanup(anchorDate());
+        LocalDate anchorDate = anchorDate();
+        verifyOwnedRowsBeforeCleanup(anchorDate);
+        legacyFileMaterializer.cleanupFiles(anchorDate, clock.instant());
 
         jdbcTemplate.update(
                 "DELETE FROM document_ocr_run WHERE ocr_run_id = ? AND company_id = ?",
@@ -114,7 +124,7 @@ class DemoDocumentDataService {
             );
         }
         for (DemoDocumentFixture fixture : DemoDocumentFixtureCatalog.fixtures()) {
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content == null) {
                 continue;
             }
@@ -124,7 +134,7 @@ class DemoDocumentDataService {
             );
             fileInstaller.cleanup(fixture.storageKey(), content);
         }
-        return new DemoDocumentDataReport(0, 0, 0, 0, 0, 0, 0, 0);
+        return new DemoDocumentDataReport(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     private void seedStoredFile(DemoDocumentFixture fixture, byte[] content, Instant now) {
@@ -193,16 +203,16 @@ class DemoDocumentDataService {
         );
     }
 
-    private void seedOcrReview(Instant now) {
+    private void seedOcrReview(Instant now, LocalDate anchorDate) {
         var existing = ocrRunRepository.findByIdAndCompanyId(
                 DemoDocumentFixtureCatalog.OCR_RUN_ID,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
         if (existing.isPresent()) {
-            verifyOcrRun(existing.get());
+            verifyOcrRun(existing.get(), anchorDate);
             return;
         }
-        byte[] plaintext = ocrPayload();
+        byte[] plaintext = ocrPayload(anchorDate);
         String ciphertext = ocrResultCipher.encrypt(
                 plaintext,
                 DemoDocumentFixtureCatalog.COMPANY_ID,
@@ -232,6 +242,7 @@ class DemoDocumentDataService {
         int pdfCount = 0;
         int hwpCount = 0;
         int hwpxCount = 0;
+        var passportCoverageHashes = new HashSet<String>();
         for (DemoDocumentFixture fixture : DemoDocumentFixtureCatalog.fixtures()) {
             requireWorkerAndTask(fixture);
             List<Map<String, Object>> documentRows = jdbcTemplate.queryForList(
@@ -242,7 +253,7 @@ class DemoDocumentDataService {
                 throw new IllegalStateException("demo worker document fixture is missing");
             }
             verifyWorkerDocument(fixture, anchorDate, documentRows.get(0));
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content == null) {
                 continue;
             }
@@ -255,6 +266,9 @@ class DemoDocumentDataService {
             }
             verifyStoredFile(fixture, content, fileRows.get(0));
             fileInstaller.verify(fixture.storageKey(), content);
+            if (DemoDocumentFixtureCatalog.passportCoverageFixtures().contains(fixture)) {
+                passportCoverageHashes.add(DemoDocumentFileInstaller.sha256(content));
+            }
             fileCount++;
             switch (fixture.format()) {
                 case PNG, JPEG -> imageCount++;
@@ -269,28 +283,51 @@ class DemoDocumentDataService {
                         DemoDocumentFixtureCatalog.COMPANY_ID
                 )
                 .orElseThrow(() -> new IllegalStateException("demo OCR review fixture is missing"));
-        verifyOcrRun(ocrRun);
+        verifyOcrRun(ocrRun, anchorDate);
+        DemoLegacyDocumentFileMaterializer.MaterializedFiles legacyFiles =
+                legacyFileMaterializer.verifyFiles(anchorDate);
         int taskLinked = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker_document WHERE source = ? AND company_id = ? AND task_id IS NOT NULL",
+                "SELECT COUNT(*) FROM worker_document WHERE source IN ('DEMO_SEED', 'LEGACY') "
+                        + "AND company_id = ? AND task_id IS NOT NULL",
                 Integer.class,
-                SOURCE,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
         int missing = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker_document WHERE source = ? AND company_id = ? AND submission_status = 'MISSING'",
+                "SELECT COUNT(*) FROM worker_document WHERE source IN ('DEMO_SEED', 'LEGACY') "
+                        + "AND company_id = ? AND submission_status = 'MISSING'",
                 Integer.class,
-                SOURCE,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
+        int passportWorkers = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(DISTINCT worker_id)
+                  FROM worker_document
+                 WHERE source IN ('DEMO_SEED', 'LEGACY')
+                   AND company_id = ?
+                   AND document_type = 'PASSPORT_COPY'
+                   AND submission_status = 'VERIFIED'
+                   AND file_id IS NOT NULL
+                   AND expiry_date > ?
+                """,
+                Integer.class,
+                DemoDocumentFixtureCatalog.COMPANY_ID,
+                Date.valueOf(anchorDate)
+        );
+        int expectedCoverageFiles = DemoDocumentFixtureCatalog.passportCoverageFixtures().size();
+        if (passportCoverageHashes.size() != expectedCoverageFiles || passportWorkers != 28) {
+            throw new IllegalStateException("demo passport fixtures are not unique or do not cover every worker");
+        }
         return new DemoDocumentDataReport(
-                DemoDocumentFixtureCatalog.fixtures().size(),
-                fileCount,
-                imageCount,
-                pdfCount,
+                DemoDocumentFixtureCatalog.fixtures().size() + 83,
+                fileCount + legacyFiles.fileCount(),
+                imageCount + legacyFiles.imageCount(),
+                pdfCount + legacyFiles.pdfCount(),
                 hwpCount,
                 hwpxCount,
                 taskLinked,
-                missing
+                missing,
+                passportWorkers,
+                legacyFiles.fileCount()
         );
     }
 
@@ -303,7 +340,7 @@ class DemoDocumentDataService {
             if (!documents.isEmpty()) {
                 verifyWorkerDocument(fixture, anchorDate, documents.get(0));
             }
-            byte[] content = content(fixture);
+            byte[] content = content(fixture, anchorDate);
             if (content == null) {
                 continue;
             }
@@ -360,7 +397,7 @@ class DemoDocumentDataService {
         }
     }
 
-    private void verifyOcrRun(DocumentOcrRun run) {
+    private void verifyOcrRun(DocumentOcrRun run, LocalDate anchorDate) {
         if (!DemoDocumentFixtureCatalog.OCR_RUN_ID.equals(run.ocrRunId())
                 || !DemoDocumentFixtureCatalog.COMPANY_ID.equals(run.companyId())
                 || !DemoDocumentFixtureCatalog.OCR_DOCUMENT_ID.equals(run.workerDocumentId())
@@ -378,28 +415,30 @@ class DemoDocumentDataService {
         } catch (JacksonException exception) {
             throw new IllegalStateException("failed to deserialize demo OCR payload", exception);
         }
-        if (!ocrPayloadObject().equals(actualPayload)) {
+        if (!ocrPayloadObject(anchorDate).equals(actualPayload)) {
             throw new IllegalStateException("demo OCR result payload does not match the fixture");
         }
     }
 
-    private byte[] ocrPayload() {
+    private byte[] ocrPayload(LocalDate anchorDate) {
         try {
-            return objectMapper.writeValueAsBytes(ocrPayloadObject());
+            return objectMapper.writeValueAsBytes(ocrPayloadObject(anchorDate));
         } catch (JacksonException exception) {
             throw new IllegalStateException("failed to serialize demo OCR payload", exception);
         }
     }
 
-    private DocumentOcrResultPayload ocrPayloadObject() {
+    private DocumentOcrResultPayload ocrPayloadObject(LocalDate anchorDate) {
+        DemoDocumentFixture fixture = fixtureById(DemoDocumentFixtureCatalog.OCR_DOCUMENT_ID);
+        var identity = fixture.passportIdentity();
         return new DocumentOcrResultPayload(
                 43019L,
                 AiOcrDocumentSide.FRONT,
                 new TreeMap<>(Map.of(
-                        "alien_registration_number", "SYNTHETIC-ARC-0001",
-                        "visa_type", "E-9",
-                        "stay_expiration_date", "2099-12-31",
-                        "residence_address_1", "DEMO ADDRESS - NOT REAL"
+                        "alien_registration_number", identity.alienRegistrationNumber(),
+                        "visa_type", identity.visaType(),
+                        "stay_expiration_date", relativeDate(anchorDate, fixture.expiryDays()).toString(),
+                        "residence_address_1", identity.syntheticAddress()
                 )),
                 new TreeMap<>(Map.of(
                         "alien_registration_number", new BigDecimal("0.61"),
@@ -430,14 +469,30 @@ class DemoDocumentDataService {
     }
 
     private void requireWorkerAndTask(DemoDocumentFixture fixture) {
-        Integer worker = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker WHERE worker_id = ? AND company_id = ?",
-                Integer.class,
+        List<Map<String, Object>> workers = jdbcTemplate.queryForList(
+                """
+                SELECT worker_id, company_id, display_name, nationality_code,
+                       preferred_language, visa_type
+                  FROM worker
+                 WHERE worker_id = ? AND company_id = ?
+                """,
                 fixture.workerId(),
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
-        if (worker != 1) {
+        if (workers.size() != 1) {
             throw new IllegalStateException("demo document worker is missing");
+        }
+        Map<String, Object> worker = workers.get(0);
+        var identity = Objects.requireNonNull(fixture.passportIdentity());
+        if (!fixture.workerId().equals(worker.get("worker_id"))
+                || !DemoDocumentFixtureCatalog.COMPANY_ID.equals(worker.get("company_id"))
+                || !identity.displayName().equals(worker.get("display_name"))
+                || !identity.nationalityCode().equals(worker.get("nationality_code"))
+                || !identity.preferredLanguage().equals(worker.get("preferred_language"))
+                || !identity.visaType().equals(worker.get("visa_type"))) {
+            throw new IllegalStateException(
+                    "demo document identity metadata does not match its worker row"
+            );
         }
         if (fixture.taskId() == null) {
             return;
@@ -466,8 +521,14 @@ class DemoDocumentDataService {
         tenantDatabaseContext.setCompanyIdForCurrentTransaction(DemoDocumentFixtureCatalog.COMPANY_ID);
     }
 
-    private byte[] content(DemoDocumentFixture fixture) {
-        return fixture.format() == FixtureFormat.NONE ? null : generator.generate(fixture);
+    private byte[] content(DemoDocumentFixture fixture, LocalDate anchorDate) {
+        return fixture.format() == FixtureFormat.NONE
+                ? null
+                : generator.generate(
+                        fixture,
+                        relativeDate(anchorDate, fixture.issueDays()),
+                        relativeDate(anchorDate, fixture.expiryDays())
+                );
     }
 
     private DemoDocumentFixture fixtureById(UUID documentId) {
@@ -523,7 +584,9 @@ class DemoDocumentDataService {
             int hwpCount,
             int hwpxCount,
             int taskLinkedDocumentCount,
-            int missingDocumentCount
+            int missingDocumentCount,
+            int passportWorkerCount,
+            int legacyMaterializedFileCount
     ) {
     }
 }
