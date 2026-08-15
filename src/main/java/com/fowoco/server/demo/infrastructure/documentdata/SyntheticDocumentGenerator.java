@@ -82,68 +82,67 @@ final class SyntheticDocumentGenerator {
         try {
             enableHighQualityRendering(graphics);
             graphics.setPaint(new GradientPaint(
-                    0, 0, new Color(235, 247, 250),
-                    width, height, new Color(252, 231, 216)
+                    0, 0, new Color(239, 248, 249),
+                    width, height, new Color(252, 234, 224)
             ));
             graphics.fillRect(0, 0, width, height);
+            drawPassportBackdrop(graphics, width, height);
 
             graphics.setColor(new Color(20, 61, 104));
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 29));
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 23));
             graphics.drawString("DEMO PASSPORT", 56, 72);
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 34));
-            graphics.drawString("FOWOCO SYNTHETIC QA", 500, 72);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 28));
+            graphics.drawString("FOWOCO SYNTHETIC IDENTITY PAGE", 450, 72);
+            drawDemoBadge(graphics);
 
-            graphics.setColor(new Color(168, 47, 43));
-            graphics.fillRoundRect(1150, 30, 190, 62, 12, 12);
-            graphics.setColor(Color.WHITE);
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 24));
-            graphics.drawString("NOT VALID", 1180, 69);
-
-            graphics.setColor(new Color(184, 48, 43));
-            graphics.fillRect(0, 112, width, 48);
-            graphics.setColor(Color.WHITE);
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
-            graphics.drawString(
-                    "DEMO / SAMPLE ONLY - NOT A TRAVEL DOCUMENT - NO GOVERNMENT SECURITY FEATURES",
-                    80,
-                    144
-            );
+            graphics.setColor(new Color(20, 61, 104, 120));
+            graphics.setStroke(new BasicStroke(2f));
+            graphics.drawLine(55, 108, width - 55, 108);
 
             drawPortrait(graphics, fixture);
 
             graphics.setColor(new Color(25, 55, 94));
             graphics.setStroke(new BasicStroke(2f));
-            graphics.drawRoundRect(42, 180, 390, 515, 18, 18);
+            graphics.drawRoundRect(52, 160, 350, 492, 14, 14);
 
-            drawField(graphics, "TYPE", "SAMPLE", 470, 205);
-            drawField(graphics, "FICTIONAL CODE", "XDM", 690, 205);
-            drawField(graphics, "DOCUMENT NO.", identity.documentNumber(), 960, 205);
-            drawField(graphics, "SURNAME", identity.surname(), 470, 295);
-            drawField(graphics, "GIVEN NAMES", identity.givenNames(), 850, 295);
-            drawField(graphics, "NATIONALITY",
-                    "%s (%s)".formatted(identity.nationality(), identity.nationalityCode()), 470, 385);
-            drawField(graphics, "DATE OF BIRTH",
-                    passportDate(identity.birthDate()) + " / SYNTHETIC", 850, 385);
-            drawField(graphics, "SEX", identity.sex(), 470, 475);
-            drawField(graphics, "PLACE OF BIRTH", "DEMO CITY", 650, 475);
-            drawField(graphics, "VISA / STAY", "E-9", 1020, 475);
-            drawField(graphics, "DATE OF ISSUE", passportDate(issueDate), 470, 565);
-            drawField(graphics, "DATE OF EXPIRY", passportDate(expiryDate), 780, 565);
-            drawField(graphics, "AUTHORITY", "FOWOCO QA ONLY", 1080, 565);
+            drawField(graphics, "Type", "SAMPLE", 440, 145);
+            drawField(graphics, "Fictional code", "XDM", 645, 145);
+            drawField(graphics, "Document No.", identity.documentNumber(), 875, 145);
+            drawField(graphics, "Surname", identity.surname(), 440, 230);
+            drawField(graphics, "Given names", identity.givenNames(), 780, 230);
+            drawField(graphics, "Nationality",
+                    "%s (%s)".formatted(identity.nationality(), identity.nationalityCode()), 440, 325);
+            drawField(graphics, "Date of birth", passportDate(identity.birthDate()), 800, 325);
+            drawField(graphics, "Sex", identity.sex(), 1180, 325);
+            drawField(graphics, "Place of birth", "DEMO CITY", 440, 420);
+            drawField(graphics, "Visa / Stay", "E-9", 735, 420);
+            drawField(graphics, "Fictional authority", "FOWOCO QA LAB", 940, 420);
+            drawField(graphics, "Date of issue", passportDate(issueDate), 440, 515);
+            drawField(graphics, "Date of expiry", passportDate(expiryDate), 760, 515);
+            drawField(graphics, "Document status", "DEMO · NOT VALID", 1080, 515);
 
             graphics.setColor(new Color(71, 85, 105));
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 18));
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 16));
             String holderLabel = goldPassport
-                    ? "Holder label: NGUYEN VAN AN / synthetic identity"
-                    : "Holder label: %s / synthetic identity / profile %02d".formatted(
+                    ? "SYNTHETIC HOLDER · NGUYEN VAN AN · DEMO PROFILE"
+                    : "SYNTHETIC HOLDER · %s · PROFILE %02d".formatted(
                             identity.englishName(), identity.portraitSeed()
                     );
-            graphics.drawString(holderLabel, 470, 665);
+            graphics.drawString(holderLabel, 440, 650);
 
-            graphics.setColor(new Color(25, 55, 94));
-            graphics.setStroke(new BasicStroke(2f));
-            graphics.drawRoundRect(42, 735, width - 84, 190, 16, 16);
-            graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, 29));
+            graphics.setColor(new Color(20, 61, 104, 90));
+            graphics.drawRoundRect(1185, 210, 140, 100, 16, 16);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 52));
+            graphics.drawString("D", 1234, 274);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+            graphics.drawString("DEMO MARK", 1219, 296);
+
+            graphics.setColor(new Color(250, 248, 241));
+            graphics.fillRect(0, 705, width, 225);
+            graphics.setColor(new Color(20, 61, 104, 120));
+            graphics.drawLine(42, 705, width - 42, 705);
+            graphics.setColor(new Color(17, 38, 66));
+            graphics.setFont(new Font(Font.MONOSPACED, Font.BOLD, 31));
             String mrzLine1 = goldPassport
                     ? "P<XDMNGUYEN<<VAN<AN<<DEMO<SAMPLE<ONLY<<<<"
                     : "P<XDM" + mrz(identity.surname()) + "<<" + mrz(identity.givenNames())
@@ -152,19 +151,26 @@ final class SyntheticDocumentGenerator {
                     ? "NOTVALID<<FOWOCO<QA<FIXTURE<<NO<TRAVEL<USE"
                     : "NOTVALID<" + identity.nationalityCode() + "<PROFILE<"
                             + "%02d".formatted(identity.portraitSeed()) + "<NO<TRAVEL<USE";
-            graphics.drawString(mrzLine1, 70, 810);
-            graphics.drawString(mrzLine2, 70, 866);
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
-            graphics.setColor(new Color(188, 53, 44));
-            graphics.drawString("INTENTIONALLY INVALID MACHINE-READABLE SAMPLE", 925, 907);
+            graphics.drawString(fitMrz(mrzLine1), 54, 785);
+            graphics.drawString(fitMrz(mrzLine2), 54, 842);
+
+            graphics.setColor(new Color(176, 47, 43));
+            graphics.fillRect(0, 930, width, 50);
+            graphics.setColor(Color.WHITE);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 17));
+            graphics.drawString(
+                    "DEMO SAMPLE ONLY · NOT A TRAVEL DOCUMENT · NO GOVERNMENT SECURITY FEATURES",
+                    315,
+                    962
+            );
 
             AffineTransform originalTransform = graphics.getTransform();
             var originalComposite = graphics.getComposite();
-            graphics.rotate(Math.toRadians(-17), 760, 465);
-            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.14f));
+            graphics.rotate(Math.toRadians(-16), 760, 420);
+            graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.10f));
             graphics.setColor(new Color(188, 53, 44));
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 142));
-            graphics.drawString("DEMO / NOT VALID", 170, 520);
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 125));
+            graphics.drawString("DEMO · NOT VALID", 220, 485);
             graphics.setTransform(originalTransform);
             graphics.setComposite(originalComposite);
         } finally {
@@ -221,13 +227,13 @@ final class SyntheticDocumentGenerator {
                     input,
                     "missing synthetic passport portrait: " + portraitResource
             ));
-            drawCroppedPortrait(graphics, portrait, 58, 196, 358, 455);
+            drawCroppedPortrait(graphics, portrait, 67, 175, 320, 420);
             graphics.setColor(new Color(30, 41, 59));
-            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+            graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
             graphics.drawString(
                     "SYNTHETIC PORTRAIT / PROFILE %02d".formatted(identity.portraitSeed()),
-                    79,
-                    678
+                    105,
+                    628
             );
         } catch (IOException exception) {
             throw new UncheckedIOException("failed to load synthetic passport portrait", exception);
@@ -264,12 +270,50 @@ final class SyntheticDocumentGenerator {
     }
 
     private void drawField(Graphics2D graphics, String label, String value, int x, int y) {
-        graphics.setColor(new Color(71, 85, 105));
-        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        graphics.setColor(new Color(48, 79, 112));
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
         graphics.drawString(label, x, y);
         graphics.setColor(new Color(15, 23, 42));
-        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 25));
-        graphics.drawString(value, x, y + 34);
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
+        graphics.drawString(value, x, y + 29);
+    }
+
+    private void drawPassportBackdrop(Graphics2D graphics, int width, int height) {
+        var originalComposite = graphics.getComposite();
+        graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.10f));
+        graphics.setColor(new Color(57, 146, 154));
+        graphics.fillOval(900, 120, 350, 350);
+        graphics.fillOval(245, 430, 250, 250);
+        graphics.setColor(new Color(230, 122, 99));
+        graphics.fillOval(1030, 420, 420, 420);
+        graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.08f));
+        graphics.setColor(new Color(20, 61, 104));
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 118));
+        graphics.drawString("D  E  M  O", 500, 390);
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 72));
+        graphics.drawString("SYNTHETIC", 520, 600);
+        graphics.setComposite(originalComposite);
+
+        graphics.setColor(new Color(255, 255, 255, 125));
+        graphics.fillRoundRect(28, 125, width - 56, height - 410, 24, 24);
+    }
+
+    private void drawDemoBadge(Graphics2D graphics) {
+        graphics.setColor(new Color(20, 61, 104));
+        graphics.fillRoundRect(1260, 28, 82, 62, 12, 12);
+        graphics.setColor(new Color(240, 191, 87));
+        graphics.fillOval(1274, 40, 34, 34);
+        graphics.setColor(Color.WHITE);
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        graphics.drawString("D", 1285, 64);
+        graphics.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 10));
+        graphics.drawString("DEMO", 1310, 66);
+    }
+
+    private String fitMrz(String value) {
+        String normalized = mrz(value);
+        String padded = normalized + "<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<";
+        return padded.substring(0, 44);
     }
 
     private String passportDate(LocalDate value) {

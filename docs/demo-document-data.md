@@ -74,7 +74,9 @@ Demo Company Worker 28명
 
 신규 파일명은 `여권사본_{합성이름}.png`, 저장 파일명은
 `passport-copy-worker-{worker_number}.png` 형식이다. 모든 이미지는 실제 여권 문양 대신
-FOWOCO QA 레이아웃과 `DEMO SAMPLE / NOT A TRAVEL DOCUMENT` 표식을 사용한다. 증명사진
+FOWOCO QA 레이아웃과 `DEMO SAMPLE / NOT A TRAVEL DOCUMENT` 표식을 사용한다. 정보면은
+상단 제목, 좌측 증명사진, 우측의 조밀한 영문 필드, 하단 2줄 판독 영역으로 구성하되
+공식 국가명·국가 문장·보안문양은 포함하지 않는다. 증명사진
 원본 27장은 `demo-data/passport-portraits/worker-{worker_number}.png`에 포함되며, 모두
 이미지 생성 모델로 만든 완전한 합성 성인이다. 생성기에서 사진을 여권형 정보면 비율로
 중앙 크롭하므로 Seed를 다시 실행해도 동일한 파일과 SHA-256이 만들어진다.
