@@ -178,6 +178,43 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
+    void rejectsNonTextLanguageAssistantContent() {
+        RenewalRunRequest request = request();
+        Map<String, Object> language = reviewLanguageAssistant();
+        language.put("translated_text", Map.of("raw", "검증되지 않은 Provider 응답"));
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                workerGuideReviewResponse(
+                        request,
+                        "LANGUAGE_ASSISTANT_REVIEW_REQUIRED",
+                        null,
+                        true,
+                        language
+                )
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsInconsistentLanguageAssistantReviewState() {
+        RenewalRunRequest request = request();
+        Map<String, Object> language = reviewLanguageAssistant();
+        language.put("generation_status", "success");
+        language.put("requires_human_review", false);
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                workerGuideReviewResponse(
+                        request,
+                        "LANGUAGE_ASSISTANT_REVIEW_REQUIRED",
+                        null,
+                        true,
+                        language
+                )
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
     void rejectsAWorkerGuideReviewResponseThatContainsAnAutomaticDeliveryMessage() {
         RenewalRunRequest request = request();
 
@@ -322,15 +359,41 @@ class RenewalRuntimeContractValidatorTest {
             String workerMessage,
             boolean reviewRequired
     ) {
+        return workerGuideReviewResponse(
+                request, failureCode, workerMessage, reviewRequired, null
+        );
+    }
+
+    private RenewalRunResponse workerGuideReviewResponse(
+            RenewalRunRequest request,
+            String failureCode,
+            String workerMessage,
+            boolean reviewRequired,
+            Map<String, Object> languageAssistant
+    ) {
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
                 request.task().workflowId(), new BigDecimal("0.91"),
                 "READY_FOR_REVIEW", "REVIEW_REQUIRED", "ask_worker",
                 "PHASE_3", "STEP_5", Map.of(), List.of("passport_number"),
                 List.of(new RenewalRequestedField("passport_number", "DOCUMENT_OCR")),
-                null, workerMessage, reviewRequired, failureCode, null, null,
+                null, workerMessage, reviewRequired, failureCode, languageAssistant, null,
                 List.of(), List.of(), null, List.of("REVIEW_WORKER_GUIDE"),
                 List.of(), null, "rules", "main", List.of()
         );
+    }
+
+    private Map<String, Object> reviewLanguageAssistant() {
+        Map<String, Object> language = new LinkedHashMap<>();
+        language.put("target_language", "vi");
+        language.put("generation_status", "warning");
+        language.put("requires_human_review", true);
+        language.put("standard_korean_text", "여권 사본을 제출해 주세요.");
+        language.put("easy_korean_text", "여권을 내 주세요.");
+        language.put("translated_text", "Vui lòng nộp bản sao hộ chiếu.");
+        language.put("warnings", List.of(Map.of(
+                "code", "SEMANTIC_VALIDATION_INCONCLUSIVE"
+        )));
+        return language;
     }
 }

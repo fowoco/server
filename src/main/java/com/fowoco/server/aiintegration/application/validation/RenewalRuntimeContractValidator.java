@@ -184,11 +184,30 @@ public final class RenewalRuntimeContractValidator {
         if (humanReview != null && !(humanReview instanceof Boolean)) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant review flag is invalid.");
         }
+        if ((generationStatus == null) != (humanReview == null)) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Language Assistant status and review flag must be provided together."
+            );
+        }
+        if (generationStatus instanceof String status && humanReview instanceof Boolean review) {
+            boolean expectedReview = !"success".equals(status);
+            if (review != expectedReview || response.guideReviewRequired() != review) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                        "Language Assistant review state is inconsistent."
+                );
+            }
+        }
         for (String key : Set.of("standard_korean_text", "easy_korean_text", "translated_text")) {
             Object text = assistant.get(key);
-            if (text instanceof String value) {
-                boundaryPolicy.validateText(value, 1_000, false);
+            if (text == null) {
+                continue;
             }
+            if (!(text instanceof String)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant text is invalid.");
+            }
+            boundaryPolicy.validateText((String) text, 1_000, false);
         }
         validateLanguageWarnings(assistant.get("warnings"));
     }
@@ -215,10 +234,16 @@ public final class RenewalRuntimeContractValidator {
             String code = (String) warningMap.get("code");
             validateIdentifier(code, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
             Object component = warningMap.get("component");
+            if (component != null && !(component instanceof String)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warning is invalid.");
+            }
             if (component instanceof String text) {
                 boundaryPolicy.validateText(text, 80, false);
             }
             Object message = warningMap.get("message");
+            if (message != null && !(message instanceof String)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warning is invalid.");
+            }
             if (message instanceof String text) {
                 boundaryPolicy.validateText(text, 500, false);
             }
