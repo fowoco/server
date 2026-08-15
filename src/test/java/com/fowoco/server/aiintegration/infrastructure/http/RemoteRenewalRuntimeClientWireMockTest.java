@@ -93,6 +93,24 @@ class RemoteRenewalRuntimeClientWireMockTest {
                 .containsEntry("employee_name", "NGUYEN VAN AN");
     }
 
+    @Test
+    void decodesTheWorkerGuideReviewContract() {
+        RenewalRunRequest request = request();
+        wireMock.stubFor(post(urlEqualTo(PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(workerGuideReviewResponseJson(request))));
+
+        RenewalRunResponse response = client().run(request, AiRuntimeCallContext.withoutTrace());
+
+        assertThat(response.guideReviewRequired()).isTrue();
+        assertThat(response.guideFailureCode())
+                .isEqualTo("LANGUAGE_ASSISTANT_NOT_CONFIGURED");
+        assertThat(response.workerRequestMessage()).isNull();
+        assertThat(response.caseSignals()).containsExactly("REVIEW_WORKER_GUIDE");
+    }
+
     private RemoteRenewalRuntimeClient client() {
         return new RemoteRenewalRuntimeClient(
                 URI.create(wireMock.baseUrl() + PATH),
@@ -199,6 +217,42 @@ class RemoteRenewalRuntimeClientWireMockTest {
                   "evidence":[],
                   "documentValidation":null,
                   "caseSignals":["GENERATE_DRAFTS","READY_FOR_REVIEW"],
+                  "progressEvents":[],
+                  "supervisorReason":null,
+                  "supervisorSource":"rules",
+                  "activeSubgraph":"main",
+                  "errors":[]
+                }
+                """.formatted(request.requestId(), request.attemptId(), request.taskId());
+    }
+
+    private String workerGuideReviewResponseJson(RenewalRunRequest request) {
+        return """
+                {
+                  "requestId":"%s",
+                  "attemptId":"%s",
+                  "taskId":"%s",
+                  "intent":"EXPIRY_RENEWAL",
+                  "workflowId":"WF-CON-001",
+                  "confidence":0.91,
+                  "status":"READY_FOR_REVIEW",
+                  "outcome":"REVIEW_REQUIRED",
+                  "scenario":"ask_worker",
+                  "phase":"PHASE_3",
+                  "step":"STEP_5",
+                  "slots":{},
+                  "missingSlots":["passport_number"],
+                  "requestedFields":[{"key":"passport_number","sourceHint":"DOCUMENT_OCR"}],
+                  "guideMessage":null,
+                  "workerRequestMessage":null,
+                  "guideReviewRequired":true,
+                  "guideFailureCode":"LANGUAGE_ASSISTANT_NOT_CONFIGURED",
+                  "languageAssistant":null,
+                  "ocrResult":null,
+                  "generatedDocuments":[],
+                  "evidence":[],
+                  "documentValidation":null,
+                  "caseSignals":["REVIEW_WORKER_GUIDE"],
                   "progressEvents":[],
                   "supervisorReason":null,
                   "supervisorSource":"rules",

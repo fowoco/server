@@ -153,6 +153,10 @@ HR이 승인된 Task의 Worker Link 발급
 덮어쓰지 않고, HR이 승인한 결과만 Renewal Context에서 사용합니다. 생성된 문서는
 자동 발송하지 않으며 다시 HR 검토를 거칩니다.
 
+Language Assistant가 근로자 안내를 안전하게 만들지 못한 경우에도 임시 문장을 발송하지
+않습니다. Server는 실패 코드를 보존하고 Task를 HR 검토로 돌리며, 담당자가 안내문을
+작성하고 승인한 뒤에만 Worker Link와 SMS 전달을 허용합니다.
+
 ### 업무 이벤트가 알림으로 이어지는 흐름
 
 ```text

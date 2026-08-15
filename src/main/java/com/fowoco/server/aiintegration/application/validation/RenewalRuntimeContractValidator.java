@@ -31,7 +31,14 @@ public final class RenewalRuntimeContractValidator {
             "GENERATE_DRAFTS",
             "READY_FOR_REVIEW",
             "OCR_SAVED",
+            "REVIEW_WORKER_GUIDE",
             "CANCEL_OUT_OF_SCOPE"
+    );
+    private static final Set<String> GUIDE_FAILURE_CODES = Set.of(
+            "LANGUAGE_ASSISTANT_NOT_CONFIGURED",
+            "LANGUAGE_ASSISTANT_INVOCATION_FAILED",
+            "LANGUAGE_ASSISTANT_REVIEW_REQUIRED",
+            "WORKER_GUIDE_UNAVAILABLE"
     );
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final Set<String> DOCUMENT_TEMPLATES = Set.of(
@@ -117,6 +124,7 @@ public final class RenewalRuntimeContractValidator {
         boundaryPolicy.validateText(response.status(), 40, true);
         boundaryPolicy.validateText(response.outcome(), 80, true);
         boundaryPolicy.validateText(response.workerRequestMessage(), 1_000, false);
+        validateWorkerGuideReview(response);
         validateLanguageAssistant(response);
         if (response.missingSlots().size() > 100
                 || response.requestedFields().size() > 100
@@ -176,6 +184,7 @@ public final class RenewalRuntimeContractValidator {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "ask_hr requires missing slots.");
         }
         if ("ask_worker".equals(response.scenario())
+                && !response.guideReviewRequired()
                 && (response.workerRequestMessage() == null || response.workerRequestMessage().isBlank())) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "ask_worker requires a worker message.");
         }
@@ -184,6 +193,37 @@ public final class RenewalRuntimeContractValidator {
         }
         if (!"generate".equals(response.scenario()) && !response.generatedDocuments().isEmpty()) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Only generate may return document descriptors.");
+        }
+    }
+
+    private void validateWorkerGuideReview(RenewalRunResponse response) {
+        if (!response.guideReviewRequired()) {
+            if (response.guideFailureCode() != null && !response.guideFailureCode().isBlank()) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                        "Worker guide failure code requires review."
+                );
+            }
+            if (response.caseSignals().contains("REVIEW_WORKER_GUIDE")) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                        "Worker guide review signal requires review."
+                );
+            }
+            return;
+        }
+        if (!"ask_worker".equals(response.scenario())
+                || !"READY_FOR_REVIEW".equals(response.status())
+                || !"REVIEW_REQUIRED".equals(response.outcome())
+                || (response.workerRequestMessage() != null
+                && !response.workerRequestMessage().isBlank())
+                || response.guideFailureCode() == null
+                || !GUIDE_FAILURE_CODES.contains(response.guideFailureCode())
+                || !response.caseSignals().contains("REVIEW_WORKER_GUIDE")) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Worker guide review response is invalid."
+            );
         }
     }
 

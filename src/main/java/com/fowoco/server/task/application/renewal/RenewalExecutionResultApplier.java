@@ -126,11 +126,7 @@ class RenewalExecutionResultApplier {
                 encoded.businessDataJson(),
                 encoded.criticalFingerprint(),
                 task.dueDate(),
-                !"out_of_scope".equals(agentResult.scenario())
-                        && agentResult.missingSlots().isEmpty()
-                        && !checklistStatusRepository.existsIncompleteRequiredItem(
-                                task.taskId(), task.companyId()
-                        ),
+                requirementsSatisfied(task, agentResult),
                 expectedVersion,
                 actor.actorId(),
                 now
@@ -155,7 +151,7 @@ class RenewalExecutionResultApplier {
         }
         appendAudit(
                 actor, AuditAction.TASK_UPDATED, AuditTargetType.TASK, saved.taskId(),
-                "Renewal Agent 결과를 업무카드에 반영함", metadata, now
+                auditSummary(agentResult), metadata, now
         );
 
         DocumentRequestDraft draft = saveWorkerMessageDraft(saved, agentResult, actor, metadata, now);
@@ -200,6 +196,8 @@ class RenewalExecutionResultApplier {
                 .map(this::requestedFieldMetadata)
                 .toList());
         metadata.put("case_signals", result.caseSignals());
+        metadata.put("guide_review_required", result.guideReviewRequired());
+        putIfPresent(metadata, "guide_failure_code", result.guideFailureCode());
         metadata.put("generated_documents", generatedDocuments.stream()
                 .map(this::generatedDocumentMetadata)
                 .toList());
@@ -233,7 +231,8 @@ class RenewalExecutionResultApplier {
             RequestMetadata metadata,
             Instant now
     ) {
-        if (!"ask_worker".equals(result.scenario())
+        if (result.guideReviewRequired()
+                || !"ask_worker".equals(result.scenario())
                 || result.workerRequestMessage() == null
                 || result.workerRequestMessage().isBlank()) {
             return null;
@@ -259,6 +258,25 @@ class RenewalExecutionResultApplier {
                 "Renewal Agent 안내 초안을 저장함", metadata, now
         );
         return draft;
+    }
+
+    private boolean requirementsSatisfied(Task task, RenewalRunResponse result) {
+        if (result.guideReviewRequired()) {
+            return true;
+        }
+        return !"out_of_scope".equals(result.scenario())
+                && result.missingSlots().isEmpty()
+                && !checklistStatusRepository.existsIncompleteRequiredItem(
+                        task.taskId(), task.companyId()
+                );
+    }
+
+    private String auditSummary(RenewalRunResponse result) {
+        if (!result.guideReviewRequired()) {
+            return "Renewal Agent 결과를 업무카드에 반영함";
+        }
+        return "Renewal Agent 근로자 안내를 HR 검토로 전환함: "
+                + result.guideFailureCode();
     }
 
     private String language(RenewalRunResponse result) {

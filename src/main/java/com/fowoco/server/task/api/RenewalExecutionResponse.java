@@ -27,6 +27,8 @@ public record RenewalExecutionResponse(
         List<GeneratedDocumentResult> generatedDocuments,
         UUID workerMessageDraftId,
         Long workerMessageDraftVersion,
+        boolean guideReviewRequired,
+        String guideFailureCode,
         boolean humanReviewRequired
 ) {
     static RenewalExecutionResponse from(RenewalExecutionResult result) {
@@ -46,6 +48,8 @@ public record RenewalExecutionResponse(
                 result.generatedDocuments(),
                 result.workerMessageDraft() == null ? null : result.workerMessageDraft().draftId(),
                 result.workerMessageDraft() == null ? null : result.workerMessageDraft().version(),
+                result.agentResult().guideReviewRequired(),
+                result.agentResult().guideFailureCode(),
                 true
         );
     }

@@ -75,6 +75,7 @@ class RenewalRuntimeContractValidatorTest {
                 "EXPIRY_RENEWAL", valid.confidence(), valid.status(), valid.outcome(),
                 valid.scenario(), valid.phase(), valid.step(), valid.slots(), valid.missingSlots(),
                 valid.requestedFields(), valid.guideMessage(), valid.workerRequestMessage(),
+                valid.guideReviewRequired(), valid.guideFailureCode(),
                 valid.languageAssistant(), valid.ocrResult(), valid.generatedDocuments(), valid.evidence(),
                 valid.documentValidation(), valid.caseSignals(), valid.progressEvents(),
                 valid.supervisorReason(), valid.supervisorSource(), valid.activeSubgraph(), valid.errors()
@@ -93,6 +94,7 @@ class RenewalRuntimeContractValidatorTest {
                 valid.workflowId(), valid.confidence(), valid.status(), valid.outcome(),
                 valid.scenario(), valid.phase(), valid.step(), valid.slots(), valid.missingSlots(),
                 valid.requestedFields(), valid.guideMessage(), valid.workerRequestMessage(),
+                valid.guideReviewRequired(), valid.guideFailureCode(),
                 valid.languageAssistant(), valid.ocrResult(), valid.generatedDocuments(), valid.evidence(),
                 valid.documentValidation(), valid.caseSignals(), valid.progressEvents(),
                 valid.supervisorReason(), valid.supervisorSource(), valid.activeSubgraph(), valid.errors()
@@ -119,7 +121,7 @@ class RenewalRuntimeContractValidatorTest {
                         new RenewalRequestedField("passport_number", "DOCUMENT_OCR"),
                         new RenewalRequestedField("alien_registration_number", "DOCUMENT_OCR")
                 ),
-                valid.guideMessage(), "여권과 외국인등록증을 제출해 주세요.", language,
+                valid.guideMessage(), "여권과 외국인등록증을 제출해 주세요.", false, null, language,
                 valid.ocrResult(), valid.generatedDocuments(), valid.evidence(),
                 valid.documentValidation(),
                 List.of(
@@ -136,6 +138,63 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
+    void acceptsAllWorkerGuideFailureCodesAsFailClosedReviewResponses() {
+        RenewalRunRequest request = request();
+
+        for (String failureCode : List.of(
+                "LANGUAGE_ASSISTANT_NOT_CONFIGURED",
+                "LANGUAGE_ASSISTANT_INVOCATION_FAILED",
+                "LANGUAGE_ASSISTANT_REVIEW_REQUIRED",
+                "WORKER_GUIDE_UNAVAILABLE"
+        )) {
+            assertThatCode(() -> validator.validateResponse(
+                    request,
+                    workerGuideReviewResponse(request, failureCode, null, true)
+            )).doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    void rejectsAWorkerGuideReviewResponseThatContainsAnAutomaticDeliveryMessage() {
+        RenewalRunRequest request = request();
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                workerGuideReviewResponse(
+                        request,
+                        "LANGUAGE_ASSISTANT_REVIEW_REQUIRED",
+                        "검토하지 않은 안내입니다.",
+                        true
+                )
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsAWorkerGuideReviewSignalWithoutTheReviewFlag() {
+        RenewalRunRequest request = request();
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                workerGuideReviewResponse(
+                        request,
+                        "LANGUAGE_ASSISTANT_NOT_CONFIGURED",
+                        null,
+                        false
+                )
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsAnUnknownWorkerGuideFailureCode() {
+        RenewalRunRequest request = request();
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                workerGuideReviewResponse(request, "RAW_PROVIDER_ERROR", null, true)
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
     void acceptsTheAgentOutOfScopeResultWithoutTreatingItAsRenewal() {
         RenewalRunRequest request = request();
         RenewalRunResponse valid = response(request);
@@ -143,7 +202,7 @@ class RenewalRuntimeContractValidatorTest {
                 valid.requestId(), valid.attemptId(), valid.taskId(), "OUT_OF_SCOPE", "",
                 new BigDecimal("0.93"), "CANCELLED", "OUT_OF_SCOPE", "out_of_scope",
                 "PHASE_1", "STEP_2", Map.of(), List.of(), List.of(),
-                "지원 범위를 벗어난 요청입니다.", null, null, null, List.of(), List.of(),
+                "지원 범위를 벗어난 요청입니다.", null, false, null, null, null, List.of(), List.of(),
                 null, List.of("CANCEL_OUT_OF_SCOPE"), List.of(), null, "rules", "main",
                 List.of()
         );
@@ -209,7 +268,7 @@ class RenewalRuntimeContractValidatorTest {
                 workflowId, new BigDecimal("0.91"), "NEEDS_INFO", "NEEDS_INFO", "ask_hr",
                 "PHASE_2", "STEP_5", Map.of(), List.of("wage"),
                 List.of(new RenewalRequestedField("wage", "USER_INPUT")),
-                "임금을 확인해 주세요.", null, null, null, List.of(), List.of(), null,
+                "임금을 확인해 주세요.", null, false, null, null, null, List.of(), List.of(), null,
                 List.of("REQUEST_CONTRACT_SLOTS", "NEEDS_INFO"), List.of(), null, "rules", "main",
                 List.of()
         );
@@ -224,12 +283,30 @@ class RenewalRuntimeContractValidatorTest {
                 request.task().workflowId(), new BigDecimal("0.94"),
                 "READY_FOR_REVIEW", "REVIEW_REQUIRED",
                 "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
-                null, null, null, null,
+                null, null, false, null, null, null,
                 List.of(new RenewalGeneratedDocument(
                         "standard_labor_contract_v6", "표준근로계약서", "hwp", "stub", null, null,
                         List.copyOf(values.keySet()), List.of(), values
                 )),
                 List.of(), null, List.of("GENERATE_DRAFTS", "READY_FOR_REVIEW"),
+                List.of(), null, "rules", "main", List.of()
+        );
+    }
+
+    private RenewalRunResponse workerGuideReviewResponse(
+            RenewalRunRequest request,
+            String failureCode,
+            String workerMessage,
+            boolean reviewRequired
+    ) {
+        return new RenewalRunResponse(
+                request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
+                request.task().workflowId(), new BigDecimal("0.91"),
+                "READY_FOR_REVIEW", "REVIEW_REQUIRED", "ask_worker",
+                "PHASE_3", "STEP_5", Map.of(), List.of("passport_number"),
+                List.of(new RenewalRequestedField("passport_number", "DOCUMENT_OCR")),
+                null, workerMessage, reviewRequired, failureCode, null, null,
+                List.of(), List.of(), null, List.of("REVIEW_WORKER_GUIDE"),
                 List.of(), null, "rules", "main", List.of()
         );
     }
