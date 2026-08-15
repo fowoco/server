@@ -155,6 +155,29 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
+    void rejectsMalformedLanguageAssistantWarnings() {
+        RenewalRunRequest request = request();
+        RenewalRunResponse valid = response(request);
+        Map<String, Object> language = new LinkedHashMap<>();
+        language.put("target_language", "vi");
+        language.put("generation_status", "warning");
+        language.put("warnings", List.of(Map.of("message", "code가 없습니다.")));
+        RenewalRunResponse invalid = new RenewalRunResponse(
+                valid.requestId(), valid.attemptId(), valid.taskId(), valid.intent(),
+                valid.workflowId(), valid.confidence(), valid.status(), valid.outcome(),
+                valid.scenario(), valid.phase(), valid.step(), valid.slots(), valid.missingSlots(),
+                valid.requestedFields(), valid.guideMessage(), valid.workerRequestMessage(),
+                valid.guideReviewRequired(), valid.guideFailureCode(), language,
+                valid.ocrResult(), valid.generatedDocuments(), valid.evidence(),
+                valid.documentValidation(), valid.caseSignals(), valid.progressEvents(),
+                valid.supervisorReason(), valid.supervisorSource(), valid.activeSubgraph(), valid.errors()
+        );
+
+        assertThatThrownBy(() -> validator.validateResponse(request, invalid))
+                .isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
     void rejectsAWorkerGuideReviewResponseThatContainsAnAutomaticDeliveryMessage() {
         RenewalRunRequest request = request();
 

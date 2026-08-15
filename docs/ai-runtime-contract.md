@@ -427,6 +427,27 @@ Server는 `guideFailureCode`를 안전한 허용 목록으로 검증하고 Task�
 상태로 회귀하지 않고 HR 검토 대상으로 남습니다. HR이 안전한 안내문을 작성하고 기존
 승인 절차를 마친 뒤에만 Worker Link 발급과 전달 흐름을 진행합니다.
 
+Runtime이 `languageAssistant`에 생성 결과를 함께 보낸 경우 Server는 임의 Provider 응답
+전체가 아니라 아래 검토 필드만 `guide_review_draft`로 선별해 Task 실행정보와 API 응답에
+보존합니다.
+
+```json
+{
+  "guide_review_draft": {
+    "target_language": "vi",
+    "generation_status": "warning",
+    "standard_korean_text": "여권 사본을 제출해 주세요.",
+    "easy_korean_text": "여권을 내 주세요.",
+    "translated_text": "Vui lòng nộp bản sao hộ chiếu.",
+    "warning_codes": ["SEMANTIC_VALIDATION_INCONCLUSIVE"]
+  }
+}
+```
+
+이 값은 HR에게 보여 주는 수정 전 제안일 뿐 `document_request_draft`가 아닙니다. 검토 필요
+경로에서는 `worker_message_draft_id=null`을 유지하며, HR이 제안문을 확인·수정해 기존
+문서 요청 초안 API에 저장하고 승인을 끝내기 전에는 Worker Link나 SMS를 만들지 않습니다.
+
 기존 Runtime이 신규 필드를 보내지 않으면 `guideReviewRequired=false`,
 `guideFailureCode=null`로 해석하므로 정상 `ask_worker` 계약은 그대로 유지됩니다.
 
