@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
 import com.fowoco.server.task.application.renewal.GeneratedDocumentResult;
 import com.fowoco.server.task.application.renewal.RenewalExecutionResult;
+import com.fowoco.server.task.application.renewal.RenewalGuideReviewDraft;
 import com.fowoco.server.task.domain.TaskStatus;
 import java.math.BigDecimal;
 import java.util.List;
@@ -29,6 +30,7 @@ public record RenewalExecutionResponse(
         Long workerMessageDraftVersion,
         boolean guideReviewRequired,
         String guideFailureCode,
+        GuideReviewDraftResponse guideReviewDraft,
         boolean humanReviewRequired
 ) {
     static RenewalExecutionResponse from(RenewalExecutionResult result) {
@@ -50,8 +52,33 @@ public record RenewalExecutionResponse(
                 result.workerMessageDraft() == null ? null : result.workerMessageDraft().version(),
                 result.agentResult().guideReviewRequired(),
                 result.agentResult().guideFailureCode(),
+                GuideReviewDraftResponse.from(result.guideReviewDraft()),
                 true
         );
+    }
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record GuideReviewDraftResponse(
+            String targetLanguage,
+            String generationStatus,
+            String standardKoreanText,
+            String easyKoreanText,
+            String translatedText,
+            List<String> warningCodes
+    ) {
+        static GuideReviewDraftResponse from(RenewalGuideReviewDraft draft) {
+            if (draft == null) {
+                return null;
+            }
+            return new GuideReviewDraftResponse(
+                    draft.targetLanguage(),
+                    draft.generationStatus(),
+                    draft.standardKoreanText(),
+                    draft.easyKoreanText(),
+                    draft.translatedText(),
+                    draft.warningCodes()
+            );
+        }
     }
 
 }

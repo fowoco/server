@@ -103,11 +103,15 @@ class RenewalExecutionResultApplier {
                 task.taskId(), task.workerId(), preparedDocuments, actor, metadata
         );
 
+        RenewalGuideReviewDraft guideReviewDraft = RenewalGuideReviewDraft.from(agentResult);
         Map<String, Object> businessData = new LinkedHashMap<>(
                 contentCodec.decodeBusinessData(task.businessDataJson())
         );
         mergeRenewalInputs(businessData, submittedSlotAnswers);
-        businessData.put("renewal_execution", executionMetadata(agentResult, generatedDocuments));
+        businessData.put(
+                "renewal_execution",
+                executionMetadata(agentResult, generatedDocuments, guideReviewDraft)
+        );
         EncodedTaskContent encoded = contentCodec.encode(
                 task.targetType(),
                 task.workerId(),
@@ -155,7 +159,9 @@ class RenewalExecutionResultApplier {
         );
 
         DocumentRequestDraft draft = saveWorkerMessageDraft(saved, agentResult, actor, metadata, now);
-        return new RenewalExecutionResult(saved, agentResult, generatedDocuments, draft);
+        return new RenewalExecutionResult(
+                saved, agentResult, generatedDocuments, draft, guideReviewDraft
+        );
     }
 
     private void mergeRenewalInputs(
@@ -180,7 +186,8 @@ class RenewalExecutionResultApplier {
 
     private Map<String, Object> executionMetadata(
             RenewalRunResponse result,
-            List<GeneratedDocumentResult> generatedDocuments
+            List<GeneratedDocumentResult> generatedDocuments,
+            RenewalGuideReviewDraft guideReviewDraft
     ) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         metadata.put("request_id", result.requestId().toString());
@@ -198,6 +205,9 @@ class RenewalExecutionResultApplier {
         metadata.put("case_signals", result.caseSignals());
         metadata.put("guide_review_required", result.guideReviewRequired());
         putIfPresent(metadata, "guide_failure_code", result.guideFailureCode());
+        if (guideReviewDraft != null) {
+            metadata.put("guide_review_draft", guideReviewDraft.toMetadata());
+        }
         metadata.put("generated_documents", generatedDocuments.stream()
                 .map(this::generatedDocumentMetadata)
                 .toList());

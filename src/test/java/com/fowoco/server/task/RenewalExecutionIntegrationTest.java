@@ -218,7 +218,22 @@ class RenewalExecutionIntegrationTest {
         assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("DRAFT");
         assertThat(JsonPath.<Boolean>read(response.body(), "$.guide_review_required")).isTrue();
         assertThat(JsonPath.<String>read(response.body(), "$.guide_failure_code"))
-                .isEqualTo("LANGUAGE_ASSISTANT_NOT_CONFIGURED");
+                .isEqualTo("LANGUAGE_ASSISTANT_REVIEW_REQUIRED");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.target_language"
+        )).isEqualTo("vi");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.generation_status"
+        )).isEqualTo("warning");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.standard_korean_text"
+        )).isEqualTo("여권 사본을 제출해 주세요.");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.translated_text"
+        )).isEqualTo("Vui lòng nộp bản sao hộ chiếu.");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.warning_codes[0]"
+        )).isEqualTo("SEMANTIC_VALIDATION_INCONCLUSIVE");
         assertThat(JsonPath.<Object>read(response.body(), "$.worker_message_draft_id")).isNull();
 
         String businessData = jdbcTemplate.queryForObject(
@@ -231,7 +246,12 @@ class RenewalExecutionIntegrationTest {
         assertThat(JsonPath.<String>read(
                 businessData,
                 "$.renewal_execution.guide_failure_code"
-        )).isEqualTo("LANGUAGE_ASSISTANT_NOT_CONFIGURED");
+        )).isEqualTo("LANGUAGE_ASSISTANT_REVIEW_REQUIRED");
+        assertThat(JsonPath.<String>read(
+                businessData,
+                "$.renewal_execution.guide_review_draft.easy_korean_text"
+        )).isEqualTo("여권을 내 주세요.");
+        assertThat(businessData).doesNotContain("provider_raw_secret", "do-not-persist");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM document_request_draft WHERE task_id = ?",
                 Integer.class,
@@ -246,7 +266,7 @@ class RenewalExecutionIntegrationTest {
                 "SELECT change_summary FROM audit_event WHERE target_id = ? AND action = 'TASK_UPDATED'",
                 String.class,
                 TASK_A
-        )).contains("LANGUAGE_ASSISTANT_NOT_CONFIGURED");
+        )).contains("LANGUAGE_ASSISTANT_REVIEW_REQUIRED");
     }
 
     @Test
@@ -548,13 +568,26 @@ class RenewalExecutionIntegrationTest {
     }
 
     private RenewalRunResponse workerGuideReviewResponse(RenewalRunRequest request) {
+        Map<String, Object> languageAssistant = new java.util.LinkedHashMap<>();
+        languageAssistant.put("target_language", "vi");
+        languageAssistant.put("generation_status", "warning");
+        languageAssistant.put("requires_human_review", true);
+        languageAssistant.put("standard_korean_text", "여권 사본을 제출해 주세요.");
+        languageAssistant.put("easy_korean_text", "여권을 내 주세요.");
+        languageAssistant.put("translated_text", "Vui lòng nộp bản sao hộ chiếu.");
+        languageAssistant.put("warnings", List.of(Map.of(
+                "component", "translation",
+                "code", "SEMANTIC_VALIDATION_INCONCLUSIVE",
+                "message", "번역 의미 검토가 필요합니다."
+        )));
+        languageAssistant.put("provider_raw_secret", "do-not-persist");
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
                 request.task().workflowId(), new BigDecimal("0.91"),
                 "READY_FOR_REVIEW", "REVIEW_REQUIRED", "ask_worker",
                 "PHASE_3", "STEP_5", Map.of(), List.of("passport_number"),
                 List.of(new RenewalRequestedField("passport_number", "DOCUMENT_OCR")),
-                null, null, true, "LANGUAGE_ASSISTANT_NOT_CONFIGURED", null, null,
+                null, null, true, "LANGUAGE_ASSISTANT_REVIEW_REQUIRED", languageAssistant, null,
                 List.of(), List.of(), null, List.of("REVIEW_WORKER_GUIDE"),
                 List.of(), null, "rules", "main", List.of()
         );
