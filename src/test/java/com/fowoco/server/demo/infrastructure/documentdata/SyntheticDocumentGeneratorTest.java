@@ -44,7 +44,7 @@ class SyntheticDocumentGeneratorTest {
         )));
 
         assertThat(image.getWidth()).isEqualTo(1400);
-        assertThat(image.getHeight()).isEqualTo(900);
+        assertThat(image.getHeight()).isEqualTo(980);
         assertThat(image.getRGB(200, 350)).isNotEqualTo(image.getRGB(500, 350));
         assertThat(generator.generate(
                 passport,
@@ -77,7 +77,7 @@ class SyntheticDocumentGeneratorTest {
             assertThat(fixture.originalFilename()).endsWith(".png");
             assertThat(fixture.contentType()).isEqualTo("image/png");
             assertThat(image.getWidth()).isEqualTo(1400);
-            assertThat(image.getHeight()).isEqualTo(900);
+            assertThat(image.getHeight()).isEqualTo(980);
             checksums.add(DemoDocumentFileInstaller.sha256(content));
             workerIds.add(fixture.workerId());
         }
