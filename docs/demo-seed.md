@@ -56,7 +56,8 @@ PostgreSQL 16 Compose 실행은 [배포 Runbook](deployment-runbook.md)의 로�
 ## 로그인 계정
 
 모든 계정은 `DEMO_SEED_ADMIN_PASSWORD`에 지정한 동일한 합성 비밀번호를 사용하고,
-DB에는 BCrypt hash만 저장한다.
+DB에는 BCrypt hash만 저장한다. 영구 Demo DB에서 이 환경변수 값을 변경하면 다음 Seed 실행 시
+예약된 Demo·Test 계정의 hash를 새 합성 비밀번호로 멱등 갱신한다.
 
 | 회사 | 역할 | 이메일 | 용도 |
 | --- | --- | --- | --- |
