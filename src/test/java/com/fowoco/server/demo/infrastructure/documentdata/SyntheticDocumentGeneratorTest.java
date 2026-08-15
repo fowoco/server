@@ -94,6 +94,104 @@ class SyntheticDocumentGeneratorTest {
     }
 
     @Test
+    void generatesResidenceCardFrontAndBackWithConsistentSyntheticIdentity() throws IOException {
+        var arcFixtures = DemoDocumentFixtureCatalog.fixtures().stream()
+                .filter(fixture -> fixture.documentType()
+                        == com.fowoco.server.worker.domain.DocumentType.ARC)
+                .filter(fixture -> fixture.format() == FixtureFormat.PNG
+                        || fixture.format() == FixtureFormat.JPEG)
+                .toList();
+
+        assertThat(arcFixtures).hasSize(2);
+        byte[] front = generator.generate(
+                arcFixtures.get(0),
+                LocalDate.of(2026, 2, 16),
+                LocalDate.of(2027, 5, 12)
+        );
+        byte[] back = generator.generate(
+                arcFixtures.get(1),
+                LocalDate.of(2026, 2, 16),
+                LocalDate.of(2027, 5, 12)
+        );
+        var frontImage = ImageIO.read(new ByteArrayInputStream(front));
+        var backImage = ImageIO.read(new ByteArrayInputStream(back));
+
+        assertThat(frontImage.getWidth()).isEqualTo(1200);
+        assertThat(frontImage.getHeight()).isEqualTo(760);
+        assertThat(backImage.getWidth()).isEqualTo(1200);
+        assertThat(backImage.getHeight()).isEqualTo(760);
+        assertThat(DemoDocumentFileInstaller.sha256(front))
+                .isNotEqualTo(DemoDocumentFileInstaller.sha256(back));
+        assertThat(arcFixtures.get(0).passportIdentity())
+                .isEqualTo(arcFixtures.get(1).passportIdentity());
+    }
+
+    @Test
+    void fillsContractExtensionAndIntegratedApplicationFields() throws IOException {
+        LocalDate issueDate = LocalDate.of(2026, 8, 15);
+        LocalDate expiryDate = LocalDate.of(2027, 2, 11);
+
+        String contract = plainHwpxText(generateHwpx(
+                com.fowoco.server.worker.domain.DocumentType.CONTRACT,
+                issueDate,
+                expiryDate
+        ));
+        assertThat(contract)
+                .contains("NGUYEN VAN AN")
+                .contains("08시 00분 ~ 17시 00분")
+                .contains("2,350,000")
+                .contains("[v]통장 입금")
+                .contains("[v]제공");
+
+        String extension = plainHwpxText(generateHwpx(
+                com.fowoco.server.worker.domain.DocumentType.EMPLOYMENT_EXTENSION_APPLICATION,
+                issueDate,
+                expiryDate
+        ));
+        assertThat(extension)
+                .contains("2024. 1. 10.")
+                .contains("NGUYEN VAN AN")
+                .contains("DEMO-P06-NOT-VALID")
+                .contains("ㆍ [v]")
+                .contains("미서명 초안 / DEMO NOT VALID");
+
+        String integrated = plainHwpxText(generateHwpx(
+                com.fowoco.server.worker.domain.DocumentType.INTEGRATED_APPLICATION,
+                issueDate,
+                expiryDate
+        ));
+        assertThat(integrated)
+                .contains("NGUYEN")
+                .contains("VAN AN")
+                .contains("DEMO-ARC-0006")
+                .contains("DEMO-P06-NOT-VALID")
+                .contains("worker-06@example.invalid")
+                .contains("FILLED DRAFT / UNSIGNED");
+    }
+
+    @Test
+    void rendersStructuredTwoPageContractPdf() {
+        DemoDocumentFixture contract = DemoDocumentFixtureCatalog.fixtures().stream()
+                .filter(fixture -> fixture.documentType()
+                        == com.fowoco.server.worker.domain.DocumentType.CONTRACT)
+                .filter(fixture -> fixture.format() == FixtureFormat.PDF)
+                .findFirst()
+                .orElseThrow();
+
+        String pdf = new String(generator.generate(
+                contract,
+                LocalDate.of(2026, 7, 16),
+                LocalDate.of(2027, 2, 11)
+        ), StandardCharsets.ISO_8859_1);
+
+        assertThat(pdf)
+                .startsWith("%PDF-1.4")
+                .contains("/Count 2")
+                .contains("MONTHLY WAGE: KRW 2,350,000")
+                .contains(contract.documentId().toString());
+    }
+
+    @Test
     void assignsOneConsistentSyntheticIdentityToEveryWorkerDocumentFixture() {
         Map<UUID, Object> identitiesByWorker = new HashMap<>();
 
@@ -176,6 +274,27 @@ class SyntheticDocumentGeneratorTest {
             }
         }
         throw new AssertionError("HWPX entry is missing: " + expectedName);
+    }
+
+    private byte[] generateHwpx(
+            com.fowoco.server.worker.domain.DocumentType documentType,
+            LocalDate issueDate,
+            LocalDate expiryDate
+    ) {
+        DemoDocumentFixture fixture = DemoDocumentFixtureCatalog.fixtures().stream()
+                .filter(candidate -> candidate.documentType() == documentType)
+                .filter(candidate -> candidate.format() == FixtureFormat.HWPX)
+                .findFirst()
+                .orElseThrow();
+        return generator.generate(fixture, issueDate, expiryDate);
+    }
+
+    private String plainHwpxText(byte[] content) throws IOException {
+        return hwpxEntry(content, "Contents/section0.xml")
+                .replaceAll("<[^>]+>", "")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&amp;", "&");
     }
 
     private byte[] generate(FixtureFormat format) {

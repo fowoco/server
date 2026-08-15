@@ -92,7 +92,7 @@ class DemoDocumentDataService {
             seedWorkerDocument(fixture, anchorDate, now);
         }
         legacyFileMaterializer.importFiles(anchorDate, now);
-        seedOcrReview(now);
+        seedOcrReview(now, anchorDate);
         return verifyInternal(anchorDate);
     }
 
@@ -203,16 +203,16 @@ class DemoDocumentDataService {
         );
     }
 
-    private void seedOcrReview(Instant now) {
+    private void seedOcrReview(Instant now, LocalDate anchorDate) {
         var existing = ocrRunRepository.findByIdAndCompanyId(
                 DemoDocumentFixtureCatalog.OCR_RUN_ID,
                 DemoDocumentFixtureCatalog.COMPANY_ID
         );
         if (existing.isPresent()) {
-            verifyOcrRun(existing.get());
+            verifyOcrRun(existing.get(), anchorDate);
             return;
         }
-        byte[] plaintext = ocrPayload();
+        byte[] plaintext = ocrPayload(anchorDate);
         String ciphertext = ocrResultCipher.encrypt(
                 plaintext,
                 DemoDocumentFixtureCatalog.COMPANY_ID,
@@ -283,7 +283,7 @@ class DemoDocumentDataService {
                         DemoDocumentFixtureCatalog.COMPANY_ID
                 )
                 .orElseThrow(() -> new IllegalStateException("demo OCR review fixture is missing"));
-        verifyOcrRun(ocrRun);
+        verifyOcrRun(ocrRun, anchorDate);
         DemoLegacyDocumentFileMaterializer.MaterializedFiles legacyFiles =
                 legacyFileMaterializer.verifyFiles(anchorDate);
         int taskLinked = jdbcTemplate.queryForObject(
@@ -397,7 +397,7 @@ class DemoDocumentDataService {
         }
     }
 
-    private void verifyOcrRun(DocumentOcrRun run) {
+    private void verifyOcrRun(DocumentOcrRun run, LocalDate anchorDate) {
         if (!DemoDocumentFixtureCatalog.OCR_RUN_ID.equals(run.ocrRunId())
                 || !DemoDocumentFixtureCatalog.COMPANY_ID.equals(run.companyId())
                 || !DemoDocumentFixtureCatalog.OCR_DOCUMENT_ID.equals(run.workerDocumentId())
@@ -415,28 +415,30 @@ class DemoDocumentDataService {
         } catch (JacksonException exception) {
             throw new IllegalStateException("failed to deserialize demo OCR payload", exception);
         }
-        if (!ocrPayloadObject().equals(actualPayload)) {
+        if (!ocrPayloadObject(anchorDate).equals(actualPayload)) {
             throw new IllegalStateException("demo OCR result payload does not match the fixture");
         }
     }
 
-    private byte[] ocrPayload() {
+    private byte[] ocrPayload(LocalDate anchorDate) {
         try {
-            return objectMapper.writeValueAsBytes(ocrPayloadObject());
+            return objectMapper.writeValueAsBytes(ocrPayloadObject(anchorDate));
         } catch (JacksonException exception) {
             throw new IllegalStateException("failed to serialize demo OCR payload", exception);
         }
     }
 
-    private DocumentOcrResultPayload ocrPayloadObject() {
+    private DocumentOcrResultPayload ocrPayloadObject(LocalDate anchorDate) {
+        DemoDocumentFixture fixture = fixtureById(DemoDocumentFixtureCatalog.OCR_DOCUMENT_ID);
+        var identity = fixture.passportIdentity();
         return new DocumentOcrResultPayload(
                 43019L,
                 AiOcrDocumentSide.FRONT,
                 new TreeMap<>(Map.of(
-                        "alien_registration_number", "SYNTHETIC-ARC-0001",
-                        "visa_type", "E-9",
-                        "stay_expiration_date", "2099-12-31",
-                        "residence_address_1", "DEMO ADDRESS - NOT REAL"
+                        "alien_registration_number", identity.alienRegistrationNumber(),
+                        "visa_type", identity.visaType(),
+                        "stay_expiration_date", relativeDate(anchorDate, fixture.expiryDays()).toString(),
+                        "residence_address_1", identity.syntheticAddress()
                 )),
                 new TreeMap<>(Map.of(
                         "alien_registration_number", new BigDecimal("0.61"),
