@@ -14,6 +14,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import org.springframework.http.HttpStatus;
@@ -51,6 +54,7 @@ public class WorkerLinkDocumentController {
                     )
             ),
             @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "409", description = "같은 멱등성 키의 요청 내용이 기존 업로드와 다름"),
             @ApiResponse(responseCode = "410", description = "링크를 찾을 수 없거나 더 이상 사용할 수 없음"),
             @ApiResponse(responseCode = "413", description = "파일 크기 초과"),
             @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType"),
@@ -66,8 +70,21 @@ public class WorkerLinkDocumentController {
             @Parameter(description = "근로자 링크 토큰") @PathVariable String token,
             @Parameter(description = "업로드할 파일") @RequestParam("file") MultipartFile file,
             @Parameter(description = "문서 유형") @RequestParam(value = "documentType", required = false) String documentType,
-            @Parameter(description = "클라이언트 중복 방지 키") @RequestParam("clientRequestId") String clientRequestId,
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Parameter(
+                    description = "더 이상 멱등성 판단에 사용하지 않는 이전 클라이언트 요청 식별자",
+                    deprecated = true
+            )
+            @RequestParam(value = "clientRequestId", required = false) String clientRequestId,
+            @Parameter(
+                    description = "문서 업로드 재시도를 식별하는 필수 키",
+                    required = true,
+                    example = "worker-upload-018f6b65"
+            )
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            @NotBlank
+            @Size(min = 8, max = 100)
+            @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+            String idempotencyKey,
             HttpServletRequest servletRequest
     ) {
         if (file.isEmpty() || file.getOriginalFilename() == null || file.getOriginalFilename().isBlank()) {
@@ -81,6 +98,7 @@ public class WorkerLinkDocumentController {
                     file.getSize(),
                     documentType,
                     clientRequestId,
+                    idempotencyKey,
                     file.getInputStream()
             );
             WorkerLinkDocumentUploadResult result = workerLinkDocumentService.upload(
