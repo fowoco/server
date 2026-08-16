@@ -8,6 +8,7 @@ import com.fowoco.server.auth.application.SignupResult;
 import com.fowoco.server.auth.application.SignupService;
 import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.auth.infrastructure.web.UserAgentDeviceSummarizer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -30,8 +31,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -215,8 +218,13 @@ public class AuthController {
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE
     )
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        LoginResult result = authService.login(request.toCommand());
+    public ResponseEntity<LoginResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            @RequestHeader(value = HttpHeaders.USER_AGENT, required = false) String userAgent
+    ) {
+        LoginResult result = authService.login(
+                request.toCommand(UserAgentDeviceSummarizer.summarize(userAgent))
+        );
         ResponseCookie refreshTokenCookie = refreshTokenCookieFactory.create(result.refreshToken());
 
         return ResponseEntity.ok()
@@ -360,5 +368,64 @@ public class AuthController {
     @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
     public CurrentActorResponse me() {
         return CurrentActorResponse.from(actorContextProvider.requireCurrentActor());
+    }
+
+    @Operation(
+            operationId = "getMyProfile",
+            summary = "내 프로필 조회",
+            description = "현재 로그인한 사용자의 표시 이름·연락처를 반환합니다.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "현재 사용자 프로필",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ProfileResponse.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized")
+    })
+    @GetMapping(path = "/me/profile", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
+    public ProfileResponse getMyProfile() {
+        var actor = actorContextProvider.requireCurrentActor();
+        return ProfileResponse.from(authService.currentProfile(actor.actorId(), actor.companyId()));
+    }
+
+    @Operation(
+            operationId = "updateMyProfile",
+            summary = "내 프로필 수정",
+            description = "현재 로그인한 사용자의 표시 이름·연락처를 수정합니다.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "수정된 프로필",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ProfileResponse.class)
+                    )
+            ),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType")
+    })
+    @PatchMapping(
+            path = "/me/profile",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
+    public ProfileResponse updateMyProfile(@Valid @RequestBody UpdateProfileRequest request) {
+        var actor = actorContextProvider.requireCurrentActor();
+        return ProfileResponse.from(authService.updateProfile(
+                actor.actorId(),
+                actor.companyId(),
+                request.getDisplayName(),
+                request.getPhone()
+        ));
     }
 }

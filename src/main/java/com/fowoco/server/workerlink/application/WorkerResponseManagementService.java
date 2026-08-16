@@ -40,6 +40,7 @@ public class WorkerResponseManagementService {
     private final WorkerLinkRepository workerLinkRepository;
     private final StoredFileRepository storedFileRepository;
     private final WorkerDocumentFileLookup workerDocumentFileLookup;
+    private final WorkerResponsePayloadCodec payloadCodec;
     private final AuditEventRepository auditRepository;
     private final TenantDatabaseContext tenantDatabaseContext;
     private final UuidGenerator uuidGenerator;
@@ -51,6 +52,7 @@ public class WorkerResponseManagementService {
             WorkerLinkRepository workerLinkRepository,
             StoredFileRepository storedFileRepository,
             WorkerDocumentFileLookup workerDocumentFileLookup,
+            WorkerResponsePayloadCodec payloadCodec,
             AuditEventRepository auditRepository,
             TenantDatabaseContext tenantDatabaseContext,
             UuidGenerator uuidGenerator,
@@ -61,6 +63,7 @@ public class WorkerResponseManagementService {
         this.workerLinkRepository = workerLinkRepository;
         this.storedFileRepository = storedFileRepository;
         this.workerDocumentFileLookup = workerDocumentFileLookup;
+        this.payloadCodec = payloadCodec;
         this.auditRepository = auditRepository;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.uuidGenerator = uuidGenerator;
@@ -78,6 +81,7 @@ public class WorkerResponseManagementService {
                         item.response().responseId(),
                         item.response().responseType(),
                         item.response().message(),
+                        payloadCodec.decodeAnswers(item.response().answersJson()),
                         item.uploadIds(),
                         item.uploadIds().stream()
                                 .map(fileId -> toUploadResult(fileId, actor.companyId()))

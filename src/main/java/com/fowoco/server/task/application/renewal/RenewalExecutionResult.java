@@ -9,7 +9,8 @@ public record RenewalExecutionResult(
         Task task,
         RenewalRunResponse agentResult,
         List<GeneratedDocumentResult> generatedDocuments,
-        DocumentRequestDraft workerMessageDraft
+        DocumentRequestDraft workerMessageDraft,
+        RenewalGuideReviewDraft guideReviewDraft
 ) {
     public RenewalExecutionResult {
         generatedDocuments = generatedDocuments == null ? List.of() : List.copyOf(generatedDocuments);

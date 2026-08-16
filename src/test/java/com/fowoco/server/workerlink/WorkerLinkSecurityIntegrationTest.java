@@ -5,15 +5,23 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
+import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
+import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
+import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
+import com.fowoco.server.reliability.application.OutboxProcessor;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsMessage;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsProviderException;
 import com.fowoco.server.workerlink.application.port.WorkerLinkSmsSender;
+import com.fowoco.server.workerlink.infrastructure.security.WorkerLinkHasher;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -63,8 +71,17 @@ class WorkerLinkSecurityIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private WorkerLinkHasher workerLinkHasher;
+
     @MockitoBean
     private WorkerLinkSmsSender workerLinkSmsSender;
+
+    @MockitoBean
+    private RenewalRuntimeClient renewalRuntimeClient;
+
+    @Autowired
+    private OutboxProcessor outboxProcessor;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -81,12 +98,14 @@ class WorkerLinkSecurityIntegrationTest {
 
     @BeforeEach
     void resetState() {
+        reset(renewalRuntimeClient);
         jdbcTemplate.update("DELETE FROM worker_response_upload");
         jdbcTemplate.update("DELETE FROM worker_response");
         jdbcTemplate.update("DELETE FROM worker_document_upload_idempotency");
         jdbcTemplate.update("DELETE FROM worker_link");
         jdbcTemplate.update("DELETE FROM document_request_draft_type");
         jdbcTemplate.update("DELETE FROM document_request_draft");
+        jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM stored_file");
         jdbcTemplate.update("DELETE FROM event_consumption");
         jdbcTemplate.update("DELETE FROM event_publication");
@@ -97,7 +116,6 @@ class WorkerLinkSecurityIntegrationTest {
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM task_checklist_item");
         jdbcTemplate.update("DELETE FROM task");
-        jdbcTemplate.update("DELETE FROM worker_document");
         jdbcTemplate.update("DELETE FROM worker");
         jdbcTemplate.update("UPDATE company_settings SET link_expiry_hours = 72");
     }
@@ -146,21 +164,27 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(viewResponse.body(), "$.due_date")).isEqualTo("2026-08-20");
         assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_document_types"))
                 .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_actions[*].type"))
+                .containsExactly("UPLOAD_DOCUMENT", "UPLOAD_DOCUMENT");
 
         HttpResponse<String> uploadResponse = uploadFile(rawToken, "passport.pdf", "application/pdf", "content".getBytes(StandardCharsets.UTF_8));
         assertThat(uploadResponse.statusCode()).isEqualTo(201);
         String uploadId = JsonPath.read(uploadResponse.body(), "$.upload_id");
 
-        HttpResponse<String> uploadFirstResponse = uploadFileWithFixedClientRequestId(
+        HttpResponse<String> uploadFirstResponse = uploadFileWithIdempotencyKey(
                 rawToken, "passport.pdf", "application/pdf",
-                "content".getBytes(StandardCharsets.UTF_8), "fixed-client-request-id"
+                "content".getBytes(StandardCharsets.UTF_8),
+                "legacy-client-request-id",
+                "fixed-upload-idempotency-key"
         );
         assertThat(uploadFirstResponse.statusCode()).isEqualTo(201);
         String firstUploadId = JsonPath.read(uploadFirstResponse.body(), "$.upload_id");
 
-        HttpResponse<String> uploadRetryResponse = uploadFileWithFixedClientRequestId(
+        HttpResponse<String> uploadRetryResponse = uploadFileWithIdempotencyKey(
                 rawToken, "passport.pdf", "application/pdf",
-                "content".getBytes(StandardCharsets.UTF_8), "fixed-client-request-id"
+                "content".getBytes(StandardCharsets.UTF_8),
+                null,
+                "fixed-upload-idempotency-key"
         );
         assertThat(uploadRetryResponse.statusCode()).isEqualTo(201);
         String retryUploadId = JsonPath.read(uploadRetryResponse.body(), "$.upload_id");
@@ -224,6 +248,353 @@ class WorkerLinkSecurityIntegrationTest {
                 accessToken(login(HR_B_EMAIL))
         );
         assertThat(otherCompanyActivities.statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void documentUploadUsesCanonicalIdempotencyKeyAndRejectsDifferentReplay() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "업로드멱등성테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "document-upload-idempotency-link-key");
+
+        HttpResponse<String> missingHeader = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8),
+                "legacy-request-id",
+                null
+        );
+        assertThat(missingHeader.statusCode()).isEqualTo(400);
+        assertThat(JsonPath.<String>read(missingHeader.body(), "$.code")).isEqualTo("VALIDATION_FAILED");
+
+        HttpResponse<String> invalidHeader = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8),
+                null,
+                "short"
+        );
+        assertThat(invalidHeader.statusCode()).isEqualTo(400);
+        assertThat(JsonPath.<String>read(invalidHeader.body(), "$.code")).isEqualTo("VALIDATION_FAILED");
+
+        HttpResponse<String> invalidDocumentType = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8),
+                null,
+                "canonical-invalid-document-type",
+                "CUSTOM_DOCUMENT"
+        );
+        assertThat(invalidDocumentType.statusCode()).isEqualTo(400);
+        assertThat(JsonPath.<String>read(invalidDocumentType.body(), "$.code"))
+                .isEqualTo("VALIDATION_FAILED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE company_id = ?",
+                Integer.class,
+                COMPANY_A
+        )).isZero();
+
+        HttpResponse<String> first = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8),
+                "shared-legacy-request-id",
+                "canonical-upload-key-1"
+        );
+        assertThat(first.statusCode()).as(first.body()).isEqualTo(201);
+        String firstUploadId = JsonPath.read(first.body(), "$.upload_id");
+
+        HttpResponse<String> retryWithoutLegacyField = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8),
+                null,
+                "canonical-upload-key-1"
+        );
+        assertThat(retryWithoutLegacyField.statusCode()).as(retryWithoutLegacyField.body()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(retryWithoutLegacyField.body(), "$.upload_id"))
+                .isEqualTo(firstUploadId);
+
+        HttpResponse<String> conflict = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "different-content".getBytes(StandardCharsets.UTF_8),
+                "shared-legacy-request-id",
+                "canonical-upload-key-1"
+        );
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(JsonPath.<String>read(conflict.body(), "$.code")).isEqualTo("IDEMPOTENCY_CONFLICT");
+
+        HttpResponse<String> differentCanonicalKey = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "content".getBytes(StandardCharsets.UTF_8),
+                "shared-legacy-request-id",
+                "canonical-upload-key-2"
+        );
+        assertThat(differentCanonicalKey.statusCode()).as(differentCanonicalKey.body()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(differentCanonicalKey.body(), "$.upload_id"))
+                .isNotEqualTo(firstUploadId);
+
+        UUID workerLinkId = jdbcTemplate.queryForObject(
+                "SELECT worker_link_id FROM worker_link WHERE task_id = ?",
+                UUID.class,
+                UUID.fromString(taskId)
+        );
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document_upload_idempotency WHERE worker_link_id = ?",
+                Integer.class,
+                workerLinkId
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT client_request_id) FROM worker_document_upload_idempotency "
+                        + "WHERE worker_link_id = ? "
+                        + "AND client_request_id = CONCAT('canonical:', CAST(stored_file_id AS VARCHAR)) "
+                        + "AND idempotency_key_hash IS NOT NULL AND request_hash IS NOT NULL",
+                Integer.class,
+                workerLinkId
+        )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE company_id = ?",
+                Integer.class,
+                COMPANY_A
+        )).isEqualTo(2);
+    }
+
+    @Test
+    void canonicalUploadDoesNotCollideWithLegacyClientRequestIdEqualToItsKeyHash() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "legacy충돌테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "legacy-collision-link-key");
+        UUID workerLinkId = jdbcTemplate.queryForObject(
+                "SELECT worker_link_id FROM worker_link WHERE task_id = ?",
+                UUID.class,
+                UUID.fromString(taskId)
+        );
+        String idempotencyKey = "legacy-collision-upload-key";
+        String idempotencyKeyHash = workerLinkHasher.hash(idempotencyKey);
+        UUID legacyStoredFileId = UUID.randomUUID();
+
+        jdbcTemplate.update(
+                """
+                INSERT INTO stored_file (
+                    stored_file_id, company_id, name, mime_type, size, purpose,
+                    task_id, storage_key, scan_status, verified
+                ) VALUES (?, ?, 'legacy.pdf', 'application/pdf', 1, 'WORKER_LINK_SUBMISSION',
+                          ?, ?, 'NOT_SCANNED', FALSE)
+                """,
+                legacyStoredFileId,
+                COMPANY_A,
+                UUID.fromString(taskId),
+                "legacy-collision-" + legacyStoredFileId
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO worker_document_upload_idempotency (
+                    worker_link_id, company_id, client_request_id, stored_file_id
+                ) VALUES (?, ?, ?, ?)
+                """,
+                workerLinkId,
+                COMPANY_A,
+                idempotencyKeyHash,
+                legacyStoredFileId
+        );
+
+        HttpResponse<String> response = uploadFileWithIdempotencyKey(
+                rawToken,
+                "passport.pdf",
+                "application/pdf",
+                "canonical-content".getBytes(StandardCharsets.UTF_8),
+                null,
+                idempotencyKey
+        );
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(201);
+        UUID canonicalStoredFileId = UUID.fromString(JsonPath.read(response.body(), "$.upload_id"));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT client_request_id FROM worker_document_upload_idempotency "
+                        + "WHERE worker_link_id = ? AND idempotency_key_hash = ?",
+                String.class,
+                workerLinkId,
+                idempotencyKeyHash
+        )).isEqualTo("canonical:" + canonicalStoredFileId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_document_upload_idempotency WHERE worker_link_id = ?",
+                Integer.class,
+                workerLinkId
+        )).isEqualTo(2);
+    }
+
+    @Test
+    void requestedSlotAnswerIsStoredAndDifferentIdempotentPayloadIsRejected() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "구조화답변테스트근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        jdbcTemplate.update(
+                "UPDATE task SET business_data_json = ? WHERE task_id = ?",
+                """
+                {
+                  "monthly_wage":2500000,
+                  "renewal_execution":{
+                    "requested_fields":[
+                      {"key":"lodging","source_hint":"USER_INPUT"},
+                      {"key":"passport_number","source_hint":"DOCUMENT_OCR"}
+                    ]
+                  }
+                }
+                """,
+                UUID.fromString(taskId)
+        );
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "slot-answer-link-key");
+
+        HttpResponse<String> viewResponse = getJson(
+                "/api/v1/public/worker-links/" + rawToken,
+                null
+        );
+        assertThat(viewResponse.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_actions[*].type"))
+                .containsExactly("ANSWER_FIELD", "UPLOAD_DOCUMENT", "UPLOAD_DOCUMENT");
+        assertThat(JsonPath.<List<String>>read(viewResponse.body(), "$.requested_actions[*].field_key"))
+                .contains("lodging");
+        assertThat(viewResponse.body()).doesNotContain("passport_number");
+
+        String body = """
+                {
+                  "response_type":"SLOT_ANSWERS_SUBMITTED",
+                  "answers":{"lodging":"사업장 건물 숙소 제공"},
+                  "idempotency_key":"slot-answer-1"
+                }
+                """;
+        HttpResponse<String> submitted = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                body,
+                null
+        );
+        assertThat(submitted.statusCode()).as(submitted.body()).isEqualTo(201);
+        String responseId = JsonPath.read(submitted.body(), "$.response_id");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT answers_json FROM worker_response WHERE response_id = ?",
+                String.class,
+                UUID.fromString(responseId)
+        )).contains("사업장 건물 숙소 제공");
+
+        doAnswer(invocation -> continuationResponse(invocation.getArgument(0)))
+                .when(renewalRuntimeClient).run(any(), any());
+        assertThat(outboxProcessor.processAvailable()).isGreaterThanOrEqualTo(1);
+        ArgumentCaptor<RenewalRunRequest> renewalRequest =
+                ArgumentCaptor.forClass(RenewalRunRequest.class);
+        verify(renewalRuntimeClient).run(renewalRequest.capture(), any());
+        assertThat(renewalRequest.getValue().slots())
+                .containsEntry("lodging", "사업장 건물 숙소 제공");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT business_data_json FROM task WHERE task_id = ?",
+                String.class,
+                UUID.fromString(taskId)
+        )).contains("renewal_inputs", "사업장 건물 숙소 제공");
+        assertThat(outboxProcessor.processAvailable()).isZero();
+
+        HttpResponse<String> retry = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                body,
+                null
+        );
+        assertThat(retry.statusCode()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(retry.body(), "$.response_id")).isEqualTo(responseId);
+
+        HttpResponse<String> conflict = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                """
+                {
+                  "response_type":"SLOT_ANSWERS_SUBMITTED",
+                  "answers":{"lodging":"다른 숙소 조건"},
+                  "idempotency_key":"slot-answer-1"
+                }
+                """,
+                null
+        );
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(conflict.body()).contains("WORKER_RESPONSE_IDEMPOTENCY_CONFLICT");
+
+        HttpResponse<String> page = getJson(
+                "/api/v1/tasks/" + taskId + "/worker-responses",
+                hrToken
+        );
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(page.body(), "$.items[0].answers.lodging"))
+                .isEqualTo("사업장 건물 숙소 제공");
+    }
+
+    private RenewalRunResponse continuationResponse(RenewalRunRequest request) {
+        return new RenewalRunResponse(
+                request.requestId(),
+                request.attemptId(),
+                request.taskId(),
+                "EXPIRY_RENEWAL",
+                request.task().workflowId(),
+                new BigDecimal("0.91"),
+                "NEEDS_INFO",
+                "NEEDS_INFO",
+                "ask_hr",
+                "PHASE_1",
+                "STEP_2",
+                Map.of(),
+                List.of("wage"),
+                List.of(new RenewalRequestedField("wage", "USER_INPUT")),
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                null,
+                List.of(),
+                List.of(),
+                null,
+                "rules",
+                "main",
+                List.of()
+        );
+    }
+
+    @Test
+    void unrequestedOrSensitiveSlotAnswerIsRejected() throws Exception {
+        String hrToken = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(hrToken, "미요청답변차단근로자");
+        String taskId = createApprovedTask(hrToken, workerId);
+        saveDocumentRequestDraft(hrToken, taskId);
+        String rawToken = issueWorkerLink(hrToken, taskId, "slot-answer-reject-link-key");
+
+        HttpResponse<String> response = postJson(
+                "/api/v1/public/worker-links/" + rawToken + "/responses",
+                """
+                {
+                  "response_type":"SLOT_ANSWERS_SUBMITTED",
+                  "answers":{"passport_number":"M12345678"},
+                  "idempotency_key":"slot-answer-reject-1"
+                }
+                """,
+                null
+        );
+
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains("WORKER_SLOT_ANSWER_INVALID");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_response",
+                Integer.class
+        )).isZero();
     }
 
     @Test
@@ -481,6 +852,11 @@ class WorkerLinkSecurityIntegrationTest {
                 UUID.fromString(taskId)
         )).isEqualTo(2);
         assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_publication "
+                        + "WHERE event_type = 'WorkerDocumentAdopted'",
+                Integer.class
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM worker_link WHERE task_id = ?",
                 String.class,
                 UUID.fromString(taskId)
@@ -512,6 +888,11 @@ class WorkerLinkSecurityIntegrationTest {
                 Integer.class,
                 UUID.fromString(taskId)
         )).isEqualTo(2);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_publication "
+                        + "WHERE event_type = 'WorkerDocumentAdopted'",
+                Integer.class
+        )).isEqualTo(1);
     }
 
     @Test
@@ -890,6 +1271,28 @@ class WorkerLinkSecurityIntegrationTest {
                 response.body(),
                 "$.paths['/api/v1/workers/{workerId}/activities'].get.operationId"
         )).isEqualTo("getWorkerActivities");
+        assertThat(JsonPath.<String>read(
+                response.body(),
+                "$.paths['/api/v1/public/worker-links/{token}/documents'].post.operationId"
+        )).isEqualTo("uploadWorkerLinkDocument");
+        assertThat(JsonPath.<List<Boolean>>read(
+                response.body(),
+                "$.paths['/api/v1/public/worker-links/{token}/documents'].post.parameters"
+                        + "[?(@.name == 'Idempotency-Key')].required"
+        )).containsExactly(true);
+        assertThat(JsonPath.<List<List<String>>>read(
+                response.body(),
+                "$.paths['/api/v1/public/worker-links/{token}/documents'].post.parameters"
+                        + "[?(@.name == 'documentType')].schema.enum"
+        )).containsExactly(List.of(
+                "PASSPORT_COPY",
+                "ARC",
+                "CONTRACT",
+                "PERMIT",
+                "EMPLOYMENT_EXTENSION_APPLICATION",
+                "INTEGRATED_APPLICATION",
+                "RESIDENCE_PROOF"
+        ));
         assertThat(JsonPath.<Number>read(
                 response.body(),
                 "$.components.schemas.WorkerLinkIssueRequest.properties.expires_in_hours.minimum"
@@ -1076,6 +1479,7 @@ class WorkerLinkSecurityIntegrationTest {
 
         HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
+                .header("Idempotency-Key", "upload-" + UUID.randomUUID())
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -1096,24 +1500,63 @@ class WorkerLinkSecurityIntegrationTest {
 
         HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
                 .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
+                .header("Idempotency-Key", "upload-" + UUID.randomUUID())
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> uploadFileWithFixedClientRequestId(
-            String token, String filename, String mimeType, byte[] content, String clientRequestId
+    private HttpResponse<String> uploadFileWithIdempotencyKey(
+            String token,
+            String filename,
+            String mimeType,
+            byte[] content,
+            String clientRequestId,
+            String idempotencyKey
+    ) throws Exception {
+        return uploadFileWithIdempotencyKey(
+                token,
+                filename,
+                mimeType,
+                content,
+                clientRequestId,
+                idempotencyKey,
+                null
+        );
+    }
+
+    private HttpResponse<String> uploadFileWithIdempotencyKey(
+            String token,
+            String filename,
+            String mimeType,
+            byte[] content,
+            String clientRequestId,
+            String idempotencyKey,
+            String documentType
     ) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         writePart(out, "file", filename, mimeType, content);
-        writeFieldPart(out, "clientRequestId", clientRequestId);
+        if (clientRequestId != null) {
+            writeFieldPart(out, "clientRequestId", clientRequestId);
+        }
+        if (documentType != null) {
+            writeFieldPart(out, "documentType", documentType);
+        }
         out.write(("--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
-        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/public/worker-links/" + token + "/documents"))
-                .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY)
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                        uri("/api/v1/public/worker-links/" + token + "/documents")
+                )
+                .header(HttpHeaders.CONTENT_TYPE, "multipart/form-data; boundary=" + BOUNDARY);
+        if (idempotencyKey != null) {
+            request.header("Idempotency-Key", idempotencyKey);
+        }
+        return httpClient.send(
+                request
                 .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
-                .build();
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                .build(),
+                HttpResponse.BodyHandlers.ofString()
+        );
     }
 
     private void writePart(ByteArrayOutputStream out, String name, String filename, String mimeType, byte[] content)

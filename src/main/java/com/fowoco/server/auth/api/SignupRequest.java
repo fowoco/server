@@ -41,6 +41,17 @@ public final class SignupRequest {
     @Pattern(regexp = "^[^\\p{Cc}]+$", message = "담당자 이름에 제어 문자를 사용할 수 없습니다.")
     private final String displayName;
 
+    @JsonProperty("phone")
+    @Schema(
+            description = "최초 담당자의 연락처 (선택)",
+            example = "010-1234-5678",
+            maxLength = 30,
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED
+    )
+    @Size(max = 30, message = "연락처는 30자 이하여야 합니다.")
+    @Pattern(regexp = "^[0-9+()\\-\\s]*$", message = "연락처 형식이 올바르지 않습니다.")
+    private final String phone;
+
     @Schema(
             description = "로그인에 사용할 이메일. 앞뒤 공백 제거 후 소문자로 정규화합니다.",
             example = "name@company.com",
@@ -76,12 +87,14 @@ public final class SignupRequest {
     public SignupRequest(
             @JsonProperty("company_name") String companyName,
             @JsonProperty("display_name") String displayName,
+            @JsonProperty("phone") String phone,
             @JsonProperty("email") String email,
             @JsonProperty("password") String password,
             @JsonProperty("agreements") SignupAgreementsRequest agreements
     ) {
         this.companyName = stripNullable(companyName);
         this.displayName = stripNullable(displayName);
+        this.phone = stripNullable(phone);
         this.email = stripNullable(email);
         this.password = password;
         this.agreements = agreements;
@@ -93,6 +106,10 @@ public final class SignupRequest {
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    public String getPhone() {
+        return phone;
     }
 
     public String getEmail() {
@@ -108,7 +125,9 @@ public final class SignupRequest {
     }
 
     public SignupCommand toCommand(String requestId) {
-        return new SignupCommand(companyName, displayName, email, password, agreements.toAgreements(), requestId);
+        return new SignupCommand(
+                companyName, displayName, phone, email, password, agreements.toAgreements(), requestId
+        );
     }
 
     private static String stripNullable(String value) {

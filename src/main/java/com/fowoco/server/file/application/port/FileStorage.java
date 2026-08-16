@@ -8,4 +8,6 @@ public interface FileStorage {
     void store(String storageKey, InputStream content, long size, String mimeType);
 
     Optional<InputStream> open(String storageKey);
+
+    void deleteIfExists(String storageKey);
 }

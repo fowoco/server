@@ -48,6 +48,18 @@ public enum WorkerLinkErrorCode implements ApiErrorCode {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "업로드된 파일을 찾을 수 없거나 이미 사용된 파일입니다."
     ),
+    IDEMPOTENCY_CONFLICT(
+            HttpStatus.CONFLICT,
+            "같은 Idempotency-Key가 다른 문서 업로드 요청에 이미 사용되었습니다."
+    ),
+    WORKER_SLOT_ANSWER_INVALID(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "요청하지 않았거나 허용되지 않은 근로자 답변입니다."
+    ),
+    WORKER_RESPONSE_IDEMPOTENCY_CONFLICT(
+            HttpStatus.CONFLICT,
+            "같은 idempotency_key가 다른 근로자 응답에 이미 사용되었습니다."
+    ),
     WORKER_RESPONSE_NOT_FOUND(HttpStatus.NOT_FOUND, "근로자 응답을 찾을 수 없습니다."),
     WORKER_RESPONSE_NOT_DOCUMENT_SUBMISSION(
             HttpStatus.UNPROCESSABLE_CONTENT,

@@ -258,7 +258,7 @@ class DashboardSecurityIntegrationTest {
         String accessToken = accessToken(login(HR_A_EMAIL));
         String workerId = registerWorker(accessToken, "승인대기추천근로자");
         String taskId = createTask(accessToken, workerId, "승인대기업무");
-        requestReview(accessToken, taskId, workerId);
+        markTaskReadyForReview(taskId);
 
         HttpResponse<String> response = authorizedGet("/api/v1/dashboard/today", accessToken);
 
@@ -361,33 +361,51 @@ class DashboardSecurityIntegrationTest {
 
     private void requestReview(String accessToken, String taskId, String workerId) throws Exception {
         HttpResponse<String> taskResponse = authorizedGet("/api/v1/tasks/" + taskId, accessToken);
+        assertThat(taskResponse.statusCode()).as("body: %s", taskResponse.body()).isEqualTo(200);
         List<String> checklistIds = JsonPath.read(taskResponse.body(), "$.checklist_items[*].checklist_item_id");
         for (String checklistId : checklistIds) {
+            long taskVersion = JsonPath.<Number>read(taskResponse.body(), "$.version").longValue();
+            List<Number> checklistVersions = JsonPath.read(
+                    taskResponse.body(),
+                    "$.checklist_items[?(@.checklist_item_id == '" + checklistId + "')].version"
+            );
+            assertThat(checklistVersions).hasSize(1);
             HttpResponse<String> checked = sendJson(
                     "/api/v1/tasks/" + taskId + "/checklist-items/" + checklistId,
                     """
-                    {"completed":true,"expected_version":0,"expected_task_version":0}
-                    """,
+                    {"completed":true,"expected_version":%d,"expected_task_version":%d}
+                    """.formatted(checklistVersions.get(0).longValue(), taskVersion),
                     accessToken,
                     "PATCH"
             );
             assertThat(checked.statusCode()).as("body: %s", checked.body()).isEqualTo(200);
+            taskResponse = checked;
         }
+        long taskVersion = JsonPath.<Number>read(taskResponse.body(), "$.version").longValue();
         HttpResponse<String> approvalRequest = sendJson(
                 "/api/v1/tasks/" + taskId + "/approval-requests",
                 """
                 {
-                  "expected_version":0,
+                  "expected_version":%d,
                   "ai_snapshot":null,
                   "hr_snapshot":{"worker_id":"%s"},
                   "changed_fields":[],
                   "source_versions":{"workflow_catalog_version":"0.2.0"}
                 }
-                """.formatted(workerId),
+                """.formatted(taskVersion, workerId),
                 accessToken,
                 "POST"
         );
         assertThat(approvalRequest.statusCode()).as("body: %s", approvalRequest.body()).isEqualTo(201);
+    }
+
+    private void markTaskReadyForReview(String taskId) {
+        int updated = jdbcTemplate.update(
+                "UPDATE task SET status = 'READY_FOR_REVIEW', updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE task_id = ?",
+                UUID.fromString(taskId)
+        );
+        assertThat(updated).isEqualTo(1);
     }
 
     private void insertCompany(UUID companyId, String name) {

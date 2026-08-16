@@ -17,6 +17,7 @@ import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.document.application.port.DocumentRequestDraftRepository;
 import com.fowoco.server.file.application.port.StoredFileRepository;
 import com.fowoco.server.file.domain.StoredFile;
+import com.fowoco.server.reliability.application.port.DomainEventPublisher;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.application.port.TaskTransitionRecorder;
@@ -65,6 +66,7 @@ public class WorkerResponseDocumentAdoptionService {
     private final DocumentRequestDraftRepository documentRequestDraftRepository;
     private final ApprovalControlPort approvalControl;
     private final AuditEventRepository auditRepository;
+    private final DomainEventPublisher eventPublisher;
     private final UuidGenerator uuidGenerator;
     private final Clock clock;
 
@@ -81,6 +83,7 @@ public class WorkerResponseDocumentAdoptionService {
             DocumentRequestDraftRepository documentRequestDraftRepository,
             ApprovalControlPort approvalControl,
             AuditEventRepository auditRepository,
+            DomainEventPublisher eventPublisher,
             UuidGenerator uuidGenerator,
             Clock clock
     ) {
@@ -96,6 +99,7 @@ public class WorkerResponseDocumentAdoptionService {
         this.documentRequestDraftRepository = documentRequestDraftRepository;
         this.approvalControl = approvalControl;
         this.auditRepository = auditRepository;
+        this.eventPublisher = eventPublisher;
         this.uuidGenerator = uuidGenerator;
         this.clock = clock;
     }
@@ -128,6 +132,7 @@ public class WorkerResponseDocumentAdoptionService {
 
         Instant now = DatabaseTimestamp.now(clock);
         List<AdoptedDocument> adoptedDocuments = new ArrayList<>();
+        List<WorkerDocument> newlyAdoptedDocuments = new ArrayList<>();
         Set<DocumentType> submittedTypes = EnumSet.noneOf(DocumentType.class);
         int newlyAdoptedCount = 0;
         for (UUID fileId : responseItem.uploadIds()) {
@@ -141,6 +146,7 @@ public class WorkerResponseDocumentAdoptionService {
                     .orElseGet(() -> createDocument(task, documentType, fileId, now));
             if (existing.isEmpty()) {
                 newlyAdoptedCount++;
+                newlyAdoptedDocuments.add(document);
                 appendFileAudit(document, actor, metadata, now);
             }
             adoptedDocuments.add(new AdoptedDocument(
@@ -179,6 +185,13 @@ public class WorkerResponseDocumentAdoptionService {
                     now
             ));
         }
+        newlyAdoptedDocuments.stream()
+                .filter(this::supportsOcr)
+                .forEach(document -> eventPublisher.publish(
+                        WorkerResponseDomainEvents.documentAdopted(
+                                uuidGenerator.generate(), document, actor, metadata, now
+                        )
+                ));
 
         return new WorkerResponseDocumentAdoptionResult(
                 responseId,
@@ -186,6 +199,11 @@ public class WorkerResponseDocumentAdoptionService {
                 savedTask.status(),
                 savedTask.version()
         );
+    }
+
+    private boolean supportsOcr(WorkerDocument document) {
+        return document.documentType() == DocumentType.PASSPORT_COPY
+                || document.documentType() == DocumentType.ARC;
     }
 
     private StoredFile requireSubmittedFile(UUID fileId, Task task, UUID companyId) {

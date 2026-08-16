@@ -95,7 +95,9 @@ class AuthOpenApiContractTest {
                 .contains("company_name", "display_name", "email", "password", "agreements");
         assertThat(requestProperties.properties())
                 .extracting(java.util.Map.Entry::getKey)
-                .containsExactlyInAnyOrder("company_name", "display_name", "email", "password", "agreements");
+                .containsExactlyInAnyOrder(
+                        "company_name", "display_name", "phone", "email", "password", "agreements"
+                );
         assertThat(request.at("/properties/password/minLength").asInt()).isEqualTo(8);
         assertThat(request.at("/properties/password/maxLength").asInt()).isEqualTo(128);
         assertThat(request.at("/properties/password/writeOnly").asBoolean()).isTrue();

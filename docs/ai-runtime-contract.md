@@ -3,6 +3,8 @@
 이 문서는 `fowoco/server`가 별도 배포되는 `fowoco/ai` Runtime을 호출할 때 지켜야 하는
 최소 계약과 방어 규칙을 설명합니다.
 
+현재 Server가 고정한 Knowledge projection과 AI Runtime의 기준 버전은 `0.3.0`입니다.
+
 Server에는 `/internal/v1/analyses`를 호출하는 HTTP Adapter까지 구현되어 있습니다.
 다만 실제 OpenAPI와 Structured Output JSON Schema의 원본은 `fowoco/ai`가 소유하므로,
 AI 저장소에서 같은 `contractVersion`을 release하기 전까지 실제 호출은 기본적으로 꺼 둡니다.
@@ -69,8 +71,11 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
     "targetDisplayName": "응웬반안",
     "extractedSlots": {},
     "requiredFieldKeys": [
-      "legal_name",
-      "stay_expiry_date"
+      "worker_id",
+      "due_at",
+      "stay_expiry_date",
+      "passport_status",
+      "arc_status"
     ]
   },
   "questions": [],
@@ -82,8 +87,8 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
     "modelName": "gpt-5-mini",
     "modelVersion": "2026-07-01",
     "promptVersion": "prompt-3",
-    "contextPackVersion": "context-0.2.0",
-    "workflowCatalogVersion": "0.2.0",
+    "contextPackVersion": "0.3.0",
+    "workflowCatalogVersion": "0.3.0",
     "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
@@ -114,8 +119,8 @@ MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택
     "modelName": "klue-roberta-base",
     "modelVersion": "BERT",
     "promptVersion": "knowledge-25e778ad",
-    "contextPackVersion": "context-0.2.0",
-    "workflowCatalogVersion": "0.2.0",
+    "contextPackVersion": "0.3.0",
+    "workflowCatalogVersion": "0.3.0",
     "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
@@ -226,8 +231,8 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
     "modelName": "gpt-5-mini",
     "modelVersion": "2026-07-01",
     "promptVersion": "prompt-3",
-    "contextPackVersion": "context-0.2.0",
-    "workflowCatalogVersion": "0.2.0",
+    "contextPackVersion": "0.3.0",
+    "workflowCatalogVersion": "0.3.0",
     "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
@@ -276,6 +281,16 @@ HR 화면은 AI를 직접 호출하지 않고 다음 Server API를 사용합니�
 | `GET /api/v1/documents/{documentId}/ocr-runs/{ocrRunId}` | 실행 상태와 HR 검토용 결과 조회 |
 | `GET /api/v1/documents/{documentId}/ocr-runs/latest` | 해당 문서의 최신 실행 조회 |
 | `POST /api/v1/documents/{documentId}/ocr-runs/{ocrRunId}/review` | HR의 수정값과 검토 완료·반려 기록 |
+
+근로자 모바일 제출물을 HR이 공식 `WorkerDocument`로 채택하면 여권·외국인등록증은
+`WorkerDocumentAdopted` Outbox 이벤트를 통해 OCR 실행이 자동 접수됩니다. 파일 채택과
+외부 OCR 호출을 같은 HTTP transaction에 묶지 않으므로, Runtime 장애가 발생해도 채택
+결과는 유지되고 OCR 실행 상태를 별도로 재처리할 수 있습니다.
+
+OCR 결과는 자동으로 Worker 개인정보를 수정하지 않습니다. HR이 결과를 대조해 승인하면
+`DocumentOcrApproved` 이벤트가 기존 Case의 Renewal Task를 다시 실행합니다. Server는
+승인된 OCR 원본과 HR 수정값을 Context에서 병합하고, Agent 결과가 `generate`이면 생성
+파일을 기존 `stored_file`과 `worker_document`에 HR 검토용 초안으로 저장합니다.
 
 Server는 연결된 `stored_file`을 읽어 AI의
 `POST /internal/v1/ocr/worker-documents/{workerDocumentId}`로 multipart 전송합니다.
@@ -393,6 +408,53 @@ Workflow로 바꾼 응답은 `UNEXPECTED_WORKFLOW`로 거부합니다.
 
 `scenario=out_of_scope`, `intent=OUT_OF_SCOPE`인 종료 응답만 `workflowId`가 비어 있을 수
 있습니다. 이는 Workflow 실행 결과가 아니라 지원 범위 밖 정상 종료 신호이기 때문입니다.
+
+## 근로자 안내 실패와 HR 검토
+
+Language Assistant가 비활성화됐거나 안내문을 안전하게 생성하지 못하면 Runtime은 임시
+문장을 만들지 않고 다음과 같이 HR 검토를 요청합니다.
+
+```json
+{
+  "scenario": "ask_worker",
+  "status": "READY_FOR_REVIEW",
+  "outcome": "REVIEW_REQUIRED",
+  "workerRequestMessage": null,
+  "guideReviewRequired": true,
+  "guideFailureCode": "LANGUAGE_ASSISTANT_NOT_CONFIGURED",
+  "caseSignals": ["REVIEW_WORKER_GUIDE"]
+}
+```
+
+Server는 `guideFailureCode`를 안전한 허용 목록으로 검증하고 Task의
+`renewal_execution` 메타데이터와 감사로그에 보존합니다. 이 경로에서는 근로자 안내
+초안, Worker Link, SMS를 자동으로 생성하거나 발송하지 않습니다. Task는 누락정보 입력
+상태로 회귀하지 않고 HR 검토 대상으로 남습니다. HR이 안전한 안내문을 작성하고 기존
+승인 절차를 마친 뒤에만 Worker Link 발급과 전달 흐름을 진행합니다.
+
+Runtime이 `languageAssistant`에 생성 결과를 함께 보낸 경우 Server는 임의 Provider 응답
+전체가 아니라 아래 검토 필드만 `guide_review_draft`로 선별해 Task 실행정보와 API 응답에
+보존합니다.
+
+```json
+{
+  "guide_review_draft": {
+    "target_language": "vi",
+    "generation_status": "warning",
+    "standard_korean_text": "여권 사본을 제출해 주세요.",
+    "easy_korean_text": "여권을 내 주세요.",
+    "translated_text": "Vui lòng nộp bản sao hộ chiếu.",
+    "warning_codes": ["SEMANTIC_VALIDATION_INCONCLUSIVE"]
+  }
+}
+```
+
+이 값은 HR에게 보여 주는 수정 전 제안일 뿐 `document_request_draft`가 아닙니다. 검토 필요
+경로에서는 `worker_message_draft_id=null`을 유지하며, HR이 제안문을 확인·수정해 기존
+문서 요청 초안 API에 저장하고 승인을 끝내기 전에는 Worker Link나 SMS를 만들지 않습니다.
+
+기존 Runtime이 신규 필드를 보내지 않으면 `guideReviewRequired=false`,
+`guideFailureCode=null`로 해석하므로 정상 `ask_worker` 계약은 그대로 유지됩니다.
 
 ## Renewal 생성 문서 연결
 

@@ -205,7 +205,7 @@ public class DocumentOcrService {
         requireFeatureEnabled();
         return requiredTransaction(() -> {
             bindTenant(actor.companyId());
-            requireDocument(documentId, actor.companyId());
+            WorkerDocument document = requireDocument(documentId, actor.companyId());
             DocumentOcrRun current = ocrRunRepository.findByIdAndCompanyId(ocrRunId, actor.companyId())
                     .filter(found -> found.workerDocumentId().equals(documentId))
                     .orElseThrow(() -> new ApiException(DocumentErrorCode.DOCUMENT_OCR_RUN_NOT_FOUND));
@@ -238,6 +238,17 @@ public class DocumentOcrService {
                     metadata,
                     reviewAuditSummary(command.decision(), correctedFields)
             );
+            if (command.decision() == DocumentOcrReviewDecision.APPROVE
+                    && document.taskId() != null) {
+                eventPublisher.publish(DocumentOcrDomainEvents.approved(
+                        uuidGenerator.generate(),
+                        saved,
+                        document.taskId(),
+                        actor,
+                        metadata,
+                        clock.instant()
+                ));
+            }
             return result(saved, false);
         });
     }
@@ -457,7 +468,9 @@ public class DocumentOcrService {
         return switch (documentType) {
             case PASSPORT_COPY -> AiOcrDocumentType.PASSPORT_COPY;
             case ARC -> AiOcrDocumentType.ARC;
-            case CONTRACT, PERMIT -> throw new ApiException(DocumentErrorCode.DOCUMENT_OCR_UNSUPPORTED_TYPE);
+            case CONTRACT, PERMIT, EMPLOYMENT_EXTENSION_APPLICATION,
+                    INTEGRATED_APPLICATION, RESIDENCE_PROOF ->
+                    throw new ApiException(DocumentErrorCode.DOCUMENT_OCR_UNSUPPORTED_TYPE);
         };
     }
 
@@ -507,7 +520,8 @@ public class DocumentOcrService {
         Set<String> allowedFields = switch (documentType) {
             case PASSPORT_COPY -> PASSPORT_CORRECTABLE_FIELDS;
             case ARC -> ARC_CORRECTABLE_FIELDS;
-            case CONTRACT, PERMIT -> Set.of();
+            case CONTRACT, PERMIT, EMPLOYMENT_EXTENSION_APPLICATION,
+                    INTEGRATED_APPLICATION, RESIDENCE_PROOF -> Set.of();
         };
         Map<String, String> normalized = new LinkedHashMap<>();
         fields.entrySet().stream()

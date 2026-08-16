@@ -36,6 +36,7 @@ import com.fowoco.server.workflow.domain.WorkflowDefinition;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -350,7 +351,7 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         }
         try {
             if (value != null && !value.isBlank()) {
-                return LocalDate.parse(value);
+                return parseDueDate(value);
             }
             if (worker.stayExpiryDate() != null) {
                 return worker.stayExpiryDate();
@@ -358,6 +359,14 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
             return worker.contractEndDate();
         } catch (DateTimeParseException exception) {
             throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
+        }
+    }
+
+    private LocalDate parseDueDate(String value) {
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException dateOnlyFailure) {
+            return OffsetDateTime.parse(value).toLocalDate();
         }
     }
 
@@ -397,7 +406,11 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
                 .map(documentType -> switch (documentType) {
                     case PASSPORT_COPY -> "여권";
                     case ARC -> "외국인등록증";
-                    default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
+                    case CONTRACT -> "근로계약서";
+                    case PERMIT -> "고용허가서";
+                    case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
+                    case INTEGRATED_APPLICATION -> "통합신청서";
+                    case RESIDENCE_PROOF -> "체류지 입증자료";
                 })
                 .collect(java.util.stream.Collectors.joining("·"));
     }

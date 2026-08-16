@@ -122,7 +122,7 @@ app:
       enabled: ${OUTBOX_ENABLED:true}
       poll-interval: ${OUTBOX_POLL_INTERVAL:1s}
       batch-size: ${OUTBOX_BATCH_SIZE:20}
-      lease-duration: ${OUTBOX_LEASE_DURATION:30s}
+      lease-duration: ${OUTBOX_LEASE_DURATION:5m}
       max-attempts: ${OUTBOX_MAX_ATTEMPTS:8}
       initial-backoff: ${OUTBOX_INITIAL_BACKOFF:1s}
       max-backoff: ${OUTBOX_MAX_BACKOFF:5m}
@@ -144,6 +144,8 @@ app:
     admin-display-name: ${DEMO_SEED_ADMIN_DISPLAY_NAME:데모 관리자}
     admin-email: ${DEMO_SEED_ADMIN_EMAIL:demo.admin@example.com}
     admin-password: ${DEMO_SEED_ADMIN_PASSWORD:}
+  demo-document-data:
+    command: ${DEMO_DOCUMENT_DATA_COMMAND:none}
   auth:
     jwt:
       issuer: ${JWT_ISSUER:fowoco-server}

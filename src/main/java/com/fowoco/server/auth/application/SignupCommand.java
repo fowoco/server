@@ -5,6 +5,7 @@ import java.util.Objects;
 public record SignupCommand(
         String companyName,
         String displayName,
+        String phone,
         String email,
         String password,
         SignupAgreements agreements,

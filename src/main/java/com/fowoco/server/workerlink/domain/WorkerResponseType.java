@@ -5,5 +5,6 @@ public enum WorkerResponseType {
     QUESTION,
     NOT_UNDERSTOOD,
     DOCUMENT_SUBMITTED,
-    DIFFICULT
+    DIFFICULT,
+    SLOT_ANSWERS_SUBMITTED
 }

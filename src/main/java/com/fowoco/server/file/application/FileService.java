@@ -47,11 +47,13 @@ public class FileService {
     );
     private static final String HWP_EXTENSION = ".hwp";
     private static final String HWPX_EXTENSION = ".hwpx";
+    private static final String FILE_UPLOAD_ACTION = "file_upload";
 
     private final StoredFileRepository storedFileRepository;
     private final HwpSignatureValidator hwpSignatureValidator;
     private final HwpxSignatureValidator hwpxSignatureValidator;
     private final FileStorage fileStorage;
+    private final FileStorageRollbackCompensation rollbackCompensation;
     private final TaskRepository taskRepository;
     private final WorkerRepository workerRepository;
     private final AuditEventRepository auditRepository;
@@ -64,6 +66,7 @@ public class FileService {
             HwpSignatureValidator hwpSignatureValidator,
             HwpxSignatureValidator hwpxSignatureValidator,
             FileStorage fileStorage,
+            FileStorageRollbackCompensation rollbackCompensation,
             TaskRepository taskRepository,
             WorkerRepository workerRepository,
             AuditEventRepository auditRepository,
@@ -75,6 +78,7 @@ public class FileService {
         this.hwpSignatureValidator = hwpSignatureValidator;
         this.hwpxSignatureValidator = hwpxSignatureValidator;
         this.fileStorage = fileStorage;
+        this.rollbackCompensation = rollbackCompensation;
         this.taskRepository = taskRepository;
         this.workerRepository = workerRepository;
         this.auditRepository = auditRepository;
@@ -128,7 +132,10 @@ public class FileService {
                 now
         );
 
+        FileStorageRollbackCompensation.Registration rollbackRegistration =
+                rollbackCompensation.register(storageKey, metadata, FILE_UPLOAD_ACTION);
         fileStorage.store(storageKey, new java.io.ByteArrayInputStream(contentBytes), command.size(), command.mimeType());
+        rollbackRegistration.markCreated();
         storedFileRepository.insert(storedFile);
 
         appendAudit(

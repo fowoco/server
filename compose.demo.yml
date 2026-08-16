@@ -63,10 +63,14 @@ services:
       DOCUMENT_OCR_ENABLED: ${DOCUMENT_OCR_ENABLED:-false}
       OCR_RESULT_ENCRYPTION_KEY_BASE64: ${OCR_RESULT_ENCRYPTION_KEY_BASE64:-}
       OCR_RESULT_KEY_VERSION: ${OCR_RESULT_KEY_VERSION:-demo-v1}
+      FILE_STORAGE_LOCAL_PATH: /app/data/files
       DEMO_SEED_ENABLED: ${DEMO_SEED_ENABLED:-false}
       DEMO_SEED_ADMIN_PASSWORD: ${DEMO_SEED_ADMIN_PASSWORD:-}
+      DEMO_DOCUMENT_DATA_COMMAND: ${DEMO_DOCUMENT_DATA_COMMAND:-none}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - fowoco-server-data:/app/data
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/actuator/health/readiness"]
       interval: 10s
@@ -76,3 +80,4 @@ services:
 
 volumes:
   fowoco-postgres-data:
+  fowoco-server-data:

@@ -12,7 +12,7 @@ public class OutboxProperties {
     private boolean enabled = true;
     private Duration pollInterval = Duration.ofSeconds(1);
     private int batchSize = 20;
-    private Duration leaseDuration = Duration.ofSeconds(30);
+    private Duration leaseDuration = Duration.ofMinutes(5);
     private int maxAttempts = 8;
     private Duration initialBackoff = Duration.ofSeconds(1);
     private Duration maxBackoff = Duration.ofMinutes(5);

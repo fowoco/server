@@ -85,6 +85,7 @@ class AuthSecurityIntegrationTest {
     @BeforeEach
     void resetAuthenticationState() {
         jdbcTemplate.update("DELETE FROM refresh_token");
+        jdbcTemplate.update("DELETE FROM user_login_event");
         jdbcTemplate.update(
                 "UPDATE user_account SET status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP, version = version + 1"
         );
@@ -130,6 +131,27 @@ class AuthSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(meResponse.body(), "$.user_id")).isEqualTo(VIEWER_A.toString());
         assertThat(JsonPath.<String>read(meResponse.body(), "$.company_id")).isEqualTo(COMPANY_A.toString());
         assertThat(JsonPath.<String>read(meResponse.body(), "$.roles[0]")).isEqualTo("VIEWER");
+    }
+
+    @Test
+    void getMyProfileReflectsAccountStateAndRecordsLoginDeviceHistory() throws Exception {
+        String chromeMacUserAgent =
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+                        + "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+        HttpResponse<String> loginResponse = loginWithUserAgent(HR_A_EMAIL, PASSWORD, chromeMacUserAgent);
+        String accessToken = accessToken(loginResponse);
+
+        HttpResponse<String> profileResponse = authorizedGet("/api/v1/auth/me/profile", accessToken);
+
+        assertThat(profileResponse.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(profileResponse.body(), "$.role")).isEqualTo("HR");
+        assertThat(JsonPath.<String>read(profileResponse.body(), "$.account_status")).isEqualTo("ACTIVE");
+        assertThat(JsonPath.<String>read(profileResponse.body(), "$.password_changed_at")).isNotBlank();
+        assertThat(JsonPath.<String>read(profileResponse.body(), "$.last_login_at")).isNotBlank();
+        assertThat(JsonPath.<String>read(profileResponse.body(), "$.last_login_device"))
+                .isEqualTo("Chrome · macOS");
+        assertThat(JsonPath.<Number>read(profileResponse.body(), "$.recent_device_count").intValue())
+                .isEqualTo(1);
     }
 
     @Test
@@ -421,6 +443,19 @@ class AuthSecurityIntegrationTest {
                 {"email":"%s","password":"%s"}
                 """.formatted(email, password);
         return postJson("/api/v1/auth/login", body, null);
+    }
+
+    private HttpResponse<String> loginWithUserAgent(String email, String password, String userAgent)
+            throws Exception {
+        String body = """
+                {"email":"%s","password":"%s"}
+                """.formatted(email, password);
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/auth/login"))
+                .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                .header(HttpHeaders.USER_AGENT, userAgent)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> refresh(String rawRefreshToken) throws Exception {

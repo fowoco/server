@@ -14,6 +14,7 @@ public record AiRunResult(
         AiRunStatus status,
         AiAnalysisOutcome analysisOutcome,
         String detectedIntent,
+        String evidence,
         String errorCode,
         int attemptCount,
         long version,

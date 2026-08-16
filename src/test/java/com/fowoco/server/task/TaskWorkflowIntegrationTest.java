@@ -218,7 +218,7 @@ class TaskWorkflowIntegrationTest {
         assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("DRAFT");
         assertThat(JsonPath.<String>read(created.body(), "$.target_type")).isEqualTo("WORKER");
         assertThat(JsonPath.<String>read(created.body(), "$.workflow_catalog_version"))
-                .isEqualTo("0.2.0");
+                .isEqualTo("0.3.0");
         assertThat(jdbcTemplate.queryForList(
                 "SELECT event_type FROM event_publication "
                         + "WHERE aggregate_id = ? ORDER BY occurred_at",

@@ -334,15 +334,20 @@ class PostgreSqlMigrationTests {
         assertThat(columnSpecs(connection, "worker_response"))
                 .containsEntry("response_id", new ColumnSpec("uuid", false))
                 .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
-                .containsEntry("company_id", new ColumnSpec("uuid", false));
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("answers_json", new ColumnSpec("text", false))
+                .containsEntry("request_fingerprint", new ColumnSpec("varchar", true));
         assertThat(columnSpecs(connection, "worker_response_upload"))
                 .containsEntry("response_id", new ColumnSpec("uuid", false))
                 .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false));
         assertThat(columnSpecs(connection, "worker_document_upload_idempotency"))
                 .containsEntry("worker_link_id", new ColumnSpec("uuid", false))
+                .containsEntry("client_request_id", new ColumnSpec("varchar", false))
                 .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
-                .containsEntry("company_id", new ColumnSpec("uuid", false));
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("idempotency_key_hash", new ColumnSpec("varchar", true))
+                .containsEntry("request_hash", new ColumnSpec("varchar", true));
         assertThat(columnSpecs(connection, "workflow_case"))
                 .containsEntry("case_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
@@ -464,6 +469,10 @@ class PostgreSqlMigrationTests {
                         "fk_worker_response_upload_file_company",
                         "fk_worker_document_upload_idempotency_link_company",
                         "fk_worker_document_upload_idempotency_file_company",
+                        "uq_worker_document_upload_idempotency_key_hash",
+                        "ck_worker_document_upload_idempotency_key_hash",
+                        "ck_worker_document_upload_idempotency_request_hash",
+                        "ck_worker_document_upload_idempotency_hash_pair",
                         "pk_outbox_manual_retry",
                         "uq_outbox_manual_retry_event_key",
                         "fk_outbox_manual_retry_event_company",
@@ -718,6 +727,54 @@ class PostgreSqlMigrationTests {
                 TASK_A, COMPANY_A, REVOKED_WORKER_LINK_TOKEN_HASH, USER_A,
                 TASK_A, COMPANY_A, EXPIRED_WORKER_LINK_TOKEN_HASH, USER_A
         ));
+        execute(connection, """
+                INSERT INTO stored_file (
+                    stored_file_id, company_id, name, mime_type, size, purpose,
+                    storage_key, scan_status
+                ) VALUES (
+                    '23000000-0000-0000-0000-000000000001', '%s',
+                    'worker-upload.pdf', 'application/pdf', 1, 'WORKER_LINK_SUBMISSION',
+                    'migration-worker-upload', 'NOT_SCANNED'
+                )
+                """.formatted(COMPANY_A));
+        execute(connection, """
+                INSERT INTO worker_document_upload_idempotency (
+                    worker_link_id, company_id, client_request_id, stored_file_id
+                ) VALUES (
+                    '21000000-0000-0000-0000-000000000001', '%s',
+                    'legacy-client-request', '23000000-0000-0000-0000-000000000001'
+                )
+                """.formatted(COMPANY_A));
+        execute(connection, """
+                INSERT INTO worker_document_upload_idempotency (
+                    worker_link_id, company_id, client_request_id, stored_file_id,
+                    idempotency_key_hash, request_hash
+                ) VALUES (
+                    '21000000-0000-0000-0000-000000000001', '%s',
+                    'canonical-client-request-a', '23000000-0000-0000-0000-000000000001',
+                    '%s', '%s'
+                )
+                """.formatted(COMPANY_A, "1".repeat(64), "2".repeat(64)));
+        assertSqlState(connection, "23505", """
+                INSERT INTO worker_document_upload_idempotency (
+                    worker_link_id, company_id, client_request_id, stored_file_id,
+                    idempotency_key_hash, request_hash
+                ) VALUES (
+                    '21000000-0000-0000-0000-000000000001', '%s',
+                    'canonical-client-request-b', '23000000-0000-0000-0000-000000000001',
+                    '%s', '%s'
+                )
+                """.formatted(COMPANY_A, "1".repeat(64), "3".repeat(64)));
+        assertSqlState(connection, "23514", """
+                INSERT INTO worker_document_upload_idempotency (
+                    worker_link_id, company_id, client_request_id, stored_file_id,
+                    idempotency_key_hash
+                ) VALUES (
+                    '21000000-0000-0000-0000-000000000001', '%s',
+                    'canonical-client-request-c', '23000000-0000-0000-0000-000000000001',
+                    '%s'
+                )
+                """.formatted(COMPANY_A, "4".repeat(64)));
         assertThat(queryNullableString(
                 connection,
                 "SELECT delivery_status FROM worker_link WHERE worker_link_id = ?::uuid",

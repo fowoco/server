@@ -98,7 +98,8 @@ HR 로그인
 → 근로자 보안 링크 발급·모바일 안내
 → 근로자 응답·서류 제출
 → HR 제출자료 확인·공식 서류 채택
-→ Task 재개
+→ OCR 실행·HR 결과 검토
+→ 승인된 OCR Context로 기존 Task 재개·문서 초안 생성
 → 외부 제출·처리결과 기록
 → 완료·감사로그
 ```
@@ -139,14 +140,23 @@ HR이 승인된 Task의 Worker Link 발급
 → Server가 WorkerResponse와 StoredFile로 보관
 → HR이 제출 파일의 이름·형식·크기·서류 유형 확인
 → HR이 채택한 파일만 WorkerDocument(SUBMITTED)로 등록
-→ 요청 서류가 모두 채택되면 Task: WAITING_WORKER → APPROVED
-→ 다음 제출·승인 단계 진행
+→ 여권·외국인등록증 채택 이벤트가 Outbox를 통해 OCR 실행 요청
+→ HR이 OCR 추출값을 원본과 대조해 수정·승인
+→ 승인된 OCR 값을 Context에 병합해 기존 Renewal Task 재실행
+→ 모든 필수정보가 갖춰지면 HWP/HWPX 초안을 저장하고 HR 검토로 이동
 ```
 
 근로자의 제출만으로 개인정보와 공식 서류 상태를 자동 확정하지 않습니다.
 `SUBMITTED`와 `VERIFIED`를 분리하고, HR이 확인한 파일만 기존 업무와 연결합니다.
 같은 파일을 다시 채택해도 문서가 중복 생성되지 않으며, 링크 발급·상태 전이·채택은
-감사로그와 Task 전이 이력으로 추적합니다.
+감사로그와 Task 전이 이력으로 추적합니다. OCR 결과도 Worker 원본 개인정보를 자동으로
+덮어쓰지 않고, HR이 승인한 결과만 Renewal Context에서 사용합니다. 생성된 문서는
+자동 발송하지 않으며 다시 HR 검토를 거칩니다.
+
+Language Assistant가 근로자 안내를 안전하게 만들지 못한 경우에도 임시 문장을 발송하지
+않습니다. Server는 생성된 한국어·쉬운 한국어·번역문을 `guide_review_draft`로 보존해
+HR이 검토할 수 있게 하고, 실패 코드도 함께 기록합니다. 이 제안문은 공식 안내 초안으로
+자동 확정되지 않으며 담당자가 수정·승인한 뒤에만 Worker Link와 SMS 전달을 허용합니다.
 
 ### 업무 이벤트가 알림으로 이어지는 흐름
 
@@ -267,6 +277,7 @@ src/main/java/com/fowoco/server/
 | Agent DB 정보 보충 | [Slot 조회·재호출](docs/ai-slot-resolution.md) | canonical key allow-list, tenant 조회와 ANALYZE 재호출 기준 |
 | AI 단계별 성능 측정 | [AI 파이프라인 관측·Prometheus 가이드](docs/ai-pipeline-observability.md) | PLAN·Slot·ANALYZE·Renewal 구간의 정량 평가와 로컬 Prometheus 확인 기준 |
 | 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
+| 파일 rollback·orphan 대응 | [File Storage rollback 보상 운영 가이드](docs/reliability/file-storage-rollback-compensation.md) | atomic finalize, rollback cleanup, `UNKNOWN` reconciliation과 배포 volume Smoke 기준 |
 | 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
 | 전체 설명·운영 가이드 | [Server Wiki](https://github.com/fowoco/server/wiki) | 초보자용 아키텍처·API·배포 설명 |
 

@@ -41,6 +41,9 @@ public class UserAccountJpaEntity {
     @Column(name = "display_name", nullable = false, length = 80)
     private String displayName;
 
+    @Column(name = "phone", length = 30)
+    private String phone;
+
     @Column(name = "email", nullable = false, length = 254)
     private String email;
 
@@ -64,6 +67,9 @@ public class UserAccountJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "password_changed_at", nullable = false)
+    private Instant passwordChangedAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -75,6 +81,7 @@ public class UserAccountJpaEntity {
             UUID userId,
             UUID companyId,
             String displayName,
+            String phone,
             String email,
             String normalizedEmail,
             String passwordHash,
@@ -82,11 +89,13 @@ public class UserAccountJpaEntity {
             AccountStatus status,
             Instant createdAt,
             Instant updatedAt,
+            Instant passwordChangedAt,
             long version
     ) {
         this.userId = userId;
         this.companyId = companyId;
         this.displayName = displayName;
+        this.phone = phone;
         this.email = email;
         this.normalizedEmail = normalizedEmail;
         this.passwordHash = passwordHash;
@@ -94,6 +103,7 @@ public class UserAccountJpaEntity {
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.passwordChangedAt = passwordChangedAt;
         this.version = version;
     }
 
@@ -103,6 +113,7 @@ public class UserAccountJpaEntity {
                 userAccount.userId(),
                 userAccount.companyId(),
                 userAccount.displayName(),
+                userAccount.phone(),
                 userAccount.email(),
                 userAccount.normalizedEmail(),
                 userAccount.passwordHash(),
@@ -110,6 +121,7 @@ public class UserAccountJpaEntity {
                 userAccount.status(),
                 userAccount.createdAt(),
                 userAccount.updatedAt(),
+                userAccount.passwordChangedAt(),
                 userAccount.version()
         );
     }
@@ -119,6 +131,7 @@ public class UserAccountJpaEntity {
                 userId,
                 companyId,
                 displayName,
+                phone,
                 email,
                 normalizedEmail,
                 passwordHash,
@@ -126,6 +139,7 @@ public class UserAccountJpaEntity {
                 status,
                 createdAt,
                 updatedAt,
+                passwordChangedAt,
                 version
         );
     }
@@ -135,8 +149,11 @@ public class UserAccountJpaEntity {
         if (!userId.equals(userAccount.userId()) || version + 1 != userAccount.version()) {
             throw new IllegalArgumentException("user account version transition is invalid");
         }
+        displayName = userAccount.displayName();
+        phone = userAccount.phone();
         passwordHash = userAccount.passwordHash();
         updatedAt = userAccount.updatedAt();
+        passwordChangedAt = userAccount.passwordChangedAt();
     }
 
 }

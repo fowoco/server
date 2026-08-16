@@ -157,7 +157,14 @@ class DemoAuthSeedRunner implements ApplicationRunner {
         Optional<UserAccount> existingByEmail =
                 userAccountRepository.findByNormalizedEmail(normalizedEmail);
         if (existingByEmail.isPresent()) {
-            verifyExistingUser(existingByEmail.orElseThrow(), companyId, demoUser);
+            UserAccount existing = existingByEmail.orElseThrow();
+            verifyExistingUser(existing, companyId, demoUser);
+            if (!passwordEncoder.matches(properties.adminPassword(), existing.passwordHash())) {
+                userAccountRepository.update(existing.changePassword(
+                        passwordEncoder.encode(properties.adminPassword()),
+                        now
+                ));
+            }
             return;
         }
         if (userAccountRepository
@@ -169,6 +176,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
                 demoUser.userId(),
                 companyId,
                 demoUser.displayName(),
+                null,
                 demoUser.email(),
                 passwordEncoder.encode(properties.adminPassword()),
                 demoUser.role(),
