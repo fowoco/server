@@ -26,6 +26,7 @@ final class PostgreSqlRestrictedRoleHttpEnvironment implements AutoCloseable {
             Map.entry("user_account", "SELECT"),
             Map.entry("refresh_token", "SELECT, INSERT, UPDATE"),
             Map.entry("worker", "SELECT, INSERT, UPDATE"),
+            Map.entry("worker_archive", "SELECT, INSERT"),
             Map.entry("task", "SELECT"),
             Map.entry("worker_link", "SELECT"),
             Map.entry("worker_response", "SELECT, INSERT"),
