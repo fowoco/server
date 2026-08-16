@@ -529,6 +529,11 @@ class DocumentOcrApiIntegrationTest {
             byte[] value = files.get(storageKey);
             return value == null ? Optional.empty() : Optional.of(new ByteArrayInputStream(value));
         }
+
+        @Override
+        public void deleteIfExists(String storageKey) {
+            files.remove(storageKey);
+        }
     }
 
     static final class TestAiOcrClient implements AiOcrClient {

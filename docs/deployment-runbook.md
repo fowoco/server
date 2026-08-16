@@ -158,10 +158,17 @@ Seed의 수량과 고정 ID도 첫 기동과 같아야 합니다.
 4. 로그인과 타 사업장 접근 차단 확인
 5. `POST /api/v1/ai-runs`의 실제 Server→AI 왕복 확인
 6. 후보 채택 후 Case·Task 조회 확인
-7. Worker Link 대표 흐름 확인
+7. Worker Link 대표 흐름과 동일 `Idempotency-Key` 문서 재시도가 같은 `upload_id`로
+   수렴하는지 확인
 8. SMS가 활성화된 환경에서는 실제 수신·링크 접속·중복 발송 방지 확인
 9. SMTP가 활성화된 환경에서는 재설정 메일 수신·링크 token·새 비밀번호 로그인 확인
 10. 로그에서 AiRun·Renewal `TOTAL` 단계와 안전한 `failure_code`가 기록되는지 확인
+11. 실제 `FILE_STORAGE_LOCAL_PATH` volume에 최종 파일만 한 개 있고
+    `.fowoco-upload-*.tmp`가 남지 않았는지 확인
+
+파일 rollback cleanup 실패나 transaction `UNKNOWN` 로그가 있으면
+[File Storage rollback 보상 운영 가이드](reliability/file-storage-rollback-compensation.md)의
+DB·volume 대조 절차를 따른다.
 
 Runtime 장애 테스트에서는 가짜 AI 결과를 만들지 않고 안전한 오류 또는 수동 처리 상태로
 남아야 합니다.
@@ -179,6 +186,15 @@ kubectl -n fowoco get events --sort-by=.lastTimestamp
 
 애플리케이션 문제이며 DB migration이 이전 이미지와 호환될 때만 승인 후 이전 image SHA로
 되돌립니다.
+
+Worker Link 문서 멱등성 V51을 적용한 뒤 이전 Server image로 되돌릴 때는 schema 호환과
+멱등성 의미 호환을 구분합니다. 이전 image는 nullable hash column을 무시하고 기동할 수
+있지만, 새 version이 `canonical:<stored_file_id>`로 기록한 성공 결과를 기존
+`clientRequestId` 조회로 재사용하지 못합니다. rollback 가능한 기간에는 Client가
+`Idempotency-Key`와 multipart `clientRequestId`를 함께 보내는 동작을 유지하고, rollback
+후에는 새 version에서 성공한 문서 업로드를 자동 재시도하지 않습니다. 상세 점검은
+[File Storage rollback 보상 운영 가이드](reliability/file-storage-rollback-compensation.md)의
+Rollback 원칙을 따릅니다.
 
 ```bash
 kubectl -n fowoco set image deployment/server server=ghcr.io/fowoco/server:<previous-sha>
