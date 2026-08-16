@@ -106,6 +106,7 @@ class WorkerDocumentSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(response.body(), "$.document_type")).isEqualTo("PASSPORT_COPY");
         assertThat(JsonPath.<String>read(response.body(), "$.submission_status")).isEqualTo("SUBMITTED");
         assertThat(JsonPath.<String>read(response.body(), "$.worker_id")).isEqualTo(workerIdInCompanyA);
+        assertThat(JsonPath.<String>read(response.body(), "$.source")).isEqualTo("HR_UPLOAD");
         assertThat(JsonPath.<Number>read(response.body(), "$.version").longValue()).isZero();
     }
 

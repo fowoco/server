@@ -2,6 +2,7 @@ package com.fowoco.server.worker.application;
 
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -11,6 +12,7 @@ public final class WorkerDocumentCreateCommand {
     private final UUID taskId;
     private final DocumentType documentType;
     private final SubmissionStatus submissionStatus;
+    private final WorkerDocumentSource source;
     private final LocalDate expiryDate;
     private final String destination;
     private final String note;
@@ -20,6 +22,7 @@ public final class WorkerDocumentCreateCommand {
             UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             String destination,
             String note
@@ -28,6 +31,7 @@ public final class WorkerDocumentCreateCommand {
         this.taskId = taskId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
+        this.source = source;
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
@@ -47,6 +51,10 @@ public final class WorkerDocumentCreateCommand {
 
     public SubmissionStatus submissionStatus() {
         return submissionStatus;
+    }
+
+    public WorkerDocumentSource source() {
+        return source;
     }
 
     public LocalDate expiryDate() {

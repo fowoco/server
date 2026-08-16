@@ -42,6 +42,9 @@ public final class RenewalRuntimeContractValidator {
             "LANGUAGE_ASSISTANT_REVIEW_REQUIRED",
             "WORKER_GUIDE_UNAVAILABLE"
     );
+    private static final Set<String> INTERNAL_DOCUMENT_STATES = Set.of(
+            "both_missing", "passport_only", "partial_unknown"
+    );
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final Set<String> DOCUMENT_TEMPLATES = Set.of(
             "standard_labor_contract_v6",
@@ -128,6 +131,7 @@ public final class RenewalRuntimeContractValidator {
         boundaryPolicy.validateText(response.workerRequestMessage(), 1_000, false);
         validateWorkerGuideReview(response);
         validateLanguageAssistant(response);
+        validateAutomaticWorkerGuide(request, response);
         if (response.missingSlots().size() > 100
                 || response.requestedFields().size() > 100
                 || response.caseSignals().size() > 20
@@ -210,6 +214,54 @@ public final class RenewalRuntimeContractValidator {
             boundaryPolicy.validateText((String) text, 1_000, false);
         }
         validateLanguageWarnings(assistant.get("warnings"));
+    }
+
+    private void validateAutomaticWorkerGuide(
+            RenewalRunRequest request,
+            RenewalRunResponse response
+    ) {
+        if (!"ask_worker".equals(response.scenario()) || response.guideReviewRequired()) {
+            return;
+        }
+        if (response.languageAssistant() == null) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Automatic worker guide requires a validated Language Assistant result."
+            );
+        }
+        Object target = response.languageAssistant().get("target_language");
+        String preferred = request.worker().preferredLanguage();
+        if (preferred != null
+                && !preferred.isBlank()
+                && (!(target instanceof String language)
+                || !preferred.equalsIgnoreCase(language))) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Worker guide target language does not match the worker preference."
+            );
+        }
+        String message = response.workerRequestMessage();
+        if (containsAnyInternalToken(message, response.missingSlots())
+                || containsAnyInternalToken(message, INTERNAL_DOCUMENT_STATES)) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Worker guide exposes an internal field or document state."
+            );
+        }
+    }
+
+    private boolean containsAnyInternalToken(String text, Iterable<String> tokens) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String normalized = text.toLowerCase(java.util.Locale.ROOT);
+        for (String token : tokens) {
+            if (token != null && !token.isBlank()
+                    && normalized.contains(token.toLowerCase(java.util.Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void validateLanguageWarnings(Object value) {

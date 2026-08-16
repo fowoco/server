@@ -128,6 +128,33 @@ class DocumentSecurityIntegrationTest {
     }
 
     @Test
+    void readinessIgnoresExpiredHistoryWhenAValidReplacementExists() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(token, "교체서류준비도테스트");
+        String taskId = createTask(token, workerId);
+
+        String expiredContractId = registerWorkerDocument(token, workerId, "CONTRACT");
+        jdbcTemplate.update(
+                "UPDATE worker_document SET expiry_date = DATE '2026-08-01' WHERE worker_document_id = ?",
+                UUID.fromString(expiredContractId)
+        );
+        String currentContractId = registerWorkerDocument(token, workerId, "CONTRACT");
+        jdbcTemplate.update(
+                "UPDATE worker_document SET expiry_date = DATE '2027-08-01' WHERE worker_document_id = ?",
+                UUID.fromString(currentContractId)
+        );
+        registerWorkerDocument(token, workerId, "PERMIT");
+
+        HttpResponse<String> response = getJson("/api/v1/tasks/" + taskId + "/document-readiness", token);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(response.body(), "$.available"))
+                .containsExactlyInAnyOrder("CONTRACT", "PERMIT");
+        assertThat(JsonPath.<List<String>>read(response.body(), "$.expired")).isEmpty();
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.completion_blocked")).isFalse();
+    }
+
+    @Test
     void readinessReturnsNotFoundForOtherCompanyTask() throws Exception {
         String tokenA = accessToken(login(HR_A_EMAIL));
         String tokenB = accessToken(login(HR_B_EMAIL));
@@ -152,6 +179,8 @@ class DocumentSecurityIntegrationTest {
         assertThat(items).hasSize(1);
         assertThat(JsonPath.<String>read(response.body(), "$.items[0].display_name"))
                 .isEqualTo("목록조회테스트");
+        assertThat(JsonPath.<String>read(response.body(), "$.items[0].source"))
+                .isEqualTo("HR_UPLOAD");
     }
 
     @Test

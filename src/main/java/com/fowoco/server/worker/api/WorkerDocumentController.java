@@ -7,6 +7,7 @@ import com.fowoco.server.worker.application.WorkerDocumentCreateCommand;
 import com.fowoco.server.worker.application.WorkerDocumentPatchCommand;
 import com.fowoco.server.worker.application.WorkerDocumentService;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -77,6 +78,7 @@ public class WorkerDocumentController {
                 request.getTaskId(),
                 request.getDocumentType(),
                 request.getSubmissionStatus(),
+                WorkerDocumentSource.HR_UPLOAD,
                 request.getExpiryDate(),
                 request.getDestination(),
                 request.getNote()
