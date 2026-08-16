@@ -230,7 +230,7 @@ class WorkerDocumentSecurityIntegrationTest {
 
         java.util.Map<String, Object> archiveMetadata = jdbcTemplate.queryForMap(
                 """
-                SELECT archived_at, archived_by, archive_reason
+                SELECT archived_at, archived_by, archive_reason, source
                   FROM worker_document
                  WHERE worker_document_id = ? AND company_id = ?
                 """,
@@ -240,6 +240,7 @@ class WorkerDocumentSecurityIntegrationTest {
         assertThat(archiveMetadata.get("archived_at")).isNotNull();
         assertThat(archiveMetadata.get("archived_by")).isEqualTo(HR_A);
         assertThat(archiveMetadata.get("archive_reason")).isEqualTo("잘못 등록한 중복 서류");
+        assertThat(archiveMetadata.get("source")).isEqualTo("HR_UPLOAD");
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*) FROM audit_event
