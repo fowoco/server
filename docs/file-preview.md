@@ -79,3 +79,21 @@ PR #183의 합성 문서가 병합된 뒤 아래 항목을 문서별로 확인�
 
 품질이 부족한 문서는 원본 생성 규칙을 수정하고, 수정 전후 Preview 화면과 확인한 필드 목록을
 #186에 남긴다.
+
+## 2026-08-16 실제 변환 확인 결과
+
+최신 main과 AI main의 문서 변환 코드를 사용해 합성 Template 4개를 실제 LibreOffice 엔진으로
+변환했다. Server의 HTTP 계약과 오류 처리는 정상이나, 아래 Provider 품질 문제가 확인되어
+HWP·HWPX 미리보기는 아직 데모 활성화 대상이 아니다.
+
+| 입력 파일 | 실제 결과 | 판정 |
+| --- | --- | --- |
+| `employment-contract-template.hwp` | PDF 생성, 136,363 bytes, 60페이지 | 깨진 문자와 비정상 페이지 수로 사용 불가 |
+| `employment-contract-template.hwpx` | `source file could not be loaded` | 변환 실패 |
+| `employment-extension-template.hwpx` | `source file could not be loaded` | 변환 실패 |
+| `integrated-application-template.hwpx` | `source file could not be loaded` | 변환 실패 |
+
+검증 명령과 환경은 macOS, LibreOffice headless, AI `HwpToPdfConverter`·`HwpxToPdfConverter`를
+사용했다. 변환 실패 상태에서는 Server가 원본이나 DB를 변경하지 않고 422 또는 503으로
+종료한다. 실제 변환 기능은 AI의 HWP/HWPX 렌더링 경로가 보완되고 동일 fixture Smoke Test가
+통과한 뒤 활성화한다.
