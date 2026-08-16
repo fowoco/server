@@ -9,8 +9,9 @@ public final class LoginCommand {
 
     private final String email;
     private final String password;
+    private final String deviceSummary;
 
-    public LoginCommand(String email, String password) {
+    public LoginCommand(String email, String password, String deviceSummary) {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("email must not be blank");
         }
@@ -26,8 +27,12 @@ public final class LoginCommand {
         if (password.getBytes(StandardCharsets.UTF_8).length > 72) {
             throw new IllegalArgumentException("password must not exceed 72 UTF-8 bytes");
         }
+        if (deviceSummary == null || deviceSummary.isBlank()) {
+            throw new IllegalArgumentException("deviceSummary must not be blank");
+        }
         this.email = email;
         this.password = password;
+        this.deviceSummary = deviceSummary;
     }
 
     public String email() {
@@ -36,5 +41,9 @@ public final class LoginCommand {
 
     public String password() {
         return password;
+    }
+
+    public String deviceSummary() {
+        return deviceSummary;
     }
 }
