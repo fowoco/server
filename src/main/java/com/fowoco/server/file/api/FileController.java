@@ -7,6 +7,8 @@ import com.fowoco.server.common.error.ErrorCode;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.file.application.FileCreateCommand;
 import com.fowoco.server.file.application.FileDownloadResult;
+import com.fowoco.server.file.application.FilePreviewResult;
+import com.fowoco.server.file.application.FilePreviewService;
 import com.fowoco.server.file.application.FileService;
 import com.fowoco.server.file.domain.StoredFile;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,10 +47,16 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileController {
 
     private final FileService fileService;
+    private final FilePreviewService filePreviewService;
     private final ActorContextProvider actorContextProvider;
 
-    public FileController(FileService fileService, ActorContextProvider actorContextProvider) {
+    public FileController(
+            FileService fileService,
+            FilePreviewService filePreviewService,
+            ActorContextProvider actorContextProvider
+    ) {
         this.fileService = fileService;
+        this.filePreviewService = filePreviewService;
         this.actorContextProvider = actorContextProvider;
     }
 
@@ -146,6 +154,53 @@ public class FileController {
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .contentLength(result.storedFile().size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .cacheControl(CacheControl.noStore())
+                .body(new InputStreamResource(result.content()));
+    }
+
+    @Operation(
+            operationId = "previewFile",
+            summary = "파일 미리보기",
+            description = "PDF와 이미지는 브라우저에서 바로 표시하고 HWP·HWPX는 AI 문서 변환기를 통해 PDF로 반환합니다. "
+                    + "원본 파일은 변경하지 않으며 다른 사업장의 파일은 404로 응답합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "미리보기 성공. HWP·HWPX는 application/pdf로 반환",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE,
+                            schema = @Schema(type = "string", format = "binary")
+                    )
+            ),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "415", ref = "#/components/responses/UnsupportedMediaType"),
+            @ApiResponse(responseCode = "422", ref = "#/components/responses/UnprocessableEntity"),
+            @ApiResponse(responseCode = "503", description = "HWP·HWPX 변환 서비스를 사용할 수 없음")
+    })
+    @GetMapping("/{fileId}/preview")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
+    public ResponseEntity<InputStreamResource> preview(
+            @Parameter(description = "미리보기할 파일 ID") @PathVariable UUID fileId,
+            HttpServletRequest servletRequest
+    ) {
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        FilePreviewResult result = filePreviewService.preview(
+                fileId,
+                actor,
+                RequestMetadata.from(servletRequest)
+        );
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(result.fileName(), StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(parseMediaType(result.mimeType()))
+                .contentLength(result.size())
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header("X-Content-Type-Options", "nosniff")
                 .cacheControl(CacheControl.noStore())

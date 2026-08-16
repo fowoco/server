@@ -14,6 +14,7 @@ class AiRuntimePropertiesTest {
 
         assertThat(properties.getOverallTimeout()).isEqualTo(Duration.ofMinutes(4));
         assertThat(properties.attemptDeadlineMs()).isEqualTo(240_000L);
+        assertThat(properties.getDocumentConversionTimeout()).isEqualTo(Duration.ofSeconds(60));
     }
 
     @Test

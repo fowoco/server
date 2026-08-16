@@ -283,6 +283,60 @@ class FileSecurityIntegrationTest {
     }
 
     @Test
+    void sameCompanyUserCanPreviewPdfInline() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        byte[] content = "%PDF-1.7 preview".getBytes(StandardCharsets.US_ASCII);
+        HttpResponse<String> uploadResponse = uploadFile(
+                token, "근로계약서.pdf", "application/pdf", content, "GENERAL"
+        );
+        UUID fileId = UUID.fromString(JsonPath.read(uploadResponse.body(), "$.file_id"));
+
+        HttpResponse<byte[]> previewResponse = previewFile(fileId, token);
+
+        assertThat(previewResponse.statusCode()).isEqualTo(200);
+        assertThat(previewResponse.body()).isEqualTo(content);
+        assertThat(previewResponse.headers().firstValue(HttpHeaders.CONTENT_TYPE)).contains("application/pdf");
+        assertThat(previewResponse.headers().firstValue(HttpHeaders.CONTENT_DISPOSITION))
+                .hasValueSatisfying(value -> assertThat(value).contains("inline").contains("filename*="));
+        assertThat(previewResponse.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+    }
+
+    @Test
+    void hwpPreviewReturnsServiceUnavailableWhenAiRuntimeIsDisabled() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        HttpResponse<String> uploadResponse = uploadFile(
+                token,
+                "contract.hwp",
+                "application/octet-stream",
+                buildValidHwpOleFile(),
+                "GENERAL"
+        );
+        UUID fileId = UUID.fromString(JsonPath.read(uploadResponse.body(), "$.file_id"));
+
+        HttpResponse<byte[]> previewResponse = previewFile(fileId, token);
+
+        assertThat(previewResponse.statusCode()).isEqualTo(503);
+    }
+
+    @Test
+    void otherCompanyCannotPreviewFile() throws Exception {
+        String companyAToken = accessToken(login(HR_A_EMAIL));
+        HttpResponse<String> uploadResponse = uploadFile(
+                companyAToken,
+                "note.pdf",
+                "application/pdf",
+                "%PDF-1.7 company A".getBytes(StandardCharsets.US_ASCII),
+                "GENERAL"
+        );
+        UUID fileId = UUID.fromString(JsonPath.read(uploadResponse.body(), "$.file_id"));
+        String companyBToken = accessToken(login(HR_B_EMAIL));
+
+        HttpResponse<byte[]> response = previewFile(fileId, companyBToken);
+
+        assertThat(response.statusCode()).isEqualTo(404);
+    }
+
+    @Test
     void downloadExposesContentDispositionToAllowedBrowserOrigin() throws Exception {
         String token = accessToken(login(HR_A_EMAIL));
         HttpResponse<String> uploadResponse = uploadFile(
@@ -376,6 +430,14 @@ class FileSecurityIntegrationTest {
 
     private HttpResponse<byte[]> downloadFile(UUID fileId, String token) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/files/" + fileId + "/content"))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .GET()
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private HttpResponse<byte[]> previewFile(UUID fileId, String token) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/files/" + fileId + "/preview"))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .GET()
                 .build();

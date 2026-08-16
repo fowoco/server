@@ -7,6 +7,7 @@ import com.fowoco.server.aiintegration.application.validation.AiRuntimeContractV
 import com.fowoco.server.aiintegration.application.validation.RenewalRuntimeContractValidator;
 import com.fowoco.server.aiintegration.application.validation.ValidatingAiRuntimeClient;
 import com.fowoco.server.aiintegration.application.validation.ValidatingRenewalRuntimeClient;
+import com.fowoco.server.file.application.port.DocumentPreviewConverter;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
@@ -109,6 +110,21 @@ public class AiRuntimeHttpConfiguration {
                 properties.getMaxDocumentResponseBytes(),
                 createHttpClient(properties.getConnectTimeout()),
                 contractObjectMapper
+        );
+    }
+
+    @Bean
+    public DocumentPreviewConverter documentPreviewConverter(AiRuntimeProperties properties) {
+        if (!properties.isEnabled()) {
+            return new DisabledDocumentPreviewConverter();
+        }
+        properties.validateEnabledConfiguration();
+        return new RemoteDocumentPreviewConverter(
+                properties.getDocumentConversionEndpoint(),
+                properties.authorizationHeader(),
+                properties.getDocumentConversionTimeout(),
+                properties.getMaxDocumentResponseBytes(),
+                createHttpClient(properties.getConnectTimeout())
         );
     }
 

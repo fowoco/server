@@ -74,6 +74,8 @@ app:
     endpoint: ${AI_RUNTIME_ENDPOINT:http://127.0.0.1:8000/internal/v1/analyses}
     renewal-endpoint: ${AI_RUNTIME_RENEWAL_ENDPOINT:http://127.0.0.1:8000/internal/v1/workflows/renewal/run}
     document-generation-endpoint: ${AI_DOCUMENT_GENERATION_ENDPOINT:http://127.0.0.1:8000/api/v1/documents/generate}
+    document-conversion-endpoint: ${AI_DOCUMENT_CONVERSION_ENDPOINT:http://127.0.0.1:8000/api/v1/documents/convert}
+    document-conversion-timeout: ${AI_DOCUMENT_CONVERSION_TIMEOUT:60s}
     service-credential: ${AI_RUNTIME_SERVICE_CREDENTIAL:}
     connect-timeout: ${AI_RUNTIME_CONNECT_TIMEOUT:2s}
     overall-timeout: ${AI_RUNTIME_OVERALL_TIMEOUT:240s}
