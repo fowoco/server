@@ -208,7 +208,7 @@ class TaskWorkflowIntegrationTest {
         assertThat(catalog.statusCode()).isEqualTo(200);
         assertThat(JsonPath.<String>read(catalog.body(), "$.source_repository"))
                 .isEqualTo("fowoco/knowledge");
-        assertThat(JsonPath.<List<?>>read(catalog.body(), "$.workflows")).hasSize(7);
+        assertThat(JsonPath.<List<?>>read(catalog.body(), "$.workflows")).hasSize(8);
 
         HttpResponse<String> created = post("/api/v1/tasks", validCreateBody(), token);
         assertThat(created.statusCode()).isEqualTo(201);
@@ -218,7 +218,7 @@ class TaskWorkflowIntegrationTest {
         assertThat(JsonPath.<String>read(created.body(), "$.status")).isEqualTo("DRAFT");
         assertThat(JsonPath.<String>read(created.body(), "$.target_type")).isEqualTo("WORKER");
         assertThat(JsonPath.<String>read(created.body(), "$.workflow_catalog_version"))
-                .isEqualTo("0.3.0");
+                .isEqualTo("0.3.1");
         assertThat(jdbcTemplate.queryForList(
                 "SELECT event_type FROM event_publication "
                         + "WHERE aggregate_id = ? ORDER BY occurred_at",

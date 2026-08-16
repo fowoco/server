@@ -121,7 +121,9 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         }
 
         WorkflowCatalog catalog = catalogService.getActiveCatalog();
-        List<WorkflowDefinition> workflows = catalog.findByIntent(command.detectedIntent());
+        List<WorkflowDefinition> workflows = catalog.findByIntent(command.detectedIntent()).stream()
+                .filter(workflow -> isStandardExpiryRenewalWorkflow(workflow.workflowId()))
+                .toList();
         if (workflows.isEmpty()
                 || workflows.stream().noneMatch(workflow -> workflow.workflowId()
                         .equals(command.candidateWorkflowId()))) {
@@ -212,6 +214,10 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
                 .map(entry -> new TaskPlan(entry.getKey(), entry.getValue(), List.of()))
                 .sorted(Comparator.comparingInt(this::order))
                 .toList();
+    }
+
+    private boolean isStandardExpiryRenewalWorkflow(String workflowId) {
+        return workflowId.equals("WF-CON-001") || workflowId.equals("WF-STY-001");
     }
 
     private WorkflowDefinition documentRequestWorkflow(WorkflowCatalog catalog) {

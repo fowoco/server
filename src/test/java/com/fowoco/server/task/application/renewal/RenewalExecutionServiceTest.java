@@ -111,7 +111,7 @@ class RenewalExecutionServiceTest {
     private RenewalTaskSnapshot taskSnapshot() {
         return new RenewalTaskSnapshot(
                 TASK_ID, COMPANY_ID, WORKER_ID, null,
-                "RECONTRACT", "WF-CON-001", "0.3.0",
+                "RECONTRACT", "WF-CON-001", "0.3.1",
                 "재계약 조건 확인", null, Map.of(), 0,
                 "MANUAL", "DRAFT", null, ACTOR_ID, ACTOR_ID,
                 null, null, 0

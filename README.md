@@ -227,7 +227,7 @@ src/main/java/com/fowoco/server/
 ├── worker / workerimport / document / file
 ├── workflow / task / casework
 ├── approval / audit
-├── workerlink / dashboard / notification / settings
+├── workerlink / stayverification / dashboard / notification / settings
 ├── airun / aiintegration
 └── reliability
 ```
@@ -277,6 +277,7 @@ src/main/java/com/fowoco/server/
 | Agent DB 정보 보충 | [Slot 조회·재호출](docs/ai-slot-resolution.md) | canonical key allow-list, tenant 조회와 ANALYZE 재호출 기준 |
 | AI 단계별 성능 측정 | [AI 파이프라인 관측·Prometheus 가이드](docs/ai-pipeline-observability.md) | PLAN·Slot·ANALYZE·Renewal 구간의 정량 평가와 로컬 Prometheus 확인 기준 |
 | 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
+| 체류기간 경과 안전 확인 | [체류기간 만료 경과 긴급 확인](docs/stay-verification.md) | 날짜 경과와 적법 체류·고용 종료 판단을 분리하는 기준 |
 | 파일 rollback·orphan 대응 | [File Storage rollback 보상 운영 가이드](docs/reliability/file-storage-rollback-compensation.md) | atomic finalize, rollback cleanup, `UNKNOWN` reconciliation과 배포 volume Smoke 기준 |
 | 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
 | 전체 설명·운영 가이드 | [Server Wiki](https://github.com/fowoco/server/wiki) | 초보자용 아키텍처·API·배포 설명 |

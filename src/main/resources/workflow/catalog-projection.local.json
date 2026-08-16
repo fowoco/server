@@ -1,6 +1,6 @@
 {
   "bundle_id": "FOWOCO-KNOWLEDGE",
-  "bundle_version": "0.3.0",
+  "bundle_version": "0.3.1",
   "bundle_status": "DRAFT",
   "source_repository": "fowoco/knowledge",
   "generated_at": "2026-08-16T00:00:00Z",
@@ -155,6 +155,51 @@
         "SRC-HIKOREA",
         "SRC-LAW-IMMIGRATION-ACT-25",
         "SRC-KEIS-REQUIRED-DOCS"
+      ]
+    },
+    {
+      "workflow_id": "WF-STY-EXC-001",
+      "name": "체류기간 만료 경과 긴급 확인",
+      "intent": "EXPIRY_RENEWAL",
+      "sensitivity": "critical",
+      "supported_task_types": ["STAY_PERIOD_EXTENSION"],
+      "required_slots": [
+        "worker_id",
+        "stay_expiry_date",
+        "stay_verification_status"
+      ],
+      "allowed_slot_keys": [
+        "worker_id",
+        "stay_expiry_date",
+        "stay_verification_status",
+        "status_checked_at",
+        "extension_applied_at",
+        "extension_receipt_document_id",
+        "approval_result_document_id",
+        "new_stay_expiry_date",
+        "official_consultation_note",
+        "employment_end_confirmed_at"
+      ],
+      "resolvable_slot_keys": ["worker_id", "stay_expiry_date"],
+      "checklist_items": [
+        {
+          "item_code": "VERIFY_STAY_STATUS_WITH_EVIDENCE",
+          "label": "공식 결과 또는 확인 메모로 현재 체류상태 확인",
+          "required": true
+        },
+        {
+          "item_code": "BLOCK_AUTOMATIC_EMPLOYMENT_CHANGE",
+          "label": "날짜 경과만으로 고용상태를 변경하지 않았는지 확인",
+          "required": true
+        }
+      ],
+      "completion_evidence": [
+        "approval_result_document_or_official_note",
+        "status_checked_at"
+      ],
+      "source_ids": [
+        "SRC-HIKOREA",
+        "SRC-LAW-IMMIGRATION-ACT-25"
       ]
     }
   ]
