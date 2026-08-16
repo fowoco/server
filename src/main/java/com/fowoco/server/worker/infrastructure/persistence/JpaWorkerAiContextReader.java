@@ -1,6 +1,7 @@
 package com.fowoco.server.worker.infrastructure.persistence;
 
 import com.fowoco.server.worker.application.WorkerAiContextSnapshot;
+import com.fowoco.server.worker.application.WorkerDisplayNameNormalizer;
 import com.fowoco.server.worker.application.WorkerIdentityDocumentStatuses;
 import com.fowoco.server.worker.application.port.WorkerAiContextReader;
 import com.fowoco.server.worker.application.port.WorkerIdentityDocumentStatusReader;
@@ -20,9 +21,14 @@ public class JpaWorkerAiContextReader implements
         WorkerIdentityDocumentStatusReader {
 
     private final EntityManager entityManager;
+    private final WorkerDisplayNameNormalizer displayNameNormalizer;
 
-    public JpaWorkerAiContextReader(EntityManager entityManager) {
+    public JpaWorkerAiContextReader(
+            EntityManager entityManager,
+            WorkerDisplayNameNormalizer displayNameNormalizer
+    ) {
         this.entityManager = entityManager;
+        this.displayNameNormalizer = displayNameNormalizer;
     }
 
     @Override
@@ -31,7 +37,8 @@ public class JpaWorkerAiContextReader implements
         if (displayName == null || displayName.isBlank()) {
             throw new IllegalArgumentException("displayName must not be blank");
         }
-        return entityManager.createQuery(
+        String strippedDisplayName = displayName.strip();
+        List<WorkerJpaEntity> exactMatches = entityManager.createQuery(
                         """
                         select worker
                         from WorkerJpaEntity worker
@@ -42,8 +49,53 @@ public class JpaWorkerAiContextReader implements
                         WorkerJpaEntity.class
                 )
                 .setParameter("companyId", companyId)
-                .setParameter("displayName", displayName.strip())
+                .setParameter("displayName", strippedDisplayName)
                 .setMaxResults(2)
+                .getResultList();
+        if (!exactMatches.isEmpty()) {
+            return exactMatches.stream()
+                    .map(this::toSnapshot)
+                    .toList();
+        }
+
+        String lookupKey;
+        try {
+            lookupKey = displayNameNormalizer.normalize(strippedDisplayName);
+        } catch (IllegalArgumentException ignored) {
+            return List.of();
+        }
+        List<UUID> workerIds = entityManager.createQuery(
+                        """
+                        select worker.workerId, worker.displayName
+                        from WorkerJpaEntity worker
+                        where worker.companyId = :companyId
+                        order by worker.workerId
+                        """,
+                        Object[].class
+                )
+                .setParameter("companyId", companyId)
+                .getResultList()
+                .stream()
+                .filter(row -> lookupKey.equals(displayNameNormalizer.normalize((String) row[1])))
+                .limit(2)
+                .map(row -> (UUID) row[0])
+                .toList();
+        if (workerIds.isEmpty()) {
+            return List.of();
+        }
+
+        return entityManager.createQuery(
+                        """
+                        select worker
+                        from WorkerJpaEntity worker
+                        where worker.companyId = :companyId
+                          and worker.workerId in :workerIds
+                        order by worker.workerId
+                        """,
+                        WorkerJpaEntity.class
+                )
+                .setParameter("companyId", companyId)
+                .setParameter("workerIds", workerIds)
                 .getResultList()
                 .stream()
                 .map(this::toSnapshot)

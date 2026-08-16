@@ -26,7 +26,7 @@ Evidence, Audit와 고정 ID는 유지한다.
 | Worker | `92000000-0000-0000-0000-000000000006` | 응웬반A, `VN`, `vi`, `ACTIVE`, 체류 만료 `D+45` | `GET /api/v1/workers`, `GET /api/v1/workers/{workerId}` |
 | 여권 사본 | `95000000-0000-0000-0000-000000000016` | `PASSPORT_COPY`, `VERIFIED`, 만료 `D+365` | 문서 API·AI Context |
 | 외국인등록증 사본 | `95000000-0000-0000-0000-000000000017` | `ARC`, `MISSING`, 만료일 없음 | 문서 API·AI Context |
-| Workflow Catalog | version `0.2.0` | classpath projection 사용 가능 | Workflow 및 AI 요청 흐름 |
+| Workflow Catalog | version `0.3.0` | classpath projection 사용 가능 | Workflow 및 AI 요청 흐름 |
 
 `D+45`는 현재 Worker 모델에 저장되는 상대 날짜 예시다. 정확한 E-9 취업활동기간이나
 3년 만료 의미를 나타내는 전용 필드가 아니며 관련 모델과 판정은 Issue #84 범위다.
