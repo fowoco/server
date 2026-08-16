@@ -109,6 +109,32 @@ class DemoAuthSeedRunnerTest {
     }
 
     @Test
+    void updatesExistingDemoHashesWhenTheConfiguredSyntheticPasswordChanges() throws Exception {
+        InMemoryCompanyRepository companyRepository = new InMemoryCompanyRepository();
+        InMemoryUserAccountRepository userAccountRepository = new InMemoryUserAccountRepository();
+        PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        runner(
+                properties(ADMIN_PASSWORD),
+                companyRepository,
+                userAccountRepository,
+                passwordEncoder
+        ).run(new DefaultApplicationArguments(new String[0]));
+
+        String rotatedPassword = "Rotated-demo-password-2!";
+        runner(
+                properties(rotatedPassword),
+                companyRepository,
+                userAccountRepository,
+                passwordEncoder
+        ).run(new DefaultApplicationArguments(new String[0]));
+
+        assertThat(userAccountRepository.users.values())
+                .allMatch(user -> passwordEncoder.matches(rotatedPassword, user.passwordHash()));
+        assertThat(userAccountRepository.users.values())
+                .allMatch(user -> user.version() == 1L);
+    }
+
+    @Test
     void existingAdminDoesNotHideAnInactiveDemoCompany() throws Exception {
         InMemoryCompanyRepository companyRepository = new InMemoryCompanyRepository();
         InMemoryUserAccountRepository userAccountRepository = new InMemoryUserAccountRepository();

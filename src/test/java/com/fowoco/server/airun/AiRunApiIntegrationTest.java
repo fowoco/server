@@ -505,7 +505,7 @@ class AiRunApiIntegrationTest {
                 "SELECT due_date FROM task WHERE case_id = ? ORDER BY task_id",
                 LocalDate.class,
                 caseId
-        )).containsOnly(LocalDate.of(2026, 9, 30));
+        )).containsOnly(LocalDate.of(2026, 8, 31));
         String snapshot = jdbcTemplate.queryForObject(
                 "SELECT workflow_snapshot_json FROM workflow_case WHERE case_id = ?",
                 String.class,
@@ -795,6 +795,7 @@ class AiRunApiIntegrationTest {
         Map<String, String> extractedSlots = new LinkedHashMap<>(
                 request.analysisInput().workers().get(0).requestedFields()
         );
+        extractedSlots.put("due_at", "2026-08-31T18:00:00+09:00");
         return new AiAnalysisResponse(
                 request.requestId(),
                 AiAnalysisOutcome.REVIEW_REQUIRED,
@@ -823,7 +824,7 @@ class AiRunApiIntegrationTest {
                 "1",
                 "prompt-demo-1",
                 "context-demo-1",
-                "0.2.0",
+                "0.3.0",
                 "1.1.0"
         );
     }

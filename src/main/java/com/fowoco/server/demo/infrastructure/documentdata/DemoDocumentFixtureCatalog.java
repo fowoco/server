@@ -2,22 +2,26 @@ package com.fowoco.server.demo.infrastructure.documentdata;
 
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 final class DemoDocumentFixtureCatalog {
 
     static final UUID COMPANY_ID = uuid("90000000-0000-0000-0000-000000000001");
     static final UUID ADMIN_USER_ID = uuid("90000000-0000-0000-0000-000000000002");
     static final UUID GOLD_WORKER_ID = workerId(6);
+    static final UUID PASSPORT_BIO_DOCUMENT_ID = documentId(1);
     static final UUID OCR_DOCUMENT_ID = documentId(3);
     static final UUID OCR_RUN_ID = uuid("95300000-0000-0000-0000-000000000001");
     static final UUID OCR_RUNTIME_REQUEST_ID = uuid("95310000-0000-0000-0000-000000000001");
 
-    private static final List<DemoDocumentFixture> FIXTURES = List.of(
-            fixture(1, 6, null, DocumentType.PASSPORT_COPY, SubmissionStatus.VERIFIED,
-                    -365, 365, "여권_인적사항면_응웬반A.png", "passport-bio.png",
-                    "image/png", FixtureFormat.PNG, "Passport biographical page"),
+    private static final List<DemoDocumentFixture> BASE_FIXTURES = List.of(
+            passportImageFixture(1, 6, -365, 365,
+                    "여권_인적사항면_응웬반A.png", "passport-bio.png",
+                    "Passport biographical page",
+                    identityForWorker(6)),
             fixture(2, 6, null, DocumentType.PASSPORT_COPY, SubmissionStatus.VERIFIED,
                     -365, 365, "여권_사본_응웬반A.pdf", "passport-copy.pdf",
                     "application/pdf", FixtureFormat.PDF, "Passport copy"),
@@ -64,11 +68,151 @@ final class DemoDocumentFixtureCatalog {
                     null, null, null, null, null, FixtureFormat.NONE, "Required document missing")
     );
 
+    private static final List<DemoDocumentFixture> PASSPORT_COVERAGE_FIXTURES = List.of(
+            passportCoverageFixture(101, 1, "리웨이", "LI WEI", "LI", "WEI",
+                    "CHINA", "CN", LocalDate.of(1992, 3, 14), "M"),
+            passportCoverageFixture(102, 2, "속 체아", "SOK CHEA", "SOK", "CHEA",
+                    "CAMBODIA", "KH", LocalDate.of(1996, 7, 21), "M"),
+            passportCoverageFixture(103, 3, "아르준 타파", "ARJUN THAPA", "THAPA", "ARJUN",
+                    "NEPAL", "NP", LocalDate.of(1991, 11, 8), "M"),
+            passportCoverageFixture(104, 4, "부디 산토소", "BUDI SANTOSO", "SANTOSO", "BUDI",
+                    "INDONESIA", "ID", LocalDate.of(1994, 2, 17), "M"),
+            passportCoverageFixture(105, 5, "마크 레예스", "MARK REYES", "REYES", "MARK",
+                    "PHILIPPINES", "PH", LocalDate.of(1993, 9, 25), "M"),
+            passportCoverageFixture(106, 7, "아디 수르야", "ADI SURYA", "SURYA", "ADI",
+                    "INDONESIA", "ID", LocalDate.of(1997, 1, 19), "M"),
+            passportCoverageFixture(107, 8, "바트 에르덴", "BAT ERDENE", "BAT", "ERDENE",
+                    "MONGOLIA", "MN", LocalDate.of(1990, 5, 30), "M"),
+            passportCoverageFixture(108, 9, "라니 위자야", "RANI WIJAYA", "WIJAYA", "RANI",
+                    "INDONESIA", "ID", LocalDate.of(1998, 8, 11), "F"),
+            passportCoverageFixture(109, 10, "민 아웅", "MIN AUNG", "MIN", "AUNG",
+                    "MYANMAR", "MM", LocalDate.of(1995, 12, 4), "M"),
+            passportCoverageFixture(110, 11, "파티마 누르", "FATIMAH NUR", "NUR", "FATIMAH",
+                    "INDONESIA", "ID", LocalDate.of(1996, 4, 27), "F"),
+            passportCoverageFixture(111, 12, "트란 티 마이", "TRAN THI MAI", "TRAN", "THI MAI",
+                    "VIET NAM", "VN", LocalDate.of(1999, 6, 15), "F"),
+            passportCoverageFixture(112, 13, "쩐 꾸옥 바오", "TRAN QUOC BAO", "TRAN", "QUOC BAO",
+                    "VIET NAM", "VN", LocalDate.of(1994, 10, 2), "M"),
+            passportCoverageFixture(113, 14, "아이다나 베크", "AIDANA BEK", "BEK", "AIDANA",
+                    "KYRGYZSTAN", "KG", LocalDate.of(1997, 3, 9), "F"),
+            passportCoverageFixture(114, 15, "찬다라 소쿤", "CHANDARA SOKUN", "SOKUN", "CHANDARA",
+                    "CAMBODIA", "KH", LocalDate.of(1992, 7, 6), "M"),
+            passportCoverageFixture(115, 16, "니말 페레라", "NIMAL PERERA", "PERERA", "NIMAL",
+                    "SRI LANKA", "LK", LocalDate.of(1991, 1, 23), "M"),
+            passportCoverageFixture(116, 17, "알리 칸", "ALI KHAN", "KHAN", "ALI",
+                    "PAKISTAN", "PK", LocalDate.of(1993, 5, 18), "M"),
+            passportCoverageFixture(117, 18, "모하메드 라힘", "MOHAMMED RAHIM", "RAHIM", "MOHAMMED",
+                    "BANGLADESH", "BD", LocalDate.of(1990, 9, 12), "M"),
+            passportCoverageFixture(118, 19, "누르 아지자", "NUR AZIZAH", "AZIZAH", "NUR",
+                    "INDONESIA", "ID", LocalDate.of(1998, 11, 29), "F"),
+            passportCoverageFixture(119, 20, "아지즈 라히모프", "AZIZ RAKHIMOV", "RAKHIMOV", "AZIZ",
+                    "UZBEKISTAN", "UZ", LocalDate.of(1992, 2, 8), "M"),
+            passportCoverageFixture(120, 21, "알렉세이 이바노프", "ALEXEI IVANOV", "IVANOV", "ALEXEI",
+                    "RUSSIAN FED.", "RU", LocalDate.of(1989, 12, 20), "M"),
+            passportCoverageFixture(121, 22, "마리아 산토스", "MARIA SANTOS", "SANTOS", "MARIA",
+                    "PHILIPPINES", "PH", LocalDate.of(1996, 8, 3), "F"),
+            passportCoverageFixture(122, 23, "솜차이 차이야", "SOMCHAI CHAIYA", "CHAIYA", "SOMCHAI",
+                    "THAILAND", "TH", LocalDate.of(1991, 6, 26), "M"),
+            passportCoverageFixture(123, 24, "응우옌 티 란", "NGUYEN THI LAN", "NGUYEN", "THI LAN",
+                    "VIET NAM", "VN", LocalDate.of(1997, 10, 14), "F"),
+            passportCoverageFixture(124, 25, "데위 사푸트리", "DEWI SAPUTRI", "SAPUTRI", "DEWI",
+                    "INDONESIA", "ID", LocalDate.of(1995, 3, 31), "F"),
+            passportCoverageFixture(125, 26, "조제 다 코스타", "JOSE DA COSTA", "DA COSTA", "JOSE",
+                    "TIMOR-LESTE", "TL", LocalDate.of(1990, 7, 17), "M"),
+            passportCoverageFixture(126, 27, "압둘 카림", "ABDUL KARIM", "KARIM", "ABDUL",
+                    "BANGLADESH", "BD", LocalDate.of(1994, 4, 5), "M"),
+            passportCoverageFixture(127, 28, "비벡 타파", "BIBEK THAPA", "THAPA", "BIBEK",
+                    "NEPAL", "NP", LocalDate.of(1993, 1, 28), "M")
+    );
+
+    private static final List<DemoDocumentFixture> FIXTURES = Stream.concat(
+            BASE_FIXTURES.stream(), PASSPORT_COVERAGE_FIXTURES.stream()
+    ).toList();
+
     private DemoDocumentFixtureCatalog() {
     }
 
     static List<DemoDocumentFixture> fixtures() {
         return FIXTURES;
+    }
+
+    static List<DemoDocumentFixture> passportCoverageFixtures() {
+        return PASSPORT_COVERAGE_FIXTURES;
+    }
+
+    static PassportIdentity identityForWorkerId(UUID workerId) {
+        return FIXTURES.stream()
+                .filter(fixture -> fixture.workerId().equals(workerId))
+                .map(DemoDocumentFixture::passportIdentity)
+                .distinct()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "demo worker identity is not defined: " + workerId
+                ));
+    }
+
+    private static DemoDocumentFixture passportCoverageFixture(
+            int documentNumber,
+            int workerNumber,
+            String displayName,
+            String englishName,
+            String surname,
+            String givenNames,
+            String nationality,
+            String nationalityCode,
+            LocalDate birthDate,
+            String sex
+    ) {
+        return passportImageFixture(
+                documentNumber,
+                workerNumber,
+                -180 - workerNumber,
+                540 + workerNumber * 7,
+                "여권사본_%s.png".formatted(displayName.replace(" ", "")),
+                "passport-copy-worker-%02d.png".formatted(workerNumber),
+                "Passport copy - " + englishName,
+                identity(
+                        displayName,
+                        englishName,
+                        surname,
+                        givenNames,
+                        nationality,
+                        nationalityCode,
+                        birthDate,
+                        sex,
+                        workerNumber
+                )
+        );
+    }
+
+    private static DemoDocumentFixture passportImageFixture(
+            int documentNumber,
+            int workerNumber,
+            Integer issueDays,
+            Integer expiryDays,
+            String originalFilename,
+            String storageFilename,
+            String title,
+            PassportIdentity passportIdentity
+    ) {
+        return new DemoDocumentFixture(
+                documentId(documentNumber),
+                fileId(documentNumber),
+                workerId(workerNumber),
+                null,
+                DocumentType.PASSPORT_COPY,
+                SubmissionStatus.VERIFIED,
+                issueDays,
+                expiryDays,
+                originalFilename,
+                storageFilename,
+                "image/png",
+                FixtureFormat.PNG,
+                title,
+                destination(DocumentType.PASSPORT_COPY),
+                "DEMO/SAMPLE fixture - not for official submission",
+                passportIdentity
+        );
     }
 
     private static DemoDocumentFixture fixture(
@@ -100,8 +244,81 @@ final class DemoDocumentFixtureCatalog {
                 format,
                 title,
                 destination(documentType),
-                "DEMO/SAMPLE fixture - not for official submission"
+                "DEMO/SAMPLE fixture - not for official submission",
+                identityForWorker(workerNumber)
         );
+    }
+
+    private static PassportIdentity identity(
+            String displayName,
+            String englishName,
+            String surname,
+            String givenNames,
+            String nationality,
+            String nationalityCode,
+            LocalDate birthDate,
+            String sex,
+            int portraitSeed
+    ) {
+        return new PassportIdentity(
+                displayName,
+                englishName,
+                surname,
+                givenNames,
+                nationality,
+                nationalityCode,
+                preferredLanguage(portraitSeed, nationalityCode),
+                birthDate,
+                sex,
+                "E-9",
+                "DEMO-P%02d-NOT-VALID".formatted(portraitSeed),
+                "DEMO-ARC-%02d-NOT-VALID".formatted(portraitSeed),
+                "DEMO RESIDENCE %02d, SAMPLE-RO, FOWOCO CITY".formatted(portraitSeed),
+                portraitSeed
+        );
+    }
+
+    private static PassportIdentity identityForWorker(int workerNumber) {
+        return switch (workerNumber) {
+            case 1 -> identity("리웨이", "LI WEI", "LI", "WEI", "CHINA", "CN",
+                    LocalDate.of(1992, 3, 14), "M", 1);
+            case 2 -> identity("속 체아", "SOK CHEA", "SOK", "CHEA", "CAMBODIA", "KH",
+                    LocalDate.of(1996, 7, 21), "M", 2);
+            case 3 -> identity("아르준 타파", "ARJUN THAPA", "THAPA", "ARJUN", "NEPAL", "NP",
+                    LocalDate.of(1991, 11, 8), "M", 3);
+            case 4 -> identity("부디 산토소", "BUDI SANTOSO", "SANTOSO", "BUDI", "INDONESIA", "ID",
+                    LocalDate.of(1994, 2, 17), "M", 4);
+            case 6 -> identity("응웬반A", "NGUYEN VAN AN", "NGUYEN", "VAN AN", "VIET NAM", "VN",
+                    LocalDate.of(1995, 4, 12), "M", 6);
+            default -> throw new IllegalArgumentException(
+                    "base document fixture worker identity is not defined: " + workerNumber
+            );
+        };
+    }
+
+    private static String preferredLanguage(int workerNumber, String nationalityCode) {
+        if (workerNumber == 22) {
+            return "fil";
+        }
+        return switch (nationalityCode) {
+            case "CN" -> "zh-Hans";
+            case "KH" -> "km";
+            case "NP", "PH", "MM" -> "en";
+            case "ID" -> "id";
+            case "MN" -> "mn";
+            case "VN" -> "vi";
+            case "KG" -> "ky";
+            case "LK" -> "si";
+            case "PK" -> "ur";
+            case "BD" -> "bn";
+            case "UZ" -> "uz";
+            case "RU" -> "ru";
+            case "TH" -> "th";
+            case "TL" -> "tet";
+            default -> throw new IllegalArgumentException(
+                    "demo worker language is not defined for nationality: " + nationalityCode
+            );
+        };
     }
 
     private static String destination(DocumentType type) {
@@ -156,7 +373,8 @@ final class DemoDocumentFixtureCatalog {
             FixtureFormat format,
             String title,
             String destination,
-            String note
+            String note,
+            PassportIdentity passportIdentity
     ) {
         String storageKey() {
             if (fileId == null) {
@@ -166,5 +384,23 @@ final class DemoDocumentFixtureCatalog {
                     COMPANY_ID, workerId, documentId, storageFilename
             );
         }
+    }
+
+    record PassportIdentity(
+            String displayName,
+            String englishName,
+            String surname,
+            String givenNames,
+            String nationality,
+            String nationalityCode,
+            String preferredLanguage,
+            LocalDate birthDate,
+            String sex,
+            String visaType,
+            String documentNumber,
+            String alienRegistrationNumber,
+            String syntheticAddress,
+            int portraitSeed
+    ) {
     }
 }

@@ -36,6 +36,7 @@ import com.fowoco.server.workflow.domain.WorkflowDefinition;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -350,7 +351,7 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         }
         try {
             if (value != null && !value.isBlank()) {
-                return LocalDate.parse(value);
+                return parseDueDate(value);
             }
             if (worker.stayExpiryDate() != null) {
                 return worker.stayExpiryDate();
@@ -358,6 +359,14 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
             return worker.contractEndDate();
         } catch (DateTimeParseException exception) {
             throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
+        }
+    }
+
+    private LocalDate parseDueDate(String value) {
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException dateOnlyFailure) {
+            return OffsetDateTime.parse(value).toLocalDate();
         }
     }
 
