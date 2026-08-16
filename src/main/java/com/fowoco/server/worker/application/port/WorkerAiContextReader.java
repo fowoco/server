@@ -10,7 +10,9 @@ import java.util.UUID;
 public interface WorkerAiContextReader {
 
     /**
-     * Returns at most two matches so the caller can distinguish not-found, unique and ambiguous targets.
+     * Returns exact matches first. If no exact match exists, conservatively searches the current
+     * company using the normalized display-name key. At most two matches are returned so the caller
+     * can distinguish not-found, unique and ambiguous targets.
      */
     List<WorkerAiContextSnapshot> findByDisplayName(UUID companyId, String displayName);
 }
