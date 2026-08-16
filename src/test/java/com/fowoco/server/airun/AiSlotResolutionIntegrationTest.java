@@ -46,7 +46,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution result = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.2.0",
+                "0.3.0",
                 requirement("같은이름")
         );
 
@@ -63,7 +63,7 @@ class AiSlotResolutionIntegrationTest {
 
         assertThatThrownBy(() -> resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.2.0",
+                "0.3.0",
                 requirement("동명이인")
         ))
                 .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
@@ -106,7 +106,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution result = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.2.0",
+                "0.3.0",
                 requirement("문서상태근로자", List.of("passport_status", "arc_status"))
         );
 

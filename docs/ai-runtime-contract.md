@@ -3,6 +3,8 @@
 이 문서는 `fowoco/server`가 별도 배포되는 `fowoco/ai` Runtime을 호출할 때 지켜야 하는
 최소 계약과 방어 규칙을 설명합니다.
 
+현재 Server가 고정한 Knowledge projection과 AI Runtime의 기준 버전은 `0.3.0`입니다.
+
 Server에는 `/internal/v1/analyses`를 호출하는 HTTP Adapter까지 구현되어 있습니다.
 다만 실제 OpenAPI와 Structured Output JSON Schema의 원본은 `fowoco/ai`가 소유하므로,
 AI 저장소에서 같은 `contractVersion`을 release하기 전까지 실제 호출은 기본적으로 꺼 둡니다.
@@ -69,8 +71,11 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
     "targetDisplayName": "응웬반안",
     "extractedSlots": {},
     "requiredFieldKeys": [
-      "legal_name",
-      "stay_expiry_date"
+      "worker_id",
+      "due_at",
+      "stay_expiry_date",
+      "passport_status",
+      "arc_status"
     ]
   },
   "questions": [],
@@ -82,8 +87,8 @@ Agent는 SQL을 만들거나 DB를 직접 조회하지 않고, canonical field k
     "modelName": "gpt-5-mini",
     "modelVersion": "2026-07-01",
     "promptVersion": "prompt-3",
-    "contextPackVersion": "context-0.2.0",
-    "workflowCatalogVersion": "0.2.0",
+    "contextPackVersion": "0.3.0",
+    "workflowCatalogVersion": "0.3.0",
     "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
@@ -114,8 +119,8 @@ MVP에서는 발화 하나에서 **대표 Intent와 Workflow 한 쌍만** 선택
     "modelName": "klue-roberta-base",
     "modelVersion": "BERT",
     "promptVersion": "knowledge-25e778ad",
-    "contextPackVersion": "context-0.2.0",
-    "workflowCatalogVersion": "0.2.0",
+    "contextPackVersion": "0.3.0",
+    "workflowCatalogVersion": "0.3.0",
     "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,
@@ -226,8 +231,8 @@ Agent가 문서 작성에 요구한 값은 `***`, `OOO`로 바꾸지 않고 원�
     "modelName": "gpt-5-mini",
     "modelVersion": "2026-07-01",
     "promptVersion": "prompt-3",
-    "contextPackVersion": "context-0.2.0",
-    "workflowCatalogVersion": "0.2.0",
+    "contextPackVersion": "0.3.0",
+    "workflowCatalogVersion": "0.3.0",
     "contractVersion": "1.1.0"
   },
   "providerAttemptCount": 1,

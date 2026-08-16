@@ -30,6 +30,10 @@ transaction과 connection을 붙잡지 않습니다.
 key의 원본은 `fowoco/knowledge`의 `required_slots.yaml`입니다. Server의 활성 Workflow
 projection은 다음 세 집합을 구분합니다.
 
+현재 활성 projection은 Knowledge `0.3.0`이며, `WF-STY-001`의 필수 Slot은
+`worker_id`, `due_at`입니다. `stay_expiry_date`, `passport_status`, `arc_status`는
+가능하면 Server가 함께 보충하는 선택 Context입니다.
+
 - `requiredSlots`: Workflow 시작에 필요한 값
 - `allowedSlotKeys`: Agent candidate와 질문에서 사용할 수 있는 전체 Slot
 - `resolvableSlotKeys`: Server context 조회를 요청할 수 있는 Slot
@@ -59,10 +63,16 @@ MVP Worker DB Resolver가 실제 값으로 바꿀 수 있는 key는 다음과 �
 | `worker_id` | 현재 사업장 Worker UUID |
 | `stay_expiry_date` | Worker의 체류기간 만료일 |
 | `contract_end_date` | Worker의 계약 종료일 |
+| `passport_status` | 최신 여권 사본의 제출·검증 상태 |
+| `arc_status` | 최신 외국인등록증 사본의 제출·검증 상태 |
 
 `due_at`처럼 Knowledge에서 context 조회 가능하지만 현재 Worker DB로 계산할 수 없는 값은
 `missingFieldKeys`로 반환합니다. `legal_name`처럼 활성 projection이 허용하지 않은 key는
 DB column을 추측하지 않고 `FORBIDDEN_FIELD`로 거부합니다.
+
+`due_at`은 Knowledge 계약에 따라 시간대가 포함된 ISO 8601 일시로 받습니다. Task에는
+별도 시각 컬럼이 없으므로 Server는 해당 일시의 날짜 부분을 `due_date`로 저장합니다.
+기존 Client 호환을 위해 `YYYY-MM-DD` 날짜 형식도 함께 허용합니다.
 
 ## 대상 근로자 확인
 
