@@ -56,6 +56,24 @@ class AiSlotResolutionIntegrationTest {
     }
 
     @Test
+    void normalizedLookupDoesNotReadAnotherCompanyCandidate() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertCompany(COMPANY_B, "사업장 B");
+        insertWorker(WORKER_A, COMPANY_A, "응우옌 반 안", "2026-09-30");
+        insertWorker(WORKER_B, COMPANY_B, "응우옌반안", "2099-12-31");
+
+        AiSlotResolution result = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.0",
+                requirement("응 우 옌 반 안")
+        );
+
+        assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
+        assertThat(result.resolvedFields()).containsEntry("stay_expiry_date", "2026-09-30");
+        assertThat(result.resolvedFields()).doesNotContainValue("2099-12-31");
+    }
+
+    @Test
     void duplicateDisplayNameInsideTheSameCompanyIsReportedAsAmbiguous() {
         insertCompany(COMPANY_A, "사업장 A");
         insertWorker(WORKER_A, COMPANY_A, "동명이인", "2026-09-30");
@@ -69,6 +87,80 @@ class AiSlotResolutionIntegrationTest {
                 .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
                         assertThat(exception.failureCode()).isEqualTo(
                                 AiContextResolutionFailureCode.TARGET_AMBIGUOUS
+                        )
+                );
+    }
+
+    @Test
+    void resolvesSpacingSeparatorAndCaseVariantsInsideTheCurrentCompany() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응우옌 반 안", "2026-09-30");
+
+        AiSlotResolution korean = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.0",
+                requirement("응 우 옌-반_안")
+        );
+
+        assertThat(korean.worker().workerRef()).isEqualTo(WORKER_A);
+
+        insertWorker(WORKER_A_DUPLICATE, COMPANY_A, "Nguyen Van An", "2026-09-30");
+
+        AiSlotResolution romanized = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.0",
+                requirement("NGUYEN-VAN_AN")
+        );
+
+        assertThat(romanized.worker().workerRef()).isEqualTo(WORKER_A_DUPLICATE);
+    }
+
+    @Test
+    void exactMatchWinsBeforeNormalizedCandidates() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응우옌 반 안", "2026-09-30");
+        insertWorker(WORKER_A_DUPLICATE, COMPANY_A, "응우옌반안", "2027-09-30");
+
+        AiSlotResolution result = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.0",
+                requirement("응우옌 반 안")
+        );
+
+        assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
+    }
+
+    @Test
+    void multipleNormalizedCandidatesAreReportedAsAmbiguous() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응우옌 반 안", "2026-09-30");
+        insertWorker(WORKER_A_DUPLICATE, COMPANY_A, "응우옌반안", "2027-09-30");
+
+        assertThatThrownBy(() -> resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.0",
+                requirement("응 우 옌 반 안")
+        ))
+                .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
+                        assertThat(exception.failureCode()).isEqualTo(
+                                AiContextResolutionFailureCode.TARGET_AMBIGUOUS
+                        )
+                );
+    }
+
+    @Test
+    void separatorOnlyTargetIsReportedAsNotFound() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응우옌 반 안", "2026-09-30");
+
+        assertThatThrownBy(() -> resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.0",
+                requirement("- _ .")
+        ))
+                .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
+                        assertThat(exception.failureCode()).isEqualTo(
+                                AiContextResolutionFailureCode.TARGET_NOT_FOUND
                         )
                 );
     }

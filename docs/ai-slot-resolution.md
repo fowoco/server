@@ -78,6 +78,18 @@ DB column을 추측하지 않고 `FORBIDDEN_FIELD`로 거부합니다.
 
 MVP는 한 요청에서 Worker 한 명만 처리합니다.
 
+대상 이름은 같은 사업장 안에서 다음 순서로 조회합니다.
+
+1. `display_name` 완전 일치를 우선 조회합니다.
+2. 완전 일치가 없으면 Unicode NFC·영문 소문자 기준으로 정규화하고 공백·구분자를 제거해 비교합니다.
+3. 정규화 후보가 한 명이면 해당 Worker Context를 사용합니다.
+4. 두 명 이상이면 `TARGET_AMBIGUOUS`로 중단하고 자동으로 Case·Task를 생성하지 않습니다.
+
+이 정규화는 `응우옌 반 안`과 `응우옌반안`, `Nguyen Van An`과
+`NGUYEN-VAN_AN`처럼 표기만 다른 경우를 대상으로 합니다. `응우옌`과 `누엔`처럼 발음이
+다른 음차 alias는 임의로 추측하지 않으며, 승인된 Knowledge alias와 HR 후보 선택 계약이
+준비된 뒤 별도 단계로 처리합니다.
+
 - 현재 `companyId` 안에서 `targetDisplayName`이 정확히 한 명이면 계속 진행합니다.
 - 없으면 `TARGET_NOT_FOUND`입니다.
 - 같은 사업장에 동명이인이 두 명 이상이면 `TARGET_AMBIGUOUS`입니다.
