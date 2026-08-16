@@ -3,6 +3,7 @@ package com.fowoco.server.worker.infrastructure.persistence;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -39,6 +40,10 @@ public class WorkerDocumentJpaEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "submission_status", nullable = false, length = 20)
     private SubmissionStatus submissionStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 30, updatable = false)
+    private WorkerDocumentSource source;
 
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
@@ -81,6 +86,7 @@ public class WorkerDocumentJpaEntity {
             UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             String destination,
             String note,
@@ -98,6 +104,7 @@ public class WorkerDocumentJpaEntity {
         this.taskId = taskId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
+        this.source = source;
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
@@ -119,6 +126,7 @@ public class WorkerDocumentJpaEntity {
                 document.taskId(),
                 document.documentType(),
                 document.submissionStatus(),
+                document.source(),
                 document.expiryDate(),
                 document.destination(),
                 document.note(),
@@ -140,6 +148,7 @@ public class WorkerDocumentJpaEntity {
                 taskId,
                 documentType,
                 submissionStatus,
+                source,
                 expiryDate,
                 destination,
                 note,
@@ -158,6 +167,7 @@ public class WorkerDocumentJpaEntity {
         if (!workerDocumentId.equals(document.workerDocumentId())
                 || !workerId.equals(document.workerId())
                 || !companyId.equals(document.companyId())
+                || source != document.source()
                 || !createdAt.equals(document.createdAt())) {
             throw new IllegalArgumentException("immutable worker document fields must not change");
         }

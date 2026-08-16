@@ -16,6 +16,7 @@ public final class WorkerDocument {
     private final UUID taskId;
     private final DocumentType documentType;
     private final SubmissionStatus submissionStatus;
+    private final WorkerDocumentSource source;
     private final LocalDate expiryDate;
     private final String destination;
     private final String note;
@@ -34,6 +35,7 @@ public final class WorkerDocument {
             UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             String destination,
             String note,
@@ -49,6 +51,7 @@ public final class WorkerDocument {
                 taskId,
                 documentType,
                 submissionStatus,
+                source,
                 expiryDate,
                 destination,
                 note,
@@ -69,6 +72,7 @@ public final class WorkerDocument {
             UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             String destination,
             String note,
@@ -86,6 +90,7 @@ public final class WorkerDocument {
         this.taskId = taskId;
         this.documentType = Objects.requireNonNull(documentType, "documentType must not be null");
         this.submissionStatus = Objects.requireNonNull(submissionStatus, "submissionStatus must not be null");
+        this.source = Objects.requireNonNull(source, "source must not be null");
         this.expiryDate = expiryDate;
         this.destination = requireMaxLength(destination, MAX_DESTINATION_LENGTH, "destination");
         this.note = requireMaxLength(note, MAX_NOTE_LENGTH, "note");
@@ -115,6 +120,7 @@ public final class WorkerDocument {
             UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             String destination,
             String note,
@@ -128,6 +134,7 @@ public final class WorkerDocument {
                 taskId,
                 documentType,
                 submissionStatus,
+                source,
                 expiryDate,
                 destination,
                 note,
@@ -144,6 +151,7 @@ public final class WorkerDocument {
             UUID companyId,
             UUID taskId,
             DocumentType documentType,
+            WorkerDocumentSource source,
             String note,
             UUID fileId,
             Instant now
@@ -157,6 +165,7 @@ public final class WorkerDocument {
                 taskId,
                 documentType,
                 SubmissionStatus.SUBMITTED,
+                source,
                 null,
                 null,
                 note,
@@ -189,6 +198,10 @@ public final class WorkerDocument {
 
     public SubmissionStatus submissionStatus() {
         return submissionStatus;
+    }
+
+    public WorkerDocumentSource source() {
+        return source;
     }
 
     public LocalDate expiryDate() {
@@ -236,6 +249,7 @@ public final class WorkerDocument {
                 taskId,
                 documentType,
                 submissionStatus,
+                source,
                 expiryDate,
                 destination,
                 note,

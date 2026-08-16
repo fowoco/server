@@ -112,14 +112,28 @@ public class RenewalContinuationService {
         if (supports(sourceTask) && requestsOcr(sourceTask)) {
             return Optional.of(sourceTask);
         }
-        if (sourceTask.caseId() == null) {
-            return Optional.empty();
+        if (sourceTask.caseId() != null) {
+            Optional<Task> caseTarget = firstOcrTarget(new TaskRepository.TaskSearchCriteria(
+                    sourceTask.companyId(), null, null, null, null, null, sourceTask.caseId(),
+                    null, null, null, 0, 100
+            ));
+            if (caseTarget.isPresent()) {
+                return caseTarget;
+            }
         }
-        List<Task> caseTasks = taskRepository.findAll(new TaskRepository.TaskSearchCriteria(
-                sourceTask.companyId(), null, null, null, null, null, sourceTask.caseId(),
+
+        // 기존 신분 서류가 과거 업무나 다른 Case에 연결되어 있어도, OCR 값은 같은 근로자의
+        // 현재 재계약 업무에 재사용할 수 있다. 같은 Case에서 찾지 못한 경우에만 근로자 범위로
+        // 넓혀 가장 앞선 활성 Renewal Task를 깨운다.
+        return firstOcrTarget(new TaskRepository.TaskSearchCriteria(
+                sourceTask.companyId(), null, null, null, null, sourceTask.workerId(), null,
                 null, null, null, 0, 100
-        )).items();
-        return caseTasks.stream()
+        ));
+    }
+
+    private Optional<Task> firstOcrTarget(TaskRepository.TaskSearchCriteria criteria) {
+        List<Task> tasks = taskRepository.findAll(criteria).items();
+        return tasks.stream()
                 .filter(this::supports)
                 .filter(this::requestsOcr)
                 .min(Comparator

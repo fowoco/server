@@ -11,6 +11,8 @@ public interface ApprovalRequestRepository {
 
     Optional<ApprovalRequest> findPendingByTaskIdAndCompanyId(UUID taskId, UUID companyId);
 
+    Optional<ApprovalRequest> findLatestByTaskIdAndCompanyId(UUID taskId, UUID companyId);
+
     Optional<ApprovalRequest> findLatestApprovedByTaskIdAndCompanyId(UUID taskId, UUID companyId);
 
     List<ApprovalRequest> findActiveByTaskIdAndCompanyId(UUID taskId, UUID companyId);

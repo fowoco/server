@@ -70,9 +70,10 @@ MVP Worker DB Resolver가 실제 값으로 바꿀 수 있는 key는 다음과 �
 `missingFieldKeys`로 반환합니다. `legal_name`처럼 활성 projection이 허용하지 않은 key는
 DB column을 추측하지 않고 `FORBIDDEN_FIELD`로 거부합니다.
 
-`due_at`은 Knowledge 계약에 따라 시간대가 포함된 ISO 8601 일시로 받습니다. Task에는
-별도 시각 컬럼이 없으므로 Server는 해당 일시의 날짜 부분을 `due_date`로 저장합니다.
-기존 Client 호환을 위해 `YYYY-MM-DD` 날짜 형식도 함께 허용합니다.
+`due_at`은 Knowledge 계약에 따라 ISO 8601 일시로 받습니다. Task에는 별도 시각 컬럼이
+없으므로 Server는 해당 일시의 날짜 부분을 `due_date`로 저장합니다. 브라우저의
+`datetime-local` 입력값(`YYYY-MM-DDTHH:mm`), 시간대가 포함된 일시와 기존
+`YYYY-MM-DD` 날짜 형식을 함께 허용합니다.
 
 ## 대상 근로자 확인
 
@@ -158,3 +159,14 @@ Runtime은 전체 요청 key와 실제로 채워진 값의 차이를 보고 `NEE
   ANALYZE에 보존되는지 확인
 
 이 기능은 DB migration을 추가하지 않습니다. `V12__create_ai_run.sql`은 #24가 소유합니다.
+
+## 문서 생성 안전 조건
+
+- Agent가 `scenario=generate`를 반환해도 Server가 현재 Task 소유 템플릿과 핵심
+  매핑값을 다시 확인합니다.
+- 재계약 계약서는 이름·생년월일·사업장명, 취업활동기간 연장서는
+  이름·외국인등록번호·여권번호가 모두 있어야 생성합니다.
+- 체류기간 연장용 통합신청서와 신원보증서는 여권번호·생년월일·성명이 모두 있어야
+  생성합니다.
+- 일부 OCR만 승인된 상태의 불완전 초안은 저장하지 않습니다. 다음 OCR 승인 이벤트가
+  최신 Context로 Renewal 실행을 다시 시도합니다.

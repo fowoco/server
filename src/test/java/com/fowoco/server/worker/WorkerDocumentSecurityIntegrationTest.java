@@ -106,6 +106,7 @@ class WorkerDocumentSecurityIntegrationTest {
         assertThat(JsonPath.<String>read(response.body(), "$.document_type")).isEqualTo("PASSPORT_COPY");
         assertThat(JsonPath.<String>read(response.body(), "$.submission_status")).isEqualTo("SUBMITTED");
         assertThat(JsonPath.<String>read(response.body(), "$.worker_id")).isEqualTo(workerIdInCompanyA);
+        assertThat(JsonPath.<String>read(response.body(), "$.source")).isEqualTo("HR_UPLOAD");
         assertThat(JsonPath.<Number>read(response.body(), "$.version").longValue()).isZero();
     }
 
@@ -229,7 +230,7 @@ class WorkerDocumentSecurityIntegrationTest {
 
         java.util.Map<String, Object> archiveMetadata = jdbcTemplate.queryForMap(
                 """
-                SELECT archived_at, archived_by, archive_reason
+                SELECT archived_at, archived_by, archive_reason, source
                   FROM worker_document
                  WHERE worker_document_id = ? AND company_id = ?
                 """,
@@ -239,6 +240,7 @@ class WorkerDocumentSecurityIntegrationTest {
         assertThat(archiveMetadata.get("archived_at")).isNotNull();
         assertThat(archiveMetadata.get("archived_by")).isEqualTo(HR_A);
         assertThat(archiveMetadata.get("archive_reason")).isEqualTo("잘못 등록한 중복 서류");
+        assertThat(archiveMetadata.get("source")).isEqualTo("HR_UPLOAD");
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*) FROM audit_event

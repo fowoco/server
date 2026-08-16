@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,6 +28,10 @@ public final class WorkerDocumentResponse {
     @JsonProperty("submission_status")
     @Schema(name = "submission_status", requiredMode = Schema.RequiredMode.REQUIRED)
     private final SubmissionStatus submissionStatus;
+
+    @JsonProperty("source")
+    @Schema(name = "source", description = "서류가 등록된 경로", requiredMode = Schema.RequiredMode.REQUIRED)
+    private final WorkerDocumentSource source;
 
     @JsonProperty("expiry_date")
     @Schema(name = "expiry_date", format = "date")
@@ -59,6 +64,7 @@ public final class WorkerDocumentResponse {
             UUID workerId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             String destination,
             String note,
@@ -71,6 +77,7 @@ public final class WorkerDocumentResponse {
         this.workerId = workerId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
+        this.source = source;
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
@@ -86,6 +93,7 @@ public final class WorkerDocumentResponse {
                 document.workerId(),
                 document.documentType(),
                 document.submissionStatus(),
+                document.source(),
                 document.expiryDate(),
                 document.destination(),
                 document.note(),
@@ -110,6 +118,10 @@ public final class WorkerDocumentResponse {
 
     public SubmissionStatus getSubmissionStatus() {
         return submissionStatus;
+    }
+
+    public WorkerDocumentSource getSource() {
+        return source;
     }
 
     public LocalDate getExpiryDate() {
