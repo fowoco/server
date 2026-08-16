@@ -44,6 +44,12 @@ public class JpaWorkerAiContextReader implements
                         from WorkerJpaEntity worker
                         where worker.companyId = :companyId
                           and worker.displayName = :displayName
+                          and not exists (
+                              select archive.workerId
+                              from WorkerArchiveJpaEntity archive
+                              where archive.workerId = worker.workerId
+                                and archive.companyId = worker.companyId
+                          )
                         order by worker.workerId
                         """,
                         WorkerJpaEntity.class
@@ -69,6 +75,12 @@ public class JpaWorkerAiContextReader implements
                         select worker.workerId, worker.displayName
                         from WorkerJpaEntity worker
                         where worker.companyId = :companyId
+                          and not exists (
+                              select archive.workerId
+                              from WorkerArchiveJpaEntity archive
+                              where archive.workerId = worker.workerId
+                                and archive.companyId = worker.companyId
+                          )
                         order by worker.workerId
                         """,
                         Object[].class
@@ -90,6 +102,12 @@ public class JpaWorkerAiContextReader implements
                         from WorkerJpaEntity worker
                         where worker.companyId = :companyId
                           and worker.workerId in :workerIds
+                          and not exists (
+                              select archive.workerId
+                              from WorkerArchiveJpaEntity archive
+                              where archive.workerId = worker.workerId
+                                and archive.companyId = worker.companyId
+                          )
                         order by worker.workerId
                         """,
                         WorkerJpaEntity.class

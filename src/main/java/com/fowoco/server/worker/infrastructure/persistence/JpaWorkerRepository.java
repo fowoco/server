@@ -102,6 +102,12 @@ public class JpaWorkerRepository implements WorkerRepository {
                         from WorkerJpaEntity worker
                         where worker.workerId in :workerIds
                           and worker.companyId = :companyId
+                          and not exists (
+                              select archive.workerId
+                              from WorkerArchiveJpaEntity archive
+                              where archive.workerId = worker.workerId
+                                and archive.companyId = worker.companyId
+                          )
                         """,
                         WorkerJpaEntity.class
                 )
@@ -114,7 +120,15 @@ public class JpaWorkerRepository implements WorkerRepository {
     }
 
     private String buildWhereClause(WorkerSearchQuery query) {
-        StringBuilder where = new StringBuilder(" where worker.companyId = :companyId");
+        StringBuilder where = new StringBuilder("""
+                 where worker.companyId = :companyId
+                   and not exists (
+                       select archive.workerId
+                       from WorkerArchiveJpaEntity archive
+                       where archive.workerId = worker.workerId
+                         and archive.companyId = worker.companyId
+                   )
+                """);
         if (query.status() != null) {
             where.append(" and worker.workStatus = :status");
         }
