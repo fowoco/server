@@ -86,7 +86,7 @@ Demo Company에는 `ADMIN` 2명, `HR` 12명, `VIEWER` 6명이 있고 Test Compan
 | 현재 상대 날짜 | 체류 만료 `D+45`, 계약 시작 `D-1년`, 계약 종료 `D+180` |
 | 여권 사본 | `PASSPORT_COPY`, `VERIFIED`, 만료 `D+365` |
 | 외국인등록증 사본 | `ARC`, `MISSING`, 만료일 없음 |
-| Workflow Catalog | classpath projection, version `0.2.0` |
+| Workflow Catalog | classpath projection, version `0.3.0` |
 
 상대 날짜는 Worker가 처음 생성되는 날을 기준으로 저장되며 재실행 시 기존 값을
 바꾸지 않는다. 현재 Worker 날짜 필드는 정확한 E-9 취업활동기간 의미를 모두 표현하지

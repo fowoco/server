@@ -1,9 +1,9 @@
 {
   "bundle_id": "FOWOCO-KNOWLEDGE",
-  "bundle_version": "0.2.0",
+  "bundle_version": "0.3.0",
   "bundle_status": "DRAFT",
   "source_repository": "fowoco/knowledge",
-  "generated_at": "2026-07-23T00:00:00Z",
+  "generated_at": "2026-08-16T00:00:00Z",
   "workflows": [
     {
       "workflow_id": "WF-WRK-001",
@@ -51,7 +51,7 @@
       "sensitivity": "medium",
       "supported_task_types": ["WORK_INSTRUCTION"],
       "required_slots": ["worker_id", "effective_at", "work_action"],
-      "allowed_slot_keys": ["worker_id", "effective_at", "work_action", "work_location", "quantity", "quantity_unit"],
+      "allowed_slot_keys": ["worker_id", "effective_at", "work_action", "work_location"],
       "resolvable_slot_keys": ["worker_id"],
       "checklist_items": [],
       "completion_evidence": ["approved_notice_id", "acknowledged_or_resolved_response"],
