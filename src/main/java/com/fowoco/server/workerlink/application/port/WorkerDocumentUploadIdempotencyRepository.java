@@ -5,7 +5,17 @@ import java.util.UUID;
 
 public interface WorkerDocumentUploadIdempotencyRepository {
 
-    Optional<UUID> findStoredFileId(UUID workerLinkId, UUID companyId, String clientRequestId);
+    Optional<WorkerDocumentUploadIdempotencyRecord> findByKeyHash(
+            UUID workerLinkId,
+            UUID companyId,
+            String idempotencyKeyHash
+    );
 
-    void save(UUID workerLinkId, UUID companyId, String clientRequestId, UUID storedFileId);
+    void save(
+            UUID workerLinkId,
+            UUID companyId,
+            String idempotencyKeyHash,
+            String requestHash,
+            UUID storedFileId
+    );
 }

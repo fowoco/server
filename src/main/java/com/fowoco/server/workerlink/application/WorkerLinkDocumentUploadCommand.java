@@ -10,6 +10,7 @@ public final class WorkerLinkDocumentUploadCommand {
     private final long size;
     private final String documentType;
     private final String clientRequestId;
+    private final String idempotencyKey;
     private final InputStream content;
 
     public WorkerLinkDocumentUploadCommand(
@@ -19,6 +20,7 @@ public final class WorkerLinkDocumentUploadCommand {
             long size,
             String documentType,
             String clientRequestId,
+            String idempotencyKey,
             InputStream content
     ) {
         this.rawToken = rawToken;
@@ -27,6 +29,7 @@ public final class WorkerLinkDocumentUploadCommand {
         this.size = size;
         this.documentType = documentType;
         this.clientRequestId = clientRequestId;
+        this.idempotencyKey = idempotencyKey;
         this.content = content;
     }
 
@@ -52,6 +55,10 @@ public final class WorkerLinkDocumentUploadCommand {
 
     public String clientRequestId() {
         return clientRequestId;
+    }
+
+    public String idempotencyKey() {
+        return idempotencyKey;
     }
 
     public InputStream content() {

@@ -56,7 +56,8 @@ PostgreSQL 16 Compose 실행은 [배포 Runbook](deployment-runbook.md)의 로�
 ## 로그인 계정
 
 모든 계정은 `DEMO_SEED_ADMIN_PASSWORD`에 지정한 동일한 합성 비밀번호를 사용하고,
-DB에는 BCrypt hash만 저장한다.
+DB에는 BCrypt hash만 저장한다. 영구 Demo DB에서 이 환경변수 값을 변경하면 다음 Seed 실행 시
+예약된 Demo·Test 계정의 hash를 새 합성 비밀번호로 멱등 갱신한다.
 
 | 회사 | 역할 | 이메일 | 용도 |
 | --- | --- | --- | --- |
@@ -85,7 +86,7 @@ Demo Company에는 `ADMIN` 2명, `HR` 12명, `VIEWER` 6명이 있고 Test Compan
 | 현재 상대 날짜 | 체류 만료 `D+45`, 계약 시작 `D-1년`, 계약 종료 `D+180` |
 | 여권 사본 | `PASSPORT_COPY`, `VERIFIED`, 만료 `D+365` |
 | 외국인등록증 사본 | `ARC`, `MISSING`, 만료일 없음 |
-| Workflow Catalog | classpath projection, version `0.2.0` |
+| Workflow Catalog | classpath projection, version `0.3.0` |
 
 상대 날짜는 Worker가 처음 생성되는 날을 기준으로 저장되며 재실행 시 기존 값을
 바꾸지 않는다. 현재 Worker 날짜 필드는 정확한 E-9 취업활동기간 의미를 모두 표현하지

@@ -37,7 +37,7 @@ class AiSlotResolutionTransactionTest {
 
         AiSlotResolution result = transaction.resolve(
                 COMPANY_A,
-                "0.2.0",
+                "0.3.0",
                 requirement(List.of(
                         "worker_id",
                         "stay_expiry_date",
@@ -72,7 +72,7 @@ class AiSlotResolutionTransactionTest {
         assertFailure(
                 () -> transaction(reader, new AtomicReference<>()).resolve(
                         COMPANY_A,
-                        "0.2.0",
+                        "0.3.0",
                         requirement(List.of("legal_name"))
                 ),
                 AiContextResolutionFailureCode.FORBIDDEN_FIELD
@@ -110,7 +110,7 @@ class AiSlotResolutionTransactionTest {
                 () -> transaction(
                         (companyId, displayName) -> List.of(worker(COMPANY_A)),
                         new AtomicReference<>()
-                ).resolve(COMPANY_A, "0.2.0", mismatched),
+                ).resolve(COMPANY_A, "0.3.0", mismatched),
                 AiContextResolutionFailureCode.UNSUPPORTED_WORKFLOW
         );
     }
@@ -119,7 +119,7 @@ class AiSlotResolutionTransactionTest {
     void distinguishesMissingAmbiguousAndCrossCompanyTargetsWithoutLeakingNames() {
         assertFailure(
                 () -> transaction((companyId, displayName) -> List.of(), new AtomicReference<>())
-                        .resolve(COMPANY_A, "0.2.0", requirement(List.of("worker_id"))),
+                        .resolve(COMPANY_A, "0.3.0", requirement(List.of("worker_id"))),
                 AiContextResolutionFailureCode.TARGET_NOT_FOUND
         );
 
@@ -127,14 +127,14 @@ class AiSlotResolutionTransactionTest {
                 () -> transaction(
                         (companyId, displayName) -> List.of(worker(COMPANY_A), worker(COMPANY_A)),
                         new AtomicReference<>()
-                ).resolve(COMPANY_A, "0.2.0", requirement(List.of("worker_id"))),
+                ).resolve(COMPANY_A, "0.3.0", requirement(List.of("worker_id"))),
                 AiContextResolutionFailureCode.TARGET_AMBIGUOUS
         );
 
         assertThatThrownBy(() -> transaction(
                 (companyId, displayName) -> List.of(worker(COMPANY_B)),
                 new AtomicReference<>()
-        ).resolve(COMPANY_A, "0.2.0", requirement(List.of("worker_id"))))
+        ).resolve(COMPANY_A, "0.3.0", requirement(List.of("worker_id"))))
                 .isInstanceOfSatisfying(AiContextResolutionException.class, exception -> {
                     assertThat(exception.failureCode()).isEqualTo(
                             AiContextResolutionFailureCode.TARGET_NOT_FOUND
@@ -158,7 +158,7 @@ class AiSlotResolutionTransactionTest {
     private WorkflowCatalog catalog() {
         return new WorkflowCatalog(
                 "FOWOCO-KNOWLEDGE",
-                "0.2.0",
+                "0.3.0",
                 "DRAFT",
                 "fowoco/knowledge",
                 Instant.parse("2026-07-23T00:00:00Z"),
