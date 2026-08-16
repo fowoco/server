@@ -109,7 +109,8 @@ class PostgreSqlMigrationTests {
                         "worker_import_job",
                         "worker_import_row",
                         "worker_import_commit_idempotency",
-                        "document_ocr_run"
+                        "document_ocr_run",
+                        "stay_verification_case"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -541,7 +542,8 @@ class PostgreSqlMigrationTests {
                         "pl_worker_import_row_tenant_isolation",
                         "pl_worker_import_commit_idempotency_tenant_isolation",
                         "pl_document_ocr_run_tenant_isolation",
-                        "pl_notification_tenant_isolation"
+                        "pl_notification_tenant_isolation",
+                        "pl_stay_verification_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
@@ -552,7 +554,8 @@ class PostgreSqlMigrationTests {
                         "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
-                        "bootstrap_oldest_outstanding_event_occurred_at"
+                        "bootstrap_oldest_outstanding_event_occurred_at",
+                        "bootstrap_expired_stay_candidates"
                 );
         assertThat(functionsWithLockedSearchPath(connection))
                 .containsExactlyInAnyOrder(
@@ -562,7 +565,8 @@ class PostgreSqlMigrationTests {
                         "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
-                        "bootstrap_oldest_outstanding_event_occurred_at"
+                        "bootstrap_oldest_outstanding_event_occurred_at",
+                        "bootstrap_expired_stay_candidates"
                 );
     }
 

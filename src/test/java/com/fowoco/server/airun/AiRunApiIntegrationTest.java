@@ -824,7 +824,7 @@ class AiRunApiIntegrationTest {
                 "1",
                 "prompt-demo-1",
                 "context-demo-1",
-                "0.3.0",
+                "0.3.1",
                 "1.1.0"
         );
     }

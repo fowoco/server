@@ -26,7 +26,7 @@ public final class AiRuntimeContractFixture {
     public static final UUID ATTEMPT_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     public static final UUID WORKER_REF = UUID.fromString("30000000-0000-0000-0000-000000000001");
     public static final String CONTRACT_VERSION = "1.1.0";
-    public static final String KNOWLEDGE_VERSION = "0.3.0";
+    public static final String KNOWLEDGE_VERSION = "0.3.1";
     public static final String INTENT = "EXPIRY_RENEWAL";
     public static final String WORKFLOW_ID = "WF-STY-001";
 
@@ -196,7 +196,7 @@ public final class AiRuntimeContractFixture {
                 "gpt-5-mini",
                 "2026-07-01",
                 "prompt-3",
-                "0.3.0",
+                "0.3.1",
                 KNOWLEDGE_VERSION,
                 CONTRACT_VERSION
         );

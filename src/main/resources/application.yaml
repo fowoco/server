@@ -132,6 +132,9 @@ app:
     catalog:
       location: ${WORKFLOW_CATALOG_LOCATION:classpath:workflow/catalog-projection.local.json}
       allow-unreleased: ${WORKFLOW_CATALOG_ALLOW_UNRELEASED:true}
+  stay-verification:
+    scheduler-enabled: ${STAY_VERIFICATION_SCHEDULER_ENABLED:true}
+    scan-cron: ${STAY_VERIFICATION_SCAN_CRON:0 10 2 * * *}
   file-storage:
     local-path: ${FILE_STORAGE_LOCAL_PATH:./data/files}
   cors:
@@ -254,6 +257,8 @@ app:
   reliability:
     outbox:
       enabled: false
+  stay-verification:
+    scheduler-enabled: false
   auth:
     jwt:
       secret-base64: ${JWT_SECRET_BASE64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
