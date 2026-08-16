@@ -608,6 +608,7 @@ final class SyntheticDocumentGenerator {
                     List.of(employmentExtensionPage(fixture, issueDate, expiryDate));
             case INTEGRATED_APPLICATION ->
                     List.of(integratedApplicationPage(fixture, issueDate, expiryDate));
+            case IDENTITY_GUARANTY -> List.of(residenceProofPage(fixture, issueDate, expiryDate));
             case RESIDENCE_PROOF -> List.of(residenceProofPage(fixture, issueDate, expiryDate));
         };
     }
@@ -1293,6 +1294,11 @@ final class SyntheticDocumentGenerator {
                     "ANNUAL INCOME: KRW 28,200,000 / OCCUPATION: MANUFACTURING ASSISTANT",
                     "SIGNATURE STATE: FILLED DRAFT / UNSIGNED"
             );
+            case IDENTITY_GUARANTY -> List.of(
+                    "GUARANTEED PERSON: " + identity.englishName(),
+                    "GUARANTOR: " + demoEmployerName() + " / " + demoCompanyName(),
+                    "SIGNATURE STATE: FILLED DRAFT / UNSIGNED"
+            );
             case RESIDENCE_PROOF -> List.of(
                     "RESIDENT: " + identity.englishName() + " / " + identity.alienRegistrationNumber(),
                     "PROVIDED ADDRESS: " + identity.syntheticAddress(),
@@ -1312,6 +1318,7 @@ final class SyntheticDocumentGenerator {
             case PERMIT -> "EMPLOYMENT PERMIT";
             case EMPLOYMENT_EXTENSION_APPLICATION -> "EMPLOYMENT PERIOD EXTENSION APPLICATION";
             case INTEGRATED_APPLICATION -> "INTEGRATED APPLICATION";
+            case IDENTITY_GUARANTY -> "IDENTITY GUARANTY";
             case RESIDENCE_PROOF -> "RESIDENCE PROOF";
         };
     }
@@ -1332,6 +1339,7 @@ final class SyntheticDocumentGenerator {
             case EMPLOYMENT_EXTENSION_APPLICATION ->
                     "DEMO-EXT-%02d-DRAFT".formatted(identity.portraitSeed());
             case INTEGRATED_APPLICATION -> "DEMO-INT-%02d-DRAFT".formatted(identity.portraitSeed());
+            case IDENTITY_GUARANTY -> "DEMO-GUARANTY-%02d-DRAFT".formatted(identity.portraitSeed());
             case RESIDENCE_PROOF -> "DEMO-ADDR-%02d-NOT-VALID".formatted(identity.portraitSeed());
         };
     }

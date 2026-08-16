@@ -147,6 +147,12 @@ class DashboardQueryServiceTest {
         }
 
         @Override
+        public java.util.Optional<com.fowoco.server.worker.domain.WorkerDocument>
+                findByIdAndCompanyIdIncludingArchived(UUID workerDocumentId, UUID companyId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
         public com.fowoco.server.worker.domain.WorkerDocument update(
                 com.fowoco.server.worker.domain.WorkerDocument document) {
             throw new UnsupportedOperationException();

@@ -125,6 +125,62 @@ class DocumentSecurityIntegrationTest {
         List<String> availableAfter = JsonPath.read(afterResponse.body(), "$.available");
         assertThat(availableAfter).containsExactlyInAnyOrder("CONTRACT", "PERMIT");
         assertThat(JsonPath.<Boolean>read(afterResponse.body(), "$.completion_blocked")).isFalse();
+
+        HttpResponse<String> archiveResponse = postJson(
+                "/api/v1/documents/" + documentId + "/archive",
+                """
+                {"expected_version":1,"reason":"중복 계약서 정리"}
+                """,
+                token
+        );
+        assertThat(archiveResponse.statusCode()).isEqualTo(204);
+
+        HttpResponse<String> archivedReadiness = getJson(
+                "/api/v1/tasks/" + taskId + "/document-readiness",
+                token
+        );
+        assertThat(JsonPath.<List<String>>read(archivedReadiness.body(), "$.missing"))
+                .containsExactly("CONTRACT");
+        assertThat(JsonPath.<List<String>>read(archivedReadiness.body(), "$.available"))
+                .containsExactly("PERMIT");
+        assertThat(JsonPath.<Boolean>read(archivedReadiness.body(), "$.completion_blocked")).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE stored_file_id = ?",
+                Integer.class,
+                UUID.fromString(fileId)
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT file_id FROM worker_document WHERE worker_document_id = ?",
+                UUID.class,
+                UUID.fromString(documentId)
+        )).isEqualTo(UUID.fromString(fileId));
+    }
+
+    @Test
+    void readinessIgnoresExpiredHistoryWhenAValidReplacementExists() throws Exception {
+        String token = accessToken(login(HR_A_EMAIL));
+        String workerId = registerWorker(token, "교체서류준비도테스트");
+        String taskId = createTask(token, workerId);
+
+        String expiredContractId = registerWorkerDocument(token, workerId, "CONTRACT");
+        jdbcTemplate.update(
+                "UPDATE worker_document SET expiry_date = DATE '2026-08-01' WHERE worker_document_id = ?",
+                UUID.fromString(expiredContractId)
+        );
+        String currentContractId = registerWorkerDocument(token, workerId, "CONTRACT");
+        jdbcTemplate.update(
+                "UPDATE worker_document SET expiry_date = DATE '2027-08-01' WHERE worker_document_id = ?",
+                UUID.fromString(currentContractId)
+        );
+        registerWorkerDocument(token, workerId, "PERMIT");
+
+        HttpResponse<String> response = getJson("/api/v1/tasks/" + taskId + "/document-readiness", token);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<List<String>>read(response.body(), "$.available"))
+                .containsExactlyInAnyOrder("CONTRACT", "PERMIT");
+        assertThat(JsonPath.<List<String>>read(response.body(), "$.expired")).isEmpty();
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.completion_blocked")).isFalse();
     }
 
     @Test
@@ -152,6 +208,8 @@ class DocumentSecurityIntegrationTest {
         assertThat(items).hasSize(1);
         assertThat(JsonPath.<String>read(response.body(), "$.items[0].display_name"))
                 .isEqualTo("목록조회테스트");
+        assertThat(JsonPath.<String>read(response.body(), "$.items[0].source"))
+                .isEqualTo("HR_UPLOAD");
     }
 
     @Test

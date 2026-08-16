@@ -5,6 +5,7 @@ import com.fowoco.server.document.application.DocumentDetailResult;
 import com.fowoco.server.file.domain.ScanStatus;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -35,6 +36,10 @@ public final class DocumentDetailResponse {
     @JsonProperty("submission_status")
     @Schema(name = "submission_status", requiredMode = Schema.RequiredMode.REQUIRED)
     private final SubmissionStatus submissionStatus;
+
+    @JsonProperty("source")
+    @Schema(name = "source", description = "서류가 등록된 경로", requiredMode = Schema.RequiredMode.REQUIRED)
+    private final WorkerDocumentSource source;
 
     @JsonProperty("expiry_date")
     @Schema(name = "expiry_date", format = "date")
@@ -71,6 +76,7 @@ public final class DocumentDetailResponse {
             String displayName,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             long version,
             UUID fileId,
@@ -85,6 +91,7 @@ public final class DocumentDetailResponse {
         this.displayName = displayName;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
+        this.source = source;
         this.expiryDate = expiryDate;
         this.version = version;
         this.fileId = fileId;
@@ -104,6 +111,7 @@ public final class DocumentDetailResponse {
                 result.workerDisplayName(),
                 document.documentType(),
                 document.submissionStatus(),
+                document.source(),
                 document.expiryDate(),
                 document.version(),
                 document.fileId(),
@@ -136,6 +144,10 @@ public final class DocumentDetailResponse {
 
     public SubmissionStatus getSubmissionStatus() {
         return submissionStatus;
+    }
+
+    public WorkerDocumentSource getSource() {
+        return source;
     }
 
     public LocalDate getExpiryDate() {

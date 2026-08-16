@@ -138,6 +138,45 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
+    void rejectsAnAutomaticWorkerGuideWithoutALanguageAssistantResult() {
+        RenewalRunRequest request = request();
+        RenewalRunResponse invalid = automaticWorkerGuide(
+                request,
+                "여권과 외국인등록증을 제출해 주세요.",
+                null
+        );
+
+        assertThatThrownBy(() -> validator.validateResponse(request, invalid))
+                .isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsAnAutomaticWorkerGuideForAnotherLanguage() {
+        RenewalRunRequest request = request();
+        Map<String, Object> language = successfulLanguageAssistant("ko");
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                automaticWorkerGuide(request, "여권과 외국인등록증을 제출해 주세요.", language)
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsAnAutomaticWorkerGuideThatExposesInternalKeys() {
+        RenewalRunRequest request = request();
+        Map<String, Object> language = successfulLanguageAssistant("vi");
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                automaticWorkerGuide(
+                        request,
+                        "필요한 정보: alien_registration_number (조합:both_missing)",
+                        language
+                )
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
     void acceptsAllWorkerGuideFailureCodesAsFailClosedReviewResponses() {
         RenewalRunRequest request = request();
 
@@ -362,6 +401,40 @@ class RenewalRuntimeContractValidatorTest {
         return workerGuideReviewResponse(
                 request, failureCode, workerMessage, reviewRequired, null
         );
+    }
+
+    private RenewalRunResponse automaticWorkerGuide(
+            RenewalRunRequest request,
+            String workerMessage,
+            Map<String, Object> languageAssistant
+    ) {
+        return new RenewalRunResponse(
+                request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
+                request.task().workflowId(), new BigDecimal("0.91"),
+                "WAITING_WORKER", "WAITING_WORKER", "ask_worker",
+                "PHASE_3", "STEP_5", Map.of(),
+                List.of("passport_number", "alien_registration_number"),
+                List.of(
+                        new RenewalRequestedField("passport_number", "DOCUMENT_OCR"),
+                        new RenewalRequestedField("alien_registration_number", "DOCUMENT_OCR")
+                ),
+                null, workerMessage, false, null, languageAssistant, null,
+                List.of(), List.of(), Map.of("combo", "both_missing"),
+                List.of("REQUEST_IDENTITY_DOCUMENT"), List.of(), null, "rules", "main",
+                List.of()
+        );
+    }
+
+    private Map<String, Object> successfulLanguageAssistant(String targetLanguage) {
+        Map<String, Object> language = new LinkedHashMap<>();
+        language.put("target_language", targetLanguage);
+        language.put("generation_status", "success");
+        language.put("requires_human_review", false);
+        language.put("standard_korean_text", "여권과 외국인등록증을 제출해 주세요.");
+        language.put("easy_korean_text", "여권과 외국인등록증을 내 주세요.");
+        language.put("translated_text", "Vui lòng nộp hộ chiếu và thẻ đăng ký người nước ngoài.");
+        language.put("warnings", List.of());
+        return language;
     }
 
     private RenewalRunResponse workerGuideReviewResponse(

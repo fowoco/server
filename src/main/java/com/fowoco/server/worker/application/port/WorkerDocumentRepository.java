@@ -18,6 +18,8 @@ public interface WorkerDocumentRepository {
 
     Optional<WorkerDocument> findByIdAndCompanyId(UUID workerDocumentId, UUID companyId);
 
+    Optional<WorkerDocument> findByIdAndCompanyIdIncludingArchived(UUID workerDocumentId, UUID companyId);
+
     WorkerDocument update(WorkerDocument document);
 
     List<WorkerDocument> findPage(UUID companyId, WorkerDocumentSearchQuery query);

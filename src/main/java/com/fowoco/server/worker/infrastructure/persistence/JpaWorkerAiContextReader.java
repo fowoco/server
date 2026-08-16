@@ -112,6 +112,7 @@ public class JpaWorkerAiContextReader implements
                         from WorkerDocumentJpaEntity document
                         where document.companyId = :companyId
                           and document.workerId = :workerId
+                          and document.archivedAt is null
                           and document.documentType in :documentTypes
                         order by document.updatedAt desc,
                                  document.createdAt desc,

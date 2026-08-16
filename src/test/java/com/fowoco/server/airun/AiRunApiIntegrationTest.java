@@ -795,7 +795,7 @@ class AiRunApiIntegrationTest {
         Map<String, String> extractedSlots = new LinkedHashMap<>(
                 request.analysisInput().workers().get(0).requestedFields()
         );
-        extractedSlots.put("due_at", "2026-08-31T18:00:00+09:00");
+        extractedSlots.put("due_at", "2026-08-31T18:00");
         return new AiAnalysisResponse(
                 request.requestId(),
                 AiAnalysisOutcome.REVIEW_REQUIRED,

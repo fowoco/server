@@ -57,6 +57,7 @@ class RenewalExecutionIntegrationTest {
     private static final UUID WORKER_A = UUID.fromString("a8300000-0000-0000-0000-000000000001");
     private static final UUID CASE_A = UUID.fromString("a8400000-0000-0000-0000-000000000001");
     private static final UUID TASK_A = UUID.fromString("a8500000-0000-0000-0000-000000000001");
+    private static final UUID TASK_B = UUID.fromString("a8500000-0000-0000-0000-000000000002");
     private static final String PASSWORD = "Test-password-1!";
     private static final String HR_A_EMAIL = "renewal.hr.a@example.com";
     private static final String HR_B_EMAIL = "renewal.hr.b@example.com";
@@ -186,7 +187,7 @@ class RenewalExecutionIntegrationTest {
         HttpResponse<String> response = postRenewal(token, 0);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("NEEDS_INFO");
+        assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("DRAFT");
         assertThat(JsonPath.<String>read(response.body(), "$.scenario")).isEqualTo("ask_worker");
         assertThat(JsonPath.<String>read(response.body(), "$.worker_message_draft_id")).isNotBlank();
         assertThat(jdbcTemplate.queryForObject(
@@ -202,6 +203,31 @@ class RenewalExecutionIntegrationTest {
                 "SELECT COUNT(*) FROM audit_event WHERE action = 'DOCUMENT_REQUEST_DRAFT_SAVED'",
                 Integer.class
         )).isEqualTo(1);
+    }
+
+    @Test
+    void keepsAskWorkerInNeedsInfoWhenAnHrInputIsStillMissing() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation -> {
+            RenewalRunRequest request = invocation.getArgument(0);
+            return response(
+                    request, "ask_worker", "WAITING_WORKER", "WAITING_WORKER",
+                    List.of("passport_number", "wage"),
+                    List.of(
+                            new RenewalRequestedField("passport_number", "DOCUMENT_OCR"),
+                            new RenewalRequestedField("wage", "USER_INPUT")
+                    ),
+                    "여권 사본을 제출해 주세요.",
+                    Map.of("target_language", "ko", "translated_text", "여권 사본을 제출해 주세요."),
+                    List.of("REQUEST_IDENTITY_DOCUMENT", "NEEDS_INFO")
+            );
+        });
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("NEEDS_INFO");
+        assertThat(JsonPath.<String>read(response.body(), "$.worker_message_draft_id")).isNotBlank();
     }
 
     @Test
@@ -297,6 +323,52 @@ class RenewalExecutionIntegrationTest {
         assertThat(JsonPath.<String>read(businessData, "$.renewal_inputs.wage"))
                 .isEqualTo("2500000");
         verify(runtimeClient, times(2)).run(any(), any());
+    }
+
+    @Test
+    void reusesSafeContractInputsFromThePreviousTaskInTheSameCase() throws Exception {
+        jdbcTemplate.update(
+                """
+                UPDATE task
+                SET business_data_json = ?, status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP,
+                    version = version + 1
+                WHERE task_id = ?
+                """,
+                """
+                {
+                  "renewal_inputs": {
+                    "wage": "2500000",
+                    "working_hours": "40",
+                    "job_description": "생산 업무",
+                    "work_location": "제1공장",
+                    "lodging": "회사 기숙사",
+                    "contract_period": "2026-09-01~2027-08-31",
+                    "passport_number": "must-not-be-inherited"
+                  }
+                }
+                """,
+                TASK_A
+        );
+        insertSecondCaseTask();
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation -> {
+            RenewalRunRequest request = invocation.getArgument(0);
+            capturedRequest.set(request);
+            return generateResponse(request);
+        });
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, TASK_B, 0);
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        assertThat(capturedRequest.get().slots())
+                .containsEntry("wage", "2500000")
+                .containsEntry("working_hours", "40")
+                .containsEntry("job_description", "생산 업무")
+                .containsEntry("work_location", "제1공장")
+                .containsEntry("lodging", "회사 기숙사")
+                .containsEntry("contract_period", "2026-09-01~2027-08-31")
+                .containsEntry("due_at", "2026-08-21")
+                .doesNotContainKey("passport_number");
     }
 
     @Test
@@ -411,6 +483,7 @@ class RenewalExecutionIntegrationTest {
                 SELECT COUNT(*) FROM worker_document
                 WHERE task_id = ? AND worker_id = ? AND file_id IS NOT NULL
                     AND document_type = 'CONTRACT' AND submission_status = 'SUBMITTED'
+                    AND source = 'AI_GENERATED'
                 """,
                 Integer.class, TASK_A, WORKER_A
         )).isEqualTo(1);
@@ -543,28 +616,67 @@ class RenewalExecutionIntegrationTest {
     }
 
     private RenewalRunResponse generateResponse(RenewalRunRequest request) {
+        List<RenewalGeneratedDocument> generatedDocuments = switch (request.task().taskType()) {
+            case "RECONTRACT" -> List.of(generatedDocument("standard_labor_contract_v6"));
+            case "EMPLOYMENT_PERIOD_EXTENSION" ->
+                    List.of(generatedDocument("employment_extension_application_v12_3"));
+            case "STAY_PERIOD_EXTENSION" -> List.of(
+                    generatedDocument("immigration_integrated_application_v34"),
+                    generatedDocument("identity_guaranty_v129")
+            );
+            default -> throw new IllegalArgumentException("unsupported test task type");
+        };
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
                 request.task().workflowId(), new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
                 "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
                 null, null, false, null, null, null,
-                List.of(new RenewalGeneratedDocument(
-                        "standard_labor_contract_v6",
-                        "표준근로계약서",
-                        "hwp",
-                        "stub",
-                        null,
-                        null,
-                        List.of("employee_name", "passport_number"),
-                        List.of(),
-                        Map.of(
-                                "employee_name", "NGUYEN VAN AN",
-                                "passport_number", "M12345678"
-                        )
-                )),
+                generatedDocuments,
                 List.of(), null, List.of("GENERATE_DRAFTS", "READY_FOR_REVIEW"),
                 List.of(), null, "rules", "main", List.of()
         );
+    }
+
+    private RenewalGeneratedDocument generatedDocument(String templateId) {
+        return new RenewalGeneratedDocument(
+                templateId,
+                "Renewal test document",
+                "hwp",
+                "stub",
+                null,
+                null,
+                List.copyOf(generatedValues(templateId).keySet()),
+                List.of(),
+                generatedValues(templateId)
+        );
+    }
+
+    private Map<String, Object> generatedValues(String templateId) {
+        return switch (templateId) {
+            case "standard_labor_contract_v6" -> Map.of(
+                    "employee_name", "NGUYEN VAN AN",
+                    "employee_birthdate", "1995-04-12",
+                    "enterprise_name", "Renewal 사업장 A"
+            );
+            case "employment_extension_application_v12_3" -> Map.of(
+                    "employee_1_name", "NGUYEN VAN AN",
+                    "employee_1_resident_number", "950412-5123456",
+                    "employee_1_passport_number", "M12345678"
+            );
+            case "immigration_integrated_application_v34" -> Map.of(
+                    "given_names", "VAN AN",
+                    "passport_number", "M12345678",
+                    "birth_year", "1995",
+                    "birth_month", "04",
+                    "birth_day", "12"
+            );
+            case "identity_guaranty_v129" -> Map.of(
+                    "foreign_name", "NGUYEN VAN AN",
+                    "foreign_birthdate", "1995-04-12",
+                    "foreign_passport", "M12345678"
+            );
+            default -> throw new IllegalArgumentException("unsupported test template");
+        };
     }
 
     private RenewalRunResponse workerGuideReviewResponse(RenewalRunRequest request) {
@@ -640,7 +752,11 @@ class RenewalExecutionIntegrationTest {
     }
 
     private HttpResponse<String> postRenewal(String token, long version) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/tasks/" + TASK_A + "/renewal-run"))
+        return postRenewal(token, TASK_A, version);
+    }
+
+    private HttpResponse<String> postRenewal(String token, UUID taskId, long version) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/tasks/" + taskId + "/renewal-run"))
                 .header(HttpHeaders.CONTENT_TYPE, "application/json")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.ofString("""
@@ -756,6 +872,22 @@ class RenewalExecutionIntegrationTest {
                     ?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0)
                 """,
                 TASK_A, COMPANY_A, WORKER_A, CASE_A, "0".repeat(64), LocalDate.of(2026, 8, 20), HR_A, HR_A
+        );
+    }
+
+    private void insertSecondCaseTask() {
+        jdbcTemplate.update(
+                """
+                INSERT INTO task (
+                    task_id,company_id,target_type,worker_id,case_id,task_type,workflow_id,
+                    workflow_catalog_version,title,description,business_data_json,critical_fingerprint,
+                    content_revision,source,status,due_date,created_by,updated_by,created_at,updated_at,version
+                ) VALUES (?,?, 'WORKER',?,?, 'STAY_PERIOD_EXTENSION','WF-STY-001','0.2.0',
+                    '체류기간 연장 준비','체류기간 연장을 준비합니다.','{}',?,0,'AI_CANDIDATE','DRAFT',?,
+                    ?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,0)
+                """,
+                TASK_B, COMPANY_A, WORKER_A, CASE_A, "1".repeat(64),
+                LocalDate.of(2026, 8, 21), HR_A, HR_A
         );
     }
 }
