@@ -53,7 +53,8 @@ class DemoDocumentDataCommandRunner implements ApplicationRunner {
         };
         LOGGER.info(
                 "demo_document_data command={} document_count={} file_count={} image_count={} "
-                        + "pdf_count={} hwp_count={} hwpx_count={} task_linked_count={} missing_count={}",
+                        + "pdf_count={} hwp_count={} hwpx_count={} task_linked_count={} missing_count={} "
+                        + "passport_worker_count={} legacy_materialized_file_count={}",
                 parsed.name().toLowerCase(Locale.ROOT),
                 report.documentCount(),
                 report.fileCount(),
@@ -62,7 +63,9 @@ class DemoDocumentDataCommandRunner implements ApplicationRunner {
                 report.hwpCount(),
                 report.hwpxCount(),
                 report.taskLinkedDocumentCount(),
-                report.missingDocumentCount()
+                report.missingDocumentCount(),
+                report.passportWorkerCount(),
+                report.legacyMaterializedFileCount()
         );
         applicationContext.close();
     }

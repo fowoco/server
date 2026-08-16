@@ -205,6 +205,71 @@ class RenewalExecutionIntegrationTest {
     }
 
     @Test
+    void keepsAWorkerGuideFailureInHrReviewWithoutCreatingDeliveryResources() throws Exception {
+        jdbcTemplate.update("UPDATE task SET status = 'NEEDS_INFO' WHERE task_id = ?", TASK_A);
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation ->
+                workerGuideReviewResponse(invocation.getArgument(0))
+        );
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(response.body(), "$.task_status")).isEqualTo("DRAFT");
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.guide_review_required")).isTrue();
+        assertThat(JsonPath.<String>read(response.body(), "$.guide_failure_code"))
+                .isEqualTo("LANGUAGE_ASSISTANT_REVIEW_REQUIRED");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.target_language"
+        )).isEqualTo("vi");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.generation_status"
+        )).isEqualTo("warning");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.standard_korean_text"
+        )).isEqualTo("여권 사본을 제출해 주세요.");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.translated_text"
+        )).isEqualTo("Vui lòng nộp bản sao hộ chiếu.");
+        assertThat(JsonPath.<String>read(
+                response.body(), "$.guide_review_draft.warning_codes[0]"
+        )).isEqualTo("SEMANTIC_VALIDATION_INCONCLUSIVE");
+        assertThat(JsonPath.<Object>read(response.body(), "$.worker_message_draft_id")).isNull();
+
+        String businessData = jdbcTemplate.queryForObject(
+                "SELECT business_data_json FROM task WHERE task_id = ?", String.class, TASK_A
+        );
+        assertThat(JsonPath.<Boolean>read(
+                businessData,
+                "$.renewal_execution.guide_review_required"
+        )).isTrue();
+        assertThat(JsonPath.<String>read(
+                businessData,
+                "$.renewal_execution.guide_failure_code"
+        )).isEqualTo("LANGUAGE_ASSISTANT_REVIEW_REQUIRED");
+        assertThat(JsonPath.<String>read(
+                businessData,
+                "$.renewal_execution.guide_review_draft.easy_korean_text"
+        )).isEqualTo("여권을 내 주세요.");
+        assertThat(businessData).doesNotContain("provider_raw_secret", "do-not-persist");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM document_request_draft WHERE task_id = ?",
+                Integer.class,
+                TASK_A
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM worker_link WHERE task_id = ?",
+                Integer.class,
+                TASK_A
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT change_summary FROM audit_event WHERE target_id = ? AND action = 'TASK_UPDATED'",
+                String.class,
+                TASK_A
+        )).contains("LANGUAGE_ASSISTANT_REVIEW_REQUIRED");
+    }
+
+    @Test
     void storesHrSlotAnswersAndSendsThemToTheNextRenewalRun() throws Exception {
         when(runtimeClient.run(any(), any())).thenAnswer(invocation -> {
             RenewalRunRequest request = invocation.getArgument(0);
@@ -482,7 +547,7 @@ class RenewalExecutionIntegrationTest {
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
                 request.task().workflowId(), new BigDecimal("0.94"), "READY_FOR_REVIEW", "REVIEW_REQUIRED",
                 "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
-                null, null, null, null,
+                null, null, false, null, null, null,
                 List.of(new RenewalGeneratedDocument(
                         "standard_labor_contract_v6",
                         "표준근로계약서",
@@ -498,6 +563,32 @@ class RenewalExecutionIntegrationTest {
                         )
                 )),
                 List.of(), null, List.of("GENERATE_DRAFTS", "READY_FOR_REVIEW"),
+                List.of(), null, "rules", "main", List.of()
+        );
+    }
+
+    private RenewalRunResponse workerGuideReviewResponse(RenewalRunRequest request) {
+        Map<String, Object> languageAssistant = new java.util.LinkedHashMap<>();
+        languageAssistant.put("target_language", "vi");
+        languageAssistant.put("generation_status", "warning");
+        languageAssistant.put("requires_human_review", true);
+        languageAssistant.put("standard_korean_text", "여권 사본을 제출해 주세요.");
+        languageAssistant.put("easy_korean_text", "여권을 내 주세요.");
+        languageAssistant.put("translated_text", "Vui lòng nộp bản sao hộ chiếu.");
+        languageAssistant.put("warnings", List.of(Map.of(
+                "component", "translation",
+                "code", "SEMANTIC_VALIDATION_INCONCLUSIVE",
+                "message", "번역 의미 검토가 필요합니다."
+        )));
+        languageAssistant.put("provider_raw_secret", "do-not-persist");
+        return new RenewalRunResponse(
+                request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
+                request.task().workflowId(), new BigDecimal("0.91"),
+                "READY_FOR_REVIEW", "REVIEW_REQUIRED", "ask_worker",
+                "PHASE_3", "STEP_5", Map.of(), List.of("passport_number"),
+                List.of(new RenewalRequestedField("passport_number", "DOCUMENT_OCR")),
+                null, null, true, "LANGUAGE_ASSISTANT_REVIEW_REQUIRED", languageAssistant, null,
+                List.of(), List.of(), null, List.of("REVIEW_WORKER_GUIDE"),
                 List.of(), null, "rules", "main", List.of()
         );
     }
@@ -522,7 +613,7 @@ class RenewalExecutionIntegrationTest {
                 request.requestId(), request.attemptId(), request.taskId(), "OUT_OF_SCOPE", "",
                 new BigDecimal("0.93"), "CANCELLED", "OUT_OF_SCOPE", "out_of_scope",
                 "PHASE_1", "STEP_2", Map.of(), List.of(), List.of(),
-                "지원 범위를 벗어난 요청입니다.", null, null, null, List.of(), List.of(),
+                "지원 범위를 벗어난 요청입니다.", null, false, null, null, null, List.of(), List.of(),
                 null, List.of("CANCEL_OUT_OF_SCOPE"), List.of(), null, "rules", "main",
                 List.of()
         );
@@ -543,7 +634,7 @@ class RenewalExecutionIntegrationTest {
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
                 request.task().workflowId(), new BigDecimal("0.91"), status, outcome, scenario,
                 "PHASE_2", "STEP_5", Map.of(), missingSlots, requestedFields,
-                null, workerMessage, languageAssistant, null, List.of(), List.of(), null,
+                null, workerMessage, false, null, languageAssistant, null, List.of(), List.of(), null,
                 signals, List.of(), null, "rules", "main", List.of()
         );
     }

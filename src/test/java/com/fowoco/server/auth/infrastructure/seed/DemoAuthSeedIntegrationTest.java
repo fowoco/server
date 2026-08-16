@@ -490,7 +490,7 @@ class DemoAuthSeedIntegrationTest {
     private void assertGoldenFlowDocumentContext() {
         var resolution = aiSlotResolutionTransaction.resolve(
                 COMPANY_ID,
-                "0.2.0",
+                "0.3.0",
                 new AiContextRequirement(
                         "EXPIRY_RENEWAL",
                         BigDecimal.ONE,

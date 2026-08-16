@@ -9,6 +9,8 @@ import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
 import com.fowoco.server.aiintegration.application.renewal.RenewalWorkflowPolicy;
 import java.math.BigDecimal;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -31,7 +33,14 @@ public final class RenewalRuntimeContractValidator {
             "GENERATE_DRAFTS",
             "READY_FOR_REVIEW",
             "OCR_SAVED",
+            "REVIEW_WORKER_GUIDE",
             "CANCEL_OUT_OF_SCOPE"
+    );
+    private static final Set<String> GUIDE_FAILURE_CODES = Set.of(
+            "LANGUAGE_ASSISTANT_NOT_CONFIGURED",
+            "LANGUAGE_ASSISTANT_INVOCATION_FAILED",
+            "LANGUAGE_ASSISTANT_REVIEW_REQUIRED",
+            "WORKER_GUIDE_UNAVAILABLE"
     );
     private static final Pattern IDENTIFIER = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
     private static final Set<String> DOCUMENT_TEMPLATES = Set.of(
@@ -117,6 +126,7 @@ public final class RenewalRuntimeContractValidator {
         boundaryPolicy.validateText(response.status(), 40, true);
         boundaryPolicy.validateText(response.outcome(), 80, true);
         boundaryPolicy.validateText(response.workerRequestMessage(), 1_000, false);
+        validateWorkerGuideReview(response);
         validateLanguageAssistant(response);
         if (response.missingSlots().size() > 100
                 || response.requestedFields().size() > 100
@@ -159,14 +169,83 @@ public final class RenewalRuntimeContractValidator {
         if (response.languageAssistant() == null) {
             return;
         }
-        Object language = response.languageAssistant().get("target_language");
+        Map<String, Object> assistant = response.languageAssistant();
+        Object language = assistant.get("target_language");
         if (!(language instanceof String value) || value.isBlank() || value.length() > 20) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant target is invalid.");
         }
+        Object generationStatus = assistant.get("generation_status");
+        if (generationStatus != null
+                && (!(generationStatus instanceof String value)
+                || !Set.of("success", "warning", "failed").contains(value))) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant status is invalid.");
+        }
+        Object humanReview = assistant.get("requires_human_review");
+        if (humanReview != null && !(humanReview instanceof Boolean)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant review flag is invalid.");
+        }
+        if ((generationStatus == null) != (humanReview == null)) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Language Assistant status and review flag must be provided together."
+            );
+        }
+        if (generationStatus instanceof String status && humanReview instanceof Boolean review) {
+            boolean expectedReview = !"success".equals(status);
+            if (review != expectedReview || response.guideReviewRequired() != review) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                        "Language Assistant review state is inconsistent."
+                );
+            }
+        }
         for (String key : Set.of("standard_korean_text", "easy_korean_text", "translated_text")) {
-            Object text = response.languageAssistant().get(key);
-            if (text instanceof String value) {
-                boundaryPolicy.validateText(value, 1_000, false);
+            Object text = assistant.get(key);
+            if (text == null) {
+                continue;
+            }
+            if (!(text instanceof String)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant text is invalid.");
+            }
+            boundaryPolicy.validateText((String) text, 1_000, false);
+        }
+        validateLanguageWarnings(assistant.get("warnings"));
+    }
+
+    private void validateLanguageWarnings(Object value) {
+        if (value == null) {
+            return;
+        }
+        if (!(value instanceof List<?>)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warnings are invalid.");
+        }
+        List<?> warnings = (List<?>) value;
+        if (warnings.size() > 20) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warnings are invalid.");
+        }
+        for (Object warning : warnings) {
+            if (!(warning instanceof Map<?, ?>)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warning is invalid.");
+            }
+            Map<?, ?> warningMap = (Map<?, ?>) warning;
+            if (!(warningMap.get("code") instanceof String)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warning is invalid.");
+            }
+            String code = (String) warningMap.get("code");
+            validateIdentifier(code, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+            Object component = warningMap.get("component");
+            if (component != null && !(component instanceof String)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warning is invalid.");
+            }
+            if (component instanceof String text) {
+                boundaryPolicy.validateText(text, 80, false);
+            }
+            Object message = warningMap.get("message");
+            if (message != null && !(message instanceof String)) {
+                reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Language Assistant warning is invalid.");
+            }
+            if (message instanceof String text) {
+                boundaryPolicy.validateText(text, 500, false);
             }
         }
     }
@@ -176,6 +255,7 @@ public final class RenewalRuntimeContractValidator {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "ask_hr requires missing slots.");
         }
         if ("ask_worker".equals(response.scenario())
+                && !response.guideReviewRequired()
                 && (response.workerRequestMessage() == null || response.workerRequestMessage().isBlank())) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "ask_worker requires a worker message.");
         }
@@ -184,6 +264,37 @@ public final class RenewalRuntimeContractValidator {
         }
         if (!"generate".equals(response.scenario()) && !response.generatedDocuments().isEmpty()) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Only generate may return document descriptors.");
+        }
+    }
+
+    private void validateWorkerGuideReview(RenewalRunResponse response) {
+        if (!response.guideReviewRequired()) {
+            if (response.guideFailureCode() != null && !response.guideFailureCode().isBlank()) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                        "Worker guide failure code requires review."
+                );
+            }
+            if (response.caseSignals().contains("REVIEW_WORKER_GUIDE")) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                        "Worker guide review signal requires review."
+                );
+            }
+            return;
+        }
+        if (!"ask_worker".equals(response.scenario())
+                || !"READY_FOR_REVIEW".equals(response.status())
+                || !"REVIEW_REQUIRED".equals(response.outcome())
+                || (response.workerRequestMessage() != null
+                && !response.workerRequestMessage().isBlank())
+                || response.guideFailureCode() == null
+                || !GUIDE_FAILURE_CODES.contains(response.guideFailureCode())
+                || !response.caseSignals().contains("REVIEW_WORKER_GUIDE")) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Worker guide review response is invalid."
+            );
         }
     }
 
