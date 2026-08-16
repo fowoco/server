@@ -67,6 +67,9 @@ public class UserAccountJpaEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "password_changed_at", nullable = false)
+    private Instant passwordChangedAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -86,6 +89,7 @@ public class UserAccountJpaEntity {
             AccountStatus status,
             Instant createdAt,
             Instant updatedAt,
+            Instant passwordChangedAt,
             long version
     ) {
         this.userId = userId;
@@ -99,6 +103,7 @@ public class UserAccountJpaEntity {
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.passwordChangedAt = passwordChangedAt;
         this.version = version;
     }
 
@@ -116,6 +121,7 @@ public class UserAccountJpaEntity {
                 userAccount.status(),
                 userAccount.createdAt(),
                 userAccount.updatedAt(),
+                userAccount.passwordChangedAt(),
                 userAccount.version()
         );
     }
@@ -133,6 +139,7 @@ public class UserAccountJpaEntity {
                 status,
                 createdAt,
                 updatedAt,
+                passwordChangedAt,
                 version
         );
     }
@@ -146,6 +153,7 @@ public class UserAccountJpaEntity {
         phone = userAccount.phone();
         passwordHash = userAccount.passwordHash();
         updatedAt = userAccount.updatedAt();
+        passwordChangedAt = userAccount.passwordChangedAt();
     }
 
 }
