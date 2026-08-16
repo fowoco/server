@@ -57,6 +57,15 @@ public class WorkerDocumentJpaEntity {
     @Column(name = "file_id")
     private UUID fileId;
 
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "archived_by")
+    private UUID archivedBy;
+
+    @Column(name = "archive_reason", length = 500)
+    private String archiveReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -82,6 +91,9 @@ public class WorkerDocumentJpaEntity {
             String destination,
             String note,
             UUID fileId,
+            Instant archivedAt,
+            UUID archivedBy,
+            String archiveReason,
             Instant createdAt,
             Instant updatedAt,
             long version
@@ -97,6 +109,9 @@ public class WorkerDocumentJpaEntity {
         this.destination = destination;
         this.note = note;
         this.fileId = fileId;
+        this.archivedAt = archivedAt;
+        this.archivedBy = archivedBy;
+        this.archiveReason = archiveReason;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
@@ -116,6 +131,9 @@ public class WorkerDocumentJpaEntity {
                 document.destination(),
                 document.note(),
                 document.fileId(),
+                document.archivedAt(),
+                document.archivedBy(),
+                document.archiveReason(),
                 document.createdAt(),
                 document.updatedAt(),
                 document.version()
@@ -135,6 +153,9 @@ public class WorkerDocumentJpaEntity {
                 destination,
                 note,
                 fileId,
+                archivedAt,
+                archivedBy,
+                archiveReason,
                 createdAt,
                 updatedAt,
                 version
@@ -160,6 +181,9 @@ public class WorkerDocumentJpaEntity {
         this.destination = document.destination();
         this.note = document.note();
         this.fileId = document.fileId();
+        this.archivedAt = document.archivedAt();
+        this.archivedBy = document.archivedBy();
+        this.archiveReason = document.archiveReason();
         this.updatedAt = document.updatedAt();
     }
 }

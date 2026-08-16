@@ -125,6 +125,35 @@ class DocumentSecurityIntegrationTest {
         List<String> availableAfter = JsonPath.read(afterResponse.body(), "$.available");
         assertThat(availableAfter).containsExactlyInAnyOrder("CONTRACT", "PERMIT");
         assertThat(JsonPath.<Boolean>read(afterResponse.body(), "$.completion_blocked")).isFalse();
+
+        HttpResponse<String> archiveResponse = postJson(
+                "/api/v1/documents/" + documentId + "/archive",
+                """
+                {"expected_version":1,"reason":"중복 계약서 정리"}
+                """,
+                token
+        );
+        assertThat(archiveResponse.statusCode()).isEqualTo(204);
+
+        HttpResponse<String> archivedReadiness = getJson(
+                "/api/v1/tasks/" + taskId + "/document-readiness",
+                token
+        );
+        assertThat(JsonPath.<List<String>>read(archivedReadiness.body(), "$.missing"))
+                .containsExactly("CONTRACT");
+        assertThat(JsonPath.<List<String>>read(archivedReadiness.body(), "$.available"))
+                .containsExactly("PERMIT");
+        assertThat(JsonPath.<Boolean>read(archivedReadiness.body(), "$.completion_blocked")).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM stored_file WHERE stored_file_id = ?",
+                Integer.class,
+                UUID.fromString(fileId)
+        )).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT file_id FROM worker_document WHERE worker_document_id = ?",
+                UUID.class,
+                UUID.fromString(documentId)
+        )).isEqualTo(UUID.fromString(fileId));
     }
 
     @Test

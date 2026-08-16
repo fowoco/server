@@ -21,6 +21,9 @@ public final class WorkerDocument {
     private final String destination;
     private final String note;
     private final UUID fileId;
+    private final Instant archivedAt;
+    private final UUID archivedBy;
+    private final String archiveReason;
     private final Instant createdAt;
     private final Instant updatedAt;
     private final long version;
@@ -41,6 +44,44 @@ public final class WorkerDocument {
             Instant updatedAt,
             long version
     ) {
+        this(
+                workerDocumentId,
+                workerId,
+                companyId,
+                taskId,
+                documentType,
+                submissionStatus,
+                expiryDate,
+                destination,
+                note,
+                fileId,
+                null,
+                null,
+                null,
+                createdAt,
+                updatedAt,
+                version
+        );
+    }
+
+    public WorkerDocument(
+            UUID workerDocumentId,
+            UUID workerId,
+            UUID companyId,
+            UUID taskId,
+            DocumentType documentType,
+            SubmissionStatus submissionStatus,
+            LocalDate expiryDate,
+            String destination,
+            String note,
+            UUID fileId,
+            Instant archivedAt,
+            UUID archivedBy,
+            String archiveReason,
+            Instant createdAt,
+            Instant updatedAt,
+            long version
+    ) {
         this.workerDocumentId = Objects.requireNonNull(workerDocumentId, "workerDocumentId must not be null");
         this.workerId = Objects.requireNonNull(workerId, "workerId must not be null");
         this.companyId = Objects.requireNonNull(companyId, "companyId must not be null");
@@ -52,8 +93,15 @@ public final class WorkerDocument {
         this.destination = requireMaxLength(destination, MAX_DESTINATION_LENGTH, "destination");
         this.note = requireMaxLength(note, MAX_NOTE_LENGTH, "note");
         this.fileId = fileId;
+        this.archivedAt = archivedAt;
+        this.archivedBy = archivedBy;
+        this.archiveReason = requireMaxLength(archiveReason, MAX_NOTE_LENGTH, "archiveReason");
+        validateArchiveMetadata();
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt must not be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
+        if (archivedAt != null && archivedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("archivedAt must not be before createdAt");
+        }
         if (updatedAt.isBefore(createdAt)) {
             throw new IllegalArgumentException("updatedAt must not be before createdAt");
         }
@@ -170,6 +218,48 @@ public final class WorkerDocument {
         return fileId;
     }
 
+    public Instant archivedAt() {
+        return archivedAt;
+    }
+
+    public UUID archivedBy() {
+        return archivedBy;
+    }
+
+    public String archiveReason() {
+        return archiveReason;
+    }
+
+    public boolean isArchived() {
+        return archivedAt != null;
+    }
+
+    public WorkerDocument archive(UUID actorId, String reason, Instant now) {
+        Objects.requireNonNull(actorId, "actorId must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+        if (isArchived()) {
+            return this;
+        }
+        return new WorkerDocument(
+                workerDocumentId,
+                workerId,
+                companyId,
+                taskId,
+                documentType,
+                submissionStatus,
+                expiryDate,
+                destination,
+                note,
+                fileId,
+                now,
+                actorId,
+                reason,
+                createdAt,
+                now,
+                version
+        );
+    }
+
     public Instant createdAt() {
         return createdAt;
     }
@@ -180,6 +270,14 @@ public final class WorkerDocument {
 
     public long version() {
         return version;
+    }
+
+    private void validateArchiveMetadata() {
+        boolean allAbsent = archivedAt == null && archivedBy == null && archiveReason == null;
+        boolean allPresent = archivedAt != null && archivedBy != null && archiveReason != null;
+        if (!allAbsent && !allPresent) {
+            throw new IllegalArgumentException("archive metadata must be all present or all absent");
+        }
     }
 
     private static String requireMaxLength(String value, int maxLength, String fieldName) {

@@ -175,6 +175,9 @@ class PostgreSqlMigrationTests {
                 .containsEntry("task_id", new ColumnSpec("uuid", true))
                 .containsEntry("document_type", new ColumnSpec("varchar", false))
                 .containsEntry("submission_status", new ColumnSpec("varchar", false))
+                .containsEntry("archived_at", new ColumnSpec("timestamptz", true))
+                .containsEntry("archived_by", new ColumnSpec("uuid", true))
+                .containsEntry("archive_reason", new ColumnSpec("varchar", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "stored_file"))
                 .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
@@ -455,7 +458,9 @@ class PostgreSqlMigrationTests {
                         "ck_document_ocr_run_correction_pair",
                         "fk_document_ocr_run_document_company",
                         "fk_document_ocr_run_file_company",
-                        "fk_document_ocr_run_requester_company"
+                        "fk_document_ocr_run_requester_company",
+                        "fk_worker_document_archived_by_company",
+                        "ck_worker_document_archive_metadata"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -465,6 +470,7 @@ class PostgreSqlMigrationTests {
                         "idx_refresh_token_expires_at",
                         "idx_worker_company",
                         "idx_worker_document_company_status",
+                        "idx_worker_document_company_archive",
                         "idx_stored_file_company",
                         "idx_task_company_status_due",
                         "idx_task_company_target_source",

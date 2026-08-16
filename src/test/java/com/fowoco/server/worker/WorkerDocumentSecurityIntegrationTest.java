@@ -202,6 +202,93 @@ class WorkerDocumentSecurityIntegrationTest {
     }
 
     @Test
+    void archiveHidesDocumentAndKeepsOneAuditRecordOnRetry() throws Exception {
+        String accessToken = accessToken(login(HR_A_EMAIL));
+        String documentId = registerDocument(accessToken, workerIdInCompanyA);
+        String body = """
+                {"expected_version":0,"reason":"잘못 등록한 중복 서류"}
+                """;
+
+        HttpResponse<String> first = postJson(
+                "/api/v1/documents/" + documentId + "/archive",
+                body,
+                accessToken
+        );
+        HttpResponse<String> retry = postJson(
+                "/api/v1/documents/" + documentId + "/archive",
+                body,
+                accessToken
+        );
+
+        assertThat(first.statusCode()).isEqualTo(204);
+        assertThat(retry.statusCode()).isEqualTo(204);
+        assertThat(getJson("/api/v1/documents/" + documentId, accessToken).statusCode()).isEqualTo(404);
+        HttpResponse<String> listResponse = getJson("/api/v1/documents", accessToken);
+        assertThat(JsonPath.<java.util.List<String>>read(
+                listResponse.body(), "$.items[*].worker_document_id"
+        )).doesNotContain(documentId);
+
+        java.util.Map<String, Object> archiveMetadata = jdbcTemplate.queryForMap(
+                """
+                SELECT archived_at, archived_by, archive_reason
+                  FROM worker_document
+                 WHERE worker_document_id = ? AND company_id = ?
+                """,
+                UUID.fromString(documentId),
+                COMPANY_A
+        );
+        assertThat(archiveMetadata.get("archived_at")).isNotNull();
+        assertThat(archiveMetadata.get("archived_by")).isEqualTo(HR_A);
+        assertThat(archiveMetadata.get("archive_reason")).isEqualTo("잘못 등록한 중복 서류");
+        assertThat(jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*) FROM audit_event
+                 WHERE company_id = ? AND target_id = ? AND action = 'DOCUMENT_ARCHIVED'
+                """,
+                Integer.class,
+                COMPANY_A,
+                UUID.fromString(documentId)
+        )).isEqualTo(1);
+    }
+
+    @Test
+    void archiveRejectsStaleVersionAndOtherCompany() throws Exception {
+        String companyAToken = accessToken(login(HR_A_EMAIL));
+        String companyBToken = accessToken(login(HR_B_EMAIL));
+        String documentId = registerDocument(companyAToken, workerIdInCompanyA);
+        String path = "/api/v1/documents/" + documentId + "/archive";
+
+        HttpResponse<String> patchResponse = patchJson(
+                "/api/v1/workers/" + workerIdInCompanyA + "/documents/" + documentId,
+                """
+                {"submission_status":"VERIFIED","expected_version":0}
+                """,
+                companyAToken
+        );
+        assertThat(patchResponse.statusCode()).isEqualTo(200);
+
+        HttpResponse<String> stale = postJson(
+                path,
+                """
+                {"expected_version":0,"reason":"오래된 화면에서 보관 요청"}
+                """,
+                companyAToken
+        );
+        HttpResponse<String> otherCompany = postJson(
+                path,
+                """
+                {"expected_version":1,"reason":"다른 사업장 요청"}
+                """,
+                companyBToken
+        );
+
+        assertThat(stale.statusCode()).isEqualTo(409);
+        assertThat(JsonPath.<String>read(stale.body(), "$.code")).isEqualTo("DOCUMENT_VERSION_CONFLICT");
+        assertThat(otherCompany.statusCode()).isEqualTo(404);
+        assertThat(JsonPath.<String>read(otherCompany.body(), "$.code")).isEqualTo("DOCUMENT_NOT_FOUND");
+    }
+
+    @Test
     void registerRejectsTaskOwnedByAnotherWorkerInSameCompany() throws Exception {
         String accessToken = accessToken(login(HR_A_EMAIL));
         String anotherWorkerId = registerWorker(accessToken, "다른 근로자");
