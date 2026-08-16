@@ -23,6 +23,7 @@ public final class UserAccount {
     private final AccountStatus status;
     private final Instant createdAt;
     private final Instant updatedAt;
+    private final Instant passwordChangedAt;
     private final long version;
 
     public UserAccount(
@@ -37,6 +38,7 @@ public final class UserAccount {
             AccountStatus status,
             Instant createdAt,
             Instant updatedAt,
+            Instant passwordChangedAt,
             long version
     ) {
         this.userId = Objects.requireNonNull(userId, "userId must not be null");
@@ -56,6 +58,10 @@ public final class UserAccount {
         this.updatedAt = Objects.requireNonNull(updatedAt, "updatedAt must not be null");
         if (updatedAt.isBefore(createdAt)) {
             throw new IllegalArgumentException("updatedAt must not be before createdAt");
+        }
+        this.passwordChangedAt = Objects.requireNonNull(passwordChangedAt, "passwordChangedAt must not be null");
+        if (passwordChangedAt.isBefore(createdAt)) {
+            throw new IllegalArgumentException("passwordChangedAt must not be before createdAt");
         }
         if (version < 0) {
             throw new IllegalArgumentException("version must not be negative");
@@ -84,6 +90,7 @@ public final class UserAccount {
                 passwordHash,
                 role,
                 AccountStatus.ACTIVE,
+                now,
                 now,
                 now,
                 0L
@@ -119,6 +126,7 @@ public final class UserAccount {
                 status,
                 createdAt,
                 now,
+                now,
                 version + 1
         );
     }
@@ -140,6 +148,7 @@ public final class UserAccount {
                 status,
                 createdAt,
                 now,
+                passwordChangedAt,
                 version + 1
         );
     }
@@ -186,6 +195,10 @@ public final class UserAccount {
 
     public Instant updatedAt() {
         return updatedAt;
+    }
+
+    public Instant passwordChangedAt() {
+        return passwordChangedAt;
     }
 
     public long version() {

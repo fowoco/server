@@ -29,6 +29,11 @@ public class FakeFileStorage implements FileStorage {
         return content == null ? Optional.empty() : Optional.of(new java.io.ByteArrayInputStream(content));
     }
 
+    @Override
+    public void deleteIfExists(String storageKey) {
+        storedContents.remove(storageKey);
+    }
+
     public boolean contains(String storageKey) {
         return storedContents.containsKey(storageKey);
     }
