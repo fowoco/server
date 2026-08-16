@@ -20,6 +20,22 @@ public class JdbcWorkerTaskContextReader implements WorkerTaskContextReader {
 
     @Override
     public Optional<WorkerTaskContext> findByIdAndCompanyId(UUID workerId, UUID companyId) {
+        List<UUID> lockedWorkerIds = jdbcTemplate.query(
+                """
+                SELECT worker_id
+                  FROM worker
+                 WHERE worker_id = ?
+                   AND company_id = ?
+                 FOR UPDATE
+                """,
+                (resultSet, rowNumber) -> resultSet.getObject("worker_id", UUID.class),
+                workerId,
+                companyId
+        );
+        if (lockedWorkerIds.isEmpty()) {
+            return Optional.empty();
+        }
+
         List<WorkerTaskContext> rows = jdbcTemplate.query(
                 """
                 SELECT worker_id, work_status, stay_expiry_date,
@@ -27,6 +43,12 @@ public class JdbcWorkerTaskContextReader implements WorkerTaskContextReader {
                   FROM worker
                  WHERE worker_id = ?
                    AND company_id = ?
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM worker_archive archive
+                        WHERE archive.worker_id = worker.worker_id
+                          AND archive.company_id = worker.company_id
+                   )
                 """,
                 (resultSet, rowNumber) -> new WorkerTaskContext(
                         resultSet.getObject("worker_id", UUID.class),

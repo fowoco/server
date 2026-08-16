@@ -110,7 +110,8 @@ class PostgreSqlMigrationTests {
                         "worker_import_row",
                         "worker_import_commit_idempotency",
                         "document_ocr_run",
-                        "stay_verification_case"
+                        "stay_verification_case",
+                        "worker_archive"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -353,6 +354,13 @@ class PostgreSqlMigrationTests {
                 .containsEntry("corrected_fields_ciphertext", new ColumnSpec("text", true))
                 .containsEntry("corrected_fields_key_version", new ColumnSpec("varchar", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker_archive"))
+                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("archived_at", new ColumnSpec("timestamptz", false))
+                .containsEntry("archived_by", new ColumnSpec("uuid", false))
+                .containsEntry("archive_reason", new ColumnSpec("varchar", false))
+                .containsEntry("worker_version", new ColumnSpec("int8", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -461,7 +469,13 @@ class PostgreSqlMigrationTests {
                         "fk_document_ocr_run_file_company",
                         "fk_document_ocr_run_requester_company",
                         "fk_worker_document_archived_by_company",
-                        "ck_worker_document_archive_metadata"
+                        "ck_worker_document_archive_metadata",
+                        "pk_worker_archive",
+                        "uq_worker_archive_worker_company",
+                        "fk_worker_archive_worker_company",
+                        "fk_worker_archive_actor_company",
+                        "ck_worker_archive_reason_not_blank",
+                        "ck_worker_archive_worker_version"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -501,7 +515,8 @@ class PostgreSqlMigrationTests {
                         "idx_worker_import_job_company_updated",
                         "idx_worker_import_row_job_status",
                         "idx_document_ocr_run_document_created",
-                        "idx_document_ocr_run_company_status"
+                        "idx_document_ocr_run_company_status",
+                        "idx_worker_archive_company_time"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -543,7 +558,8 @@ class PostgreSqlMigrationTests {
                         "pl_worker_import_commit_idempotency_tenant_isolation",
                         "pl_document_ocr_run_tenant_isolation",
                         "pl_notification_tenant_isolation",
-                        "pl_stay_verification_tenant_isolation"
+                        "pl_stay_verification_tenant_isolation",
+                        "pl_worker_archive_tenant_isolation"
                 );
         assertThat(rlsEnabledTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
