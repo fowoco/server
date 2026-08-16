@@ -171,6 +171,48 @@ class RenewalContinuationServiceTest {
         );
     }
 
+    @Test
+    void ocrApprovalFallsBackToAnActiveRenewalTaskForTheSameWorker() {
+        Task source = task(
+                UUID.fromString("74000000-0000-0000-0000-000000000001"),
+                TaskType.DOCUMENT_REQUEST,
+                "WF-DOC-001",
+                "source-task",
+                TaskStatus.WAITING_WORKER
+        );
+        Task renewal = task(
+                UUID.fromString("74000000-0000-0000-0000-000000000002"),
+                TaskType.STAY_PERIOD_EXTENSION,
+                "WF-STY-001",
+                "renewal-task",
+                TaskStatus.NEEDS_INFO
+        );
+        when(taskRepository.findByIdAndCompanyId(source.taskId(), COMPANY_ID))
+                .thenReturn(Optional.of(source));
+        when(taskRepository.findAll(any()))
+                .thenReturn(new TaskRepository.TaskPage(List.of(), 0, 100, 0, 0))
+                .thenReturn(new TaskRepository.TaskPage(List.of(renewal), 0, 100, 1, 1));
+        when(taskContentCodec.decodeBusinessData("source-task")).thenReturn(Map.of());
+        when(taskContentCodec.decodeBusinessData("renewal-task")).thenReturn(renewalData(1));
+
+        DomainEventEnvelope event = event(
+                UUID.fromString("74000000-0000-0000-0000-000000000003"),
+                "DocumentOcrApproved",
+                source.taskId(),
+                "ocr-review-request"
+        );
+        service.continueAfterOcrApproval(event);
+
+        verify(executionService).executeOcrContinuation(
+                eq(renewal.taskId()),
+                any(String.class),
+                eq(renewal.version()),
+                any(),
+                any(),
+                eq(event.eventId())
+        );
+    }
+
     private Map<String, Object> renewalData(int order) {
         return Map.of(
                 "candidate_order", order,

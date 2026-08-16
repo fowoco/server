@@ -27,6 +27,7 @@ import com.fowoco.server.settings.domain.ApprovalPolicy;
 import com.fowoco.server.task.application.error.TaskErrorCode;
 import com.fowoco.server.task.application.TaskReadinessChecker;
 import com.fowoco.server.task.application.port.TaskRepository;
+import com.fowoco.server.task.application.port.TaskCaseLifecycleUpdater;
 import com.fowoco.server.task.application.port.TaskTransitionRecorder;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskStatus;
@@ -49,6 +50,7 @@ public class ApprovalService implements ApprovalControlPort {
     private final ActorAuthorizer actorAuthorizer;
     private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
+    private final TaskCaseLifecycleUpdater taskCaseLifecycleUpdater;
     private final TaskTransitionRecorder transitionRecorder;
     private final TaskReadinessChecker taskReadinessChecker;
     private final ApprovalRequestRepository approvalRepository;
@@ -65,6 +67,7 @@ public class ApprovalService implements ApprovalControlPort {
             ActorAuthorizer actorAuthorizer,
             TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
+            TaskCaseLifecycleUpdater taskCaseLifecycleUpdater,
             TaskTransitionRecorder transitionRecorder,
             TaskReadinessChecker taskReadinessChecker,
             ApprovalRequestRepository approvalRepository,
@@ -80,6 +83,7 @@ public class ApprovalService implements ApprovalControlPort {
         this.actorAuthorizer = actorAuthorizer;
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
+        this.taskCaseLifecycleUpdater = taskCaseLifecycleUpdater;
         this.transitionRecorder = transitionRecorder;
         this.taskReadinessChecker = taskReadinessChecker;
         this.approvalRepository = approvalRepository;
@@ -169,7 +173,11 @@ public class ApprovalService implements ApprovalControlPort {
         requireApprovalDecisionPermission(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
-        ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
+        ApprovalRequest approval = requirePendingApproval(
+                taskId,
+                actor.companyId(),
+                command.expectedVersion()
+        );
         Instant now = Instant.now(clock);
         long currentVersion = task.version();
         TaskStatus previous = task.approve(command.expectedVersion(), actor.actorId(), now);
@@ -207,7 +215,11 @@ public class ApprovalService implements ApprovalControlPort {
         requireApprovalDecisionPermission(actor);
         Task task = requireTask(taskId, actor.companyId());
         requireTaskVersion(task, command.expectedVersion());
-        ApprovalRequest approval = requirePendingApproval(taskId, actor.companyId());
+        ApprovalRequest approval = requirePendingApproval(
+                taskId,
+                actor.companyId(),
+                command.expectedVersion()
+        );
         Instant now = Instant.now(clock);
         long currentVersion = task.version();
         TaskStatus previous = task.reject(command.expectedVersion(), actor.actorId(), now);
@@ -359,6 +371,13 @@ public class ApprovalService implements ApprovalControlPort {
                 metadata,
                 now
         );
+        if (savedTask.caseId() != null) {
+            taskCaseLifecycleUpdater.completeIfAllTasksFinished(
+                    savedTask.caseId(),
+                    savedTask.companyId(),
+                    now
+            );
+        }
         return new TaskActionResult(savedTask.taskId(), taskId, savedTask.status(), savedTask.version());
     }
 
@@ -551,9 +570,20 @@ public class ApprovalService implements ApprovalControlPort {
                 .orElseThrow(() -> new ApiException(TaskErrorCode.TASK_NOT_FOUND));
     }
 
-    private ApprovalRequest requirePendingApproval(UUID taskId, UUID companyId) {
+    private ApprovalRequest requirePendingApproval(
+            UUID taskId,
+            UUID companyId,
+            long expectedTaskVersion
+    ) {
         return approvalRepository.findPendingByTaskIdAndCompanyId(taskId, companyId)
-                .orElseThrow(() -> new ApiException(ApprovalErrorCode.APPROVAL_REQUEST_NOT_FOUND));
+                .orElseGet(() -> {
+                    approvalRepository.findLatestByTaskIdAndCompanyId(taskId, companyId)
+                            .filter(latest -> latest.targetTaskVersion() == expectedTaskVersion)
+                            .ifPresent(ignored -> {
+                                throw new ApiException(TaskErrorCode.CONCURRENT_MODIFICATION);
+                            });
+                    throw new ApiException(ApprovalErrorCode.APPROVAL_REQUEST_NOT_FOUND);
+                });
     }
 
     private void requireTaskVersion(Task task, long expectedVersion) {
