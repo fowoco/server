@@ -3,11 +3,16 @@ package com.fowoco.server.demo.infrastructure.seed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fowoco.server.ServerApplication;
+import com.fowoco.server.auth.application.ActorContext;
+import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.security.PostgreSqlRlsTestLock;
+import com.fowoco.server.task.application.TaskResult;
+import com.fowoco.server.task.application.TaskWorkflowService;
 import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -24,6 +29,10 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
 
     private static final UUID COMPANY_ID =
             UUID.fromString("90000000-0000-0000-0000-000000000001");
+    private static final UUID ADMIN_USER_ID =
+            UUID.fromString("90000000-0000-0000-0000-000000000002");
+    private static final UUID TASK_ID =
+            UUID.fromString("94000000-0000-0000-0000-000000000003");
     private static final UUID REPRESENTATIVE_WORKER_ID =
             UUID.fromString("92000000-0000-0000-0000-000000000006");
     private static final UUID SHOWCASE_CASE_ID =
@@ -67,6 +76,7 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
             )) {
                 JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
                 assertGoldenFlowStartState(jdbcTemplate);
+                assertTaskDetailReadable(context);
                 firstBoot = snapshot(jdbcTemplate);
                 emulatePreviousReleaseSeed(jdbcTemplate);
             }
@@ -78,6 +88,7 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
             )) {
                 JdbcTemplate jdbcTemplate = context.getBean(JdbcTemplate.class);
                 assertGoldenFlowStartState(jdbcTemplate);
+                assertTaskDetailReadable(context);
                 assertThat(snapshot(jdbcTemplate)).isEqualTo(firstBoot);
             }
 
@@ -259,6 +270,16 @@ class DemoSeedPostgreSqlApplicationIntegrationTest {
                     .as("%s must not be pre-seeded for the Golden Flow", table)
                     .isZero();
         }
+    }
+
+    private void assertTaskDetailReadable(ConfigurableApplicationContext context) {
+        TaskResult result = context.getBean(TaskWorkflowService.class).findById(
+                TASK_ID,
+                new ActorContext(ADMIN_USER_ID, COMPANY_ID, Set.of(UserRole.ADMIN))
+        );
+
+        assertThat(result.task().taskId()).isEqualTo(TASK_ID);
+        assertThat(result.task().workerId()).isNotNull();
     }
 
     private SeedSnapshot snapshot(JdbcTemplate jdbcTemplate) {
