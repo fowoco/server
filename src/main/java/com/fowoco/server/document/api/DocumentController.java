@@ -2,6 +2,7 @@ package com.fowoco.server.document.api;
 
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.document.application.DocumentDetailResult;
 import com.fowoco.server.document.application.DocumentPageResult;
 import com.fowoco.server.document.application.DocumentService;
@@ -16,16 +17,21 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -123,5 +129,37 @@ public class DocumentController {
         ActorContext actor = actorContextProvider.requireCurrentActor();
         DocumentDetailResult result = documentService.findById(documentId, actor);
         return DocumentDetailResponse.from(result);
+    }
+
+    @Operation(
+            operationId = "archiveDocument",
+            summary = "문서 보관",
+            description = "문서를 일반 조회와 업무 계산에서 제외합니다. 원본 파일·OCR·감사 이력은 삭제하지 않습니다. "
+                    + "이미 보관된 문서에 같은 요청을 다시 보내도 204를 반환합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "보관 성공 또는 이미 보관됨"),
+            @ApiResponse(responseCode = "400", ref = "#/components/responses/BadRequest"),
+            @ApiResponse(responseCode = "401", ref = "#/components/responses/Unauthorized"),
+            @ApiResponse(responseCode = "403", ref = "#/components/responses/Forbidden"),
+            @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound"),
+            @ApiResponse(responseCode = "409", ref = "#/components/responses/Conflict")
+    })
+    @PostMapping(path = "/{documentId}/archive", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    public ResponseEntity<Void> archive(
+            @Parameter(description = "서류 ID") @PathVariable UUID documentId,
+            @Valid @RequestBody DocumentArchiveRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        ActorContext actor = actorContextProvider.requireCurrentActor();
+        documentService.archive(
+                documentId,
+                request.expectedVersion(),
+                request.reason(),
+                actor,
+                RequestMetadata.from(servletRequest)
+        );
+        return ResponseEntity.noContent().build();
     }
 }

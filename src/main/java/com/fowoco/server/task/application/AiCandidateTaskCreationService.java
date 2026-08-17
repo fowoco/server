@@ -36,6 +36,7 @@ import com.fowoco.server.workflow.domain.WorkflowDefinition;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -120,7 +121,9 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         }
 
         WorkflowCatalog catalog = catalogService.getActiveCatalog();
-        List<WorkflowDefinition> workflows = catalog.findByIntent(command.detectedIntent());
+        List<WorkflowDefinition> workflows = catalog.findByIntent(command.detectedIntent()).stream()
+                .filter(workflow -> isStandardExpiryRenewalWorkflow(workflow.workflowId()))
+                .toList();
         if (workflows.isEmpty()
                 || workflows.stream().noneMatch(workflow -> workflow.workflowId()
                         .equals(command.candidateWorkflowId()))) {
@@ -211,6 +214,10 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
                 .map(entry -> new TaskPlan(entry.getKey(), entry.getValue(), List.of()))
                 .sorted(Comparator.comparingInt(this::order))
                 .toList();
+    }
+
+    private boolean isStandardExpiryRenewalWorkflow(String workflowId) {
+        return workflowId.equals("WF-CON-001") || workflowId.equals("WF-STY-001");
     }
 
     private WorkflowDefinition documentRequestWorkflow(WorkflowCatalog catalog) {
@@ -366,7 +373,11 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         try {
             return LocalDate.parse(value);
         } catch (DateTimeParseException dateOnlyFailure) {
-            return OffsetDateTime.parse(value).toLocalDate();
+            try {
+                return LocalDateTime.parse(value).toLocalDate();
+            } catch (DateTimeParseException localDateTimeFailure) {
+                return OffsetDateTime.parse(value).toLocalDate();
+            }
         }
     }
 
@@ -410,6 +421,7 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
                     case PERMIT -> "고용허가서";
                     case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
                     case INTEGRATED_APPLICATION -> "통합신청서";
+                    case IDENTITY_GUARANTY -> "신원보증서";
                     case RESIDENCE_PROOF -> "체류지 입증자료";
                 })
                 .collect(java.util.stream.Collectors.joining("·"));

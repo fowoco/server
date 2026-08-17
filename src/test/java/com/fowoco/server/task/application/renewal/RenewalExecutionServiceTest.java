@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
 import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
+import com.fowoco.server.aiintegration.application.renewal.RenewalTaskSnapshot;
 import com.fowoco.server.auth.application.ActorContext;
 import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.common.id.UuidGenerator;
@@ -54,7 +55,7 @@ class RenewalExecutionServiceTest {
     void setUp() {
         context = new RenewalExecutionContext(
                 TASK_ID, COMPANY_ID, WORKER_ID, Map.of(), Map.of(), List.of(), null,
-                null, null, null
+                null, null, taskSnapshot()
         );
         RenewalGeneratedDocument document = new RenewalGeneratedDocument(
                 "standard_labor_contract_v6", "표준근로계약서", "hwp", "READY",
@@ -69,7 +70,7 @@ class RenewalExecutionServiceTest {
         );
         preparedDocuments = List.of(mock(PreparedRenewalDocument.class));
         when(runtimeClient.run(any(), any())).thenReturn(response);
-        when(generatedDocumentService.prepare(response.generatedDocuments()))
+        when(generatedDocumentService.prepare("RECONTRACT", response.generatedDocuments()))
                 .thenReturn(preparedDocuments);
         when(resultApplier.apply(any(), anyLong(), any(), any(), any(), any(), any()))
                 .thenReturn(mock(RenewalExecutionResult.class));
@@ -85,7 +86,7 @@ class RenewalExecutionServiceTest {
                 TASK_ID, "재계약 준비", 3L, answers, actor, metadata, EVENT_ID
         );
 
-        verify(generatedDocumentService).prepare(response.generatedDocuments());
+        verify(generatedDocumentService).prepare("RECONTRACT", response.generatedDocuments());
         verify(resultApplier).apply(
                 eq(TASK_ID), eq(3L), eq(response), eq(preparedDocuments),
                 eq(context.submittedSlotAnswers()), eq(actor), eq(metadata)
@@ -100,10 +101,20 @@ class RenewalExecutionServiceTest {
                 TASK_ID, "재계약 준비", 4L, actor, metadata, EVENT_ID
         );
 
-        verify(generatedDocumentService).prepare(response.generatedDocuments());
+        verify(generatedDocumentService).prepare("RECONTRACT", response.generatedDocuments());
         verify(resultApplier).apply(
                 eq(TASK_ID), eq(4L), eq(response), eq(preparedDocuments),
                 eq(context.submittedSlotAnswers()), eq(actor), eq(metadata)
+        );
+    }
+
+    private RenewalTaskSnapshot taskSnapshot() {
+        return new RenewalTaskSnapshot(
+                TASK_ID, COMPANY_ID, WORKER_ID, null,
+                "RECONTRACT", "WF-CON-001", "0.3.1",
+                "재계약 조건 확인", null, Map.of(), 0,
+                "MANUAL", "DRAFT", null, ACTOR_ID, ACTOR_ID,
+                null, null, 0
         );
     }
 }

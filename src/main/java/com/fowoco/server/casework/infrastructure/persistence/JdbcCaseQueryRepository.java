@@ -109,6 +109,7 @@ public class JdbcCaseQueryRepository implements CaseQueryRepository {
                           AND document.company_id = document_task.company_id
                         WHERE document_task.case_id = c.case_id
                           AND document_task.company_id = c.company_id
+                          AND document.archived_at IS NULL
                           AND document.submission_status = 'VERIFIED'
                    ) AS verified_documents
                    ,(
@@ -119,6 +120,7 @@ public class JdbcCaseQueryRepository implements CaseQueryRepository {
                           AND document.company_id = document_task.company_id
                         WHERE document_task.case_id = c.case_id
                           AND document_task.company_id = c.company_id
+                          AND document.archived_at IS NULL
                    ) AS total_documents
                    ,(
                        SELECT COUNT(*)

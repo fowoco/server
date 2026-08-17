@@ -177,7 +177,10 @@ public final class RenewalExecutionService {
                                     runtimeRequestId,
                                     metadata.requestId(),
                                     DOCUMENT_GENERATION,
-                                    () -> generatedDocumentService.prepare(response.generatedDocuments())
+                                    () -> generatedDocumentService.prepare(
+                                            context.task().taskType(),
+                                            response.generatedDocuments()
+                                    )
                             )
                             : List.of();
             return telemetry.measure(

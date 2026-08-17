@@ -27,7 +27,7 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | 핵심 업무 API | Auth·Worker·Document·Task·Approval·Worker Link·Case·Dashboard·Notification 구현 |
 | AI 연동 | PLAN에서 대표 Intent·Workflow를 한 번 결정하고, 허용 Slot을 보충한 뒤 같은 결정을 ANALYZE에 재사용하는 AiRun·SSE 흐름 구현 |
 | 문서 처리 | 파일 저장·다운로드, HWP/HWPX 검증·생성 결과 연계, OCR 실행·HR 검토 구현 |
-| 근로자 협업 | 만료형 보안 링크 발급, 모바일 안내·응답·서류 제출, HR 공식 서류 채택과 Task 재개 구현 |
+| 근로자 협업 | 만료형 보안 링크 발급, 모바일 안내·응답·서류 제출, HR 공식 서류 채택과 Task 재개, 퇴사 근로자 안전 보관 구현 |
 | 알림 | 업무 Domain Event와 Outbox를 이용한 알림 생성, 읽음 상태, 마감 임박 배치 구현 |
 | 운영 기반 | Flyway, PostgreSQL 16, RLS, Transactional Outbox, 감사로그, Micrometer·Prometheus, Docker·Kubernetes·HTTPS 배포와 제품 E2E 검증 |
 
@@ -65,6 +65,7 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 - 사업장 사용자 인증과 `ADMIN`·`HR`·`VIEWER` 권한
 - `company_id`를 기준으로 한 사업장 데이터 격리
 - 근로자 기본정보와 서류 메타데이터 관리
+- 체류 만료 경과 확인과 퇴사 근로자의 삭제 없는 안전 보관·업무 차단
 - CSV/XLSX 근로자 명단 가져오기와 OCR 검토
 - 업무카드·체크리스트·상태 전이 관리
 - HR 승인·반려·외부 제출·증빙·완료와 감사로그
@@ -102,6 +103,7 @@ HR 로그인
 → 승인된 OCR Context로 기존 Task 재개·문서 초안 생성
 → 외부 제출·처리결과 기록
 → 완료·감사로그
+→ 퇴사·업무 종료 확인 후 운영 목록에서 안전 보관
 ```
 
 대표 입력:
@@ -227,7 +229,7 @@ src/main/java/com/fowoco/server/
 ├── worker / workerimport / document / file
 ├── workflow / task / casework
 ├── approval / audit
-├── workerlink / dashboard / notification / settings
+├── workerlink / stayverification / dashboard / notification / settings
 ├── airun / aiintegration
 └── reliability
 ```
@@ -274,9 +276,11 @@ src/main/java/com/fowoco/server/
 | 중요한 설계 결정 | [ADR 목록](docs/adr/README.md) | 저장소 경계, API·보안, Task·AiRun, RLS 결정 원본 |
 | Server ↔ AI 계약 | [AI Runtime 계약](docs/ai-runtime-contract.md) | Server가 AI에 보내고 받을 수 있는 값과 검증 기준 |
 | 근로자 명단 가져오기 | [Worker Import 가이드](docs/worker-import.md) | CSV/XLSX 업로드부터 검증·수정·등록까지의 API 순서 |
+| 퇴사 근로자 보관 | [근로자 안전 보관 가이드](docs/worker-archive.md) | 삭제 없이 운영 대상에서 분리하는 조건·API·감사 기준 |
 | Agent DB 정보 보충 | [Slot 조회·재호출](docs/ai-slot-resolution.md) | canonical key allow-list, tenant 조회와 ANALYZE 재호출 기준 |
 | AI 단계별 성능 측정 | [AI 파이프라인 관측·Prometheus 가이드](docs/ai-pipeline-observability.md) | PLAN·Slot·ANALYZE·Renewal 구간의 정량 평가와 로컬 Prometheus 확인 기준 |
 | 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
+| 체류기간 경과 안전 확인 | [체류기간 만료 경과 긴급 확인](docs/stay-verification.md) | 날짜 경과와 적법 체류·고용 종료 판단을 분리하는 기준 |
 | 파일 rollback·orphan 대응 | [File Storage rollback 보상 운영 가이드](docs/reliability/file-storage-rollback-compensation.md) | atomic finalize, rollback cleanup, `UNKNOWN` reconciliation과 배포 volume Smoke 기준 |
 | 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
 | 전체 설명·운영 가이드 | [Server Wiki](https://github.com/fowoco/server/wiki) | 초보자용 아키텍처·API·배포 설명 |

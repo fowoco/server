@@ -78,6 +78,9 @@ public class DocumentReadinessService {
                 available.add(document.documentType());
             }
         }
+        // 같은 종류의 과거 만료 문서가 남아 있어도 현재 유효한 문서가 하나라도 있으면
+        // 그 서류 종류는 준비된 것으로 본다. 만료 이력 때문에 완료가 영구 차단되면 안 된다.
+        expired.removeAll(available);
 
         Set<DocumentType> missing = EnumSet.copyOf(requiredTypes);
         missing.removeAll(available);

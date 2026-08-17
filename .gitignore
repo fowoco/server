@@ -40,6 +40,7 @@ out/
 .env
 .env.*
 !.env.example
+.server-env
 
 ### Local file storage ###
 /data/

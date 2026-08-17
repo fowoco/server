@@ -34,6 +34,12 @@ public class JpaApprovalRequestRepository implements ApprovalRequestRepository {
     }
 
     @Override
+    public Optional<ApprovalRequest> findLatestByTaskIdAndCompanyId(UUID taskId, UUID companyId) {
+        return repository.findFirstByTaskIdAndCompanyIdOrderByRequestedAtDesc(taskId, companyId)
+                .map(ApprovalRequestJpaEntity::toDomain);
+    }
+
+    @Override
     public Optional<ApprovalRequest> findLatestApprovedByTaskIdAndCompanyId(
             UUID taskId,
             UUID companyId

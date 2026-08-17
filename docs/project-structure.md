@@ -36,6 +36,7 @@ server/
     │   │   ├── approval/
     │   │   ├── audit/
     │   │   ├── workerlink/
+    │   │   ├── stayverification/
     │   │   ├── airun/
     │   │   ├── aiintegration/
     │   │   └── reliability/
@@ -67,6 +68,7 @@ server/
 | `approval` | 승인 요청, 승인·반려와 snapshot |
 | `audit` | append-only 감사 이벤트 |
 | `workerlink` | 로그인 없는 근로자 보안 링크 |
+| `stayverification` | 기록상 체류기간 경과 대상의 긴급 확인 Case와 HR 증빙 상태 |
 | `airun` | AI 실행, Candidate, Attempt와 retry 상태 |
 | `aiintegration` | AI Runtime HTTP 계약과 Client |
 | `reliability` | Outbox, event 전달과 복구 |

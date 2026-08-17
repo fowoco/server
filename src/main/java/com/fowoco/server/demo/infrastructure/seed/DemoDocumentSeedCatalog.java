@@ -85,7 +85,8 @@ final class DemoDocumentSeedCatalog {
             case CONTRACT -> TaskType.RECONTRACT;
             case PERMIT -> TaskType.EMPLOYMENT_PERIOD_EXTENSION;
             case EMPLOYMENT_EXTENSION_APPLICATION -> TaskType.EMPLOYMENT_PERIOD_EXTENSION;
-            case INTEGRATED_APPLICATION, RESIDENCE_PROOF -> TaskType.STAY_PERIOD_EXTENSION;
+            case INTEGRATED_APPLICATION, IDENTITY_GUARANTY, RESIDENCE_PROOF ->
+                    TaskType.STAY_PERIOD_EXTENSION;
         };
         return tasks.stream()
                 .filter(task -> task.workerId().equals(document.workerId()))
@@ -161,7 +162,8 @@ final class DemoDocumentSeedCatalog {
                 case ARC -> null;
                 case CONTRACT -> 180;
                 case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
-                case EMPLOYMENT_EXTENSION_APPLICATION, INTEGRATED_APPLICATION, RESIDENCE_PROOF ->
+                case EMPLOYMENT_EXTENSION_APPLICATION, INTEGRATED_APPLICATION,
+                        IDENTITY_GUARANTY, RESIDENCE_PROOF ->
                         throw new IllegalStateException("worker 6 has no extended document seed");
             };
         }
@@ -188,7 +190,8 @@ final class DemoDocumentSeedCatalog {
                 case ARC -> "외국인등록증 사본 요청 필요";
                 case CONTRACT -> "현재 근로계약서 확인 완료";
                 case PERMIT -> throw new IllegalStateException("worker 6 has no permit document seed");
-                case EMPLOYMENT_EXTENSION_APPLICATION, INTEGRATED_APPLICATION, RESIDENCE_PROOF ->
+                case EMPLOYMENT_EXTENSION_APPLICATION, INTEGRATED_APPLICATION,
+                        IDENTITY_GUARANTY, RESIDENCE_PROOF ->
                         throw new IllegalStateException("worker 6 has no extended document seed");
             };
         }
@@ -201,7 +204,7 @@ final class DemoDocumentSeedCatalog {
             case CONTRACT -> "근로계약 갱신";
             case PERMIT -> "고용허가기간 연장";
             case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장";
-            case INTEGRATED_APPLICATION, RESIDENCE_PROOF -> "체류기간 연장";
+            case INTEGRATED_APPLICATION, IDENTITY_GUARANTY, RESIDENCE_PROOF -> "체류기간 연장";
         };
     }
 
@@ -213,6 +216,7 @@ final class DemoDocumentSeedCatalog {
             case PERMIT -> "고용허가서";
             case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
             case INTEGRATED_APPLICATION -> "통합신청서";
+            case IDENTITY_GUARANTY -> "신원보증서";
             case RESIDENCE_PROOF -> "체류지 입증자료";
         };
         return switch (status) {

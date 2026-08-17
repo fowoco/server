@@ -381,6 +381,8 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 | `AI_RUNTIME_OVERALL_TIMEOUT` | `15s` | 연결·요청·응답 수신 전체의 Server 상한 |
 | `AI_RUNTIME_MAX_RESPONSE_BYTES` | `1048576` | 응답을 메모리에 받기 전 적용하는 최대 크기 |
 | `AI_DOCUMENT_GENERATION_ENDPOINT` | `http://127.0.0.1:8000/api/v1/documents/generate` | Renewal 문서 생성 API |
+| `AI_DOCUMENT_CONVERSION_ENDPOINT` | `http://127.0.0.1:8000/api/v1/documents/convert` | HWP·HWPX를 PDF 미리보기로 변환하는 API |
+| `AI_DOCUMENT_CONVERSION_TIMEOUT` | `60s` | 사용자 요청 안에서 문서 변환을 기다리는 최대 시간 |
 | `AI_DOCUMENT_GENERATION_MAX_RESPONSE_BYTES` | `20971520` | 생성 파일을 메모리에 받기 전 적용하는 최대 크기 |
 | `AI_RUNTIME_MAX_CONCURRENT_CALLS` | `8` | Server 한 인스턴스가 동시에 보내는 최대 호출 수 |
 | `AI_RUNTIME_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | 연속 장애 후 호출을 잠시 막는 기준 |

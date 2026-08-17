@@ -29,6 +29,7 @@ import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import com.fowoco.server.workerlink.application.WorkerResponseDocumentAdoptionResult.AdoptedDocument;
 import com.fowoco.server.workerlink.application.error.WorkerLinkErrorCode;
 import com.fowoco.server.workerlink.application.port.WorkerLinkRepository;
@@ -248,6 +249,7 @@ public class WorkerResponseDocumentAdoptionService {
                 task.companyId(),
                 task.taskId(),
                 documentType,
+                WorkerDocumentSource.WORKER_UPLOAD,
                 ADOPTION_NOTE,
                 fileId,
                 now

@@ -232,7 +232,7 @@ class AiAnalysisContinuationServiceTest {
         );
         return new WorkflowCatalog(
                 "FOWOCO-KNOWLEDGE",
-                "0.3.0",
+                "0.3.1",
                 "DRAFT",
                 "fowoco/knowledge",
                 Instant.parse("2026-07-23T00:00:00Z"),
