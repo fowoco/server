@@ -411,6 +411,22 @@ Workflow로 바꾼 응답은 `UNEXPECTED_WORKFLOW`로 거부합니다.
 `scenario=out_of_scope`, `intent=OUT_OF_SCOPE`인 종료 응답만 `workflowId`가 비어 있을 수
 있습니다. 이는 Workflow 실행 결과가 아니라 지원 범위 밖 정상 종료 신호이기 때문입니다.
 
+### Renewal Shadow Planning
+
+`AI_RUNTIME_RENEWAL_AGENT_MODE`의 기본값은 `LEGACY`입니다. `SHADOW`로 설정하면 Runtime은
+현재 State를 기준으로 Agent 계획을 만들지만, 실제 분기·Task 상태·문서 생성은 계속 기존
+Supervisor 결과를 따릅니다. 따라서 Client API와 DB Schema는 변경하지 않습니다.
+
+Runtime은 계획의 각 행동을 `TOOL` 또는 `SERVER_CONTROL`로 구분하고, 제안 Route와 실제
+Supervisor Route를 `progressEvents`의 `subgraph=agent-shadow` 이벤트 한 건으로 반환합니다.
+Server는 이 구조를 허용 목록으로 재검증한 뒤 기존 `renewal_execution.agent_shadow`에
+보존합니다. 계획 불일치는 관측 대상일 뿐 자동 승인·발송이나 업무 분기 변경의 근거가
+되지 않습니다.
+
+배포 순서는 Server를 기본 `LEGACY`로 먼저 배포하고 AI Runtime 호환 버전을 배포한 뒤,
+검증 환경에서만 `SHADOW`를 켜는 순서입니다. Active Agent 전환은 비교 결과와 E2E가 충분히
+쌓인 뒤 별도 결정으로 진행합니다.
+
 ## 근로자 안내 실패와 HR 검토
 
 Language Assistant가 비활성화됐거나 안내문을 안전하게 생성하지 못하면 Runtime은 임시

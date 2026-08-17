@@ -211,6 +211,44 @@ class RenewalExecutionResultApplier {
         metadata.put("generated_documents", generatedDocuments.stream()
                 .map(this::generatedDocumentMetadata)
                 .toList());
+        List<Map<String, Object>> shadowEvents = result.progressEvents().stream()
+                .filter(event -> "agent-shadow".equals(event.get("subgraph")))
+                .map(this::shadowEventMetadata)
+                .toList();
+        if (!shadowEvents.isEmpty()) {
+            metadata.put("agent_shadow", shadowEvents);
+        }
+        return Map.copyOf(metadata);
+    }
+
+    private Map<String, Object> shadowEventMetadata(Map<String, Object> event) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        for (String key : List.of(
+                "phase", "step", "message", "subgraph", "mode", "decisionOwner",
+                "decisionType", "proposedRoute", "legacyRoute", "matched"
+        )) {
+            if (event.containsKey(key)) {
+                metadata.put(key, event.get(key));
+            }
+        }
+        Object planValue = event.get("plan");
+        if (planValue instanceof List<?> plan) {
+            metadata.put("plan", plan.stream()
+                    .filter(Map.class::isInstance)
+                    .map(Map.class::cast)
+                    .map(this::shadowPlanStepMetadata)
+                    .toList());
+        }
+        return Map.copyOf(metadata);
+    }
+
+    private Map<String, Object> shadowPlanStepMetadata(Map<?, ?> step) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        for (String key : List.of("stepId", "actionType", "action", "reason")) {
+            if (step.containsKey(key)) {
+                metadata.put(key, step.get(key));
+            }
+        }
         return Map.copyOf(metadata);
     }
 

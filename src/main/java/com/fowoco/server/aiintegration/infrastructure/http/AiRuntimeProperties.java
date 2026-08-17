@@ -1,6 +1,7 @@
 package com.fowoco.server.aiintegration.infrastructure.http;
 
 import com.fowoco.server.aiintegration.application.port.AiRuntimeDeadlinePolicy;
+import com.fowoco.server.aiintegration.application.renewal.RenewalAgentMode;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -27,6 +28,7 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
     private int maxConcurrentCalls = 8;
     private int circuitBreakerFailureThreshold = 5;
     private Duration circuitBreakerOpenDuration = Duration.ofSeconds(30);
+    private RenewalAgentMode renewalAgentMode = RenewalAgentMode.LEGACY;
 
     public boolean isEnabled() {
         return enabled;
@@ -163,6 +165,17 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
                 circuitBreakerOpenDuration,
                 "circuitBreakerOpenDuration"
         );
+    }
+
+    public RenewalAgentMode getRenewalAgentMode() {
+        return renewalAgentMode;
+    }
+
+    public void setRenewalAgentMode(RenewalAgentMode renewalAgentMode) {
+        if (renewalAgentMode == null) {
+            throw new IllegalArgumentException("renewalAgentMode must not be null");
+        }
+        this.renewalAgentMode = renewalAgentMode;
     }
 
     String authorizationHeader() {

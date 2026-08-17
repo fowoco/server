@@ -3,6 +3,7 @@ package com.fowoco.server.aiintegration.infrastructure.http;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fowoco.server.aiintegration.application.renewal.RenewalAgentMode;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
@@ -15,6 +16,16 @@ class AiRuntimePropertiesTest {
         assertThat(properties.getOverallTimeout()).isEqualTo(Duration.ofMinutes(4));
         assertThat(properties.attemptDeadlineMs()).isEqualTo(240_000L);
         assertThat(properties.getDocumentConversionTimeout()).isEqualTo(Duration.ofSeconds(60));
+        assertThat(properties.getRenewalAgentMode()).isEqualTo(RenewalAgentMode.LEGACY);
+    }
+
+    @Test
+    void acceptsShadowRenewalMode() {
+        AiRuntimeProperties properties = new AiRuntimeProperties();
+
+        properties.setRenewalAgentMode(RenewalAgentMode.SHADOW);
+
+        assertThat(properties.getRenewalAgentMode()).isEqualTo(RenewalAgentMode.SHADOW);
     }
 
     @Test

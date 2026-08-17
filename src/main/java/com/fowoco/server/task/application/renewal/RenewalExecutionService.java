@@ -10,6 +10,7 @@ import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
+import com.fowoco.server.aiintegration.application.port.RenewalAgentModePolicy;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
@@ -29,6 +30,7 @@ public final class RenewalExecutionService {
 
     private final RenewalExecutionContextReader contextReader;
     private final RenewalRuntimeClient runtimeClient;
+    private final RenewalAgentModePolicy agentModePolicy;
     private final RenewalExecutionResultApplier resultApplier;
     private final GeneratedDocumentService generatedDocumentService;
     private final RenewalExecutionTelemetry telemetry;
@@ -37,6 +39,7 @@ public final class RenewalExecutionService {
     RenewalExecutionService(
             RenewalExecutionContextReader contextReader,
             RenewalRuntimeClient runtimeClient,
+            RenewalAgentModePolicy agentModePolicy,
             RenewalExecutionResultApplier resultApplier,
             GeneratedDocumentService generatedDocumentService,
             RenewalExecutionTelemetry telemetry,
@@ -44,6 +47,7 @@ public final class RenewalExecutionService {
     ) {
         this.contextReader = contextReader;
         this.runtimeClient = runtimeClient;
+        this.agentModePolicy = agentModePolicy;
         this.resultApplier = resultApplier;
         this.generatedDocumentService = generatedDocumentService;
         this.telemetry = telemetry;
@@ -162,7 +166,8 @@ public final class RenewalExecutionService {
                 context.ocrResult(),
                 context.worker(),
                 context.company(),
-                context.task()
+                context.task(),
+                agentModePolicy.currentMode()
         );
         try {
             RenewalRunResponse response = telemetry.measure(

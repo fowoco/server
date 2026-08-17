@@ -2,6 +2,7 @@ package com.fowoco.server.aiintegration.infrastructure.http;
 
 import com.fowoco.server.aiintegration.application.document.DocumentGenerationClient;
 import com.fowoco.server.aiintegration.application.port.AiRuntimeClient;
+import com.fowoco.server.aiintegration.application.port.RenewalAgentModePolicy;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
 import com.fowoco.server.aiintegration.application.validation.AiRuntimeContractValidator;
 import com.fowoco.server.aiintegration.application.validation.RenewalRuntimeContractValidator;
@@ -21,6 +22,11 @@ import tools.jackson.databind.PropertyNamingStrategies;
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(AiRuntimeProperties.class)
 public class AiRuntimeHttpConfiguration {
+
+    @Bean
+    public RenewalAgentModePolicy renewalAgentModePolicy(AiRuntimeProperties properties) {
+        return properties::getRenewalAgentMode;
+    }
 
     @Bean
     public AiRuntimeClient aiRuntimeClient(

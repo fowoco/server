@@ -62,6 +62,9 @@ class RemoteRenewalRuntimeClientWireMockTest {
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.task.workflowId", equalTo("WF-CON-001")
                 ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.agentMode", equalTo("LEGACY")
+                ))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")

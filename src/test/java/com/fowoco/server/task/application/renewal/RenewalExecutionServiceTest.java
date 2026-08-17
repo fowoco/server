@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
+import com.fowoco.server.aiintegration.application.renewal.RenewalAgentMode;
 import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
 import com.fowoco.server.aiintegration.application.renewal.RenewalTaskSnapshot;
@@ -40,6 +41,7 @@ class RenewalExecutionServiceTest {
     private final RenewalExecutionService service = new RenewalExecutionService(
             contextReader,
             runtimeClient,
+            () -> RenewalAgentMode.LEGACY,
             resultApplier,
             generatedDocumentService,
             new RenewalExecutionTelemetry(new SimpleMeterRegistry()),

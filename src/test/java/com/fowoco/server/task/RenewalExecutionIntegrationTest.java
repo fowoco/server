@@ -15,6 +15,7 @@ import com.fowoco.server.aiintegration.application.document.DocumentGenerationCl
 import com.fowoco.server.aiintegration.application.document.GeneratedDocumentFile;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
 import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
+import com.fowoco.server.aiintegration.application.renewal.RenewalAgentMode;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunResponse;
@@ -160,6 +161,7 @@ class RenewalExecutionIntegrationTest {
         assertThat(sent.worker().displayName()).isEqualTo("응웬반안");
         assertThat(sent.company().name()).isEqualTo("Renewal 사업장 A");
         assertThat(sent.documents()).isEmpty();
+        assertThat(sent.agentMode()).isEqualTo(RenewalAgentMode.LEGACY);
         assertThat(sent.slots())
                 .containsEntry("stay_expiry_date", "2027-08-31")
                 .containsEntry("contract_end_date", "2027-08-31");
@@ -177,6 +179,34 @@ class RenewalExecutionIntegrationTest {
                 "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'TASK_UPDATED'",
                 Integer.class, TASK_A
         )).isEqualTo(1);
+    }
+
+    @Test
+    void storesOnlyTheStructuredShadowComparisonInRenewalMetadata() throws Exception {
+        when(runtimeClient.run(any(), any())).thenAnswer(invocation -> {
+            RenewalRunRequest request = invocation.getArgument(0);
+            return withProgress(askHrResponse(request), List.of(shadowEvent()));
+        });
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        String businessData = jdbcTemplate.queryForObject(
+                "SELECT business_data_json FROM task WHERE task_id = ?", String.class, TASK_A
+        );
+        assertThat(JsonPath.<String>read(
+                businessData,
+                "$.renewal_execution.agent_shadow[0].mode"
+        )).isEqualTo("SHADOW");
+        assertThat(JsonPath.<String>read(
+                businessData,
+                "$.renewal_execution.agent_shadow[0].legacyRoute"
+        )).isEqualTo("ask_hr");
+        assertThat(JsonPath.<String>read(
+                businessData,
+                "$.renewal_execution.agent_shadow[0].plan[0].actionType"
+        )).isEqualTo("SERVER_CONTROL");
     }
 
     @Test
@@ -749,6 +779,44 @@ class RenewalExecutionIntegrationTest {
                 null, workerMessage, false, null, languageAssistant, null, List.of(), List.of(), null,
                 signals, List.of(), null, "rules", "main", List.of()
         );
+    }
+
+    private RenewalRunResponse withProgress(
+            RenewalRunResponse response,
+            List<Map<String, Object>> progressEvents
+    ) {
+        return new RenewalRunResponse(
+                response.requestId(), response.attemptId(), response.taskId(), response.intent(),
+                response.workflowId(), response.confidence(), response.status(), response.outcome(),
+                response.scenario(), response.phase(), response.step(), response.slots(),
+                response.missingSlots(), response.requestedFields(), response.guideMessage(),
+                response.workerRequestMessage(), response.guideReviewRequired(),
+                response.guideFailureCode(), response.languageAssistant(), response.ocrResult(),
+                response.generatedDocuments(), response.evidence(), response.documentValidation(),
+                response.caseSignals(), progressEvents, response.supervisorReason(),
+                response.supervisorSource(), response.activeSubgraph(), response.errors()
+        );
+    }
+
+    private Map<String, Object> shadowEvent() {
+        Map<String, Object> event = new java.util.LinkedHashMap<>();
+        event.put("phase", "PHASE_2_VALIDATION_COMMUNICATION");
+        event.put("step", "STEP_5_CASE_SIGNAL");
+        event.put("message", "Shadow Agent 계획과 기존 Supervisor 판단 비교");
+        event.put("subgraph", "agent-shadow");
+        event.put("mode", "SHADOW");
+        event.put("decisionOwner", "AGENT");
+        event.put("decisionType", "AGENT_JUDGMENT");
+        event.put("proposedRoute", "ask_hr");
+        event.put("legacyRoute", "ask_hr");
+        event.put("matched", true);
+        event.put("plan", List.of(Map.of(
+                "stepId", "REQUEST_CONTRACT_SLOTS",
+                "actionType", "SERVER_CONTROL",
+                "action", "REQUEST_HR_SLOTS",
+                "reason", "계약 정보를 HR에게 요청합니다."
+        )));
+        return Map.copyOf(event);
     }
 
     private HttpResponse<String> postRenewal(String token, long version) throws Exception {

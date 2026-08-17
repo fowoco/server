@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
+import com.fowoco.server.aiintegration.application.renewal.RenewalAgentMode;
 import com.fowoco.server.aiintegration.application.renewal.RenewalCompanySnapshot;
 import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
@@ -330,8 +331,68 @@ class RenewalRuntimeContractValidatorTest {
         )).isInstanceOf(AiRuntimeContractException.class);
     }
 
+    @Test
+    void acceptsAValidShadowComparisonTrace() {
+        RenewalRunRequest request = shadowRequest();
+        RenewalRunResponse response = withProgress(
+                response(request),
+                List.of(shadowEvent("generate", "ask_hr", false))
+        );
+
+        assertThatCode(() -> validator.validateResponse(request, response))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsAShadowTraceForALegacyRequest() {
+        RenewalRunRequest request = request();
+        RenewalRunResponse response = withProgress(
+                response(request),
+                List.of(shadowEvent("ask_hr", "ask_hr", true))
+        );
+
+        assertThatThrownBy(() -> validator.validateResponse(request, response))
+                .isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsAShadowTraceThatDoesNotMatchTheExecutedScenario() {
+        RenewalRunRequest request = shadowRequest();
+        RenewalRunResponse response = withProgress(
+                response(request),
+                List.of(shadowEvent("ask_hr", "generate", false))
+        );
+
+        assertThatThrownBy(() -> validator.validateResponse(request, response))
+                .isInstanceOf(AiRuntimeContractException.class);
+    }
+
+    @Test
+    void rejectsAnUnexpectedFieldInAShadowTrace() {
+        RenewalRunRequest request = shadowRequest();
+        Map<String, Object> event = new LinkedHashMap<>(
+                shadowEvent("ask_hr", "ask_hr", true)
+        );
+        event.put("providerRaw", "must-not-be-stored");
+
+        assertThatThrownBy(() -> validator.validateResponse(
+                request,
+                withProgress(response(request), List.of(event))
+        )).isInstanceOf(AiRuntimeContractException.class);
+    }
+
     private RenewalRunRequest request() {
         return request("RECONTRACT", "WF-CON-001");
+    }
+
+    private RenewalRunRequest shadowRequest() {
+        RenewalRunRequest legacy = request();
+        return new RenewalRunRequest(
+                legacy.requestId(), legacy.attemptId(), legacy.instruction(),
+                legacy.workerId(), legacy.companyId(), legacy.taskId(), legacy.slots(),
+                legacy.documents(), legacy.ocrResult(), legacy.worker(), legacy.company(),
+                legacy.task(), RenewalAgentMode.SHADOW
+        );
     }
 
     private RenewalRunRequest request(String taskType, String workflowId) {
@@ -371,6 +432,48 @@ class RenewalRuntimeContractValidatorTest {
                 List.of("REQUEST_CONTRACT_SLOTS", "NEEDS_INFO"), List.of(), null, "rules", "main",
                 List.of()
         );
+    }
+
+    private RenewalRunResponse withProgress(
+            RenewalRunResponse response,
+            List<Map<String, Object>> progressEvents
+    ) {
+        return new RenewalRunResponse(
+                response.requestId(), response.attemptId(), response.taskId(), response.intent(),
+                response.workflowId(), response.confidence(), response.status(), response.outcome(),
+                response.scenario(), response.phase(), response.step(), response.slots(),
+                response.missingSlots(), response.requestedFields(), response.guideMessage(),
+                response.workerRequestMessage(), response.guideReviewRequired(),
+                response.guideFailureCode(), response.languageAssistant(), response.ocrResult(),
+                response.generatedDocuments(), response.evidence(), response.documentValidation(),
+                response.caseSignals(), progressEvents, response.supervisorReason(),
+                response.supervisorSource(), response.activeSubgraph(), response.errors()
+        );
+    }
+
+    private Map<String, Object> shadowEvent(
+            String proposedRoute,
+            String legacyRoute,
+            boolean matched
+    ) {
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("phase", "PHASE_2_VALIDATION_COMMUNICATION");
+        event.put("step", "STEP_5_CASE_SIGNAL");
+        event.put("message", "Shadow Agent 계획과 기존 Supervisor 판단 비교");
+        event.put("subgraph", "agent-shadow");
+        event.put("mode", "SHADOW");
+        event.put("decisionOwner", "AGENT");
+        event.put("decisionType", "AGENT_JUDGMENT");
+        event.put("proposedRoute", proposedRoute);
+        event.put("legacyRoute", legacyRoute);
+        event.put("matched", matched);
+        event.put("plan", List.of(Map.of(
+                "stepId", "REQUEST_CONTRACT_SLOTS",
+                "actionType", "SERVER_CONTROL",
+                "action", "REQUEST_HR_SLOTS",
+                "reason", "계약 정보를 HR에게 요청합니다."
+        )));
+        return Map.copyOf(event);
     }
 
     private RenewalRunResponse generateResponse(

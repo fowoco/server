@@ -2,6 +2,7 @@ package com.fowoco.server.aiintegration.application.validation;
 
 import com.fowoco.server.aiintegration.application.error.AiRuntimeContractException;
 import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
+import com.fowoco.server.aiintegration.application.renewal.RenewalAgentMode;
 import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
@@ -53,6 +54,23 @@ public final class RenewalRuntimeContractValidator {
             "identity_guaranty_v129"
     );
     private static final Set<String> DOCUMENT_FORMATS = Set.of("hwp", "hwpx");
+    private static final Set<String> SHADOW_ACTION_TYPES = Set.of("TOOL", "SERVER_CONTROL");
+    private static final Set<String> SHADOW_ACTIONS = Set.of(
+            "CANCEL_OUT_OF_SCOPE",
+            "RUN_OCR",
+            "GENERATE_RENEWAL_DOCUMENTS",
+            "REQUEST_HR_INPUT",
+            "REQUEST_WORKER_DOCUMENTS",
+            "REQUEST_HR_SLOTS",
+            "REQUEST_HR_REVIEW"
+    );
+    private static final Set<String> SHADOW_EVENT_FIELDS = Set.of(
+            "phase", "step", "message", "subgraph", "mode", "decisionOwner",
+            "decisionType", "proposedRoute", "legacyRoute", "matched", "plan"
+    );
+    private static final Set<String> SHADOW_PLAN_FIELDS = Set.of(
+            "stepId", "actionType", "action", "reason"
+    );
 
     private final AiRuntimeBoundaryPolicy boundaryPolicy;
 
@@ -136,6 +154,7 @@ public final class RenewalRuntimeContractValidator {
                 || response.requestedFields().size() > 100
                 || response.caseSignals().size() > 20
                 || response.generatedDocuments().size() > 20
+                || response.progressEvents().size() > 100
                 || response.errors().size() > 20) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Renewal response is too large.");
         }
@@ -163,10 +182,100 @@ public final class RenewalRuntimeContractValidator {
             }
         });
         response.generatedDocuments().forEach(this::validateGeneratedDocument);
+        validateShadowProgress(request, response);
         if (outOfScopeResult && !response.caseSignals().contains("CANCEL_OUT_OF_SCOPE")) {
             reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "OUT_OF_SCOPE signal is missing.");
         }
         validateScenario(response);
+    }
+
+    private void validateShadowProgress(
+            RenewalRunRequest request,
+            RenewalRunResponse response
+    ) {
+        List<Map<String, Object>> shadowEvents = response.progressEvents().stream()
+                .filter(event -> "agent-shadow".equals(event.get("subgraph")))
+                .toList();
+        if (request.agentMode() == RenewalAgentMode.LEGACY) {
+            if (!shadowEvents.isEmpty()) {
+                reject(
+                        AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                        "Legacy Renewal response must not contain a Shadow trace."
+                );
+            }
+            return;
+        }
+        if (shadowEvents.size() != 1) {
+            reject(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Shadow Renewal response must contain exactly one comparison trace."
+            );
+        }
+
+        Map<String, Object> event = shadowEvents.get(0);
+        if (!event.keySet().equals(SHADOW_EVENT_FIELDS)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow trace fields are invalid.");
+        }
+        requireEventText(event, "phase", 80);
+        requireEventText(event, "step", 80);
+        requireEventText(event, "message", 500);
+        if (!RenewalAgentMode.SHADOW.name().equals(event.get("mode"))
+                || !"AGENT".equals(event.get("decisionOwner"))
+                || !"AGENT_JUDGMENT".equals(event.get("decisionType"))) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow trace owner is invalid.");
+        }
+        String proposedRoute = requireEventText(event, "proposedRoute", 40);
+        String legacyRoute = requireEventText(event, "legacyRoute", 40);
+        if (!SCENARIOS.contains(proposedRoute)
+                || !SCENARIOS.contains(legacyRoute)
+                || !response.scenario().equals(legacyRoute)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow trace route is invalid.");
+        }
+        Object matched = event.get("matched");
+        if (!(matched instanceof Boolean matchedValue)
+                || matchedValue != proposedRoute.equals(legacyRoute)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow trace comparison is invalid.");
+        }
+        Object planValue = event.get("plan");
+        if (!(planValue instanceof List<?>)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow plan is invalid.");
+        }
+        List<?> plan = (List<?>) planValue;
+        if (plan.isEmpty() || plan.size() > 20) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow plan is invalid.");
+        }
+        for (Object item : plan) {
+            validateShadowPlanStep(item);
+        }
+    }
+
+    private void validateShadowPlanStep(Object value) {
+        if (!(value instanceof Map<?, ?>)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow plan step is invalid.");
+        }
+        Map<?, ?> step = (Map<?, ?>) value;
+        if (!step.keySet().equals(SHADOW_PLAN_FIELDS)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow plan fields are invalid.");
+        }
+        String stepId = requireEventText(step, "stepId", 128);
+        String actionType = requireEventText(step, "actionType", 40);
+        String action = requireEventText(step, "action", 128);
+        requireEventText(step, "reason", 500);
+        validateIdentifier(stepId, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+        validateIdentifier(action, AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT);
+        if (!SHADOW_ACTION_TYPES.contains(actionType) || !SHADOW_ACTIONS.contains(action)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow plan action is invalid.");
+        }
+    }
+
+    private String requireEventText(Map<?, ?> source, String key, int maxLength) {
+        Object value = source.get(key);
+        if (!(value instanceof String)) {
+            reject(AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT, "Shadow trace field is invalid.");
+        }
+        String text = (String) value;
+        boundaryPolicy.validateText(text, maxLength, true);
+        return text;
     }
 
     private void validateLanguageAssistant(RenewalRunResponse response) {
