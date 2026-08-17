@@ -240,7 +240,7 @@ public class TaskWorkflowService {
         return toResult(
                 task,
                 checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId()),
-                findWorker(task, actor.companyId()),
+                findWorkerReadOnly(task, actor.companyId()),
                 catalogService.requireWorkflow(task.workflowId())
         );
     }
@@ -608,6 +608,13 @@ public class TaskWorkflowService {
     private WorkerTaskContext findWorker(Task task, UUID companyId) {
         return task.targetType() == TaskTargetType.WORKER
                 ? requireWorker(task.workerId(), companyId)
+                : null;
+    }
+
+    private WorkerTaskContext findWorkerReadOnly(Task task, UUID companyId) {
+        return task.targetType() == TaskTargetType.WORKER
+                ? workerReader.findByIdAndCompanyIdReadOnly(task.workerId(), companyId)
+                        .orElseThrow(() -> new ApiException(TaskErrorCode.WORKER_NOT_FOUND))
                 : null;
     }
 
