@@ -86,6 +86,10 @@ class PostgreSqlRlsIsolationTest {
             UUID.fromString("ad000000-0000-0000-0000-000000000001");
     private static final UUID OCR_RUN_B =
             UUID.fromString("bd000000-0000-0000-0000-000000000002");
+    private static final UUID STAY_VERIFICATION_A =
+            UUID.fromString("ae000000-0000-0000-0000-000000000001");
+    private static final UUID STAY_VERIFICATION_B =
+            UUID.fromString("be000000-0000-0000-0000-000000000002");
     private static final List<String> RLS_TABLES = List.of(
             "company",
             "user_account",
@@ -102,7 +106,9 @@ class PostgreSqlRlsIsolationTest {
             "outbox_manual_retry",
             "user_agreement_consent",
             "password_reset_token",
-            "document_ocr_run"
+            "document_ocr_run",
+            "stay_verification_case",
+            "worker_archive"
     );
 
     @Test
@@ -196,6 +202,8 @@ class PostgreSqlRlsIsolationTest {
                             + "public.worker_document_upload_idempotency, "
                             + "public.outbox_manual_retry, "
                             + "public.document_ocr_run, "
+                            + "public.stay_verification_case, "
+                            + "public.worker_archive, "
                             + "public.user_agreement_consent, "
                             + "public.password_reset_token TO "
                             + quotedRole
@@ -225,6 +233,31 @@ class PostgreSqlRlsIsolationTest {
                         ('%s', '%s', 'rls-b@example.com', 'rls-b@example.com',
                          'test-password-hash-b', 'ADMIN', 'ACTIVE')
                     """.formatted(USER_A, COMPANY_A, USER_B, COMPANY_B));
+            statement.execute("""
+                    INSERT INTO stay_verification_case (
+                        stay_verification_id, company_id, worker_id,
+                        source_stay_expiry_date, verification_status,
+                        created_at, updated_at
+                    ) VALUES
+                        ('%s', '%s', '%s', DATE '2026-08-01', 'UNKNOWN',
+                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+                        ('%s', '%s', '%s', DATE '2026-08-02', 'UNKNOWN',
+                         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    """.formatted(
+                    STAY_VERIFICATION_A, COMPANY_A, WORKER_A,
+                    STAY_VERIFICATION_B, COMPANY_B, WORKER_B
+            ));
+            statement.execute("""
+                    INSERT INTO worker_archive (
+                        worker_id, company_id, archived_at, archived_by,
+                        archive_reason, worker_version
+                    ) VALUES
+                        ('%s', '%s', CURRENT_TIMESTAMP, '%s', 'RLS archive A', 1),
+                        ('%s', '%s', CURRENT_TIMESTAMP, '%s', 'RLS archive B', 1)
+                    """.formatted(
+                    WORKER_A, COMPANY_A, USER_A,
+                    WORKER_B, COMPANY_B, USER_B
+            ));
             statement.execute("""
                     INSERT INTO user_agreement_consent (
                         consent_id, company_id, user_id, agreement_type,
@@ -448,6 +481,8 @@ class PostgreSqlRlsIsolationTest {
             assertThat(tableCount(connection, "user_agreement_consent")).isZero();
             assertThat(tableCount(connection, "password_reset_token")).isZero();
             assertThat(tableCount(connection, "document_ocr_run")).isZero();
+            assertThat(tableCount(connection, "stay_verification_case")).isZero();
+            assertThat(tableCount(connection, "worker_archive")).isZero();
 
             setTenantContext(connection, "");
             assertThat(workerCount(connection)).isZero();
@@ -524,6 +559,15 @@ class PostgreSqlRlsIsolationTest {
                     connection,
                     "SELECT ocr_run_id FROM public.document_ocr_run ORDER BY ocr_run_id"
             )).containsExactly(OCR_RUN_A);
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT stay_verification_id FROM public.stay_verification_case "
+                            + "ORDER BY stay_verification_id"
+            )).containsExactly(STAY_VERIFICATION_A);
+            assertThat(uuidValues(
+                    connection,
+                    "SELECT worker_id FROM public.worker_archive ORDER BY worker_id"
+            )).containsExactly(WORKER_A);
 
             assertThat(executeUpdate(
                     connection,
@@ -698,6 +742,33 @@ class PostgreSqlRlsIsolationTest {
                     )
                     """.formatted(COMPANY_B, EVENT_B, USER_B)
             );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO stay_verification_case (
+                        stay_verification_id, company_id, worker_id,
+                        source_stay_expiry_date, verification_status,
+                        created_at, updated_at
+                    ) VALUES (
+                        'be000000-0000-0000-0000-000000000099', '%s', '%s',
+                        DATE '2026-08-03', 'UNKNOWN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    """.formatted(COMPANY_B, WORKER_B)
+            );
+            assertSqlState(
+                    connection,
+                    "42501",
+                    """
+                    INSERT INTO worker_archive (
+                        worker_id, company_id, archived_at, archived_by,
+                        archive_reason, worker_version
+                    ) VALUES (
+                        '%s', '%s',
+                        CURRENT_TIMESTAMP, '%s', 'Forbidden archive', 1
+                    )
+                    """.formatted(WORKER_B, COMPANY_B, USER_B)
+            );
 
             assertThat(executeUpdate(
                     connection,
@@ -713,6 +784,16 @@ class PostgreSqlRlsIsolationTest {
                     connection,
                     "DELETE FROM document_ocr_run WHERE ocr_run_id = ?",
                     OCR_RUN_B
+            )).isZero();
+            assertThat(executeUpdate(
+                    connection,
+                    "DELETE FROM stay_verification_case WHERE stay_verification_id = ?",
+                    STAY_VERIFICATION_B
+            )).isZero();
+            assertThat(executeUpdate(
+                    connection,
+                    "DELETE FROM worker_archive WHERE worker_id = ?",
+                    WORKER_B
             )).isZero();
             assertThat(executeUpdate(
                     connection,
@@ -760,6 +841,8 @@ class PostgreSqlRlsIsolationTest {
         assertThat(tableCount(connection, "workflow_case")).isZero();
         assertThat(tableCount(connection, "outbox_manual_retry")).isZero();
         assertThat(tableCount(connection, "document_ocr_run")).isZero();
+        assertThat(tableCount(connection, "stay_verification_case")).isZero();
+        assertThat(tableCount(connection, "worker_archive")).isZero();
         setTenantContext(connection, COMPANY_B.toString());
         assertThat(workerIds(connection)).containsExactly(WORKER_B);
         assertThat(uuidValues(
@@ -774,6 +857,15 @@ class PostgreSqlRlsIsolationTest {
                 connection,
                 "SELECT ocr_run_id FROM public.document_ocr_run ORDER BY ocr_run_id"
         )).containsExactly(OCR_RUN_B);
+        assertThat(uuidValues(
+                connection,
+                "SELECT stay_verification_id FROM public.stay_verification_case "
+                        + "ORDER BY stay_verification_id"
+        )).containsExactly(STAY_VERIFICATION_B);
+        assertThat(uuidValues(
+                connection,
+                "SELECT worker_id FROM public.worker_archive ORDER BY worker_id"
+        )).containsExactly(WORKER_B);
         connection.rollback();
     }
 
@@ -816,6 +908,15 @@ class PostgreSqlRlsIsolationTest {
     }
 
     private void deleteFixtureRows(Statement statement) throws SQLException {
+        statement.execute("""
+                DELETE FROM stay_verification_case
+                WHERE stay_verification_id IN ('%s', '%s')
+                   OR stay_verification_id = 'be000000-0000-0000-0000-000000000099'
+                """.formatted(STAY_VERIFICATION_A, STAY_VERIFICATION_B));
+        statement.execute("""
+                DELETE FROM worker_archive
+                WHERE worker_id IN ('%s', '%s')
+                """.formatted(WORKER_A, WORKER_B));
         statement.execute("""
                 DELETE FROM document_ocr_run
                 WHERE ocr_run_id IN ('%s', '%s')
