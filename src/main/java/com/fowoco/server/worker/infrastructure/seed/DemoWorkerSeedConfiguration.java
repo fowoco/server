@@ -2,6 +2,7 @@ package com.fowoco.server.worker.infrastructure.seed;
 
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
 import com.fowoco.server.company.application.port.CompanyRepository;
+import com.fowoco.server.common.security.TenantTransactionExecutor;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import java.time.Clock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -17,13 +18,15 @@ public class DemoWorkerSeedConfiguration {
             DemoAuthSeedProperties properties,
             CompanyRepository companyRepository,
             WorkerRepository workerRepository,
-            Clock clock
+            Clock clock,
+            TenantTransactionExecutor tenantTransactionExecutor
     ) {
         return new DemoWorkerSeedRunner(
                 properties,
                 companyRepository,
                 workerRepository,
-                clock
+                clock,
+                tenantTransactionExecutor
         );
     }
 }

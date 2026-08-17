@@ -1,6 +1,7 @@
 package com.fowoco.server.demo.infrastructure.seed;
 
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
+import com.fowoco.server.common.security.TenantTransactionExecutor;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.AuditSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ApprovalSeed;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.ChecklistSeed;
@@ -21,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.transaction.annotation.Transactional;
 
 @Order(2)
 class DemoOperationalSeedRunner implements ApplicationRunner {
@@ -44,6 +44,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
     private final DemoDocumentRequestDraftSeeder requestDraftSeeder;
     private final DemoAuditEventSeeder auditSeeder;
     private final DemoOperationalSeedVerifier verifier;
+    private final TenantTransactionExecutor tenantTransactionExecutor;
 
     DemoOperationalSeedRunner(
             DemoAuthSeedProperties properties,
@@ -61,7 +62,8 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
             DemoEvidenceSeeder evidenceSeeder,
             DemoDocumentRequestDraftSeeder requestDraftSeeder,
             DemoAuditEventSeeder auditSeeder,
-            DemoOperationalSeedVerifier verifier
+            DemoOperationalSeedVerifier verifier,
+            TenantTransactionExecutor tenantTransactionExecutor
     ) {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -94,30 +96,35 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
         );
         this.auditSeeder = Objects.requireNonNull(auditSeeder, "auditSeeder must not be null");
         this.verifier = Objects.requireNonNull(verifier, "verifier must not be null");
+        this.tenantTransactionExecutor = Objects.requireNonNull(
+                tenantTransactionExecutor,
+                "tenantTransactionExecutor must not be null"
+        );
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments arguments) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.now(clock);
         DemoOperationalSeedContext demoContext = DemoOperationalSeedContext.demo(properties, today, now);
         DemoOperationalSeedContext testContext = DemoOperationalSeedContext.test(properties, today, now);
-        goldenFlowStateGuard.verifyNoLegacyRows(demoContext);
-        seedDataset(
-                catalog.demoTasks(),
-                catalog.demoStoredFiles(),
-                catalog.demoDocuments(),
-                catalog.demoChecklists(),
-                catalog.demoApprovals(),
-                catalog.demoTransitions(),
-                catalog.demoExternalSubmissions(),
-                catalog.demoEvidence(),
-                catalog.demoDocumentRequestDrafts(),
-                catalog.demoAudits(),
-                demoContext
-        );
-        seedDataset(
+        tenantTransactionExecutor.execute(demoContext.companyId(), () -> {
+            goldenFlowStateGuard.verifyNoLegacyRows(demoContext);
+            seedDataset(
+                    catalog.demoTasks(),
+                    catalog.demoStoredFiles(),
+                    catalog.demoDocuments(),
+                    catalog.demoChecklists(),
+                    catalog.demoApprovals(),
+                    catalog.demoTransitions(),
+                    catalog.demoExternalSubmissions(),
+                    catalog.demoEvidence(),
+                    catalog.demoDocumentRequestDrafts(),
+                    catalog.demoAudits(),
+                    demoContext
+            );
+        });
+        tenantTransactionExecutor.execute(testContext.companyId(), () -> seedDataset(
                 catalog.testTasks(),
                 List.of(),
                 catalog.testDocuments(),
@@ -129,7 +136,7 @@ class DemoOperationalSeedRunner implements ApplicationRunner {
                 List.of(),
                 catalog.testAudits(),
                 testContext
-        );
+        ));
         LOGGER.info(
                 "demo_operational_seed ready demo_task_count={} demo_stored_file_count={} "
                         + "demo_document_count={} "
