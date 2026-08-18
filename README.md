@@ -56,6 +56,25 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | 김재성 [`@krestar`](https://github.com/krestar) | PostgreSQL·RLS·Settings·Demo Seed·DB 운영 안전성 |
 | 함께 | API 계약, Flyway 순서 조율, 상호 PR Review, 배포·E2E 준비 |
 
+### `@hywznn` 기여 하이라이트
+
+아래는 아이디어 참여가 아니라 **`main`에 병합된 PR을 기준으로 직접 설계·구현·통합한
+범위**입니다. 기능 수보다 “AI 결과가 실제 HR 업무로 안전하게 이어지는가”에 초점을
+맞췄습니다.
+
+| 문제 | 구현·통합한 내용 | 서비스에 생긴 변화 |
+| --- | --- | --- |
+| 업무 서버의 기준이 없었음 | 저장소·모듈·API·상태 ADR, Auth·Company, Task·Approval·Audit 기반 | 인증된 담당자의 행동만 상태 전이와 감사 이력으로 남는 업무 서버 기반 확립 |
+| AI 호출 결과가 일회성 응답에 머물렀음 | AI Runtime 경계, AiRun, PLAN 결정 재사용, Slot Resolver, Candidate→Case·Task 변환, SSE | 발화문 분석 결과를 재조회·검토·채택할 수 있는 영속 HR Workflow로 전환 |
+| 근로자 제출과 문서 생성이 끊겨 있었음 | Worker Link·SMS, 모바일 응답 회수, 공식 서류 채택, OCR 검토, Renewal 재실행, HWP/HWPX 결과 저장 | `안내 → 제출 → 검토 → OCR → 초안`이 같은 Task·Case 안에서 이어지는 대표 시나리오 완성 |
+| 장애와 성능을 설명하기 어려웠음 | Transactional Outbox·수동 재처리, Runtime 장애 격리, 단계별 구조화 로그·Prometheus, Swagger·DB 문서 자동화 | 외부 Provider 실패 후 복구 경로와 AI 병목을 재현 가능한 테스트·수치·문서로 확인 가능 |
+| 데모 데이터와 실제 계약이 자주 달라졌음 | Knowledge 0.3 Workflow·Slot 반영, 합성 문서 Seed, 이름 정규화, 만료·퇴사 근로자 안전 보관, 문서 미리보기 | 대표 E-9 시나리오를 실제 화면과 API에서 반복 검증할 수 있는 기준 데이터와 예외 흐름 확보 |
+
+세부 변경은 [`@hywznn`의 병합 PR](https://github.com/fowoco/server/pulls?q=is%3Apr+is%3Amerged+author%3Ahywznn)에서
+코드와 테스트 단위로 확인할 수 있습니다. 다른 구성원이 소유한 Worker·Document·DB
+영역은 계약과 리뷰를 통해 연결했으며, 위 표가 해당 영역 전체의 단독 소유를 의미하지는
+않습니다.
+
 위 표는 프로젝트 기여를 이해하기 위한 요약입니다. 현재 담당자와 완료 조건은
 [GitHub Issues](https://github.com/fowoco/server/issues)의 Assignee와
 [Server Roadmap](https://github.com/orgs/fowoco/projects/3)을 기준으로 확인합니다.
