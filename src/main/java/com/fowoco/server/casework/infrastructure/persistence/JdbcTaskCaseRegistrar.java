@@ -78,7 +78,7 @@ public class JdbcTaskCaseRegistrar implements TaskCaseRegistrar {
                 first.caseId(),
                 first.companyId(),
                 first.workerId(),
-                orderedTasks.size() == 1 ? first.title() : "3년 만료 연장 준비",
+                orderedTasks.size() == 1 ? first.title() : caseTitle(orderedTasks),
                 priority(orderedTasks, today),
                 first.workflowCatalogVersion(),
                 snapshot(orderedTasks),
@@ -96,6 +96,10 @@ public class JdbcTaskCaseRegistrar implements TaskCaseRegistrar {
         Task first = caseTasks.get(0).task();
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("workflow_catalog_version", first.workflowCatalogVersion());
+        Object caseTemplateId = businessData(first).get("case_template_id");
+        if (caseTemplateId instanceof String value && !value.isBlank()) {
+            snapshot.put("case_template_id", value);
+        }
         snapshot.put("steps", steps);
         try {
             return objectMapper.writeValueAsString(snapshot);
@@ -114,6 +118,7 @@ public class JdbcTaskCaseRegistrar implements TaskCaseRegistrar {
         List.of(
                 "approval_required",
                 "depends_on_task_id",
+                "depends_on_task_ids",
                 "dependency_reason",
                 "missing_information",
                 "submission_due_offset_days",
@@ -133,6 +138,13 @@ public class JdbcTaskCaseRegistrar implements TaskCaseRegistrar {
         step.put("task_type", task.taskType().name());
         step.put("required_conditions", conditions);
         return Map.copyOf(step);
+    }
+
+    private String caseTitle(List<CaseTask> caseTasks) {
+        Object value = businessData(caseTasks.get(0).task()).get("case_title");
+        return value instanceof String title && !title.isBlank()
+                ? title
+                : "3년 만료 연장 준비";
     }
 
     @SuppressWarnings("unchecked")

@@ -270,6 +270,7 @@ src/main/java/com/fowoco/server/
 | DB 테이블·ERD | [Database 문서](https://fowoco.github.io/server/) | Flyway를 빈 PostgreSQL에 적용해 자동 생성한 구조 |
 | 로컬 실행·인증·Workflow | [개발 가이드](docs/development-guide.md) | 처음 서버를 실행하고 기능 흐름을 이해하는 방법 |
 | Demo Seed 수량·시나리오 | [Demo Seed 운영 시나리오](docs/demo-seed.md) | 로컬 데모 데이터의 기준 수량, 대표 흐름과 표현 한계 |
+| 재계약·연장 수동 E2E | [Golden Flow 수동 시연 가이드](docs/golden-renewal-manual-e2e.md) | HR 요청부터 근로자 서류 제출, OCR 검토와 연장 업무 완료까지 직접 확인하는 순서 |
 | Docker·데모 배포 | [Server 데모 배포 Runbook](docs/deployment-runbook.md) | 로컬 Compose, 필수 Secret, Smoke와 rollback 기준 |
 | Figma fixture 대응표 | [Figma Demo Fixture Manifest](docs/demo-seed-fixture-manifest.md) | 화면 요구사항별 예약 데이터와 현재 API 노출 범위 |
 | 패키지·모듈 경계 | [프로젝트 구조](docs/project-structure.md) | 코드를 어느 패키지에 구현해야 하는지 설명 |

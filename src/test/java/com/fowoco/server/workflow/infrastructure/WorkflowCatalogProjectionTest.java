@@ -48,5 +48,21 @@ class WorkflowCatalogProjectionTest {
                 "stay_expiry_date",
                 "stay_verification_status"
         );
+        var renewalCase = catalog.findCaseTemplatesByIntent("EXPIRY_RENEWAL")
+                .stream()
+                .filter(template -> template.caseTemplateId().equals("CASE-EXPIRY-RENEWAL-001"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(renewalCase.tasks()).extracting(task -> task.taskType().name())
+                .containsExactly(
+                        "RECONTRACT",
+                        "DOCUMENT_REQUEST",
+                        "EMPLOYMENT_PERIOD_EXTENSION",
+                        "STAY_PERIOD_EXTENSION"
+                );
+        assertThat(renewalCase.tasks().get(0).checklistItems()).hasSize(6);
+        assertThat(renewalCase.tasks().get(2).dependsOn()).containsExactly("recontract");
+        assertThat(renewalCase.tasks().get(3).dependsOn())
+                .containsExactly("employment_period_extension");
     }
 }
