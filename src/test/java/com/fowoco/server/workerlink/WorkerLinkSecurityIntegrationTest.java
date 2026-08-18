@@ -847,7 +847,8 @@ class WorkerLinkSecurityIntegrationTest {
         assertThat(JsonPath.<List<String>>read(adoption.body(), "$.adopted_documents[*].document_type"))
                 .containsExactlyInAnyOrder("PASSPORT_COPY", "CONTRACT");
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM worker_document WHERE task_id = ? AND submission_status = 'SUBMITTED'",
+                "SELECT COUNT(*) FROM worker_document WHERE task_id = ? "
+                        + "AND submission_status = 'SUBMITTED' AND source = 'WORKER_UPLOAD'",
                 Integer.class,
                 UUID.fromString(taskId)
         )).isEqualTo(2);

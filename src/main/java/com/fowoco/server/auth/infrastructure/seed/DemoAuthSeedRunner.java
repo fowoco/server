@@ -6,6 +6,7 @@ import com.fowoco.server.auth.domain.UserRole;
 import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.application.port.CompanySettingsProvisioner;
 import com.fowoco.server.company.domain.Company;
+import com.fowoco.server.common.security.TenantTransactionExecutor;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -18,7 +19,6 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.transaction.annotation.Transactional;
 
 @Order(0)
 class DemoAuthSeedRunner implements ApplicationRunner {
@@ -58,6 +58,7 @@ class DemoAuthSeedRunner implements ApplicationRunner {
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
+    private final TenantTransactionExecutor tenantTransactionExecutor;
 
     DemoAuthSeedRunner(
             DemoAuthSeedProperties properties,
@@ -65,7 +66,8 @@ class DemoAuthSeedRunner implements ApplicationRunner {
             CompanySettingsProvisioner companySettingsProvisioner,
             UserAccountRepository userAccountRepository,
             PasswordEncoder passwordEncoder,
-            Clock clock
+            Clock clock,
+            TenantTransactionExecutor tenantTransactionExecutor
     ) {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.companyRepository = Objects.requireNonNull(
@@ -82,24 +84,30 @@ class DemoAuthSeedRunner implements ApplicationRunner {
         );
         this.passwordEncoder = Objects.requireNonNull(passwordEncoder, "passwordEncoder must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.tenantTransactionExecutor = Objects.requireNonNull(
+                tenantTransactionExecutor,
+                "tenantTransactionExecutor must not be null"
+        );
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments arguments) {
         validateConfiguration();
         Instant now = clock.instant();
-        ensureCompany(properties.companyId(), properties.companyName(), now);
-        ensureCompany(properties.testCompanyId(), properties.testCompanyName(), now);
-
-        seedUser(properties.companyId(), new DemoUser(
-                properties.adminUserId(),
-                properties.adminDisplayName(),
-                properties.adminEmail(),
-                UserRole.ADMIN
-        ), now);
-        DEMO_USERS.forEach(user -> seedUser(properties.companyId(), user, now));
-        TEST_USERS.forEach(user -> seedUser(properties.testCompanyId(), user, now));
+        tenantTransactionExecutor.execute(properties.companyId(), () -> {
+            ensureCompany(properties.companyId(), properties.companyName(), now);
+            seedUser(properties.companyId(), new DemoUser(
+                    properties.adminUserId(),
+                    properties.adminDisplayName(),
+                    properties.adminEmail(),
+                    UserRole.ADMIN
+            ), now);
+            DEMO_USERS.forEach(user -> seedUser(properties.companyId(), user, now));
+        });
+        tenantTransactionExecutor.execute(properties.testCompanyId(), () -> {
+            ensureCompany(properties.testCompanyId(), properties.testCompanyName(), now);
+            TEST_USERS.forEach(user -> seedUser(properties.testCompanyId(), user, now));
+        });
         LOGGER.info(
                 "demo_auth_seed ready company_count={} user_count={}",
                 2,

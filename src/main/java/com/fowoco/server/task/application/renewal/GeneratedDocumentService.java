@@ -17,10 +17,12 @@ import com.fowoco.server.worker.application.WorkerDocumentService;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -30,9 +32,41 @@ final class GeneratedDocumentService {
     private static final String GENERATED_DRAFT_PURPOSE = "AI_GENERATED_DRAFT";
     private static final Map<String, DocumentType> DOCUMENT_TYPES = Map.of(
             "standard_labor_contract_v6", DocumentType.CONTRACT,
-            "employment_extension_application_v12_3", DocumentType.PERMIT,
-            "immigration_integrated_application_v34", DocumentType.PERMIT,
-            "identity_guaranty_v129", DocumentType.PERMIT
+            "employment_extension_application_v12_3", DocumentType.EMPLOYMENT_EXTENSION_APPLICATION,
+            "immigration_integrated_application_v34", DocumentType.INTEGRATED_APPLICATION,
+            "identity_guaranty_v129", DocumentType.IDENTITY_GUARANTY
+    );
+    private static final Map<String, Set<String>> TEMPLATE_IDS_BY_TASK_TYPE = Map.of(
+            "RECONTRACT", Set.of("standard_labor_contract_v6"),
+            "EMPLOYMENT_PERIOD_EXTENSION", Set.of("employment_extension_application_v12_3"),
+            "STAY_PERIOD_EXTENSION", Set.of(
+                    "immigration_integrated_application_v34",
+                    "identity_guaranty_v129"
+            )
+    );
+    private static final Map<String, Set<String>> REQUIRED_VALUES_BY_TEMPLATE = Map.of(
+            "standard_labor_contract_v6", Set.of(
+                    "employee_name",
+                    "employee_birthdate",
+                    "enterprise_name"
+            ),
+            "employment_extension_application_v12_3", Set.of(
+                    "employee_1_name",
+                    "employee_1_resident_number",
+                    "employee_1_passport_number"
+            ),
+            "immigration_integrated_application_v34", Set.of(
+                    "given_names",
+                    "passport_number",
+                    "birth_year",
+                    "birth_month",
+                    "birth_day"
+            ),
+            "identity_guaranty_v129", Set.of(
+                    "foreign_name",
+                    "foreign_birthdate",
+                    "foreign_passport"
+            )
     );
 
     private final DocumentGenerationClient documentGenerationClient;
@@ -49,10 +83,47 @@ final class GeneratedDocumentService {
         this.workerDocumentService = workerDocumentService;
     }
 
-    List<PreparedRenewalDocument> prepare(List<RenewalGeneratedDocument> documents) {
-        return documents.stream()
+    List<PreparedRenewalDocument> prepare(
+            String taskType,
+            List<RenewalGeneratedDocument> documents
+    ) {
+        Set<String> allowedTemplateIds = TEMPLATE_IDS_BY_TASK_TYPE.get(taskType);
+        if (allowedTemplateIds == null) {
+            throw new IllegalArgumentException("Unsupported Renewal task type");
+        }
+        List<RenewalGeneratedDocument> routedDocuments = documents.stream()
+                .filter(document -> allowedTemplateIds.contains(document.templateId()))
+                .toList();
+        Set<String> routedTemplateIds = routedDocuments.stream()
+                .map(RenewalGeneratedDocument::templateId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        if (!routedTemplateIds.equals(allowedTemplateIds)
+                || routedTemplateIds.size() != routedDocuments.size()) {
+            throw new AiRuntimeCallException(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Generated documents do not match the current task templates."
+            );
+        }
+        routedDocuments.forEach(this::validateRequiredValues);
+        return routedDocuments.stream()
                 .map(this::prepare)
                 .toList();
+    }
+
+    private void validateRequiredValues(RenewalGeneratedDocument document) {
+        Set<String> required = REQUIRED_VALUES_BY_TEMPLATE.get(document.templateId());
+        boolean missingRequiredValue = required == null
+                || required.stream().anyMatch(key -> !hasValue(document.values().get(key)));
+        if (missingRequiredValue) {
+            throw new AiRuntimeCallException(
+                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
+                    "Generated document is missing a required mapped value."
+            );
+        }
+    }
+
+    private boolean hasValue(Object value) {
+        return value != null && (!(value instanceof String text) || !text.isBlank());
     }
 
     private PreparedRenewalDocument prepare(RenewalGeneratedDocument document) {
@@ -112,6 +183,7 @@ final class GeneratedDocumentService {
                         taskId,
                         documentType(descriptor.templateId()),
                         SubmissionStatus.SUBMITTED,
+                        WorkerDocumentSource.AI_GENERATED,
                         null,
                         null,
                         "AI 생성 초안 - HR 검토 필요"
@@ -142,7 +214,7 @@ final class GeneratedDocumentService {
         );
     }
 
-    private DocumentType documentType(String templateId) {
+    DocumentType documentType(String templateId) {
         DocumentType type = DOCUMENT_TYPES.get(templateId);
         if (type == null) {
             throw new IllegalArgumentException("Unsupported Renewal document template");

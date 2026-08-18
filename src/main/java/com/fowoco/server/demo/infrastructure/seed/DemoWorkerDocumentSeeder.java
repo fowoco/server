@@ -4,6 +4,7 @@ import com.fowoco.server.demo.infrastructure.DemoDocumentFileIds;
 import com.fowoco.server.demo.infrastructure.seed.DemoOperationalSeedCatalog.DocumentSeed;
 import com.fowoco.server.worker.application.port.WorkerDocumentRepository;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
@@ -40,6 +41,7 @@ final class DemoWorkerDocumentSeeder {
                         seed.taskId(),
                         document.documentType(),
                         document.submissionStatus(),
+                        document.source(),
                         document.expiryDate(),
                         document.destination(),
                         document.note(),
@@ -58,6 +60,7 @@ final class DemoWorkerDocumentSeeder {
                 seed.taskId(),
                 seed.documentType(),
                 seed.submissionStatus(),
+                WorkerDocumentSource.LEGACY,
                 expiryDate,
                 seed.destination(),
                 seed.note(),

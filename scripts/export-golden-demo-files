@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+server_dir="$(cd "${script_dir}/.." && pwd)"
+output_dir="${1:-${server_dir}/build/demo-upload-fixtures}"
+
+cd "${server_dir}"
+./gradlew exportGoldenDemoFiles -PdemoOutputDir="${output_dir}"

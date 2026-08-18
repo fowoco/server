@@ -274,11 +274,21 @@ class RenewalExecutionResultApplier {
         if (result.guideReviewRequired()) {
             return true;
         }
-        return !"out_of_scope".equals(result.scenario())
-                && result.missingSlots().isEmpty()
-                && !checklistStatusRepository.existsIncompleteRequiredItem(
+        if ("out_of_scope".equals(result.scenario())
+                || checklistStatusRepository.existsIncompleteRequiredItem(
                         task.taskId(), task.companyId()
-                );
+                )) {
+            return false;
+        }
+        if (!"ask_worker".equals(result.scenario())) {
+            return result.missingSlots().isEmpty();
+        }
+
+        Set<String> hrInputKeys = result.requestedFields().stream()
+                .filter(field -> "USER_INPUT".equals(field.sourceHint()))
+                .map(RenewalRequestedField::key)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return result.missingSlots().stream().noneMatch(hrInputKeys::contains);
     }
 
     private String auditSummary(RenewalRunResponse result) {

@@ -27,7 +27,7 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | 핵심 업무 API | Auth·Worker·Document·Task·Approval·Worker Link·Case·Dashboard·Notification 구현 |
 | AI 연동 | PLAN에서 대표 Intent·Workflow를 한 번 결정하고, 허용 Slot을 보충한 뒤 같은 결정을 ANALYZE에 재사용하는 AiRun·SSE 흐름 구현 |
 | 문서 처리 | 파일 저장·다운로드, HWP/HWPX 검증·생성 결과 연계, OCR 실행·HR 검토 구현 |
-| 근로자 협업 | 만료형 보안 링크 발급, 모바일 안내·응답·서류 제출, HR 공식 서류 채택과 Task 재개 구현 |
+| 근로자 협업 | 만료형 보안 링크 발급, 모바일 안내·응답·서류 제출, HR 공식 서류 채택과 Task 재개, 퇴사 근로자 안전 보관 구현 |
 | 알림 | 업무 Domain Event와 Outbox를 이용한 알림 생성, 읽음 상태, 마감 임박 배치 구현 |
 | 운영 기반 | Flyway, PostgreSQL 16, RLS, Transactional Outbox, 감사로그, Micrometer·Prometheus, Docker·Kubernetes·HTTPS 배포와 제품 E2E 검증 |
 
@@ -56,6 +56,25 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 | 김재성 [`@krestar`](https://github.com/krestar) | PostgreSQL·RLS·Settings·Demo Seed·DB 운영 안전성 |
 | 함께 | API 계약, Flyway 순서 조율, 상호 PR Review, 배포·E2E 준비 |
 
+### `@hywznn` 기여 하이라이트
+
+아래는 아이디어 참여가 아니라 **`main`에 병합된 PR을 기준으로 직접 설계·구현·통합한
+범위**입니다. 기능 수보다 “AI 결과가 실제 HR 업무로 안전하게 이어지는가”에 초점을
+맞췄습니다.
+
+| 문제 | 구현·통합한 내용 | 서비스에 생긴 변화 |
+| --- | --- | --- |
+| 업무 서버의 기준이 없었음 | 저장소·모듈·API·상태 ADR, Auth·Company, Task·Approval·Audit 기반 | 인증된 담당자의 행동만 상태 전이와 감사 이력으로 남는 업무 서버 기반 확립 |
+| AI 호출 결과가 일회성 응답에 머물렀음 | AI Runtime 경계, AiRun, PLAN 결정 재사용, Slot Resolver, Candidate→Case·Task 변환, SSE | 발화문 분석 결과를 재조회·검토·채택할 수 있는 영속 HR Workflow로 전환 |
+| 근로자 제출과 문서 생성이 끊겨 있었음 | Worker Link·SMS, 모바일 응답 회수, 공식 서류 채택, OCR 검토, Renewal 재실행, HWP/HWPX 결과 저장 | `안내 → 제출 → 검토 → OCR → 초안`이 같은 Task·Case 안에서 이어지는 대표 시나리오 완성 |
+| 장애와 성능을 설명하기 어려웠음 | Transactional Outbox·수동 재처리, Runtime 장애 격리, 단계별 구조화 로그·Prometheus, Swagger·DB 문서 자동화 | 외부 Provider 실패 후 복구 경로와 AI 병목을 재현 가능한 테스트·수치·문서로 확인 가능 |
+| 데모 데이터와 실제 계약이 자주 달라졌음 | Knowledge 0.3 Workflow·Slot 반영, 합성 문서 Seed, 이름 정규화, 만료·퇴사 근로자 안전 보관, 문서 미리보기 | 대표 E-9 시나리오를 실제 화면과 API에서 반복 검증할 수 있는 기준 데이터와 예외 흐름 확보 |
+
+세부 변경은 [`@hywznn`의 병합 PR](https://github.com/fowoco/server/pulls?q=is%3Apr+is%3Amerged+author%3Ahywznn)에서
+코드와 테스트 단위로 확인할 수 있습니다. 다른 구성원이 소유한 Worker·Document·DB
+영역은 계약과 리뷰를 통해 연결했으며, 위 표가 해당 영역 전체의 단독 소유를 의미하지는
+않습니다.
+
 위 표는 프로젝트 기여를 이해하기 위한 요약입니다. 현재 담당자와 완료 조건은
 [GitHub Issues](https://github.com/fowoco/server/issues)의 Assignee와
 [Server Roadmap](https://github.com/orgs/fowoco/projects/3)을 기준으로 확인합니다.
@@ -65,6 +84,7 @@ AI 실행, 승인, 근로자 링크, 알림과 장애 복구까지 하나의 Pos
 - 사업장 사용자 인증과 `ADMIN`·`HR`·`VIEWER` 권한
 - `company_id`를 기준으로 한 사업장 데이터 격리
 - 근로자 기본정보와 서류 메타데이터 관리
+- 체류 만료 경과 확인과 퇴사 근로자의 삭제 없는 안전 보관·업무 차단
 - CSV/XLSX 근로자 명단 가져오기와 OCR 검토
 - 업무카드·체크리스트·상태 전이 관리
 - HR 승인·반려·외부 제출·증빙·완료와 감사로그
@@ -102,6 +122,7 @@ HR 로그인
 → 승인된 OCR Context로 기존 Task 재개·문서 초안 생성
 → 외부 제출·처리결과 기록
 → 완료·감사로그
+→ 퇴사·업무 종료 확인 후 운영 목록에서 안전 보관
 ```
 
 대표 입력:
@@ -227,7 +248,7 @@ src/main/java/com/fowoco/server/
 ├── worker / workerimport / document / file
 ├── workflow / task / casework
 ├── approval / audit
-├── workerlink / dashboard / notification / settings
+├── workerlink / stayverification / dashboard / notification / settings
 ├── airun / aiintegration
 └── reliability
 ```
@@ -268,15 +289,18 @@ src/main/java/com/fowoco/server/
 | DB 테이블·ERD | [Database 문서](https://fowoco.github.io/server/) | Flyway를 빈 PostgreSQL에 적용해 자동 생성한 구조 |
 | 로컬 실행·인증·Workflow | [개발 가이드](docs/development-guide.md) | 처음 서버를 실행하고 기능 흐름을 이해하는 방법 |
 | Demo Seed 수량·시나리오 | [Demo Seed 운영 시나리오](docs/demo-seed.md) | 로컬 데모 데이터의 기준 수량, 대표 흐름과 표현 한계 |
+| 재계약·연장 수동 E2E | [Golden Flow 수동 시연 가이드](docs/golden-renewal-manual-e2e.md) | HR 요청부터 근로자 서류 제출, OCR 검토와 연장 업무 완료까지 직접 확인하는 순서. `./scripts/export-golden-demo-files`로 합성 여권·ARC를 생성 |
 | Docker·데모 배포 | [Server 데모 배포 Runbook](docs/deployment-runbook.md) | 로컬 Compose, 필수 Secret, Smoke와 rollback 기준 |
 | Figma fixture 대응표 | [Figma Demo Fixture Manifest](docs/demo-seed-fixture-manifest.md) | 화면 요구사항별 예약 데이터와 현재 API 노출 범위 |
 | 패키지·모듈 경계 | [프로젝트 구조](docs/project-structure.md) | 코드를 어느 패키지에 구현해야 하는지 설명 |
 | 중요한 설계 결정 | [ADR 목록](docs/adr/README.md) | 저장소 경계, API·보안, Task·AiRun, RLS 결정 원본 |
 | Server ↔ AI 계약 | [AI Runtime 계약](docs/ai-runtime-contract.md) | Server가 AI에 보내고 받을 수 있는 값과 검증 기준 |
 | 근로자 명단 가져오기 | [Worker Import 가이드](docs/worker-import.md) | CSV/XLSX 업로드부터 검증·수정·등록까지의 API 순서 |
+| 퇴사 근로자 보관 | [근로자 안전 보관 가이드](docs/worker-archive.md) | 삭제 없이 운영 대상에서 분리하는 조건·API·감사 기준 |
 | Agent DB 정보 보충 | [Slot 조회·재호출](docs/ai-slot-resolution.md) | canonical key allow-list, tenant 조회와 ANALYZE 재호출 기준 |
 | AI 단계별 성능 측정 | [AI 파이프라인 관측·Prometheus 가이드](docs/ai-pipeline-observability.md) | PLAN·Slot·ANALYZE·Renewal 구간의 정량 평가와 로컬 Prometheus 확인 기준 |
 | 이벤트 유실·재처리 | [Outbox 운영 가이드](docs/reliability/transactional-outbox.md) | 이벤트 발행, lease, 재시도와 장애 복구 기준 |
+| 체류기간 경과 안전 확인 | [체류기간 만료 경과 긴급 확인](docs/stay-verification.md) | 날짜 경과와 적법 체류·고용 종료 판단을 분리하는 기준 |
 | 파일 rollback·orphan 대응 | [File Storage rollback 보상 운영 가이드](docs/reliability/file-storage-rollback-compensation.md) | atomic finalize, rollback cleanup, `UNKNOWN` reconciliation과 배포 volume Smoke 기준 |
 | 구현 계획·업무 상태 | [Server Roadmap](https://github.com/orgs/fowoco/projects/3) · [Issues](https://github.com/fowoco/server/issues) | 실제 담당자, 우선순위와 진행 상태 |
 | 전체 설명·운영 가이드 | [Server Wiki](https://github.com/fowoco/server/wiki) | 초보자용 아키텍처·API·배포 설명 |

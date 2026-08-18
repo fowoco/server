@@ -34,7 +34,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -43,6 +46,21 @@ import tools.jackson.databind.ObjectMapper;
 
 @Service
 class RenewalExecutionContextReader {
+
+    private static final Logger log = LoggerFactory.getLogger(RenewalExecutionContextReader.class);
+
+    /**
+     * Contract conditions are shared by the three renewal Tasks in one Case.
+     * Task-specific deadlines and sensitive OCR values are deliberately excluded.
+     */
+    private static final Set<String> CASE_REUSABLE_RENEWAL_INPUTS = Set.of(
+            "wage",
+            "working_hours",
+            "job_description",
+            "work_location",
+            "lodging",
+            "contract_period"
+    );
 
     private final ActorAuthorizer authorizer;
     private final TenantDatabaseContext tenantContext;
@@ -142,13 +160,16 @@ class RenewalExecutionContextReader {
             Map<String, String> normalizedAnswers
     ) {
         businessData.remove("renewal_execution");
+        Map<String, Object> inheritedRenewalInputs = inheritedRenewalInputs(task);
         Map<String, Object> storedRenewalInputs = renewalInputs(businessData.remove("renewal_inputs"));
         Map<String, Object> slots = buildSlots(
                 businessData,
+                inheritedRenewalInputs,
                 storedRenewalInputs,
                 normalizedAnswers,
                 worker,
-                company
+                company,
+                task
         );
         OcrContext ocr = loadOcrContext(worker, task.companyId());
         return new RenewalExecutionContext(
@@ -178,12 +199,15 @@ class RenewalExecutionContextReader {
 
     private Map<String, Object> buildSlots(
             Map<String, Object> businessData,
+            Map<String, Object> inheritedRenewalInputs,
             Map<String, Object> storedRenewalInputs,
             Map<String, String> submittedSlotAnswers,
             Worker worker,
-            Company company
+            Company company,
+            Task task
     ) {
         Map<String, Object> slots = new LinkedHashMap<>(businessData);
+        slots.putAll(inheritedRenewalInputs);
         slots.putAll(storedRenewalInputs);
         slots.putAll(submittedSlotAnswers);
         put(slots, "worker_id", worker.workerId());
@@ -198,7 +222,40 @@ class RenewalExecutionContextReader {
         put(slots, "employment_permit_end_date", worker.employmentPermitEndDate());
         put(slots, "employment_activity_end_date", worker.employmentActivityEndDate());
         put(slots, "enterprise_name", company.name());
+        put(slots, "due_at", task.dueDate());
         return slots;
+    }
+
+    private Map<String, Object> inheritedRenewalInputs(Task currentTask) {
+        if (currentTask.caseId() == null) {
+            return Map.of();
+        }
+        List<Task> siblings = new ArrayList<>(taskRepository.findAll(
+                new TaskRepository.TaskSearchCriteria(
+                        currentTask.companyId(), null, null, TaskTargetType.WORKER, null,
+                        currentTask.workerId(), currentTask.caseId(), null, null, null, 0, 100
+                )
+        ).items());
+        siblings.sort(Comparator
+                .comparing(Task::updatedAt)
+                .thenComparing(Task::taskId));
+
+        Map<String, Object> inherited = new LinkedHashMap<>();
+        for (Task sibling : siblings) {
+            if (sibling.taskId().equals(currentTask.taskId())
+                    || !RenewalWorkflowPolicy.supports(sibling.taskType().name(), sibling.workflowId())) {
+                continue;
+            }
+            Map<String, Object> siblingBusinessData = taskContentCodec.decodeBusinessData(
+                    sibling.businessDataJson()
+            );
+            renewalInputs(siblingBusinessData.get("renewal_inputs")).forEach((key, value) -> {
+                if (CASE_REUSABLE_RENEWAL_INPUTS.contains(key)) {
+                    inherited.put(key, value);
+                }
+            });
+        }
+        return Map.copyOf(inherited);
     }
 
     private Map<String, Object> renewalInputs(Object value) {
@@ -249,20 +306,38 @@ class RenewalExecutionContextReader {
                     hints
             ));
         }
-        Map<String, Object> latest = approvedResults.stream()
-                .max(Comparator.comparing(ApprovedOcr::updatedAt))
-                .map(ApprovedOcr::payload)
-                .orElse(null);
-        return new OcrContext(List.copyOf(documents), latest);
+        Map<String, Object> combinedFields = new LinkedHashMap<>();
+        approvedResults.stream()
+                .sorted(Comparator.comparing(ApprovedOcr::updatedAt))
+                .forEach(result -> combinedFields.putAll(result.fields()));
+        return new OcrContext(
+                List.copyOf(documents),
+                combinedFields.isEmpty() ? null : Map.copyOf(combinedFields)
+        );
     }
 
     private Optional<ApprovedOcr> approvedOcr(WorkerDocument document, UUID companyId) {
         if (!ocrResultCipher.isAvailable()) {
             return Optional.empty();
         }
-        return ocrRunRepository.findLatestByDocumentIdAndCompanyId(document.workerDocumentId(), companyId)
-                .filter(run -> run.status() == DocumentOcrRunStatus.APPROVED)
-                .map(this::decryptOcr);
+        Optional<DocumentOcrRun> latest = ocrRunRepository.findLatestByDocumentIdAndCompanyId(
+                document.workerDocumentId(), companyId
+        ).filter(run -> run.status() == DocumentOcrRunStatus.APPROVED);
+        if (latest.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(decryptOcr(latest.get()));
+        } catch (IllegalStateException exception) {
+            DocumentOcrRun unreadable = latest.get();
+            log.warn(
+                    "renewal_ocr_context_skipped company_id={} worker_document_id={} key_version={} reason=unreadable",
+                    companyId,
+                    document.workerDocumentId(),
+                    unreadable.resultKeyVersion()
+            );
+            return Optional.empty();
+        }
     }
 
     private ApprovedOcr decryptOcr(DocumentOcrRun run) {
@@ -288,15 +363,7 @@ class RenewalExecutionContextReader {
                     correctedMap.forEach((key, value) -> fields.put(String.valueOf(key), value));
                 }
             }
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("fields", Map.copyOf(fields));
-            if (payload.matchedTemplateId() != null) {
-                response.put("matchedTemplateId", payload.matchedTemplateId());
-            }
-            if (payload.documentSide() != null) {
-                response.put("documentSide", payload.documentSide().name());
-            }
-            return new ApprovedOcr(Map.copyOf(fields), Map.copyOf(response), run.updatedAt());
+            return new ApprovedOcr(Map.copyOf(fields), run.updatedAt());
         } catch (JacksonException exception) {
             throw new IllegalStateException("stored OCR result is invalid", exception);
         }
@@ -332,6 +399,6 @@ class RenewalExecutionContextReader {
     private record OcrContext(List<RenewalDocumentInput> documents, Map<String, Object> latestResult) {
     }
 
-    private record ApprovedOcr(Map<String, Object> fields, Map<String, Object> payload, java.time.Instant updatedAt) {
+    private record ApprovedOcr(Map<String, Object> fields, java.time.Instant updatedAt) {
     }
 }

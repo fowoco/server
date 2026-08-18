@@ -74,6 +74,8 @@ app:
     endpoint: ${AI_RUNTIME_ENDPOINT:http://127.0.0.1:8000/internal/v1/analyses}
     renewal-endpoint: ${AI_RUNTIME_RENEWAL_ENDPOINT:http://127.0.0.1:8000/internal/v1/workflows/renewal/run}
     document-generation-endpoint: ${AI_DOCUMENT_GENERATION_ENDPOINT:http://127.0.0.1:8000/api/v1/documents/generate}
+    document-conversion-endpoint: ${AI_DOCUMENT_CONVERSION_ENDPOINT:http://127.0.0.1:8000/api/v1/documents/convert}
+    document-conversion-timeout: ${AI_DOCUMENT_CONVERSION_TIMEOUT:60s}
     service-credential: ${AI_RUNTIME_SERVICE_CREDENTIAL:}
     connect-timeout: ${AI_RUNTIME_CONNECT_TIMEOUT:2s}
     overall-timeout: ${AI_RUNTIME_OVERALL_TIMEOUT:240s}
@@ -130,6 +132,9 @@ app:
     catalog:
       location: ${WORKFLOW_CATALOG_LOCATION:classpath:workflow/catalog-projection.local.json}
       allow-unreleased: ${WORKFLOW_CATALOG_ALLOW_UNRELEASED:true}
+  stay-verification:
+    scheduler-enabled: ${STAY_VERIFICATION_SCHEDULER_ENABLED:true}
+    scan-cron: ${STAY_VERIFICATION_SCAN_CRON:0 10 2 * * *}
   file-storage:
     local-path: ${FILE_STORAGE_LOCAL_PATH:./data/files}
   cors:
@@ -190,6 +195,11 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+    hikari:
+      # H2 2.4.240은 CHECK 제약을 만든 세션이 닫히면 다른 세션의 갱신에서
+      # "database has been closed"를 반환한다. 로컬 JVM 수명 동안 Flyway의
+      # 물리 연결을 유지해 30분 이후 수동 E2E가 중단되지 않게 한다.
+      max-lifetime: 0
   jpa:
     show-sql: true
   h2:
@@ -255,6 +265,8 @@ app:
   reliability:
     outbox:
       enabled: false
+  stay-verification:
+    scheduler-enabled: false
   auth:
     jwt:
       secret-base64: ${JWT_SECRET_BASE64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}

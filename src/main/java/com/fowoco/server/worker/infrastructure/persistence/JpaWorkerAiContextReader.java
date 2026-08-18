@@ -44,6 +44,12 @@ public class JpaWorkerAiContextReader implements
                         from WorkerJpaEntity worker
                         where worker.companyId = :companyId
                           and worker.displayName = :displayName
+                          and not exists (
+                              select archive.workerId
+                              from WorkerArchiveJpaEntity archive
+                              where archive.workerId = worker.workerId
+                                and archive.companyId = worker.companyId
+                          )
                         order by worker.workerId
                         """,
                         WorkerJpaEntity.class
@@ -64,22 +70,61 @@ public class JpaWorkerAiContextReader implements
         } catch (IllegalArgumentException ignored) {
             return List.of();
         }
-        List<UUID> workerIds = entityManager.createQuery(
+        List<Object[]> candidateRows = entityManager.createQuery(
                         """
                         select worker.workerId, worker.displayName
                         from WorkerJpaEntity worker
                         where worker.companyId = :companyId
+                          and not exists (
+                              select archive.workerId
+                              from WorkerArchiveJpaEntity archive
+                              where archive.workerId = worker.workerId
+                                and archive.companyId = worker.companyId
+                          )
                         order by worker.workerId
                         """,
                         Object[].class
                 )
                 .setParameter("companyId", companyId)
-                .getResultList()
+                .getResultList();
+        List<UUID> workerIds = candidateRows
                 .stream()
                 .filter(row -> lookupKey.equals(displayNameNormalizer.normalize((String) row[1])))
                 .limit(2)
                 .map(row -> (UUID) row[0])
                 .toList();
+        if (workerIds.isEmpty() && lookupKey.codePointCount(0, lookupKey.length()) >= 3) {
+            workerIds = candidateRows
+                    .stream()
+                    .filter(row -> displayNameNormalizer.normalize((String) row[1])
+                            .startsWith(lookupKey))
+                    .limit(2)
+                    .map(row -> (UUID) row[0])
+                    .toList();
+        }
+        if (workerIds.isEmpty()) {
+            List<Object[]> sentencePrefixCandidates = candidateRows.stream()
+                    .filter(row -> {
+                        String candidateKey = displayNameNormalizer.normalize((String) row[1]);
+                        return candidateKey.codePointCount(0, candidateKey.length()) >= 3
+                                && lookupKey.startsWith(candidateKey);
+                    })
+                    .toList();
+            int longestCandidateLength = sentencePrefixCandidates.stream()
+                    .map(row -> displayNameNormalizer.normalize((String) row[1]))
+                    .mapToInt(value -> value.codePointCount(0, value.length()))
+                    .max()
+                    .orElse(0);
+            workerIds = sentencePrefixCandidates.stream()
+                    .filter(row -> {
+                        String candidateKey = displayNameNormalizer.normalize((String) row[1]);
+                        return candidateKey.codePointCount(0, candidateKey.length())
+                                == longestCandidateLength;
+                    })
+                    .limit(2)
+                    .map(row -> (UUID) row[0])
+                    .toList();
+        }
         if (workerIds.isEmpty()) {
             return List.of();
         }
@@ -90,6 +135,12 @@ public class JpaWorkerAiContextReader implements
                         from WorkerJpaEntity worker
                         where worker.companyId = :companyId
                           and worker.workerId in :workerIds
+                          and not exists (
+                              select archive.workerId
+                              from WorkerArchiveJpaEntity archive
+                              where archive.workerId = worker.workerId
+                                and archive.companyId = worker.companyId
+                          )
                         order by worker.workerId
                         """,
                         WorkerJpaEntity.class
@@ -112,6 +163,7 @@ public class JpaWorkerAiContextReader implements
                         from WorkerDocumentJpaEntity document
                         where document.companyId = :companyId
                           and document.workerId = :workerId
+                          and document.archivedAt is null
                           and document.documentType in :documentTypes
                         order by document.updatedAt desc,
                                  document.createdAt desc,

@@ -186,6 +186,7 @@ final class PostgreSqlWorkerRestrictedRuntimeFixture implements AutoCloseable {
                             + "ON TABLE public.worker TO "
                             + quotedRole
             );
+            statement.execute("GRANT SELECT ON TABLE public.worker_archive TO " + quotedRole);
         }
     }
 

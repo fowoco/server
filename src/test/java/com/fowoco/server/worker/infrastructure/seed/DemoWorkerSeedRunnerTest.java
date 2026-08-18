@@ -1,10 +1,15 @@
 package com.fowoco.server.worker.infrastructure.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
 import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.domain.Company;
+import com.fowoco.server.common.security.TenantTransactionExecutor;
 import com.fowoco.server.worker.application.WorkerSearchQuery;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
@@ -64,11 +69,13 @@ class DemoWorkerSeedRunnerTest {
         companyRepository.insert(Company.create(TEST_COMPANY_ID, "FOWOCO Test Company", NOW));
         InMemoryWorkerRepository workerRepository = new InMemoryWorkerRepository();
         MutableClock clock = new MutableClock(NOW, ZoneOffset.UTC);
+        TenantTransactionExecutor transactionExecutor = immediateTenantTransactionExecutor();
         DemoWorkerSeedRunner runner = new DemoWorkerSeedRunner(
                 properties(),
                 companyRepository,
                 workerRepository,
-                clock
+                clock,
+                transactionExecutor
         );
 
         runner.run(new DefaultApplicationArguments(new String[0]));
@@ -122,6 +129,19 @@ class DemoWorkerSeedRunnerTest {
         assertThat(workerRepository.workers.get(
                 UUID.fromString("92000000-0000-0000-0000-000000000025")
         ).stayExpiryDate()).isNull();
+        verify(transactionExecutor, org.mockito.Mockito.times(3))
+                .execute(org.mockito.ArgumentMatchers.eq(DEMO_COMPANY_ID), any(Runnable.class));
+        verify(transactionExecutor, org.mockito.Mockito.times(3))
+                .execute(org.mockito.ArgumentMatchers.eq(TEST_COMPANY_ID), any(Runnable.class));
+    }
+
+    private TenantTransactionExecutor immediateTenantTransactionExecutor() {
+        TenantTransactionExecutor executor = mock(TenantTransactionExecutor.class);
+        doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(1).run();
+            return null;
+        }).when(executor).execute(any(UUID.class), any(Runnable.class));
+        return executor;
     }
 
     private DemoAuthSeedProperties properties() {

@@ -6,6 +6,7 @@ JSON을 읽기 쉬운 화면으로 변환한 문서입니다.
 - 팀 공유 사이트: <https://fowoco.github.io/server/api/>
 - OpenAPI JSON: <https://fowoco.github.io/server/api/openapi.json>
 - 로컬 Swagger UI: <http://localhost:8080/swagger-ui.html>
+- 파일 미리보기·합성 문서 확인: [file-preview.md](file-preview.md)
 
 ## 어떤 문서인가요?
 

@@ -21,6 +21,49 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 @EnabledIfEnvironmentVariable(named = "POSTGRES_TEST_ENABLED", matches = "true")
 class PostgreSqlMigrationTests {
 
+    private static final Set<String> RLS_TABLES = Set.of(
+            "company",
+            "company_settings",
+            "user_account",
+            "refresh_token",
+            "user_agreement_consent",
+            "password_reset_token",
+            "worker",
+            "worker_document",
+            "stored_file",
+            "task",
+            "task_checklist_item",
+            "task_transition_history",
+            "document_request_draft",
+            "document_request_draft_type",
+            "approval_request",
+            "external_submission",
+            "task_evidence",
+            "audit_event",
+            "workflow_case",
+            "document_ocr_run",
+            "notification",
+            "stay_verification_case",
+            "worker_archive",
+            "worker_link",
+            "worker_response",
+            "worker_response_upload",
+            "worker_document_upload_idempotency",
+            "worker_import_job",
+            "worker_import_row",
+            "worker_import_commit_idempotency",
+            "ai_run",
+            "ai_attempt",
+            "ai_question",
+            "ai_candidate",
+            "ai_candidate_decision_batch",
+            "ai_candidate_decision",
+            "ai_candidate_decision_task",
+            "event_publication",
+            "event_consumption",
+            "outbox_manual_retry"
+    );
+
     private static final String COMPANY_A = "10000000-0000-0000-0000-000000000001";
     private static final String COMPANY_B = "20000000-0000-0000-0000-000000000002";
     private static final String USER_A = "11000000-0000-0000-0000-000000000001";
@@ -109,7 +152,10 @@ class PostgreSqlMigrationTests {
                         "worker_import_job",
                         "worker_import_row",
                         "worker_import_commit_idempotency",
-                        "document_ocr_run"
+                        "document_ocr_run",
+                        "notification",
+                        "stay_verification_case",
+                        "worker_archive"
                 );
 
         assertThat(columnSpecs(connection, "company"))
@@ -175,6 +221,9 @@ class PostgreSqlMigrationTests {
                 .containsEntry("task_id", new ColumnSpec("uuid", true))
                 .containsEntry("document_type", new ColumnSpec("varchar", false))
                 .containsEntry("submission_status", new ColumnSpec("varchar", false))
+                .containsEntry("archived_at", new ColumnSpec("timestamptz", true))
+                .containsEntry("archived_by", new ColumnSpec("uuid", true))
+                .containsEntry("archive_reason", new ColumnSpec("varchar", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
         assertThat(columnSpecs(connection, "stored_file"))
                 .containsEntry("stored_file_id", new ColumnSpec("uuid", false))
@@ -349,6 +398,13 @@ class PostgreSqlMigrationTests {
                 .containsEntry("corrected_fields_ciphertext", new ColumnSpec("text", true))
                 .containsEntry("corrected_fields_key_version", new ColumnSpec("varchar", true))
                 .containsEntry("version", new ColumnSpec("int8", false));
+        assertThat(columnSpecs(connection, "worker_archive"))
+                .containsEntry("worker_id", new ColumnSpec("uuid", false))
+                .containsEntry("company_id", new ColumnSpec("uuid", false))
+                .containsEntry("archived_at", new ColumnSpec("timestamptz", false))
+                .containsEntry("archived_by", new ColumnSpec("uuid", false))
+                .containsEntry("archive_reason", new ColumnSpec("varchar", false))
+                .containsEntry("worker_version", new ColumnSpec("int8", false));
 
         assertThat(constraintNames(connection))
                 .contains(
@@ -455,7 +511,15 @@ class PostgreSqlMigrationTests {
                         "ck_document_ocr_run_correction_pair",
                         "fk_document_ocr_run_document_company",
                         "fk_document_ocr_run_file_company",
-                        "fk_document_ocr_run_requester_company"
+                        "fk_document_ocr_run_requester_company",
+                        "fk_worker_document_archived_by_company",
+                        "ck_worker_document_archive_metadata",
+                        "pk_worker_archive",
+                        "uq_worker_archive_worker_company",
+                        "fk_worker_archive_worker_company",
+                        "fk_worker_archive_actor_company",
+                        "ck_worker_archive_reason_not_blank",
+                        "ck_worker_archive_worker_version"
                 );
         assertThat(indexNames(connection))
                 .contains(
@@ -465,6 +529,7 @@ class PostgreSqlMigrationTests {
                         "idx_refresh_token_expires_at",
                         "idx_worker_company",
                         "idx_worker_document_company_status",
+                        "idx_worker_document_company_archive",
                         "idx_stored_file_company",
                         "idx_task_company_status_due",
                         "idx_task_company_target_source",
@@ -494,7 +559,8 @@ class PostgreSqlMigrationTests {
                         "idx_worker_import_job_company_updated",
                         "idx_worker_import_row_job_status",
                         "idx_document_ocr_run_document_created",
-                        "idx_document_ocr_run_company_status"
+                        "idx_document_ocr_run_company_status",
+                        "idx_worker_archive_company_time"
                 );
         assertThat(policyNames(connection))
                 .containsExactlyInAnyOrder(
@@ -535,9 +601,15 @@ class PostgreSqlMigrationTests {
                         "pl_worker_import_row_tenant_isolation",
                         "pl_worker_import_commit_idempotency_tenant_isolation",
                         "pl_document_ocr_run_tenant_isolation",
-                        "pl_notification_tenant_isolation"
+                        "pl_notification_tenant_isolation",
+                        "pl_stay_verification_tenant_isolation",
+                        "pl_worker_archive_tenant_isolation"
                 );
-        assertThat(rlsEnabledTables(connection)).isEmpty();
+        assertThat(policyTableNames(connection))
+                .containsExactlyInAnyOrderElementsOf(RLS_TABLES);
+        assertThat(rlsEnabledTables(connection))
+                .containsExactlyInAnyOrderElementsOf(RLS_TABLES);
+        assertThat(rlsForcedTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
@@ -546,7 +618,8 @@ class PostgreSqlMigrationTests {
                         "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
-                        "bootstrap_oldest_outstanding_event_occurred_at"
+                        "bootstrap_oldest_outstanding_event_occurred_at",
+                        "bootstrap_expired_stay_candidates"
                 );
         assertThat(functionsWithLockedSearchPath(connection))
                 .containsExactlyInAnyOrder(
@@ -556,7 +629,8 @@ class PostgreSqlMigrationTests {
                         "bootstrap_company_id_by_worker_link_token_hash",
                         "bootstrap_claim_event_publications",
                         "bootstrap_count_outstanding_event_publications",
-                        "bootstrap_oldest_outstanding_event_occurred_at"
+                        "bootstrap_oldest_outstanding_event_occurred_at",
+                        "bootstrap_expired_stay_candidates"
                 );
     }
 
@@ -1118,6 +1192,17 @@ class PostgreSqlMigrationTests {
         );
     }
 
+    private Set<String> policyTableNames(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT DISTINCT tablename
+                FROM pg_catalog.pg_policies
+                WHERE schemaname = 'public'
+                """
+        );
+    }
+
     private Set<String> rlsEnabledTables(Connection connection) throws SQLException {
         return queryStrings(
                 connection,
@@ -1127,6 +1212,19 @@ class PostgreSqlMigrationTests {
                 WHERE relnamespace = 'public'::regnamespace
                   AND relkind = 'r'
                   AND relrowsecurity
+                """
+        );
+    }
+
+    private Set<String> rlsForcedTables(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT relname
+                FROM pg_catalog.pg_class
+                WHERE relnamespace = 'public'::regnamespace
+                  AND relkind = 'r'
+                  AND relforcerowsecurity
                 """
         );
     }

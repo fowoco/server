@@ -3,6 +3,7 @@ package com.fowoco.server.worker.infrastructure.persistence;
 import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.worker.domain.WorkerDocument;
+import com.fowoco.server.worker.domain.WorkerDocumentSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -40,6 +41,10 @@ public class WorkerDocumentJpaEntity {
     @Column(name = "submission_status", nullable = false, length = 20)
     private SubmissionStatus submissionStatus;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source", nullable = false, length = 30, updatable = false)
+    private WorkerDocumentSource source;
+
     @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
@@ -51,6 +56,15 @@ public class WorkerDocumentJpaEntity {
 
     @Column(name = "file_id")
     private UUID fileId;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "archived_by")
+    private UUID archivedBy;
+
+    @Column(name = "archive_reason", length = 500)
+    private String archiveReason;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -72,10 +86,14 @@ public class WorkerDocumentJpaEntity {
             UUID taskId,
             DocumentType documentType,
             SubmissionStatus submissionStatus,
+            WorkerDocumentSource source,
             LocalDate expiryDate,
             String destination,
             String note,
             UUID fileId,
+            Instant archivedAt,
+            UUID archivedBy,
+            String archiveReason,
             Instant createdAt,
             Instant updatedAt,
             long version
@@ -86,10 +104,14 @@ public class WorkerDocumentJpaEntity {
         this.taskId = taskId;
         this.documentType = documentType;
         this.submissionStatus = submissionStatus;
+        this.source = source;
         this.expiryDate = expiryDate;
         this.destination = destination;
         this.note = note;
         this.fileId = fileId;
+        this.archivedAt = archivedAt;
+        this.archivedBy = archivedBy;
+        this.archiveReason = archiveReason;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.version = version;
@@ -104,10 +126,14 @@ public class WorkerDocumentJpaEntity {
                 document.taskId(),
                 document.documentType(),
                 document.submissionStatus(),
+                document.source(),
                 document.expiryDate(),
                 document.destination(),
                 document.note(),
                 document.fileId(),
+                document.archivedAt(),
+                document.archivedBy(),
+                document.archiveReason(),
                 document.createdAt(),
                 document.updatedAt(),
                 document.version()
@@ -122,10 +148,14 @@ public class WorkerDocumentJpaEntity {
                 taskId,
                 documentType,
                 submissionStatus,
+                source,
                 expiryDate,
                 destination,
                 note,
                 fileId,
+                archivedAt,
+                archivedBy,
+                archiveReason,
                 createdAt,
                 updatedAt,
                 version
@@ -137,6 +167,7 @@ public class WorkerDocumentJpaEntity {
         if (!workerDocumentId.equals(document.workerDocumentId())
                 || !workerId.equals(document.workerId())
                 || !companyId.equals(document.companyId())
+                || source != document.source()
                 || !createdAt.equals(document.createdAt())) {
             throw new IllegalArgumentException("immutable worker document fields must not change");
         }
@@ -150,6 +181,9 @@ public class WorkerDocumentJpaEntity {
         this.destination = document.destination();
         this.note = document.note();
         this.fileId = document.fileId();
+        this.archivedAt = document.archivedAt();
+        this.archivedBy = document.archivedBy();
+        this.archiveReason = document.archiveReason();
         this.updatedAt = document.updatedAt();
     }
 }

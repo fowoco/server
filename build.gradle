@@ -50,3 +50,13 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+tasks.register('exportGoldenDemoFiles', JavaExec) {
+	group = 'fowoco demo'
+	description = 'Golden Renewal 수동 E2E에 사용할 합성 근로자 서류를 내보냅니다.'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.fowoco.server.demo.infrastructure.documentdata.DemoGoldenUploadFixtureExporter'
+	if (project.hasProperty('demoOutputDir')) {
+		args project.property('demoOutputDir')
+	}
+}

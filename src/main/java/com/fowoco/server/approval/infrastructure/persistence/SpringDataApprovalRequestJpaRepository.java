@@ -20,6 +20,11 @@ interface SpringDataApprovalRequestJpaRepository
             ApprovalStatus status
     );
 
+    Optional<ApprovalRequestJpaEntity> findFirstByTaskIdAndCompanyIdOrderByRequestedAtDesc(
+            UUID taskId,
+            UUID companyId
+    );
+
     Optional<ApprovalRequestJpaEntity> findFirstByTaskIdAndCompanyIdAndStatusOrderByDecidedAtDesc(
             UUID taskId,
             UUID companyId,

@@ -46,7 +46,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution result = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("같은이름")
         );
 
@@ -64,7 +64,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution result = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("응 우 옌 반 안")
         );
 
@@ -81,7 +81,7 @@ class AiSlotResolutionIntegrationTest {
 
         assertThatThrownBy(() -> resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("동명이인")
         ))
                 .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
@@ -98,7 +98,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution korean = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("응 우 옌-반_안")
         );
 
@@ -108,7 +108,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution romanized = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("NGUYEN-VAN_AN")
         );
 
@@ -123,7 +123,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution result = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("응우옌 반 안")
         );
 
@@ -138,12 +138,90 @@ class AiSlotResolutionIntegrationTest {
 
         assertThatThrownBy(() -> resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("응 우 옌 반 안")
         ))
                 .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
                         assertThat(exception.failureCode()).isEqualTo(
                                 AiContextResolutionFailureCode.TARGET_AMBIGUOUS
+                        )
+                );
+    }
+
+    @Test
+    void resolvesUniqueNormalizedPrefixInsideTheCurrentCompany() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반A", "2026-09-30");
+
+        AiSlotResolution result = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응웬반")
+        );
+
+        assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
+    }
+
+    @Test
+    void resolvesWorkerWhenAgentReturnsSentenceStartingWithTheDisplayName() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반A", "2026-09-30");
+
+        AiSlotResolution result = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응웬반A가 3년 만료 예정이야.")
+        );
+
+        assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
+    }
+
+    @Test
+    void longestDisplayNameWinsWhenAgentReturnsANamePrefixedSentence() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반", "2026-09-30");
+        insertWorker(WORKER_A_DUPLICATE, COMPANY_A, "응웬반A", "2027-09-30");
+
+        AiSlotResolution result = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응웬반A가 3년 만료 예정이야.")
+        );
+
+        assertThat(result.worker().workerRef()).isEqualTo(WORKER_A_DUPLICATE);
+    }
+
+    @Test
+    void multipleNormalizedPrefixCandidatesAreReportedAsAmbiguous() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반A", "2026-09-30");
+        insertWorker(WORKER_A_DUPLICATE, COMPANY_A, "응웬반B", "2027-09-30");
+
+        assertThatThrownBy(() -> resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응웬반")
+        ))
+                .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
+                        assertThat(exception.failureCode()).isEqualTo(
+                                AiContextResolutionFailureCode.TARGET_AMBIGUOUS
+                        )
+                );
+    }
+
+    @Test
+    void shortPrefixIsNotUsedForWorkerResolution() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반A", "2026-09-30");
+
+        assertThatThrownBy(() -> resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응")
+        ))
+                .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
+                        assertThat(exception.failureCode()).isEqualTo(
+                                AiContextResolutionFailureCode.TARGET_NOT_FOUND
                         )
                 );
     }
@@ -155,7 +233,7 @@ class AiSlotResolutionIntegrationTest {
 
         assertThatThrownBy(() -> resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("- _ .")
         ))
                 .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
@@ -198,7 +276,7 @@ class AiSlotResolutionIntegrationTest {
 
         AiSlotResolution result = resolutionTransaction.resolve(
                 COMPANY_A,
-                "0.3.0",
+                "0.3.1",
                 requirement("문서상태근로자", List.of("passport_status", "arc_status"))
         );
 

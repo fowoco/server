@@ -17,9 +17,11 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
     private URI endpoint = URI.create("http://127.0.0.1:8000/internal/v1/analyses");
     private URI renewalEndpoint = URI.create("http://127.0.0.1:8000/internal/v1/workflows/renewal/run");
     private URI documentGenerationEndpoint = URI.create("http://127.0.0.1:8000/api/v1/documents/generate");
+    private URI documentConversionEndpoint = URI.create("http://127.0.0.1:8000/api/v1/documents/convert");
     private String serviceCredential;
     private Duration connectTimeout = Duration.ofSeconds(2);
     private Duration overallTimeout = Duration.ofMinutes(4);
+    private Duration documentConversionTimeout = Duration.ofSeconds(60);
     private int maxResponseBytes = 1_048_576;
     private int maxDocumentResponseBytes = MAX_DOCUMENT_RESPONSE_BYTES;
     private int maxConcurrentCalls = 8;
@@ -58,6 +60,14 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
         this.documentGenerationEndpoint = requireHttpEndpoint(documentGenerationEndpoint);
     }
 
+    public URI getDocumentConversionEndpoint() {
+        return documentConversionEndpoint;
+    }
+
+    public void setDocumentConversionEndpoint(URI documentConversionEndpoint) {
+        this.documentConversionEndpoint = requireHttpEndpoint(documentConversionEndpoint);
+    }
+
     public void setServiceCredential(String serviceCredential) {
         this.serviceCredential = serviceCredential;
     }
@@ -89,6 +99,18 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
 
     public int getMaxResponseBytes() {
         return maxResponseBytes;
+    }
+
+    public Duration getDocumentConversionTimeout() {
+        return documentConversionTimeout;
+    }
+
+    public void setDocumentConversionTimeout(Duration documentConversionTimeout) {
+        Duration validated = requirePositive(documentConversionTimeout, "documentConversionTimeout");
+        if (validated.compareTo(MAX_OVERALL_TIMEOUT) > 0) {
+            throw new IllegalArgumentException("documentConversionTimeout must not exceed 5m");
+        }
+        this.documentConversionTimeout = validated;
     }
 
     public void setMaxResponseBytes(int maxResponseBytes) {
@@ -159,9 +181,11 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
         requireHttpEndpoint(endpoint);
         requireHttpEndpoint(renewalEndpoint);
         requireHttpEndpoint(documentGenerationEndpoint);
+        requireHttpEndpoint(documentConversionEndpoint);
         authorizationHeader();
         requirePositive(connectTimeout, "connectTimeout");
         requirePositive(overallTimeout, "overallTimeout");
+        requirePositive(documentConversionTimeout, "documentConversionTimeout");
     }
 
     private static URI requireHttpEndpoint(URI value) {

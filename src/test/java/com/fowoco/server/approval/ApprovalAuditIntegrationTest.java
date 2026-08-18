@@ -46,6 +46,8 @@ class ApprovalAuditIntegrationTest {
             UUID.fromString("a4000000-0000-0000-0000-000000000001");
     private static final UUID TASK_A =
             UUID.fromString("a5000000-0000-0000-0000-000000000001");
+    private static final UUID TASK_B =
+            UUID.fromString("a5000000-0000-0000-0000-000000000002");
     private static final UUID CASE_A =
             UUID.fromString("a6000000-0000-0000-0000-000000000001");
     private static final String PASSWORD = "Test-password-1!";
@@ -96,6 +98,7 @@ class ApprovalAuditIntegrationTest {
         jdbcTemplate.update("DELETE FROM task_transition_history");
         jdbcTemplate.update("DELETE FROM task_checklist_item");
         jdbcTemplate.update("DELETE FROM task");
+        jdbcTemplate.update("DELETE FROM workflow_case");
         jdbcTemplate.update("DELETE FROM worker");
         jdbcTemplate.update("DELETE FROM refresh_token");
         jdbcTemplate.update("DELETE FROM user_account");
@@ -208,6 +211,59 @@ class ApprovalAuditIntegrationTest {
                 "$.items[*].audit_event_id"
         );
         assertThat(secondIds).doesNotContainAnyElementsOf(firstIds);
+    }
+
+    @Test
+    void completingTheLastTaskAlsoCompletesItsWorkflowCase() throws Exception {
+        insertWorkflowCase();
+        insertCompletedSiblingTask();
+        String hrToken = accessToken(login(HR_A_EMAIL));
+
+        assertThat(requestApproval(hrToken, validApprovalBody()).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/approve"),
+                "{\"expected_version\":1,\"reason\":\"최종 업무 승인\"}",
+                hrToken
+        ).statusCode()).isEqualTo(200);
+        assertThat(authorizedPost(
+                taskPath("/external-submissions"),
+                """
+                {
+                  "expected_version":2,
+                  "destination":"고용센터",
+                  "safe_reference":"CASE-COMPLETE-001"
+                }
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/evidence"),
+                """
+                {
+                  "evidence_type":"OFFICIAL_RESULT",
+                  "note":"Case 완료 상태 검증"
+                }
+                """,
+                hrToken
+        ).statusCode()).isEqualTo(201);
+        assertThat(authorizedPost(
+                taskPath("/complete"),
+                "{\"expected_version\":3}",
+                hrToken
+        ).statusCode()).isEqualTo(200);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT lifecycle_status FROM workflow_case WHERE case_id = ? AND company_id = ?",
+                String.class,
+                CASE_A,
+                COMPANY_A
+        )).isEqualTo("COMPLETED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT version FROM workflow_case WHERE case_id = ? AND company_id = ?",
+                Long.class,
+                CASE_A,
+                COMPANY_A
+        )).isEqualTo(1L);
     }
 
     @Test
@@ -817,6 +873,48 @@ class ApprovalAuditIntegrationTest {
                 CASE_A,
                 FINGERPRINT,
                 LocalDate.of(2027, 7, 31),
+                HR_A,
+                HR_A
+        );
+    }
+
+    private void insertWorkflowCase() {
+        jdbcTemplate.update(
+                """
+                INSERT INTO workflow_case (
+                    case_id, company_id, worker_id, title, lifecycle_status, priority,
+                    workflow_catalog_version, workflow_snapshot_json, created_by,
+                    created_at, updated_at, version
+                ) VALUES (?, ?, ?, '승인 완료 테스트 Case', 'ACTIVE', 'NORMAL',
+                          '2026.07', '{"steps":[]}', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+                """,
+                CASE_A,
+                COMPANY_A,
+                WORKER_A,
+                HR_A
+        );
+    }
+
+    private void insertCompletedSiblingTask() {
+        jdbcTemplate.update(
+                """
+                INSERT INTO task (
+                    task_id, company_id, worker_id, case_id, task_type,
+                    workflow_id, workflow_catalog_version, title, description,
+                    business_data_json, critical_fingerprint, content_revision,
+                    source, status, due_date,
+                    created_by, updated_by, created_at, updated_at, version
+                ) VALUES (?, ?, ?, ?, 'STAY_PERIOD_EXTENSION',
+                          'e9-stay-extension', '2026.07', '선행 완료 업무', '이미 완료된 선행 업무',
+                          '{}', ?, 0, 'MANUAL', 'COMPLETED', ?,
+                          ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+                """,
+                TASK_B,
+                COMPANY_A,
+                WORKER_A,
+                CASE_A,
+                FINGERPRINT,
+                LocalDate.of(2027, 7, 30),
                 HR_A,
                 HR_A
         );

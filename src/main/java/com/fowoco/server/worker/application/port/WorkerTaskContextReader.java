@@ -7,4 +7,6 @@ import java.util.UUID;
 public interface WorkerTaskContextReader {
 
     Optional<WorkerTaskContext> findByIdAndCompanyId(UUID workerId, UUID companyId);
+
+    Optional<WorkerTaskContext> findByIdAndCompanyIdReadOnly(UUID workerId, UUID companyId);
 }

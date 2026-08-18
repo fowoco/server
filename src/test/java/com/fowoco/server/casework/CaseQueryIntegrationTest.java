@@ -44,6 +44,8 @@ class CaseQueryIntegrationTest {
     private static final UUID TASK_B = UUID.fromString("cb400000-0000-0000-0000-000000000001");
     private static final UUID TASK_CANCELLED =
             UUID.fromString("ca400000-0000-0000-0000-000000000003");
+    private static final UUID TASK_A_SECOND_PREREQUISITE =
+            UUID.fromString("ca400000-0000-0000-0000-000000000004");
     private static final String PASSWORD = "Test-password-1!";
     private static final String HR_A_EMAIL = "case.hr.a@example.com";
 
@@ -181,6 +183,62 @@ class CaseQueryIntegrationTest {
                 token
         );
         assertThat(afterCompletion.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(afterCompletion.body(), "$.current_task.task_id"))
+                .isEqualTo(TASK_A_WAITING.toString());
+    }
+
+    @Test
+    void taskWithTwoDependenciesBecomesCurrentOnlyAfterBothComplete() throws Exception {
+        insertTask(
+                TASK_A_SECOND_PREREQUISITE,
+                CASE_A,
+                COMPANY_A,
+                WORKER_A,
+                HR_A,
+                "EMPLOYMENT_PERIOD_EXTENSION",
+                "DRAFT",
+                3
+        );
+        jdbcTemplate.update(
+                """
+                UPDATE workflow_case
+                SET workflow_snapshot_json = ?
+                WHERE case_id = ?
+                """,
+                """
+                {"steps":[
+                  {"order":1,"task_id":"%s","required_conditions":{}},
+                  {"order":2,"task_id":"%s","required_conditions":{}},
+                  {"order":3,"task_id":"%s","required_conditions":{
+                    "depends_on_task_ids":["%s","%s"]
+                  }}
+                ]}
+                """.formatted(
+                        TASK_A_DONE,
+                        TASK_A_SECOND_PREREQUISITE,
+                        TASK_A_WAITING,
+                        TASK_A_DONE,
+                        TASK_A_SECOND_PREREQUISITE
+                ),
+                CASE_A
+        );
+        String token = login();
+
+        HttpResponse<String> beforeCompletion = get(
+                "/api/v1/cases/" + CASE_A + "/projection",
+                token
+        );
+        assertThat(JsonPath.<String>read(beforeCompletion.body(), "$.current_task.task_id"))
+                .isEqualTo(TASK_A_SECOND_PREREQUISITE.toString());
+
+        jdbcTemplate.update(
+                "UPDATE task SET status = 'COMPLETED' WHERE task_id = ?",
+                TASK_A_SECOND_PREREQUISITE
+        );
+        HttpResponse<String> afterCompletion = get(
+                "/api/v1/cases/" + CASE_A + "/projection",
+                token
+        );
         assertThat(JsonPath.<String>read(afterCompletion.body(), "$.current_task.task_id"))
                 .isEqualTo(TASK_A_WAITING.toString());
     }

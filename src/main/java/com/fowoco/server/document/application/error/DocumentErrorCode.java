@@ -16,6 +16,10 @@ public enum DocumentErrorCode implements ApiErrorCode {
             HttpStatus.NOT_FOUND,
             "문서를 찾을 수 없습니다."
     ),
+    DOCUMENT_VERSION_CONFLICT(
+            HttpStatus.CONFLICT,
+            "다른 사용자가 문서를 먼저 수정했습니다. 새로고침 후 다시 시도해 주세요."
+    ),
     DOCUMENT_OCR_DISABLED(
             HttpStatus.SERVICE_UNAVAILABLE,
             "OCR 기능이 아직 활성화되지 않았습니다."

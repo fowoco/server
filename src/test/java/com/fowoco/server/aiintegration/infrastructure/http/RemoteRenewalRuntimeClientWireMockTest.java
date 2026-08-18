@@ -71,6 +71,9 @@ class RemoteRenewalRuntimeClientWireMockTest {
 
         assertThat(response.intent()).isEqualTo("EXPIRY_RENEWAL");
         assertThat(response.workflowId()).isEqualTo("WF-CON-001");
+        assertThat(response.nextAction()).isEqualTo("REQUEST_WORKER_DOCUMENT");
+        assertThat(response.questions()).isEmpty();
+        assertThat(response.suggestedWorkflowIds()).isEmpty();
         assertThat(response.requestedFields()).extracting("key").containsExactly("wage");
     }
 
@@ -157,6 +160,11 @@ class RemoteRenewalRuntimeClientWireMockTest {
                   "taskId":"%s",
                   "intent":"EXPIRY_RENEWAL",
                   "workflowId":"WF-CON-001",
+                  "variant":null,
+                  "nextAction":"REQUEST_WORKER_DOCUMENT",
+                  "legalConclusion":null,
+                  "questions":[],
+                  "suggestedWorkflowIds":[],
                   "confidence":0.91,
                   "status":"NEEDS_INFO",
                   "outcome":"NEEDS_INFO",

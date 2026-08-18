@@ -98,6 +98,10 @@ HR은 같은 Demo Company 범위에서 응웬반A를 조회하고 현재 구현�
 Worker 연락처, 활성 Agent Version 또는 활성 Prompt Version Seed 모델은 만들지 않는다.
 Agent·Prompt 버전은 실제 AI 실행 후 `AiAttempt` 메타데이터로 기록된다.
 
+Candidate를 채택하면 Knowledge의 `CASE-EXPIRY-RENEWAL-001`을 기준으로 재계약,
+조건부 신분서류 보완, 취업활동기간 연장, 체류기간 연장 업무가 생성된다. 전체 시연 순서는
+[재계약·연장 Golden Flow 수동 시연 가이드](golden-renewal-manual-e2e.md)를 따른다.
+
 ### 시연 전에 존재하는 데이터
 
 - Demo Company와 HR 사용자·현재 역할

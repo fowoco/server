@@ -22,7 +22,7 @@ import java.util.stream.Stream;
 
 final class DemoOperationalSeedCatalog {
 
-    static final String WORKFLOW_CATALOG_VERSION = "0.3.0";
+    static final String WORKFLOW_CATALOG_VERSION = "0.3.1";
     static final UUID TIMELINE_TASK_ID =
             UUID.fromString("94000000-0000-0000-0000-000000000002");
     static final UUID TEST_ADMIN_USER_ID =

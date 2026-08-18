@@ -32,15 +32,18 @@ import com.fowoco.server.worker.domain.DocumentType;
 import com.fowoco.server.worker.domain.SubmissionStatus;
 import com.fowoco.server.workflow.application.WorkflowCatalogService;
 import com.fowoco.server.workflow.domain.WorkflowCatalog;
+import com.fowoco.server.workflow.domain.WorkflowCaseTemplate;
+import com.fowoco.server.workflow.domain.WorkflowCaseTemplate.ActivationMode;
+import com.fowoco.server.workflow.domain.WorkflowCaseTemplate.TaskTemplate;
 import com.fowoco.server.workflow.domain.WorkflowDefinition;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -120,30 +123,41 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         }
 
         WorkflowCatalog catalog = catalogService.getActiveCatalog();
-        List<WorkflowDefinition> workflows = catalog.findByIntent(command.detectedIntent());
-        if (workflows.isEmpty()
-                || workflows.stream().noneMatch(workflow -> workflow.workflowId()
-                        .equals(command.candidateWorkflowId()))) {
+        List<WorkflowCaseTemplate> matchingTemplates = catalog
+                .findCaseTemplatesByIntent(command.detectedIntent())
+                .stream()
+                .filter(template -> template.workflowIds().contains(command.candidateWorkflowId()))
+                .toList();
+        if (matchingTemplates.size() != 1) {
             throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
         }
-        List<TaskPlan> renewalPlans = plans(workflows);
-        EnumSet<TaskType> plannedTaskTypes = renewalPlans.stream()
+        WorkflowCaseTemplate caseTemplate = matchingTemplates.get(0);
+        Map<String, WorkflowDefinition> workflows = catalog.workflows().stream()
+                .filter(workflow -> caseTemplate.workflowIds().contains(workflow.workflowId()))
+                .collect(java.util.stream.Collectors.toMap(
+                        WorkflowDefinition::workflowId,
+                        workflow -> workflow
+                ));
+        if (!workflows.keySet().containsAll(caseTemplate.workflowIds())) {
+            throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
+        }
+        WorkerIdentityDocumentStatuses identityDocumentStatuses = identityDocumentStatusReader
+                .findCurrentStatuses(actor.companyId(), command.workerId());
+        List<DocumentType> missingIdentityDocuments = missingIdentityDocuments(
+                identityDocumentStatuses
+        );
+        List<TaskPlan> plans = plans(
+                caseTemplate,
+                workflows,
+                identityDocumentStatuses,
+                missingIdentityDocuments
+        );
+        EnumSet<TaskType> plannedTaskTypes = plans.stream()
                 .map(TaskPlan::taskType)
+                .filter(EXPIRY_RENEWAL_TASK_TYPES::contains)
                 .collect(java.util.stream.Collectors.toCollection(() -> EnumSet.noneOf(TaskType.class)));
         if (!plannedTaskTypes.equals(EXPIRY_RENEWAL_TASK_TYPES)) {
             throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
-        }
-
-        List<TaskPlan> plans = new ArrayList<>(renewalPlans);
-        List<DocumentType> missingIdentityDocuments = missingIdentityDocuments(
-                identityDocumentStatusReader.findCurrentStatuses(actor.companyId(), command.workerId())
-        );
-        if (!missingIdentityDocuments.isEmpty()) {
-            plans.add(new TaskPlan(
-                    TaskType.DOCUMENT_REQUEST,
-                    documentRequestWorkflow(catalog),
-                    missingIdentityDocuments
-            ));
         }
 
         LocalDate dueDate = dueDate(command.extractedSlots(), worker);
@@ -152,10 +166,10 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         List<PlannedTask> plannedTasks = plans.stream()
                 .map(plan -> new PlannedTask(plan, uuidGenerator.generate()))
                 .toList();
-        Map<TaskType, UUID> taskIds = new EnumMap<>(TaskType.class);
-        plannedTasks.stream()
-                .filter(plannedTask -> EXPIRY_RENEWAL_TASK_TYPES.contains(plannedTask.plan().taskType()))
-                .forEach(plannedTask -> taskIds.put(plannedTask.plan().taskType(), plannedTask.taskId()));
+        Map<String, UUID> taskIds = plannedTasks.stream().collect(java.util.stream.Collectors.toMap(
+                plannedTask -> plannedTask.plan().template().key(),
+                PlannedTask::taskId
+        ));
 
         List<TaskCaseRegistrar.CaseTask> caseTasks = plannedTasks.stream()
                 .map(plannedTask -> createTask(
@@ -164,6 +178,7 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
                         command,
                         actor,
                         catalog.bundleVersion(),
+                        caseTemplate,
                         caseId,
                         taskIds,
                         worker,
@@ -200,24 +215,59 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         return new CreationResult(caseId, createdTaskIds);
     }
 
-    private List<TaskPlan> plans(List<WorkflowDefinition> workflows) {
-        Map<TaskType, WorkflowDefinition> workflowByType = new EnumMap<>(TaskType.class);
-        workflows.forEach(workflow -> workflow.supportedTaskTypes().forEach(taskType -> {
-            if (workflowByType.putIfAbsent(taskType, workflow) != null) {
-                throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
-            }
-        }));
-        return workflowByType.entrySet().stream()
-                .map(entry -> new TaskPlan(entry.getKey(), entry.getValue(), List.of()))
-                .sorted(Comparator.comparingInt(this::order))
+    private List<TaskPlan> plans(
+            WorkflowCaseTemplate caseTemplate,
+            Map<String, WorkflowDefinition> workflows,
+            WorkerIdentityDocumentStatuses statuses,
+            List<DocumentType> missingIdentityDocuments
+    ) {
+        return caseTemplate.tasks().stream()
+                .filter(template -> active(template, statuses))
+                .map(template -> {
+                    WorkflowDefinition workflow = workflows.get(template.workflowId());
+                    if (workflow == null || !workflow.supportedTaskTypes().contains(template.taskType())) {
+                        throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
+                    }
+                    List<DocumentType> documents = template.taskType() == TaskType.DOCUMENT_REQUEST
+                            ? missingIdentityDocuments
+                            : List.of();
+                    return new TaskPlan(template, effectiveWorkflow(workflow, template), documents);
+                })
+                .sorted(Comparator.comparingInt(plan -> plan.template().order()))
                 .toList();
     }
 
-    private WorkflowDefinition documentRequestWorkflow(WorkflowCatalog catalog) {
-        return catalog.findByIntent("DOCUMENT_REQUEST").stream()
-                .filter(workflow -> workflow.supportedTaskTypes().contains(TaskType.DOCUMENT_REQUEST))
-                .findFirst()
-                .orElseThrow(() -> new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH));
+    private boolean active(TaskTemplate template, WorkerIdentityDocumentStatuses statuses) {
+        if (template.activation().mode() == ActivationMode.ALWAYS) {
+            return true;
+        }
+        if (template.activation().mode() != ActivationMode.MISSING_ANY) {
+            throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
+        }
+        return template.activation().fieldKeys().stream().anyMatch(field -> switch (field) {
+            case "passport_status" -> statuses.passportStatus() == SubmissionStatus.MISSING;
+            case "arc_status" -> statuses.arcStatus() == SubmissionStatus.MISSING;
+            default -> throw new ApiException(TaskErrorCode.WORKFLOW_TASK_TYPE_MISMATCH);
+        });
+    }
+
+    private WorkflowDefinition effectiveWorkflow(
+            WorkflowDefinition workflow,
+            TaskTemplate template
+    ) {
+        return new WorkflowDefinition(
+                workflow.workflowId(),
+                workflow.name(),
+                workflow.intent(),
+                workflow.sensitivity(),
+                workflow.supportedTaskTypes(),
+                workflow.requiredSlots(),
+                workflow.allowedSlotKeys(),
+                workflow.resolvableSlotKeys(),
+                template.checklistItems(),
+                template.completionEvidence(),
+                workflow.sourceIds()
+        );
     }
 
     private List<DocumentType> missingIdentityDocuments(WorkerIdentityDocumentStatuses statuses) {
@@ -237,14 +287,15 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
             CreationCommand command,
             ActorContext actor,
             String catalogVersion,
+            WorkflowCaseTemplate caseTemplate,
             UUID caseId,
-            Map<TaskType, UUID> taskIds,
+            Map<String, UUID> taskIds,
             WorkerTaskContext worker,
             LocalDate dueDate,
             Instant now
     ) {
         TaskType taskType = plan.taskType();
-        Map<String, Object> businessData = businessData(command, plan, taskIds);
+        Map<String, Object> businessData = businessData(command, caseTemplate, plan, taskIds);
         List<String> missingSlots = missingRequiredSlots(
                 plan.workflow(),
                 worker,
@@ -254,8 +305,8 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         if (!missingSlots.isEmpty()) {
             throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
         }
-        String title = title(plan);
-        String description = description(plan);
+        String title = plan.template().title();
+        String description = plan.template().description();
         EncodedTaskContent content = contentCodec.encode(
                 command.workerId(),
                 plan.workflow().workflowId(),
@@ -288,20 +339,35 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
 
     private Map<String, Object> businessData(
             CreationCommand command,
+            WorkflowCaseTemplate caseTemplate,
             TaskPlan plan,
-            Map<TaskType, UUID> taskIds
+            Map<String, UUID> taskIds
     ) {
         TaskType taskType = plan.taskType();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("ai_run_id", command.aiRunId().toString());
         data.put("ai_candidate_id", command.candidateId().toString());
         data.put("source_intent", command.detectedIntent());
-        data.put("candidate_order", order(plan));
+        data.put("case_template_id", caseTemplate.caseTemplateId());
+        data.put("case_title", caseTemplate.name());
+        data.put("task_template_key", plan.template().key());
+        data.put("candidate_order", plan.template().order());
+        List<String> dependencyTaskIds = java.util.stream.Stream.concat(
+                        plan.template().dependsOn().stream(),
+                        plan.template().dependsOnIfPresent().stream()
+                )
+                .map(taskIds::get)
+                .filter(java.util.Objects::nonNull)
+                .map(UUID::toString)
+                .toList();
+        if (!dependencyTaskIds.isEmpty()) {
+            data.put("depends_on_task_ids", dependencyTaskIds);
+            data.put("depends_on_task_id", dependencyTaskIds.get(0));
+        }
         switch (taskType) {
             case RECONTRACT -> data.put("approval_required", true);
             case STAY_PERIOD_EXTENSION -> data.put("submission_due_offset_days", 7);
             case EMPLOYMENT_PERIOD_EXTENSION -> {
-                data.put("depends_on_task_id", taskIds.get(TaskType.RECONTRACT).toString());
                 data.put("dependency_reason", "SIGNED_CONTRACT_REQUIRED");
             }
             case DOCUMENT_REQUEST -> {
@@ -366,53 +432,12 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
         try {
             return LocalDate.parse(value);
         } catch (DateTimeParseException dateOnlyFailure) {
-            return OffsetDateTime.parse(value).toLocalDate();
+            try {
+                return LocalDateTime.parse(value).toLocalDate();
+            } catch (DateTimeParseException localDateTimeFailure) {
+                return OffsetDateTime.parse(value).toLocalDate();
+            }
         }
-    }
-
-    private int order(TaskPlan plan) {
-        return switch (plan.taskType()) {
-            case RECONTRACT -> 1;
-            case STAY_PERIOD_EXTENSION -> 2;
-            case EMPLOYMENT_PERIOD_EXTENSION -> 3;
-            case DOCUMENT_REQUEST -> 4;
-            default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
-        };
-    }
-
-    private String title(TaskPlan plan) {
-        return switch (plan.taskType()) {
-            case RECONTRACT -> "재계약 조건 확인";
-            case STAY_PERIOD_EXTENSION -> "체류기간 연장 준비";
-            case EMPLOYMENT_PERIOD_EXTENSION -> "취업활동기간 연장 준비";
-            case DOCUMENT_REQUEST -> identityDocumentLabel(plan.requestedDocumentTypes()) + " 사본 요청";
-            default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
-        };
-    }
-
-    private String description(TaskPlan plan) {
-        return switch (plan.taskType()) {
-            case RECONTRACT -> "재계약 조건과 계속 고용 의사를 검토합니다.";
-            case STAY_PERIOD_EXTENSION -> "체류기간 연장에 필요한 정보와 서류를 확인합니다.";
-            case EMPLOYMENT_PERIOD_EXTENSION -> "재계약 결과를 바탕으로 취업활동기간 연장을 준비합니다.";
-            case DOCUMENT_REQUEST -> "근로자에게 " + identityDocumentLabel(plan.requestedDocumentTypes())
-                    + " 사본 제출을 요청합니다.";
-            default -> throw new ApiException(TaskErrorCode.INVALID_AI_CANDIDATE_TASK_DATA);
-        };
-    }
-
-    private String identityDocumentLabel(List<DocumentType> documentTypes) {
-        return documentTypes.stream()
-                .map(documentType -> switch (documentType) {
-                    case PASSPORT_COPY -> "여권";
-                    case ARC -> "외국인등록증";
-                    case CONTRACT -> "근로계약서";
-                    case PERMIT -> "고용허가서";
-                    case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
-                    case INTEGRATED_APPLICATION -> "통합신청서";
-                    case RESIDENCE_PROOF -> "체류지 입증자료";
-                })
-                .collect(java.util.stream.Collectors.joining("·"));
     }
 
     private void appendAudit(
@@ -449,12 +474,16 @@ public class AiCandidateTaskCreationService implements AiCandidateTaskCreator {
     }
 
     private record TaskPlan(
-            TaskType taskType,
+            TaskTemplate template,
             WorkflowDefinition workflow,
             List<DocumentType> requestedDocumentTypes
     ) {
         private TaskPlan {
             requestedDocumentTypes = List.copyOf(requestedDocumentTypes);
+        }
+
+        private TaskType taskType() {
+            return template.taskType();
         }
     }
 

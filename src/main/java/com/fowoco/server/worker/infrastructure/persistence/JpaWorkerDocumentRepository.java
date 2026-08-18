@@ -45,6 +45,7 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository, Wo
                         where document.workerDocumentId = :workerDocumentId
                           and document.workerId = :workerId
                           and document.companyId = :companyId
+                          and document.archivedAt is null
                         """,
                         WorkerDocumentJpaEntity.class
                 )
@@ -58,6 +59,30 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository, Wo
 
     @Override
     public Optional<WorkerDocument> findByIdAndCompanyId(UUID workerDocumentId, UUID companyId) {
+        Objects.requireNonNull(workerDocumentId, "workerDocumentId must not be null");
+        Objects.requireNonNull(companyId, "companyId must not be null");
+        return entityManager.createQuery(
+                        """
+                        select document
+                        from WorkerDocumentJpaEntity document
+                        where document.workerDocumentId = :workerDocumentId
+                          and document.companyId = :companyId
+                          and document.archivedAt is null
+                        """,
+                        WorkerDocumentJpaEntity.class
+                )
+                .setParameter("workerDocumentId", workerDocumentId)
+                .setParameter("companyId", companyId)
+                .getResultStream()
+                .findFirst()
+                .map(WorkerDocumentJpaEntity::toDomain);
+    }
+
+    @Override
+    public Optional<WorkerDocument> findByIdAndCompanyIdIncludingArchived(
+            UUID workerDocumentId,
+            UUID companyId
+    ) {
         Objects.requireNonNull(workerDocumentId, "workerDocumentId must not be null");
         Objects.requireNonNull(companyId, "companyId must not be null");
         return entityManager.createQuery(
@@ -86,6 +111,7 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository, Wo
                         from WorkerDocumentJpaEntity document
                         where document.fileId = :fileId
                           and document.companyId = :companyId
+                          and document.archivedAt is null
                         """,
                         WorkerDocumentJpaEntity.class
                 )
@@ -140,7 +166,9 @@ public class JpaWorkerDocumentRepository implements WorkerDocumentRepository, Wo
     }
 
     private String buildWhereClause(WorkerDocumentSearchQuery query) {
-        StringBuilder where = new StringBuilder(" where document.companyId = :companyId");
+        StringBuilder where = new StringBuilder(
+                " where document.companyId = :companyId and document.archivedAt is null"
+        );
         if (query.workerId() != null) {
             where.append(" and document.workerId = :workerId");
         }

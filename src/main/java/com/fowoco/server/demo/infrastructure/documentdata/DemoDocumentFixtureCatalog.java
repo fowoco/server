@@ -323,7 +323,8 @@ final class DemoDocumentFixtureCatalog {
 
     private static String destination(DocumentType type) {
         return switch (type) {
-            case PASSPORT_COPY, ARC, INTEGRATED_APPLICATION, RESIDENCE_PROOF -> "체류기간 연장";
+            case PASSPORT_COPY, ARC, INTEGRATED_APPLICATION, IDENTITY_GUARANTY,
+                    RESIDENCE_PROOF -> "체류기간 연장";
             case CONTRACT -> "근로계약 갱신";
             case PERMIT, EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장";
         };

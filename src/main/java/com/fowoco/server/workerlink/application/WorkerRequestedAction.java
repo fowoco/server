@@ -45,6 +45,7 @@ public record WorkerRequestedAction(
             case PERMIT -> "고용허가 관련 서류";
             case EMPLOYMENT_EXTENSION_APPLICATION -> "취업활동기간 연장신청서";
             case INTEGRATED_APPLICATION -> "통합신청서";
+            case IDENTITY_GUARANTY -> "신원보증서";
             case RESIDENCE_PROOF -> "체류지 입증자료";
         };
     }

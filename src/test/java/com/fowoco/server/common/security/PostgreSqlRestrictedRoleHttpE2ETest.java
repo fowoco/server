@@ -142,7 +142,7 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
         )).isFalse();
 
         assertTablePrivileges("company", true, false, false, false);
-        assertTablePrivileges("user_account", true, false, false, false);
+        assertTablePrivileges("user_account", true, false, true, false);
         assertTablePrivileges("refresh_token", true, true, true, false);
         assertTablePrivileges("worker", true, true, true, false);
         assertTablePrivileges("task", true, false, false, false);
@@ -309,6 +309,41 @@ class PostgreSqlRestrictedRoleHttpE2ETest {
         ).statusCode()).isEqualTo(410);
         assertThat(get("/api/v1/public/worker-links/unregistered-rls-http-token", null).statusCode())
                 .isEqualTo(410);
+    }
+
+    @Test
+    void profileReadAndUpdateBindTheAuthenticatedTenantWithRlsEnabled() throws Exception {
+        String accessToken = accessToken(login(
+                PostgreSqlRestrictedRoleHttpDataFixture.USER_A_EMAIL,
+                PostgreSqlRestrictedRoleHttpDataFixture.PASSWORD
+        ));
+
+        HttpResponse<String> currentProfile = get(
+                "/api/v1/auth/me/profile",
+                accessToken
+        );
+
+        assertThat(currentProfile.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(currentProfile.body(), "$.role")).isEqualTo("HR");
+        assertThat(JsonPath.<String>read(currentProfile.body(), "$.account_status"))
+                .isEqualTo("ACTIVE");
+
+        HttpResponse<String> updatedProfile = patch(
+                "/api/v1/auth/me/profile",
+                """
+                {
+                  "display_name":"Restricted Profile A",
+                  "phone":"010-1234-5678"
+                }
+                """,
+                accessToken
+        );
+
+        assertThat(updatedProfile.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(updatedProfile.body(), "$.display_name"))
+                .isEqualTo("Restricted Profile A");
+        assertThat(JsonPath.<String>read(updatedProfile.body(), "$.phone"))
+                .isEqualTo("010-1234-5678");
     }
 
     @Test

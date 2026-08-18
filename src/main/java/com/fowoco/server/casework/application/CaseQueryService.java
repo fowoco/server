@@ -169,10 +169,11 @@ public class CaseQueryService {
             Map<UUID, TaskStatus> statusesByTaskId
     ) {
         SnapshotStep step = snapshotSteps.get(task.taskId());
-        if (step == null || step.dependsOnTaskId() == null) {
+        if (step == null || step.dependsOnTaskIds().isEmpty()) {
             return true;
         }
-        return statusesByTaskId.get(step.dependsOnTaskId()) == TaskStatus.COMPLETED;
+        return step.dependsOnTaskIds().stream()
+                .allMatch(taskId -> statusesByTaskId.get(taskId) == TaskStatus.COMPLETED);
     }
 
     private Map<UUID, SnapshotStep> snapshotSteps(Map<String, Object> snapshot) {
@@ -192,11 +193,17 @@ public class CaseQueryService {
             int order = step.get("order") instanceof Number number
                     ? number.intValue()
                     : Integer.MAX_VALUE;
-            UUID dependsOnTaskId = null;
+            List<UUID> dependsOnTaskIds = List.of();
             if (step.get("required_conditions") instanceof Map<?, ?> conditions) {
-                dependsOnTaskId = uuidValue(conditions.get("depends_on_task_id"));
+                dependsOnTaskIds = uuidValues(conditions.get("depends_on_task_ids"));
+                if (dependsOnTaskIds.isEmpty()) {
+                    UUID legacyDependency = uuidValue(conditions.get("depends_on_task_id"));
+                    dependsOnTaskIds = legacyDependency == null
+                            ? List.of()
+                            : List.of(legacyDependency);
+                }
             }
-            result.put(taskId, new SnapshotStep(order, dependsOnTaskId));
+            result.put(taskId, new SnapshotStep(order, dependsOnTaskIds));
         }
         return Map.copyOf(result);
     }
@@ -210,6 +217,16 @@ public class CaseQueryService {
         } catch (IllegalArgumentException exception) {
             return null;
         }
+    }
+
+    private List<UUID> uuidValues(Object value) {
+        if (!(value instanceof List<?> values)) {
+            return List.of();
+        }
+        return values.stream()
+                .map(this::uuidValue)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     private static CaseTaskProjection toTaskProjection(CaseTaskRecord task) {
@@ -232,10 +249,14 @@ public class CaseQueryService {
         }
     }
 
-    private record SnapshotStep(int order, UUID dependsOnTaskId) {
+    private record SnapshotStep(int order, List<UUID> dependsOnTaskIds) {
+
+        private SnapshotStep {
+            dependsOnTaskIds = List.copyOf(dependsOnTaskIds);
+        }
 
         private static SnapshotStep fallback() {
-            return new SnapshotStep(Integer.MAX_VALUE, null);
+            return new SnapshotStep(Integer.MAX_VALUE, List.of());
         }
     }
 }
