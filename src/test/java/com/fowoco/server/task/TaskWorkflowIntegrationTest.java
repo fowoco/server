@@ -340,6 +340,106 @@ class TaskWorkflowIntegrationTest {
     }
 
     @Test
+    void cancellingTheOnlyTaskCancelsItsCaseProjection() throws Exception {
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> created = post("/api/v1/tasks", validCreateBody(), token);
+        UUID taskId = UUID.fromString(JsonPath.read(created.body(), "$.task_id"));
+        UUID caseId = UUID.fromString(JsonPath.read(created.body(), "$.case_id"));
+
+        assertThat(post(
+                "/api/v1/tasks/" + taskId + "/cancel",
+                "{\"expected_version\":0,\"reason\":\"업무 계획 취소\"}",
+                token
+        ).statusCode()).isEqualTo(200);
+
+        HttpResponse<String> projection = get(
+                "/api/v1/cases/" + caseId + "/projection",
+                token
+        );
+        assertThat(projection.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(projection.body(), "$.lifecycle_status"))
+                .isEqualTo("CANCELLED");
+        assertThat(JsonPath.<String>read(projection.body(), "$.display_status"))
+                .isEqualTo("CANCELLED");
+        assertThat(JsonPath.<Object>read(projection.body(), "$.current_task")).isNull();
+
+        HttpResponse<String> page = get("/api/v1/cases?page=0&size=20", token);
+        assertThat(page.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(page.body(), "$.items[0].display_status"))
+                .isEqualTo("CANCELLED");
+        assertThat(JsonPath.<Object>read(page.body(), "$.items[0].current_task")).isNull();
+    }
+
+    @Test
+    void cancellingOneTaskKeepsCaseActiveWhileAnotherTaskIsNonTerminal() throws Exception {
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> firstCreated = post("/api/v1/tasks", validCreateBody(), token);
+        UUID firstTaskId = UUID.fromString(JsonPath.read(firstCreated.body(), "$.task_id"));
+        UUID caseId = UUID.fromString(JsonPath.read(firstCreated.body(), "$.case_id"));
+        HttpResponse<String> secondCreated = post(
+                "/api/v1/tasks",
+                createBody(caseId, "후속 재계약 확인"),
+                token
+        );
+        UUID secondTaskId = UUID.fromString(JsonPath.read(secondCreated.body(), "$.task_id"));
+
+        assertThat(post(
+                "/api/v1/tasks/" + firstTaskId + "/cancel",
+                "{\"expected_version\":0,\"reason\":\"첫 업무만 취소\"}",
+                token
+        ).statusCode()).isEqualTo(200);
+
+        HttpResponse<String> projection = get(
+                "/api/v1/cases/" + caseId + "/projection",
+                token
+        );
+        assertThat(JsonPath.<String>read(projection.body(), "$.lifecycle_status"))
+                .isEqualTo("ACTIVE");
+        assertThat(JsonPath.<String>read(projection.body(), "$.current_task.task_id"))
+                .isEqualTo(secondTaskId.toString());
+    }
+
+    @Test
+    void cancellingLastNonTerminalTaskCompletesCaseWhenAnotherTaskIsCompleted() throws Exception {
+        String token = login(HR_A_EMAIL);
+        HttpResponse<String> completedTaskCreated = post("/api/v1/tasks", validCreateBody(), token);
+        UUID completedTaskId = UUID.fromString(JsonPath.read(
+                completedTaskCreated.body(),
+                "$.task_id"
+        ));
+        UUID caseId = UUID.fromString(JsonPath.read(completedTaskCreated.body(), "$.case_id"));
+        HttpResponse<String> cancelledTaskCreated = post(
+                "/api/v1/tasks",
+                createBody(caseId, "취소할 후속 업무"),
+                token
+        );
+        UUID cancelledTaskId = UUID.fromString(JsonPath.read(
+                cancelledTaskCreated.body(),
+                "$.task_id"
+        ));
+        jdbcTemplate.update(
+                "UPDATE task SET status = 'COMPLETED' WHERE task_id = ?",
+                completedTaskId
+        );
+
+        assertThat(post(
+                "/api/v1/tasks/" + cancelledTaskId + "/cancel",
+                "{\"expected_version\":0,\"reason\":\"불필요한 후속 업무\"}",
+                token
+        ).statusCode()).isEqualTo(200);
+
+        HttpResponse<String> projection = get(
+                "/api/v1/cases/" + caseId + "/projection",
+                token
+        );
+        assertThat(JsonPath.<String>read(projection.body(), "$.lifecycle_status"))
+                .isEqualTo("COMPLETED");
+        assertThat(JsonPath.<String>read(projection.body(), "$.display_status"))
+                .isEqualTo("COMPLETED");
+        assertThat(JsonPath.<Object>read(projection.body(), "$.current_task")).isNull();
+    }
+
+    @Test
     void createsACompanyOnboardingTaskWithoutWorkerOrCase() throws Exception {
         String token = login(HR_A_EMAIL);
 

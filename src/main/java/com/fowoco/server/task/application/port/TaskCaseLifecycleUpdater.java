@@ -6,4 +6,6 @@ import java.util.UUID;
 public interface TaskCaseLifecycleUpdater {
 
     boolean completeIfAllTasksFinished(UUID caseId, UUID companyId, Instant completedAt);
+
+    boolean cancelIfAllTasksCancelled(UUID caseId, UUID companyId, Instant cancelledAt);
 }
