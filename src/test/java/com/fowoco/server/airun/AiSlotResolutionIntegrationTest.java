@@ -149,6 +149,55 @@ class AiSlotResolutionIntegrationTest {
     }
 
     @Test
+    void resolvesUniqueNormalizedPrefixInsideTheCurrentCompany() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반A", "2026-09-30");
+
+        AiSlotResolution result = resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응웬반")
+        );
+
+        assertThat(result.worker().workerRef()).isEqualTo(WORKER_A);
+    }
+
+    @Test
+    void multipleNormalizedPrefixCandidatesAreReportedAsAmbiguous() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반A", "2026-09-30");
+        insertWorker(WORKER_A_DUPLICATE, COMPANY_A, "응웬반B", "2027-09-30");
+
+        assertThatThrownBy(() -> resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응웬반")
+        ))
+                .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
+                        assertThat(exception.failureCode()).isEqualTo(
+                                AiContextResolutionFailureCode.TARGET_AMBIGUOUS
+                        )
+                );
+    }
+
+    @Test
+    void shortPrefixIsNotUsedForWorkerResolution() {
+        insertCompany(COMPANY_A, "사업장 A");
+        insertWorker(WORKER_A, COMPANY_A, "응웬반A", "2026-09-30");
+
+        assertThatThrownBy(() -> resolutionTransaction.resolve(
+                COMPANY_A,
+                "0.3.1",
+                requirement("응")
+        ))
+                .isInstanceOfSatisfying(AiContextResolutionException.class, exception ->
+                        assertThat(exception.failureCode()).isEqualTo(
+                                AiContextResolutionFailureCode.TARGET_NOT_FOUND
+                        )
+                );
+    }
+
+    @Test
     void separatorOnlyTargetIsReportedAsNotFound() {
         insertCompany(COMPANY_A, "사업장 A");
         insertWorker(WORKER_A, COMPANY_A, "응우옌 반 안", "2026-09-30");
