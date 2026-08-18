@@ -17,6 +17,7 @@ public final class DemoGoldenUploadFixtureExporter {
 
     private static final Path DEFAULT_OUTPUT = Path.of("build", "demo-upload-fixtures");
     private static final List<String> GOLDEN_FILENAMES = List.of(
+            "여권_인적사항면_응웬반A.png",
             "외국인등록증_앞면_응웬반A.png",
             "외국인등록증_뒷면_응웬반A.jpg"
     );
@@ -45,7 +46,7 @@ public final class DemoGoldenUploadFixtureExporter {
                 .filter(fixture -> GOLDEN_FILENAMES.contains(fixture.originalFilename()))
                 .toList();
         if (fixtures.size() != GOLDEN_FILENAMES.size()) {
-            throw new IllegalStateException("Golden Renewal 합성 ARC fixture 구성이 올바르지 않습니다.");
+            throw new IllegalStateException("Golden Renewal 합성 신분서류 fixture 구성이 올바르지 않습니다.");
         }
 
         return fixtures.stream().map(fixture -> {

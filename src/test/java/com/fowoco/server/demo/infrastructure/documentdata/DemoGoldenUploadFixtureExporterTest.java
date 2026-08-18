@@ -17,7 +17,7 @@ class DemoGoldenUploadFixtureExporterTest {
     Path output;
 
     @Test
-    void exportsDeterministicSyntheticArcFilesWithoutDatabaseAccess() throws Exception {
+    void exportsDeterministicSyntheticIdentityFilesWithoutDatabaseAccess() throws Exception {
         Clock clock = Clock.fixed(Instant.parse("2026-08-18T00:00:00Z"), ZoneOffset.UTC);
 
         List<Path> first = DemoGoldenUploadFixtureExporter.export(output, clock);
@@ -26,6 +26,7 @@ class DemoGoldenUploadFixtureExporterTest {
 
         assertThat(first).extracting(path -> path.getFileName().toString())
                 .containsExactly(
+                        "여권_인적사항면_응웬반A.png",
                         "외국인등록증_앞면_응웬반A.png",
                         "외국인등록증_뒷면_응웬반A.jpg"
                 );
@@ -33,7 +34,8 @@ class DemoGoldenUploadFixtureExporterTest {
                 .usingElementComparator((left, right) -> java.util.Arrays.compare(left, right))
                 .containsExactlyElementsOf(originalContents);
         assertThat(originalContents.get(0)).startsWith((byte) 0x89, (byte) 'P', (byte) 'N', (byte) 'G');
-        assertThat(originalContents.get(1)).startsWith((byte) 0xFF, (byte) 0xD8, (byte) 0xFF);
+        assertThat(originalContents.get(1)).startsWith((byte) 0x89, (byte) 'P', (byte) 'N', (byte) 'G');
+        assertThat(originalContents.get(2)).startsWith((byte) 0xFF, (byte) 0xD8, (byte) 0xFF);
     }
 
     private byte[] read(Path path) {
