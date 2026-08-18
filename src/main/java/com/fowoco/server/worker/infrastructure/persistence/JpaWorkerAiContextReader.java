@@ -70,7 +70,7 @@ public class JpaWorkerAiContextReader implements
         } catch (IllegalArgumentException ignored) {
             return List.of();
         }
-        List<UUID> workerIds = entityManager.createQuery(
+        List<Object[]> candidateRows = entityManager.createQuery(
                         """
                         select worker.workerId, worker.displayName
                         from WorkerJpaEntity worker
@@ -86,12 +86,45 @@ public class JpaWorkerAiContextReader implements
                         Object[].class
                 )
                 .setParameter("companyId", companyId)
-                .getResultList()
+                .getResultList();
+        List<UUID> workerIds = candidateRows
                 .stream()
                 .filter(row -> lookupKey.equals(displayNameNormalizer.normalize((String) row[1])))
                 .limit(2)
                 .map(row -> (UUID) row[0])
                 .toList();
+        if (workerIds.isEmpty() && lookupKey.codePointCount(0, lookupKey.length()) >= 3) {
+            workerIds = candidateRows
+                    .stream()
+                    .filter(row -> displayNameNormalizer.normalize((String) row[1])
+                            .startsWith(lookupKey))
+                    .limit(2)
+                    .map(row -> (UUID) row[0])
+                    .toList();
+        }
+        if (workerIds.isEmpty()) {
+            List<Object[]> sentencePrefixCandidates = candidateRows.stream()
+                    .filter(row -> {
+                        String candidateKey = displayNameNormalizer.normalize((String) row[1]);
+                        return candidateKey.codePointCount(0, candidateKey.length()) >= 3
+                                && lookupKey.startsWith(candidateKey);
+                    })
+                    .toList();
+            int longestCandidateLength = sentencePrefixCandidates.stream()
+                    .map(row -> displayNameNormalizer.normalize((String) row[1]))
+                    .mapToInt(value -> value.codePointCount(0, value.length()))
+                    .max()
+                    .orElse(0);
+            workerIds = sentencePrefixCandidates.stream()
+                    .filter(row -> {
+                        String candidateKey = displayNameNormalizer.normalize((String) row[1]);
+                        return candidateKey.codePointCount(0, candidateKey.length())
+                                == longestCandidateLength;
+                    })
+                    .limit(2)
+                    .map(row -> (UUID) row[0])
+                    .toList();
+        }
         if (workerIds.isEmpty()) {
             return List.of();
         }
