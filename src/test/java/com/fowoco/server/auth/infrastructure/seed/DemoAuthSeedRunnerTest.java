@@ -2,6 +2,10 @@ package com.fowoco.server.auth.infrastructure.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.fowoco.server.auth.application.port.UserAccountRepository;
 import com.fowoco.server.auth.domain.UserAccount;
@@ -10,6 +14,7 @@ import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.application.port.CompanySettingsProvisioner;
 import com.fowoco.server.company.domain.Company;
 import com.fowoco.server.company.domain.CompanyStatus;
+import com.fowoco.server.common.security.TenantTransactionExecutor;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -41,12 +46,14 @@ class DemoAuthSeedRunnerTest {
         RecordingCompanySettingsProvisioner settingsProvisioner =
                 new RecordingCompanySettingsProvisioner();
         PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
+        TenantTransactionExecutor transactionExecutor = immediateTenantTransactionExecutor();
         DemoAuthSeedRunner runner = runner(
                 properties(ADMIN_PASSWORD),
                 companyRepository,
                 settingsProvisioner,
                 userAccountRepository,
-                passwordEncoder
+                passwordEncoder,
+                transactionExecutor
         );
 
         runner.run(new DefaultApplicationArguments(new String[0]));
@@ -81,6 +88,10 @@ class DemoAuthSeedRunnerTest {
                 .containsExactlyInAnyOrder(UserRole.ADMIN, UserRole.HR, UserRole.VIEWER);
         assertThat(userAccountRepository.users.values())
                 .allMatch(user -> passwordEncoder.matches(ADMIN_PASSWORD, user.passwordHash()));
+        verify(transactionExecutor, org.mockito.Mockito.times(2))
+                .execute(org.mockito.ArgumentMatchers.eq(COMPANY_ID), any(Runnable.class));
+        verify(transactionExecutor, org.mockito.Mockito.times(2))
+                .execute(org.mockito.ArgumentMatchers.eq(TEST_COMPANY_ID), any(Runnable.class));
     }
 
     @Test
@@ -239,8 +250,37 @@ class DemoAuthSeedRunnerTest {
                 companySettingsProvisioner,
                 userAccountRepository,
                 passwordEncoder,
-                Clock.fixed(NOW, ZoneOffset.UTC)
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                immediateTenantTransactionExecutor()
         );
+    }
+
+    private DemoAuthSeedRunner runner(
+            DemoAuthSeedProperties properties,
+            CompanyRepository companyRepository,
+            CompanySettingsProvisioner companySettingsProvisioner,
+            UserAccountRepository userAccountRepository,
+            PasswordEncoder passwordEncoder,
+            TenantTransactionExecutor tenantTransactionExecutor
+    ) {
+        return new DemoAuthSeedRunner(
+                properties,
+                companyRepository,
+                companySettingsProvisioner,
+                userAccountRepository,
+                passwordEncoder,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                tenantTransactionExecutor
+        );
+    }
+
+    private TenantTransactionExecutor immediateTenantTransactionExecutor() {
+        TenantTransactionExecutor executor = mock(TenantTransactionExecutor.class);
+        doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(1).run();
+            return null;
+        }).when(executor).execute(any(UUID.class), any(Runnable.class));
+        return executor;
     }
 
     private static final class RecordingCompanySettingsProvisioner

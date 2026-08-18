@@ -6,6 +6,7 @@ import com.fowoco.server.approval.application.port.EvidenceRepository;
 import com.fowoco.server.approval.application.port.ExternalSubmissionRepository;
 import com.fowoco.server.approval.application.SafeJsonService;
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
+import com.fowoco.server.common.security.TenantTransactionExecutor;
 import com.fowoco.server.document.application.port.DocumentRequestDraftRepository;
 import com.fowoco.server.file.application.port.FileStorage;
 import com.fowoco.server.file.application.port.StoredFileRepository;
@@ -48,6 +49,7 @@ public class DemoOperationalSeedConfiguration {
             JdbcTemplate jdbcTemplate,
             ObjectMapper objectMapper,
             Clock clock,
+            TenantTransactionExecutor tenantTransactionExecutor,
             @Value("${app.file-storage.local-path}") String localFileStoragePath
     ) {
         if (!(fileStorage instanceof LocalFileStorage)) {
@@ -121,7 +123,8 @@ public class DemoOperationalSeedConfiguration {
                 evidenceSeeder,
                 requestDraftSeeder,
                 auditSeeder,
-                verifier
+                verifier,
+                tenantTransactionExecutor
         );
     }
 }

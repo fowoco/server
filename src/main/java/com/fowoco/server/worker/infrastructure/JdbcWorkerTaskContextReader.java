@@ -36,6 +36,18 @@ public class JdbcWorkerTaskContextReader implements WorkerTaskContextReader {
             return Optional.empty();
         }
 
+        return findContext(workerId, companyId);
+    }
+
+    @Override
+    public Optional<WorkerTaskContext> findByIdAndCompanyIdReadOnly(
+            UUID workerId,
+            UUID companyId
+    ) {
+        return findContext(workerId, companyId);
+    }
+
+    private Optional<WorkerTaskContext> findContext(UUID workerId, UUID companyId) {
         List<WorkerTaskContext> rows = jdbcTemplate.query(
                 """
                 SELECT worker_id, work_status, stay_expiry_date,

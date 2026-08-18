@@ -3,6 +3,7 @@ package com.fowoco.server.worker.infrastructure.seed;
 import com.fowoco.server.auth.infrastructure.seed.DemoAuthSeedProperties;
 import com.fowoco.server.company.application.port.CompanyRepository;
 import com.fowoco.server.company.domain.Company;
+import com.fowoco.server.common.security.TenantTransactionExecutor;
 import com.fowoco.server.worker.application.port.WorkerRepository;
 import com.fowoco.server.worker.domain.Worker;
 import com.fowoco.server.worker.infrastructure.seed.DemoWorkerSeedCatalog.WorkerSeed;
@@ -18,7 +19,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.transaction.annotation.Transactional;
 
 @Order(1)
 class DemoWorkerSeedRunner implements ApplicationRunner {
@@ -29,12 +29,14 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
     private final WorkerRepository workerRepository;
     private final Clock clock;
     private final DemoWorkerSeedCatalog catalog;
+    private final TenantTransactionExecutor tenantTransactionExecutor;
 
     DemoWorkerSeedRunner(
             DemoAuthSeedProperties properties,
             CompanyRepository companyRepository,
             WorkerRepository workerRepository,
-            Clock clock
+            Clock clock,
+            TenantTransactionExecutor tenantTransactionExecutor
     ) {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.companyRepository = Objects.requireNonNull(
@@ -44,15 +46,24 @@ class DemoWorkerSeedRunner implements ApplicationRunner {
         this.workerRepository = Objects.requireNonNull(workerRepository, "workerRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.catalog = new DemoWorkerSeedCatalog();
+        this.tenantTransactionExecutor = Objects.requireNonNull(
+                tenantTransactionExecutor,
+                "tenantTransactionExecutor must not be null"
+        );
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments arguments) {
         Instant now = clock.instant();
         LocalDate today = LocalDate.now(clock);
-        seedCompanyWorkers(properties.companyId(), catalog.demoWorkers(), today, now);
-        seedCompanyWorkers(properties.testCompanyId(), catalog.testWorkers(), today, now);
+        tenantTransactionExecutor.execute(
+                properties.companyId(),
+                () -> seedCompanyWorkers(properties.companyId(), catalog.demoWorkers(), today, now)
+        );
+        tenantTransactionExecutor.execute(
+                properties.testCompanyId(),
+                () -> seedCompanyWorkers(properties.testCompanyId(), catalog.testWorkers(), today, now)
+        );
         LOGGER.info(
                 "demo_worker_seed ready company_count={} worker_count={}",
                 2,
