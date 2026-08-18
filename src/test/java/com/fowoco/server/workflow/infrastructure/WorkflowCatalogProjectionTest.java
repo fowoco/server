@@ -61,6 +61,18 @@ class WorkflowCatalogProjectionTest {
                         "STAY_PERIOD_EXTENSION"
                 );
         assertThat(renewalCase.tasks().get(0).checklistItems()).hasSize(6);
+        assertThat(renewalCase.tasks().get(1).checklistItems())
+                .filteredOn(item -> item.required())
+                .extracting(item -> item.itemCode())
+                .containsExactly("WORKER_DOCUMENT_REQUEST_APPROVED");
+        assertThat(renewalCase.tasks().get(1).checklistItems())
+                .filteredOn(item -> !item.required())
+                .extracting(item -> item.itemCode())
+                .containsExactly(
+                        "SECURE_LINK_DELIVERY_RECORDED",
+                        "IDENTITY_DOCUMENTS_SUBMITTED",
+                        "OCR_RESULT_HR_REVIEWED"
+                );
         assertThat(renewalCase.tasks().get(2).dependsOn()).containsExactly("recontract");
         assertThat(renewalCase.tasks().get(3).dependsOn())
                 .containsExactly("employment_period_extension");
