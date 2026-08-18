@@ -171,6 +171,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public ProfileSnapshot currentProfile(UUID userId, UUID companyId) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
         UserAccount account = userAccountRepository.findByUserIdAndCompanyId(userId, companyId)
                 .orElseThrow(() -> new IllegalStateException("authenticated user account was not found"));
         return withLoginHistory(account);
@@ -178,6 +179,7 @@ public class AuthService {
 
     @Transactional
     public ProfileSnapshot updateProfile(UUID userId, UUID companyId, String displayName, String phone) {
+        tenantDatabaseContext.setCompanyIdForCurrentTransaction(companyId);
         UserAccount current = userAccountRepository.findByUserIdAndCompanyIdWithLock(userId, companyId)
                 .orElseThrow(() -> new IllegalStateException("authenticated user account was not found"));
         UserAccount updated = current.updateProfile(displayName, phone, clock.instant());
