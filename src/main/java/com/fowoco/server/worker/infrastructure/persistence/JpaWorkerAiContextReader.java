@@ -103,6 +103,29 @@ public class JpaWorkerAiContextReader implements
                     .toList();
         }
         if (workerIds.isEmpty()) {
+            List<Object[]> sentencePrefixCandidates = candidateRows.stream()
+                    .filter(row -> {
+                        String candidateKey = displayNameNormalizer.normalize((String) row[1]);
+                        return candidateKey.codePointCount(0, candidateKey.length()) >= 3
+                                && lookupKey.startsWith(candidateKey);
+                    })
+                    .toList();
+            int longestCandidateLength = sentencePrefixCandidates.stream()
+                    .map(row -> displayNameNormalizer.normalize((String) row[1]))
+                    .mapToInt(value -> value.codePointCount(0, value.length()))
+                    .max()
+                    .orElse(0);
+            workerIds = sentencePrefixCandidates.stream()
+                    .filter(row -> {
+                        String candidateKey = displayNameNormalizer.normalize((String) row[1]);
+                        return candidateKey.codePointCount(0, candidateKey.length())
+                                == longestCandidateLength;
+                    })
+                    .limit(2)
+                    .map(row -> (UUID) row[0])
+                    .toList();
+        }
+        if (workerIds.isEmpty()) {
             return List.of();
         }
 
