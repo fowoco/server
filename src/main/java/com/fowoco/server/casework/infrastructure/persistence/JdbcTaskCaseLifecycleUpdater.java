@@ -48,4 +48,37 @@ public class JdbcTaskCaseLifecycleUpdater implements TaskCaseLifecycleUpdater {
         );
         return updated == 1;
     }
+
+    @Override
+    public boolean cancelIfAllTasksCancelled(UUID caseId, UUID companyId, Instant cancelledAt) {
+        int updated = jdbcTemplate.update(
+                """
+                UPDATE workflow_case workflow_case
+                   SET lifecycle_status = 'CANCELLED',
+                       updated_at = ?,
+                       version = version + 1
+                 WHERE workflow_case.case_id = ?
+                   AND workflow_case.company_id = ?
+                   AND workflow_case.lifecycle_status = 'ACTIVE'
+                   AND EXISTS (
+                       SELECT 1
+                         FROM task cancelled_task
+                        WHERE cancelled_task.case_id = workflow_case.case_id
+                          AND cancelled_task.company_id = workflow_case.company_id
+                          AND cancelled_task.status = 'CANCELLED'
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM task remaining_task
+                        WHERE remaining_task.case_id = workflow_case.case_id
+                          AND remaining_task.company_id = workflow_case.company_id
+                          AND remaining_task.status <> 'CANCELLED'
+                   )
+                """,
+                Timestamp.from(cancelledAt),
+                caseId,
+                companyId
+        );
+        return updated == 1;
+    }
 }

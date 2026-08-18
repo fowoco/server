@@ -18,8 +18,9 @@ import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.reliability.application.port.DomainEventPublisher;
 import com.fowoco.server.task.application.TaskContentCodec.EncodedTaskContent;
 import com.fowoco.server.task.application.error.TaskErrorCode;
-import com.fowoco.server.task.application.port.TaskChecklistRepository;
+import com.fowoco.server.task.application.port.TaskCaseLifecycleUpdater;
 import com.fowoco.server.task.application.port.TaskCaseRegistrar;
+import com.fowoco.server.task.application.port.TaskChecklistRepository;
 import com.fowoco.server.task.application.port.TaskRepository;
 import com.fowoco.server.task.application.port.TaskRepository.TaskPage;
 import com.fowoco.server.task.application.port.TaskRepository.TaskSearchCriteria;
@@ -54,6 +55,7 @@ public class TaskWorkflowService {
     private final TenantDatabaseContext tenantDatabaseContext;
     private final TaskRepository taskRepository;
     private final TaskChecklistRepository checklistRepository;
+    private final TaskCaseLifecycleUpdater taskCaseLifecycleUpdater;
     private final TaskCaseRegistrar taskCaseRegistrar;
     private final TaskTransitionRecorder transitionRecorder;
     private final WorkerTaskContextReader workerReader;
@@ -71,6 +73,7 @@ public class TaskWorkflowService {
             TenantDatabaseContext tenantDatabaseContext,
             TaskRepository taskRepository,
             TaskChecklistRepository checklistRepository,
+            TaskCaseLifecycleUpdater taskCaseLifecycleUpdater,
             TaskCaseRegistrar taskCaseRegistrar,
             TaskTransitionRecorder transitionRecorder,
             WorkerTaskContextReader workerReader,
@@ -87,6 +90,7 @@ public class TaskWorkflowService {
         this.tenantDatabaseContext = tenantDatabaseContext;
         this.taskRepository = taskRepository;
         this.checklistRepository = checklistRepository;
+        this.taskCaseLifecycleUpdater = taskCaseLifecycleUpdater;
         this.taskCaseRegistrar = taskCaseRegistrar;
         this.transitionRecorder = transitionRecorder;
         this.workerReader = workerReader;
@@ -506,6 +510,20 @@ public class TaskWorkflowService {
                 metadata,
                 now
         ));
+        if (savedTask.caseId() != null) {
+            boolean completed = taskCaseLifecycleUpdater.completeIfAllTasksFinished(
+                    savedTask.caseId(),
+                    savedTask.companyId(),
+                    now
+            );
+            if (!completed) {
+                taskCaseLifecycleUpdater.cancelIfAllTasksCancelled(
+                        savedTask.caseId(),
+                        savedTask.companyId(),
+                        now
+                );
+            }
+        }
         return toResult(
                 savedTask,
                 checklistRepository.findAllByTaskIdAndCompanyId(taskId, actor.companyId()),
