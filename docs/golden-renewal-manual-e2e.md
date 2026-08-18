@@ -153,6 +153,20 @@ POST /api/v1/worker-links/{workerLinkId}/sms-deliveries
 
 ## 5. 근로자 역할로 합성 서류를 제출한다
 
+먼저 Server 저장소에서 아래 명령을 한 번 실행한다. PostgreSQL이나 기존 Demo Seed를
+수정하지 않고 모바일 제출에 사용할 응웬반A의 합성 ARC 앞·뒷면만 생성한다.
+
+```bash
+./scripts/export-golden-demo-files
+```
+
+파일은 기본적으로 `build/demo-upload-fixtures/`에 생성된다. 원하는 폴더를 첫 번째 인자로
+지정할 수도 있다.
+
+```bash
+./scripts/export-golden-demo-files "$HOME/Desktop/fowoco-demo-files"
+```
+
 1. 공개 Worker Link를 시크릿 창 또는 다른 브라우저에서 연다.
 2. 안내 내용을 확인한다.
 3. 요청 서류에서 `외국인등록증 사본`을 선택한다.
