@@ -10,11 +10,32 @@ public record WorkflowCatalog(
         String bundleStatus,
         String sourceRepository,
         Instant generatedAt,
-        List<WorkflowDefinition> workflows
+        List<WorkflowDefinition> workflows,
+        List<WorkflowCaseTemplate> caseTemplates
 ) {
 
     public WorkflowCatalog {
         workflows = List.copyOf(workflows);
+        caseTemplates = List.copyOf(caseTemplates);
+    }
+
+    public WorkflowCatalog(
+            String bundleId,
+            String bundleVersion,
+            String bundleStatus,
+            String sourceRepository,
+            Instant generatedAt,
+            List<WorkflowDefinition> workflows
+    ) {
+        this(
+                bundleId,
+                bundleVersion,
+                bundleStatus,
+                sourceRepository,
+                generatedAt,
+                workflows,
+                List.of()
+        );
     }
 
     public Optional<WorkflowDefinition> findWorkflow(String workflowId) {
@@ -26,6 +47,12 @@ public record WorkflowCatalog(
     public List<WorkflowDefinition> findByIntent(String intent) {
         return workflows.stream()
                 .filter(workflow -> workflow.intent().equals(intent))
+                .toList();
+    }
+
+    public List<WorkflowCaseTemplate> findCaseTemplatesByIntent(String intent) {
+        return caseTemplates.stream()
+                .filter(template -> template.intent().equals(intent))
                 .toList();
     }
 }

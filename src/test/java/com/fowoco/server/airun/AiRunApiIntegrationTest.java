@@ -512,13 +512,32 @@ class AiRunApiIntegrationTest {
                 caseId
         );
         assertThat(JsonPath.<List<Integer>>read(snapshot, "$.steps[*].order"))
-                .containsExactly(1, 2, 3);
+                .containsExactly(1, 3, 4);
         assertThat(JsonPath.<List<String>>read(snapshot, "$.steps[*].task_type"))
                 .containsExactly(
                         "RECONTRACT",
-                        "STAY_PERIOD_EXTENSION",
-                        "EMPLOYMENT_PERIOD_EXTENSION"
+                        "EMPLOYMENT_PERIOD_EXTENSION",
+                        "STAY_PERIOD_EXTENSION"
                 );
+        assertThat(JsonPath.<String>read(snapshot, "$.case_template_id"))
+                .isEqualTo("CASE-EXPIRY-RENEWAL-001");
+        assertThat(jdbcTemplate.queryForList(
+                """
+                SELECT label
+                FROM task_checklist_item
+                WHERE task_id = (
+                    SELECT task_id FROM task
+                    WHERE case_id = ? AND task_type = 'RECONTRACT'
+                )
+                ORDER BY item_code
+                """,
+                String.class,
+                caseId
+        )).contains(
+                "회사의 재계약 의사 확인",
+                "근로자의 계속 근무 의사 확인",
+                "최신 표준근로계약서 초안 검토"
+        );
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM ai_candidate_decision_batch WHERE ai_run_id = ?",
                 Integer.class,
@@ -640,6 +659,17 @@ class AiRunApiIntegrationTest {
         assertThat((String) requestTask.get("business_data_json"))
                 .contains("ARC", "SECURE_LINK")
                 .doesNotContain("PASSPORT_COPY");
+        String snapshot = jdbcTemplate.queryForObject(
+                "SELECT workflow_snapshot_json FROM workflow_case WHERE case_id = ?",
+                String.class,
+                caseId
+        );
+        assertThat(JsonPath.<List<Integer>>read(snapshot, "$.steps[*].order"))
+                .containsExactly(1, 2, 3, 4);
+        assertThat(JsonPath.<List<String>>read(
+                snapshot,
+                "$.steps[2].required_conditions.depends_on_task_ids"
+        )).hasSize(2);
     }
 
     @Test
