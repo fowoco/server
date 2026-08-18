@@ -12,8 +12,8 @@ HR 자연어 요청
 → HR이 후보 채택
 → CASE-EXPIRY-RENEWAL-001 Case와 업무 4개 생성
 → HR이 재계약 조건과 계약서 초안 검토
-→ 근로자에게 ARC 보완 링크 전달
-→ 근로자가 합성 ARC 제출
+→ 근로자에게 여권·ARC 보완 링크 전달
+→ 근로자가 합성 여권·ARC 제출
 → HR이 제출 파일 채택·OCR 검토
 → 취업활동기간 연장과 체류기간 연장을 차례로 기록
 → 모든 업무와 Case 완료
@@ -21,6 +21,21 @@ HR 자연어 요청
 
 외부기관 로그인과 실제 제출은 자동화하지 않는다. HR이 실제 실행 결과를 기록하는
 지점까지만 FOWOCO가 관리한다.
+
+### 로컬 검증 기준선
+
+2026-08-18에 Server·AI Runtime을 로컬 HTTP로 연결해 아래 왕복을 직접 확인했다.
+
+- 발화문 분석 후 Golden Case와 Catalog 순서의 Task 4개 생성
+- 여권·ARC 요청, 공개 링크 조회, 합성 파일 제출과 HR 공식 문서 채택
+- OCR 검토값 승인 후 Outbox가 기존 Renewal을 재개하고 HWP 원본 생성
+- 재계약 승인·증빙 완료 후 취업활동기간 연장 업무가 현재 업무로 이동
+- 두 연장 업무의 HR 승인, 합성 외부 접수 기록, 증빙과 완료 처리
+- 최종 Case `COMPLETED`, `4/4`, 진행률 `100%`, `currentTask=null`
+
+실제 기관 제출과 실제 개인정보 저장은 이 검증에 포함하지 않았다. OCR Provider가 값을
+추출하지 못한 항목은 합성 원본을 보며 HR 수정값으로 검토 완료했으며, 이는 실패를 숨기는
+Fallback이 아니라 제품의 HITL 검토 경로다.
 
 ## 1. 시작 전 준비
 
@@ -34,6 +49,11 @@ export DEMO_SEED_ADMIN_PASSWORD='<12자 이상 로컬 합성 비밀번호>'
 
 기본 `local` profile은 H2 인메모리 DB를 사용한다. 서버를 종료하면 시연 중 만든
 Case와 Task도 초기화된다.
+
+H2 `2.4.240`에는 CHECK 제약을 만든 DB 연결이 닫힌 뒤 다른 연결에서 값을 갱신하면
+오류가 발생하는 알려진 문제가 있다. Server는 local profile에서 Hikari 연결 수명을
+JVM과 같게 유지해 30분 이후에도 시연이 중단되지 않게 한다. 운영·통합 환경의 기준
+DB는 계속 PostgreSQL 16이다.
 
 ### 제출 파일까지 준비하는 PostgreSQL 통합 실행
 
@@ -100,8 +120,10 @@ GET  /api/v1/ai-runs/{aiRunId}/events
 | 3 | 취업활동기간 연장 | 1번과, 생성된 경우 2번 완료 후 |
 | 4 | 체류기간 연장 | 3번과, 생성된 경우 2번 완료 후 |
 
-Demo Seed의 응웬반A는 여권이 유효하고 ARC가 누락되어 있으므로 네 업무가 모두 생성되어야
-한다. Case 상세는 `GET /api/v1/cases/{caseId}/projection`으로도 확인할 수 있다.
+Demo Seed의 응웬반A는 ARC가 누락되어 있으므로 네 업무가 모두 생성되어야 한다. 실제
+Renewal 문서 초안에는 여권번호와 생년월일도 필요하므로 Golden Flow에서는 합성 여권과
+ARC를 함께 요청한다. Case 상세는 `GET /api/v1/cases/{caseId}/projection`으로도 확인할
+수 있다.
 
 ## 3. 재계약 조건과 계약서 초안을 검토한다
 
@@ -132,7 +154,7 @@ POST /api/v1/tasks/{taskId}/evidence
 POST /api/v1/tasks/{taskId}/complete
 ```
 
-## 4. 근로자에게 ARC 보완을 요청한다
+## 4. 근로자에게 여권·ARC 보완을 요청한다
 
 두 번째 업무에서 안내 초안을 HR이 확인한 뒤 Worker Link를 발급한다. SMS Provider를
 사용하지 않는 로컬 시연에서는 응답의 공개 URL을 브라우저 시크릿 창에 직접 연다.
@@ -154,7 +176,8 @@ POST /api/v1/worker-links/{workerLinkId}/sms-deliveries
 ## 5. 근로자 역할로 합성 서류를 제출한다
 
 먼저 Server 저장소에서 아래 명령을 한 번 실행한다. PostgreSQL이나 기존 Demo Seed를
-수정하지 않고 모바일 제출에 사용할 응웬반A의 합성 ARC 앞·뒷면만 생성한다.
+수정하지 않고 모바일 제출에 사용할 응웬반A의 합성 여권 인적사항면과 ARC 앞·뒷면을
+생성한다.
 
 ```bash
 ./scripts/export-golden-demo-files
@@ -169,16 +192,17 @@ POST /api/v1/worker-links/{workerLinkId}/sms-deliveries
 
 1. 공개 Worker Link를 시크릿 창 또는 다른 브라우저에서 연다.
 2. 안내 내용을 확인한다.
-3. 요청 서류에서 `외국인등록증 사본`을 선택한다.
-4. Demo Data가 생성한 응웬반A의 합성 ARC 앞면 PNG를 선택한다.
-5. 제출 버튼을 누르고 완료 화면을 확인한다.
+3. 요청 서류에서 `여권 사본`, `외국인등록증 사본`을 선택한다.
+4. Demo Data가 생성한 합성 여권 인적사항면과 ARC 앞면 PNG를 선택한다.
+5. 제출 버튼을 누르고 완료 화면을 확인한다. ARC 뒷면은 추가 검증이 필요할 때만
+   제출한다.
 
 합성 파일에는 `DEMO / SAMPLE - NOT FOR OFFICIAL SUBMISSION` 표시가 있으며 실제 신분증이
 아니다. 공개 API는 JWT 대신 만료되는 Worker Link token만 사용한다.
 
 ```text
 GET  /api/v1/public/worker-links/{token}
-POST /api/v1/public/worker-links/{token}/files
+POST /api/v1/public/worker-links/{token}/documents
 POST /api/v1/public/worker-links/{token}/responses
 ```
 
@@ -188,10 +212,11 @@ POST /api/v1/public/worker-links/{token}/responses
 ## 6. HR이 제출물을 회수하고 OCR을 검토한다
 
 1. HR 화면으로 돌아와 근로자 응답과 파일을 연다.
-2. 파일이 응웬반A의 합성 ARC인지 확인한다.
-3. 제출 파일을 공식 `WorkerDocument`로 채택한다.
-4. OCR 상태가 완료될 때까지 조회한다.
-5. OCR 원본과 추출값을 비교하고 필요한 값만 수정한 뒤 검토 완료한다.
+2. 파일이 응웬반A의 합성 여권·ARC인지 확인한다.
+3. 제출 파일을 공식 `WorkerDocument`로 각각 채택한다.
+4. 여권과 ARC의 OCR 상태가 완료될 때까지 조회한다.
+5. OCR 원본과 추출값을 비교하고 필요한 값만 수정한 뒤 검토 완료한다. 합성 파일의
+   데모 값은 실제 개인정보가 아니며 공식 업무에 사용하지 않는다.
 
 ```text
 GET  /api/v1/tasks/{taskId}/worker-responses
@@ -205,21 +230,35 @@ OCR 결과만으로 Worker의 개인정보를 자동 수정하지 않는다. HR�
 기존 업무를 재실행할 때 사용한다. 같은 파일·이벤트를 다시 처리해도 기존 OCR Run과
 WorkerDocument를 재사용해야 한다.
 
+두 OCR 검토가 끝나면 Outbox가 기존 Renewal 실행을 자동 재개한다. `missingSlots`가
+비어 있고 생성 문서에 `storedFileId`가 연결됐는지 확인한다. 생성된 원본은 다음 API로
+내려받는다.
+
+```text
+GET /api/v1/files/{storedFileId}/content
+```
+
+현재 HWP → PDF 브라우저 미리보기 품질은 AI #53의 후속 범위다. Golden Flow 완료
+여부는 원본 HWP 다운로드와 문서 내부 필드값으로 검증하며, 미리보기 실패를 문서 생성
+실패로 처리하지 않는다.
+
 ## 7. 취업활동기간과 체류기간 연장을 마친다
 
 앞선 의존 업무가 완료되면 Case의 `currentTask`가 세 번째 업무로 이동해야 한다.
 
 ### 취업활동기간 연장
 
-- 별지 제12호의3 초안과 첨부서류를 검토한다.
+- 서명된 계약서와 별지 제12호의3 준비정보·첨부서류를 필수 확인한다.
 - HR 승인 후 고용 관련 기관에 직접 제출한다.
+- `HR이 공식 채널에서 직접 제출`은 승인 후 실행 확인 항목으로 기록한다.
 - 접수처, 안전한 합성 접수번호, 제출시각을 기록한다.
 - 접수증을 증빙으로 남기고 업무를 완료한다.
 
 ### 체류기간 연장
 
-- 통합신청서와 체류 관련 증빙을 검토한다.
+- 여권·ARC, 앞선 연장 결과, 통합신청서와 체류 관련 증빙을 필수 확인한다.
 - HR 승인 후 공식 사이트 또는 관할기관에서 직접 제출한다.
+- `직접 제출`과 `처리결과·다음 확인일`은 승인 후 실행 확인 항목으로 기록한다.
 - 접수 결과와 최종 처리 결과를 기록한다.
 - 증빙을 남기고 마지막 업무를 완료한다.
 
@@ -251,6 +290,7 @@ POST /api/v1/tasks/{taskId}/complete
 | 모바일 링크가 열리지 않음 | 원본 token, 링크 만료시각, public path 확인 |
 | 제출 파일이 안 보임 | Worker Response와 StoredFile 저장 여부, HR 사업장 권한 확인 |
 | OCR이 계속 대기 | Outbox backlog, OCR Provider 활성화, 암호화 키 확인 |
+| 30분 뒤 승인 API가 H2에서 500 | local profile의 `spring.datasource.hikari.max-lifetime=0` 적용 여부 확인 |
 | 다음 업무가 열리지 않음 | 선행 Task들의 `COMPLETED`, 생성된 조건부 업무 완료 여부 |
 | 문서가 생성되지 않음 | Renewal 응답 `missingSlots`, 생성 문서 status와 FileStorage 경로 확인 |
 
