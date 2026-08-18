@@ -39,11 +39,14 @@ class PostgreSqlRuntimeTimeoutBehaviorIntegrationTest
     void statementTimeoutRollsBackTransactionAndPoolServesNextQuery() {
         Throwable failure = catchThrowable(() -> transactionTemplate.executeWithoutResult(
                 status -> {
-                    runtimeJdbc.update(
+                    tenantDatabaseContext.setCompanyIdForCurrentTransaction(
+                            FIXTURE_COMPANY_ID
+                    );
+                    assertThat(runtimeJdbc.update(
                             "UPDATE company SET name = ? WHERE company_id = ?",
                             "must roll back",
                             FIXTURE_COMPANY_ID
-                    );
+                    )).isEqualTo(1);
                     runtimeJdbc.execute("SELECT pg_catalog.pg_sleep(1.0)");
                 }
         ));
@@ -72,14 +75,17 @@ class PostgreSqlRuntimeTimeoutBehaviorIntegrationTest
 
                 for (int attempt = 0; attempt < 3; attempt++) {
                     Throwable failure = catchThrowable(() ->
-                            transactionTemplate.executeWithoutResult(status ->
-                                    runtimeJdbc.update(
-                                            "UPDATE company SET name = ? "
-                                                    + "WHERE company_id = ?",
-                                            "blocked update",
-                                            FIXTURE_COMPANY_ID
-                                    )
-                            )
+                            transactionTemplate.executeWithoutResult(status -> {
+                                tenantDatabaseContext.setCompanyIdForCurrentTransaction(
+                                        FIXTURE_COMPANY_ID
+                                );
+                                runtimeJdbc.update(
+                                        "UPDATE company SET name = ? "
+                                                + "WHERE company_id = ?",
+                                        "blocked update",
+                                        FIXTURE_COMPANY_ID
+                                );
+                            })
                     );
                     PostgreSqlTimeoutClassification classification =
                             classifier.classify(failure);
@@ -95,11 +101,14 @@ class PostgreSqlRuntimeTimeoutBehaviorIntegrationTest
             }
         }
 
-        transactionTemplate.executeWithoutResult(status -> runtimeJdbc.update(
-                "UPDATE company SET name = ? WHERE company_id = ?",
-                "after lock release",
-                FIXTURE_COMPANY_ID
-        ));
+        transactionTemplate.executeWithoutResult(status -> {
+            tenantDatabaseContext.setCompanyIdForCurrentTransaction(FIXTURE_COMPANY_ID);
+            assertThat(runtimeJdbc.update(
+                    "UPDATE company SET name = ? WHERE company_id = ?",
+                    "after lock release",
+                    FIXTURE_COMPANY_ID
+            )).isEqualTo(1);
+        });
         assertThat(migrationJdbc.queryForObject(
                 "SELECT name FROM company WHERE company_id = ?",
                 String.class,

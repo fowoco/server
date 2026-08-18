@@ -21,6 +21,49 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 @EnabledIfEnvironmentVariable(named = "POSTGRES_TEST_ENABLED", matches = "true")
 class PostgreSqlMigrationTests {
 
+    private static final Set<String> RLS_TABLES = Set.of(
+            "company",
+            "company_settings",
+            "user_account",
+            "refresh_token",
+            "user_agreement_consent",
+            "password_reset_token",
+            "worker",
+            "worker_document",
+            "stored_file",
+            "task",
+            "task_checklist_item",
+            "task_transition_history",
+            "document_request_draft",
+            "document_request_draft_type",
+            "approval_request",
+            "external_submission",
+            "task_evidence",
+            "audit_event",
+            "workflow_case",
+            "document_ocr_run",
+            "notification",
+            "stay_verification_case",
+            "worker_archive",
+            "worker_link",
+            "worker_response",
+            "worker_response_upload",
+            "worker_document_upload_idempotency",
+            "worker_import_job",
+            "worker_import_row",
+            "worker_import_commit_idempotency",
+            "ai_run",
+            "ai_attempt",
+            "ai_question",
+            "ai_candidate",
+            "ai_candidate_decision_batch",
+            "ai_candidate_decision",
+            "ai_candidate_decision_task",
+            "event_publication",
+            "event_consumption",
+            "outbox_manual_retry"
+    );
+
     private static final String COMPANY_A = "10000000-0000-0000-0000-000000000001";
     private static final String COMPANY_B = "20000000-0000-0000-0000-000000000002";
     private static final String USER_A = "11000000-0000-0000-0000-000000000001";
@@ -110,6 +153,7 @@ class PostgreSqlMigrationTests {
                         "worker_import_row",
                         "worker_import_commit_idempotency",
                         "document_ocr_run",
+                        "notification",
                         "stay_verification_case",
                         "worker_archive"
                 );
@@ -561,7 +605,11 @@ class PostgreSqlMigrationTests {
                         "pl_stay_verification_tenant_isolation",
                         "pl_worker_archive_tenant_isolation"
                 );
-        assertThat(rlsEnabledTables(connection)).isEmpty();
+        assertThat(policyTableNames(connection))
+                .containsExactlyInAnyOrderElementsOf(RLS_TABLES);
+        assertThat(rlsEnabledTables(connection))
+                .containsExactlyInAnyOrderElementsOf(RLS_TABLES);
+        assertThat(rlsForcedTables(connection)).isEmpty();
         assertThat(securityDefinerFunctionNames(connection))
                 .containsExactlyInAnyOrder(
                         "bootstrap_company_id_by_normalized_email",
@@ -1144,6 +1192,17 @@ class PostgreSqlMigrationTests {
         );
     }
 
+    private Set<String> policyTableNames(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT DISTINCT tablename
+                FROM pg_catalog.pg_policies
+                WHERE schemaname = 'public'
+                """
+        );
+    }
+
     private Set<String> rlsEnabledTables(Connection connection) throws SQLException {
         return queryStrings(
                 connection,
@@ -1153,6 +1212,19 @@ class PostgreSqlMigrationTests {
                 WHERE relnamespace = 'public'::regnamespace
                   AND relkind = 'r'
                   AND relrowsecurity
+                """
+        );
+    }
+
+    private Set<String> rlsForcedTables(Connection connection) throws SQLException {
+        return queryStrings(
+                connection,
+                """
+                SELECT relname
+                FROM pg_catalog.pg_class
+                WHERE relnamespace = 'public'::regnamespace
+                  AND relkind = 'r'
+                  AND relforcerowsecurity
                 """
         );
     }
