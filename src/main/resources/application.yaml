@@ -160,6 +160,8 @@ app:
       current-key-base64: ${PII_ENCRYPTION_KEY_BASE64:}
       current-key-version: ${PII_ENCRYPTION_KEY_VERSION:local-v1}
       decryption-keys: ${PII_DECRYPTION_KEYS:}
+      maintenance-command: ${PII_MAINTENANCE_COMMAND:none}
+      maintenance-batch-size: ${PII_MAINTENANCE_BATCH_SIZE:100}
     jwt:
       issuer: ${JWT_ISSUER:fowoco-server}
       audience: ${JWT_AUDIENCE:fowoco-client}

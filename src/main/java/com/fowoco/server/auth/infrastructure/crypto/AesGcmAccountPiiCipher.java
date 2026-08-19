@@ -45,6 +45,11 @@ final class AesGcmAccountPiiCipher implements AccountPiiCipher {
     }
 
     @Override
+    public String currentKeyVersion() {
+        return currentKeyVersion;
+    }
+
+    @Override
     public EncryptedValue encrypt(
             String plaintext,
             UUID companyId,

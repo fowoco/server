@@ -6,6 +6,12 @@ public interface AccountPiiCipher {
 
     boolean isAvailable();
 
+    String currentKeyVersion();
+
+    default boolean requiresReEncryption(String keyVersion) {
+        return isAvailable() && !currentKeyVersion().equals(keyVersion);
+    }
+
     EncryptedValue encrypt(String plaintext, UUID companyId, UUID userId, String fieldName);
 
     String decrypt(

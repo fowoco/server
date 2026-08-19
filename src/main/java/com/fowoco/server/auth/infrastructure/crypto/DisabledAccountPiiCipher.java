@@ -10,6 +10,11 @@ final class DisabledAccountPiiCipher implements AccountPiiCipher {
     }
 
     @Override
+    public String currentKeyVersion() {
+        throw new IllegalStateException("account PII encryption is disabled");
+    }
+
+    @Override
     public EncryptedValue encrypt(String plaintext, UUID companyId, UUID userId, String fieldName) {
         throw new IllegalStateException("account PII encryption is disabled");
     }

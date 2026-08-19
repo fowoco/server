@@ -203,13 +203,17 @@ public class UserAccountJpaEntity {
     private String readPhone(AccountPiiCipher piiCipher) {
         Objects.requireNonNull(piiCipher, "piiCipher must not be null");
         if (phoneCiphertext != null) {
-            return piiCipher.decrypt(
+            String decrypted = piiCipher.decrypt(
                     phoneCiphertext,
                     phoneKeyVersion,
                     companyId,
                     userId,
                     PHONE_FIELD
             );
+            if (piiCipher.requiresReEncryption(phoneKeyVersion)) {
+                storePhone(decrypted, piiCipher);
+            }
+            return decrypted;
         }
         if (phone != null && piiCipher.isAvailable()) {
             String legacyPhone = phone;
