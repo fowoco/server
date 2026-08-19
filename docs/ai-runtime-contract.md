@@ -184,7 +184,7 @@ Slot 조회와 ANALYZE 호출은 수행하지 않습니다. 따라서 지원하�
 `AiAnalysisRequest`에 유지하지만 HTTP JSON에는 넣지 않습니다.
 
 한 번의 PLAN 또는 ANALYZE 호출 제한시간은 `AI_RUNTIME_OVERALL_TIMEOUT`을 단일 기준으로
-사용합니다. 기본값은 실제 A.X CPU 추론 시간을 수용하는 `240s`이고 계약상 최대값은
+사용합니다. 기본값은 실제 A.X CPU 추론 시간을 수용하는 `300s`이고 계약상 최대값은
 `5m`입니다. Client 요청은 먼저 `202 + aiRunId`를 반환하므로 이 제한시간 동안 HTTP 화면
 요청을 붙잡지 않으며, 진행 상태는 SSE와 조회 API로 제공합니다.
 
@@ -378,7 +378,7 @@ AI_RUNTIME_SERVICE_CREDENTIAL=<배포 환경 Secret>
 | 설정 | 기본값 | 의미 |
 | --- | --- | --- |
 | `AI_RUNTIME_CONNECT_TIMEOUT` | `2s` | AI 서버에 TCP 연결을 맺을 수 있는 최대 시간 |
-| `AI_RUNTIME_OVERALL_TIMEOUT` | `15s` | 연결·요청·응답 수신 전체의 Server 상한 |
+| `AI_RUNTIME_OVERALL_TIMEOUT` | `300s` | 연결·요청·응답 수신 전체의 Server 상한 |
 | `AI_RUNTIME_MAX_RESPONSE_BYTES` | `1048576` | 응답을 메모리에 받기 전 적용하는 최대 크기 |
 | `AI_DOCUMENT_GENERATION_ENDPOINT` | `http://127.0.0.1:8000/api/v1/documents/generate` | Renewal 문서 생성 API |
 | `AI_DOCUMENT_CONVERSION_ENDPOINT` | `http://127.0.0.1:8000/api/v1/documents/convert` | HWP·HWPX를 PDF 미리보기로 변환하는 API |

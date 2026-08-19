@@ -58,7 +58,7 @@ class RenewalExecutionServiceTest {
                 null, null, taskSnapshot()
         );
         RenewalGeneratedDocument document = new RenewalGeneratedDocument(
-                "standard_labor_contract_v6", "표준근로계약서", "hwp", "READY",
+                "standard_labor_contract_v6", "표준근로계약서", "hwpx", "READY",
                 null, null, List.of(), List.of(), Map.of("worker_name", "응웬반안")
         );
         response = new RenewalRunResponse(
