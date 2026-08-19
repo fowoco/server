@@ -111,12 +111,6 @@ final class GeneratedDocumentService {
     }
 
     private void validateRequiredValues(RenewalGeneratedDocument document) {
-        if (!"hwpx".equals(document.format())) {
-            throw new AiRuntimeCallException(
-                    AiRuntimeFailureCode.INVALID_RESPONSE_CONTRACT,
-                    "Renewal draft format must be HWPX."
-            );
-        }
         Set<String> required = REQUIRED_VALUES_BY_TEMPLATE.get(document.templateId());
         boolean missingRequiredValue = required == null
                 || required.stream().anyMatch(key -> !hasValue(document.values().get(key)));

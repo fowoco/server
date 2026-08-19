@@ -52,7 +52,7 @@ public final class RenewalRuntimeContractValidator {
             "immigration_integrated_application_v34",
             "identity_guaranty_v129"
     );
-    private static final Set<String> DOCUMENT_FORMATS = Set.of("hwpx");
+    private static final Set<String> DOCUMENT_FORMATS = Set.of("hwp", "hwpx");
 
     private final AiRuntimeBoundaryPolicy boundaryPolicy;
 

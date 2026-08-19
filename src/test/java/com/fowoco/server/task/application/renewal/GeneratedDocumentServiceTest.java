@@ -101,8 +101,8 @@ class GeneratedDocumentServiceTest {
     }
 
     @Test
-    void rejectsLegacyHwpDraftBeforeCallingTheGenerator() {
-        RenewalGeneratedDocument hwp = new RenewalGeneratedDocument(
+    void preservesLegacyHwpFormatForBackwardCompatibility() {
+        RenewalGeneratedDocument legacyHwp = new RenewalGeneratedDocument(
                 "standard_labor_contract_v6",
                 "standard_labor_contract_v6",
                 "hwp",
@@ -114,9 +114,14 @@ class GeneratedDocumentServiceTest {
                 values("standard_labor_contract_v6")
         );
 
-        assertThatThrownBy(() -> service.prepare("RECONTRACT", List.of(hwp)))
-                .isInstanceOf(AiRuntimeCallException.class);
-        verify(generationClient, times(0)).generate(any());
+        PreparedRenewalDocument prepared = service.prepare(
+                "RECONTRACT",
+                List.of(legacyHwp)
+        ).get(0);
+
+        assertThat(prepared.descriptor().format()).isEqualTo("hwp");
+        assertThat(prepared.file().format()).isEqualTo("hwp");
+        assertThat(prepared.file().fileName()).endsWith(".hwp");
     }
 
     @Test

@@ -86,17 +86,17 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
-    void rejectsLegacyHwpGeneratedDocuments() {
+    void acceptsLegacyHwpGeneratedDocumentsForBackwardCompatibility() {
         RenewalRunRequest request = request();
 
-        assertThatThrownBy(() -> validator.validateResponse(
+        assertThatCode(() -> validator.validateResponse(
                 request,
                 generateResponse(
                         request,
                         Map.of("employee_name", "NGUYEN VAN AN"),
                         "hwp"
                 )
-        )).isInstanceOf(AiRuntimeContractException.class);
+        )).doesNotThrowAnyException();
     }
 
     @Test
