@@ -36,7 +36,7 @@ class GeneratedDocumentServiceTest {
             var request = invocation.<com.fowoco.server.aiintegration.application.document.DocumentGenerationRequest>
                     getArgument(0);
             return new GeneratedDocumentFile(
-                    request.templateId() + ".hwp",
+                    request.templateId() + "." + request.format(),
                     request.format(),
                     request.templateId().getBytes(StandardCharsets.UTF_8)
             );
@@ -83,7 +83,7 @@ class GeneratedDocumentServiceTest {
         RenewalGeneratedDocument incomplete = new RenewalGeneratedDocument(
                 "standard_labor_contract_v6",
                 "standard_labor_contract_v6",
-                "hwp",
+                "hwpx",
                 "READY",
                 null,
                 null,
@@ -96,6 +96,25 @@ class GeneratedDocumentServiceTest {
         );
 
         assertThatThrownBy(() -> service.prepare("RECONTRACT", List.of(incomplete)))
+                .isInstanceOf(AiRuntimeCallException.class);
+        verify(generationClient, times(0)).generate(any());
+    }
+
+    @Test
+    void rejectsLegacyHwpDraftBeforeCallingTheGenerator() {
+        RenewalGeneratedDocument hwp = new RenewalGeneratedDocument(
+                "standard_labor_contract_v6",
+                "standard_labor_contract_v6",
+                "hwp",
+                "READY",
+                null,
+                null,
+                List.of(),
+                List.of(),
+                values("standard_labor_contract_v6")
+        );
+
+        assertThatThrownBy(() -> service.prepare("RECONTRACT", List.of(hwp)))
                 .isInstanceOf(AiRuntimeCallException.class);
         verify(generationClient, times(0)).generate(any());
     }
@@ -123,7 +142,7 @@ class GeneratedDocumentServiceTest {
 
     private RenewalGeneratedDocument document(String templateId) {
         return new RenewalGeneratedDocument(
-                templateId, templateId, "hwp", "READY",
+                templateId, templateId, "hwpx", "READY",
                 null, null, List.of(), List.of(), values(templateId)
         );
     }
