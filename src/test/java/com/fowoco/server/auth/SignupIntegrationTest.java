@@ -155,6 +155,40 @@ class SignupIntegrationTest {
     }
 
     @Test
+    void signupPolicyIsPublicAndUsesConfiguredAgreementVersions() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/v1/auth/signup-policy"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+        assertThat(JsonPath.<Integer>read(response.body(), "$.password_policy.min_length"))
+                .isEqualTo(8);
+        assertThat(JsonPath.<Integer>read(response.body(), "$.password_policy.max_length"))
+                .isEqualTo(128);
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.password_policy.require_letter"))
+                .isTrue();
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.password_policy.require_digit"))
+                .isTrue();
+        assertThat(JsonPath.<String>read(response.body(), "$.agreements.service_terms.version"))
+                .isEqualTo("1.0");
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.agreements.service_terms.required"))
+                .isTrue();
+        assertThat(JsonPath.<String>read(response.body(), "$.agreements.service_terms.content_path"))
+                .isEqualTo("/legal/terms");
+        assertThat(JsonPath.<String>read(response.body(), "$.agreements.privacy_policy.content_path"))
+                .isEqualTo("/legal/privacy");
+        assertThat(JsonPath.<Boolean>read(response.body(), "$.agreements.marketing.required"))
+                .isFalse();
+    }
+
+    @Test
     void duplicateNormalizedEmailReturnsConflictAndRollsBackNewCompany() throws Exception {
         assertThat(signup("첫 번째 사업장", "첫 관리자", "owner@example.com", PASSWORD).statusCode())
                 .isEqualTo(201);
@@ -248,6 +282,15 @@ class SignupIntegrationTest {
     }
 
     @Test
+    void passwordRequiresAtLeastOneLetterAndOneDigit() throws Exception {
+        assertInvalidPassword("onlyletters");
+        assertInvalidPassword("12345678");
+
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company", Integer.class)).isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_account", Integer.class)).isZero();
+    }
+
+    @Test
     void requiredAgreementAndSupportedVersionsAreValidated() throws Exception {
         HttpResponse<String> missingRequiredConsent = postJson("/api/v1/auth/signup", """
                 {
@@ -289,6 +332,26 @@ class SignupIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(400);
         assertThat(JsonPath.<String>read(response.body(), "$.code"))
                 .isIn("VALIDATION_FAILED", "INVALID_REQUEST");
+    }
+
+    private void assertInvalidPassword(String password) throws Exception {
+        HttpResponse<String> response = postJson("/api/v1/auth/signup", """
+                {
+                  "company_name":"사업장",
+                  "display_name":"담당자",
+                  "email":"owner@example.com",
+                  "password":"%s",
+                  "agreements":{
+                    "service_terms":{"agreed":true,"version":"1.0"},
+                    "privacy_policy":{"agreed":true,"version":"1.0"},
+                    "marketing":{"agreed":false,"version":"1.0"}
+                  }
+                }
+                """.formatted(password));
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(JsonPath.<String>read(response.body(), "$.code")).isEqualTo("VALIDATION_FAILED");
+        assertThat(response.body()).contains("영문과 숫자");
     }
 
     private HttpResponse<String> signup(

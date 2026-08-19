@@ -100,6 +100,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/swagger-ui/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/signup-policy").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/signup",
                                 "/api/v1/auth/login",
