@@ -40,6 +40,7 @@ public class AuthService {
     private final RefreshTokenHashPort refreshTokenHashPort;
     private final RefreshTokenRotationTransaction refreshTokenRotationTransaction;
     private final RefreshTokenLogoutTransaction refreshTokenLogoutTransaction;
+    private final LoginProtectionTransaction loginProtectionTransaction;
     private final AuthAuditPort authAuditPort;
     private final UserLoginEventRepository userLoginEventRepository;
     private final UuidGenerator uuidGenerator;
@@ -59,6 +60,7 @@ public class AuthService {
             RefreshTokenHashPort refreshTokenHashPort,
             RefreshTokenRotationTransaction refreshTokenRotationTransaction,
             RefreshTokenLogoutTransaction refreshTokenLogoutTransaction,
+            LoginProtectionTransaction loginProtectionTransaction,
             AuthAuditPort authAuditPort,
             UserLoginEventRepository userLoginEventRepository,
             UuidGenerator uuidGenerator,
@@ -75,6 +77,7 @@ public class AuthService {
         this.refreshTokenHashPort = refreshTokenHashPort;
         this.refreshTokenRotationTransaction = refreshTokenRotationTransaction;
         this.refreshTokenLogoutTransaction = refreshTokenLogoutTransaction;
+        this.loginProtectionTransaction = loginProtectionTransaction;
         this.authAuditPort = authAuditPort;
         this.userLoginEventRepository = userLoginEventRepository;
         this.uuidGenerator = uuidGenerator;
@@ -104,9 +107,14 @@ public class AuthService {
 
         UserAccount userAccount = userAccountCandidate.orElseThrow();
         boolean passwordMatches = passwordVerifier.matches(command.password(), userAccount.passwordHash());
-        if (!passwordMatches || !userAccount.canLogin()) {
+        if (!passwordMatches) {
+            loginProtectionTransaction.recordFailure(userAccount.userId(), userAccount.companyId());
             throw invalidCredentialsWithAudit();
         }
+        if (!userAccount.canLogin()) {
+            throw invalidCredentialsWithAudit();
+        }
+        loginProtectionTransaction.verifyAndClear(userAccount.userId(), userAccount.companyId());
 
         CompanyAuthenticationSnapshot company = companyAuthenticationReader
                 .findByCompanyId(userAccount.companyId())

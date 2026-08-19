@@ -3,24 +3,34 @@ package com.fowoco.server.auth.api;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fowoco.server.auth.api.validation.PasswordPolicy;
 import com.fowoco.server.auth.infrastructure.security.AgreementPolicyProperties;
+import com.fowoco.server.auth.infrastructure.security.LoginProtectionProperties;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(name = "SignupPolicyResponse", description = "회원가입 화면이 적용할 현재 정책")
 public record SignupPolicyResponse(
         @JsonProperty("password_policy") PasswordPolicyResponse passwordPolicy,
+        @JsonProperty("account_protection") AccountProtectionResponse accountProtection,
         AgreementsPolicyResponse agreements
 ) {
 
     private static final String SERVICE_TERMS_PATH = "/legal/terms";
     private static final String PRIVACY_POLICY_PATH = "/legal/privacy";
 
-    public static SignupPolicyResponse from(AgreementPolicyProperties policy) {
+    public static SignupPolicyResponse from(
+            AgreementPolicyProperties policy,
+            LoginProtectionProperties loginProtection
+    ) {
         return new SignupPolicyResponse(
                 new PasswordPolicyResponse(
                         PasswordPolicy.MIN_LENGTH,
                         PasswordPolicy.MAX_LENGTH,
                         true,
                         true
+                ),
+                new AccountProtectionResponse(
+                        loginProtection.maxFailedAttempts(),
+                        loginProtection.lockDuration().toSeconds(),
+                        loginProtection.passwordMaxAge().toDays()
                 ),
                 new AgreementsPolicyResponse(
                         new AgreementPolicyResponse(
@@ -40,6 +50,14 @@ public record SignupPolicyResponse(
                         )
                 )
         );
+    }
+
+    @Schema(name = "AccountProtectionResponse", description = "로그인 잠금과 비밀번호 갱신 정책")
+    public record AccountProtectionResponse(
+            @JsonProperty("max_failed_attempts") int maxFailedAttempts,
+            @JsonProperty("lock_duration_seconds") long lockDurationSeconds,
+            @JsonProperty("password_max_age_days") long passwordMaxAgeDays
+    ) {
     }
 
     @Schema(name = "PasswordPolicyResponse", description = "비밀번호 생성 규칙")

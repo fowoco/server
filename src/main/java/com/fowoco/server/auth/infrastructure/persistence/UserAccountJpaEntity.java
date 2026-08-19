@@ -70,6 +70,15 @@ public class UserAccountJpaEntity {
     @Column(name = "password_changed_at", nullable = false)
     private Instant passwordChangedAt;
 
+    @Column(name = "failed_login_attempts", nullable = false)
+    private int failedLoginAttempts;
+
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
+
+    @Column(name = "last_failed_login_at")
+    private Instant lastFailedLoginAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -90,6 +99,9 @@ public class UserAccountJpaEntity {
             Instant createdAt,
             Instant updatedAt,
             Instant passwordChangedAt,
+            int failedLoginAttempts,
+            Instant lockedUntil,
+            Instant lastFailedLoginAt,
             long version
     ) {
         this.userId = userId;
@@ -104,6 +116,9 @@ public class UserAccountJpaEntity {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.passwordChangedAt = passwordChangedAt;
+        this.failedLoginAttempts = failedLoginAttempts;
+        this.lockedUntil = lockedUntil;
+        this.lastFailedLoginAt = lastFailedLoginAt;
         this.version = version;
     }
 
@@ -122,6 +137,9 @@ public class UserAccountJpaEntity {
                 userAccount.createdAt(),
                 userAccount.updatedAt(),
                 userAccount.passwordChangedAt(),
+                userAccount.failedLoginAttempts(),
+                userAccount.lockedUntil(),
+                userAccount.lastFailedLoginAt(),
                 userAccount.version()
         );
     }
@@ -140,6 +158,9 @@ public class UserAccountJpaEntity {
                 createdAt,
                 updatedAt,
                 passwordChangedAt,
+                failedLoginAttempts,
+                lockedUntil,
+                lastFailedLoginAt,
                 version
         );
     }
@@ -154,6 +175,9 @@ public class UserAccountJpaEntity {
         passwordHash = userAccount.passwordHash();
         updatedAt = userAccount.updatedAt();
         passwordChangedAt = userAccount.passwordChangedAt();
+        failedLoginAttempts = userAccount.failedLoginAttempts();
+        lockedUntil = userAccount.lockedUntil();
+        lastFailedLoginAt = userAccount.lastFailedLoginAt();
     }
 
 }
