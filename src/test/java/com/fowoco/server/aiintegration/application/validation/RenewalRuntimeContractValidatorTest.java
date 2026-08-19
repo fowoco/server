@@ -86,6 +86,20 @@ class RenewalRuntimeContractValidatorTest {
     }
 
     @Test
+    void acceptsLegacyHwpGeneratedDocumentsForBackwardCompatibility() {
+        RenewalRunRequest request = request();
+
+        assertThatCode(() -> validator.validateResponse(
+                request,
+                generateResponse(
+                        request,
+                        Map.of("employee_name", "NGUYEN VAN AN"),
+                        "hwp"
+                )
+        )).doesNotThrowAnyException();
+    }
+
+    @Test
     void rejectsAResponseFromAnotherAttempt() {
         RenewalRunRequest request = request();
         RenewalRunResponse valid = response(request);
@@ -377,6 +391,14 @@ class RenewalRuntimeContractValidatorTest {
             RenewalRunRequest request,
             Map<String, Object> values
     ) {
+        return generateResponse(request, values, "hwpx");
+    }
+
+    private RenewalRunResponse generateResponse(
+            RenewalRunRequest request,
+            Map<String, Object> values,
+            String format
+    ) {
         return new RenewalRunResponse(
                 request.requestId(), request.attemptId(), request.taskId(), "EXPIRY_RENEWAL",
                 request.task().workflowId(), new BigDecimal("0.94"),
@@ -384,7 +406,7 @@ class RenewalRuntimeContractValidatorTest {
                 "generate", "PHASE_4", "STEP_13", Map.of(), List.of(), List.of(),
                 null, null, false, null, null, null,
                 List.of(new RenewalGeneratedDocument(
-                        "standard_labor_contract_v6", "표준근로계약서", "hwp", "stub", null, null,
+                        "standard_labor_contract_v6", "표준근로계약서", format, "stub", null, null,
                         List.copyOf(values.keySet()), List.of(), values
                 )),
                 List.of(), null, List.of("GENERATE_DRAFTS", "READY_FOR_REVIEW"),
