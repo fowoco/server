@@ -8,6 +8,7 @@ import com.fowoco.server.auth.application.SignupResult;
 import com.fowoco.server.auth.application.SignupService;
 import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
+import com.fowoco.server.auth.infrastructure.security.AgreementPolicyProperties;
 import com.fowoco.server.auth.infrastructure.web.UserAgentDeviceSummarizer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,6 +47,7 @@ public class AuthController {
     private final AuthService authService;
     private final SignupService signupService;
     private final PasswordResetService passwordResetService;
+    private final AgreementPolicyProperties agreementPolicy;
     private final RefreshTokenCookieFactory refreshTokenCookieFactory;
     private final ActorContextProvider actorContextProvider;
 
@@ -53,14 +55,37 @@ public class AuthController {
             AuthService authService,
             SignupService signupService,
             PasswordResetService passwordResetService,
+            AgreementPolicyProperties agreementPolicy,
             RefreshTokenCookieFactory refreshTokenCookieFactory,
             ActorContextProvider actorContextProvider
     ) {
         this.authService = authService;
         this.signupService = signupService;
         this.passwordResetService = passwordResetService;
+        this.agreementPolicy = agreementPolicy;
         this.refreshTokenCookieFactory = refreshTokenCookieFactory;
         this.actorContextProvider = actorContextProvider;
+    }
+
+    @Operation(
+            operationId = "getSignupPolicy",
+            summary = "현재 회원가입 정책 조회",
+            description = "회원가입 화면이 적용할 비밀번호 규칙과 약관별 현재 버전·필수 여부를 반환합니다."
+    )
+    @ApiResponse(
+            responseCode = "200",
+            description = "현재 회원가입 정책",
+            content = @Content(
+                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = SignupPolicyResponse.class)
+            )
+    )
+    @GetMapping(path = "/signup-policy", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<SignupPolicyResponse> getSignupPolicy() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(SignupPolicyResponse.from(agreementPolicy));
     }
 
     @Operation(

@@ -3,6 +3,7 @@ package com.fowoco.server.auth.api;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fowoco.server.auth.api.validation.Utf8ByteLength;
+import com.fowoco.server.auth.api.validation.PasswordPolicy;
 import com.fowoco.server.auth.application.SignupCommand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
@@ -68,14 +69,25 @@ public final class SignupRequest {
             description = "로그인 비밀번호. UTF-8 기준 72바이트 이하이며 "
                     + "원문은 저장하지 않고 BCrypt hash만 저장합니다.",
             format = "password",
-            minLength = 8,
-            maxLength = 128,
+            minLength = PasswordPolicy.MIN_LENGTH,
+            maxLength = PasswordPolicy.MAX_LENGTH,
             accessMode = Schema.AccessMode.WRITE_ONLY,
             requiredMode = Schema.RequiredMode.REQUIRED
     )
     @NotBlank(message = "비밀번호를 입력해 주세요.")
-    @Size(min = 8, max = 128, message = "비밀번호는 8자 이상 128자 이하여야 합니다.")
-    @Utf8ByteLength(max = 72, message = "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.")
+    @Size(
+            min = PasswordPolicy.MIN_LENGTH,
+            max = PasswordPolicy.MAX_LENGTH,
+            message = "비밀번호는 8자 이상 128자 이하여야 합니다."
+    )
+    @Pattern(
+            regexp = PasswordPolicy.LETTER_AND_DIGIT_PATTERN,
+            message = "비밀번호에는 영문과 숫자가 각각 하나 이상 포함되어야 합니다."
+    )
+    @Utf8ByteLength(
+            max = PasswordPolicy.MAX_UTF8_BYTES,
+            message = "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다."
+    )
     private final String password;
 
     @Valid
