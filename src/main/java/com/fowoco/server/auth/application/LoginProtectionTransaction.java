@@ -44,7 +44,7 @@ public class LoginProtectionTransaction {
         userAccountRepository.update(updated);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void verifyAndClear(UUID userId, UUID companyId) {
         UserAccount account = lockedAccount(userId, companyId);
         Instant now = clock.instant();
