@@ -39,6 +39,10 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | DB | `DB_RUNTIME_USERNAME`, `DB_RUNTIME_PASSWORD` | 애플리케이션 실행 계정 |
 | DB | `DB_MIGRATION_USERNAME`, `DB_MIGRATION_PASSWORD` | Flyway 전용 계정 |
 | Auth | `JWT_SECRET_BASE64`, `JWT_ISSUER`, `JWT_AUDIENCE` | Access Token 발급·검증 |
+| PII | `PII_ENCRYPTION_ENABLED=true` | 계정 연락처 AES-256-GCM 암호화 활성화 |
+| PII | `PII_ENCRYPTION_KEY_BASE64` | 현재 32바이트 연락처 암호화 키의 Base64 |
+| PII | `PII_ENCRYPTION_KEY_VERSION` | 현재 키 식별 version, 예: `pii-2026-08-v1` |
+| PII | `PII_DECRYPTION_KEYS` | 회전 이전 키 목록, `version=base64`를 쉼표로 구분 |
 | Web | `CORS_ALLOWED_ORIGINS` | 실제 Client HTTPS origin만 허용 |
 | Catalog | `WORKFLOW_CATALOG_LOCATION` | 검증된 `RELEASED` projection 위치 |
 | AI | `AI_RUNTIME_ENABLED=true` | 실제 Runtime 연동 활성화 |
@@ -52,6 +56,28 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | OCR | `AI_OCR_ENDPOINT`, `AI_OCR_SERVICE_CREDENTIAL` | OCR 내부 endpoint와 Bearer credential |
 | OCR | `OCR_RESULT_ENCRYPTION_KEY_BASE64` | 32바이트 OCR 결과 암호화 키의 Base64 |
 | OCR | `OCR_RESULT_KEY_VERSION` | 암호화 키 식별 version |
+
+`PII_ENCRYPTION_KEY_BASE64`와 `PII_DECRYPTION_KEYS`는 Git, DB, 이미지, Issue, 로그에
+기록하지 않고 `server-env` Secret으로 주입합니다. 운영에서는 `prod` profile이 PII 암호화를
+기본 활성화하므로 현재 키가 없으면 Server가 기동하지 않습니다. 현재 Infra는 Kubernetes
+Secret 주입까지 지원하며 AWS KMS·Secrets Manager 자동 동기화는 별도 고도화 범위입니다.
+
+키 회전은 새 키와 새 version을 현재 값으로 배포하되, 기존 version과 키를
+`PII_DECRYPTION_KEYS`에 유지한 상태에서 수행합니다. 기존 평문 연락처는 로그인·프로필 수정 등
+계정이 쓰기 transaction에서 조회될 때 암호문으로 점진 전환됩니다. 이전 키 제거 전에는
+DB에서 해당 `phone_key_version` 잔여 건수가 0인지 확인해야 합니다.
+
+```sql
+SELECT COUNT(*) AS legacy_plaintext_phone_count
+FROM user_account
+WHERE phone IS NOT NULL;
+
+SELECT phone_key_version, COUNT(*) AS encrypted_phone_count
+FROM user_account
+WHERE phone_ciphertext IS NOT NULL
+GROUP BY phone_key_version
+ORDER BY phone_key_version;
+```
 
 비밀번호 재설정 메일을 실제로 발송할 때만 다음 값을 `server-env`에 추가합니다. 기본
 `PASSWORD_RESET_NOTIFICATION_PROVIDER=none`에서는 메일을 발송하지 않습니다.
@@ -116,6 +142,9 @@ Swagger를 읽기 전용으로 유지합니다. HTTP 주소를 임시로 넣어 
 ```bash
 export DEMO_DB_PASSWORD='local-demo-password'
 export JWT_SECRET_BASE64="$(openssl rand -base64 32)"
+export PII_ENCRYPTION_ENABLED=true
+export PII_ENCRYPTION_KEY_BASE64="$(openssl rand -base64 32)"
+export PII_ENCRYPTION_KEY_VERSION='local-pii-v1'
 export DEMO_SEED_ENABLED=true
 export DEMO_SEED_ADMIN_PASSWORD='로컬 전용 12자 이상 값'
 docker compose -f compose.demo.yml up --build
