@@ -20,7 +20,7 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
     private URI documentConversionEndpoint = URI.create("http://127.0.0.1:8000/api/v1/documents/convert");
     private String serviceCredential;
     private Duration connectTimeout = Duration.ofSeconds(2);
-    private Duration overallTimeout = Duration.ofMinutes(4);
+    private Duration overallTimeout = Duration.ofMinutes(5);
     private Duration documentConversionTimeout = Duration.ofSeconds(60);
     private int maxResponseBytes = 1_048_576;
     private int maxDocumentResponseBytes = MAX_DOCUMENT_RESPONSE_BYTES;

@@ -78,7 +78,7 @@ app:
     document-conversion-timeout: ${AI_DOCUMENT_CONVERSION_TIMEOUT:60s}
     service-credential: ${AI_RUNTIME_SERVICE_CREDENTIAL:}
     connect-timeout: ${AI_RUNTIME_CONNECT_TIMEOUT:2s}
-    overall-timeout: ${AI_RUNTIME_OVERALL_TIMEOUT:240s}
+    overall-timeout: ${AI_RUNTIME_OVERALL_TIMEOUT:300s}
     max-response-bytes: ${AI_RUNTIME_MAX_RESPONSE_BYTES:1048576}
     max-document-response-bytes: ${AI_DOCUMENT_GENERATION_MAX_RESPONSE_BYTES:20971520}
     max-concurrent-calls: ${AI_RUNTIME_MAX_CONCURRENT_CALLS:8}

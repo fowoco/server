@@ -9,11 +9,11 @@ import org.junit.jupiter.api.Test;
 class AiRuntimePropertiesTest {
 
     @Test
-    void usesFourMinuteDeadlineByDefault() {
+    void usesFiveMinuteDeadlineByDefault() {
         AiRuntimeProperties properties = new AiRuntimeProperties();
 
-        assertThat(properties.getOverallTimeout()).isEqualTo(Duration.ofMinutes(4));
-        assertThat(properties.attemptDeadlineMs()).isEqualTo(240_000L);
+        assertThat(properties.getOverallTimeout()).isEqualTo(Duration.ofMinutes(5));
+        assertThat(properties.attemptDeadlineMs()).isEqualTo(300_000L);
         assertThat(properties.getDocumentConversionTimeout()).isEqualTo(Duration.ofSeconds(60));
     }
 
@@ -21,10 +21,10 @@ class AiRuntimePropertiesTest {
     void usesConfiguredOverallTimeoutAsAttemptDeadline() {
         AiRuntimeProperties properties = new AiRuntimeProperties();
 
-        properties.setOverallTimeout(Duration.ofSeconds(180));
+        properties.setOverallTimeout(Duration.ofSeconds(300));
 
-        assertThat(properties.getOverallTimeout()).isEqualTo(Duration.ofSeconds(180));
-        assertThat(properties.attemptDeadlineMs()).isEqualTo(180_000L);
+        assertThat(properties.getOverallTimeout()).isEqualTo(Duration.ofSeconds(300));
+        assertThat(properties.attemptDeadlineMs()).isEqualTo(300_000L);
     }
 
     @Test
