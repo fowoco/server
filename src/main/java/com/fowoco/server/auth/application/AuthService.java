@@ -84,7 +84,7 @@ public class AuthService {
         this.clock = clock;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     public LoginResult login(LoginCommand command) {
         String normalizedEmail = UserAccount.normalizeEmail(command.email());
         Optional<UUID> companyIdCandidate =

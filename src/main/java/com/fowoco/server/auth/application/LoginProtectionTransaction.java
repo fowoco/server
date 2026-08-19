@@ -10,7 +10,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -33,7 +32,7 @@ public class LoginProtectionTransaction {
         this.clock = clock;
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void recordFailure(UUID userId, UUID companyId) {
         UserAccount account = lockedAccount(userId, companyId);
         UserAccount updated = account.recordFailedLogin(
@@ -44,7 +43,7 @@ public class LoginProtectionTransaction {
         userAccountRepository.update(updated);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     public void verifyAndClear(UUID userId, UUID companyId) {
         UserAccount account = lockedAccount(userId, companyId);
         Instant now = clock.instant();
