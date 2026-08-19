@@ -176,6 +176,12 @@ class SignupIntegrationTest {
                 .isTrue();
         assertThat(JsonPath.<Boolean>read(response.body(), "$.password_policy.require_digit"))
                 .isTrue();
+        assertThat(JsonPath.<Integer>read(response.body(), "$.account_protection.max_failed_attempts"))
+                .isEqualTo(5);
+        assertThat(JsonPath.<Integer>read(response.body(), "$.account_protection.lock_duration_seconds"))
+                .isEqualTo(900);
+        assertThat(JsonPath.<Integer>read(response.body(), "$.account_protection.password_max_age_days"))
+                .isEqualTo(180);
         assertThat(JsonPath.<String>read(response.body(), "$.agreements.service_terms.version"))
                 .isEqualTo("1.0");
         assertThat(JsonPath.<Boolean>read(response.body(), "$.agreements.service_terms.required"))

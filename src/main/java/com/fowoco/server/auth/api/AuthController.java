@@ -9,6 +9,7 @@ import com.fowoco.server.auth.application.SignupService;
 import com.fowoco.server.auth.application.error.InvalidRefreshTokenException;
 import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.auth.infrastructure.security.AgreementPolicyProperties;
+import com.fowoco.server.auth.infrastructure.security.LoginProtectionProperties;
 import com.fowoco.server.auth.infrastructure.web.UserAgentDeviceSummarizer;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -48,6 +49,7 @@ public class AuthController {
     private final SignupService signupService;
     private final PasswordResetService passwordResetService;
     private final AgreementPolicyProperties agreementPolicy;
+    private final LoginProtectionProperties loginProtectionPolicy;
     private final RefreshTokenCookieFactory refreshTokenCookieFactory;
     private final ActorContextProvider actorContextProvider;
 
@@ -56,6 +58,7 @@ public class AuthController {
             SignupService signupService,
             PasswordResetService passwordResetService,
             AgreementPolicyProperties agreementPolicy,
+            LoginProtectionProperties loginProtectionPolicy,
             RefreshTokenCookieFactory refreshTokenCookieFactory,
             ActorContextProvider actorContextProvider
     ) {
@@ -63,6 +66,7 @@ public class AuthController {
         this.signupService = signupService;
         this.passwordResetService = passwordResetService;
         this.agreementPolicy = agreementPolicy;
+        this.loginProtectionPolicy = loginProtectionPolicy;
         this.refreshTokenCookieFactory = refreshTokenCookieFactory;
         this.actorContextProvider = actorContextProvider;
     }
@@ -85,7 +89,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.PRAGMA, "no-cache")
-                .body(SignupPolicyResponse.from(agreementPolicy));
+                .body(SignupPolicyResponse.from(agreementPolicy, loginProtectionPolicy));
     }
 
     @Operation(

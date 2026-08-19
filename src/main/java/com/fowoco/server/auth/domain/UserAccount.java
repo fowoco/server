@@ -1,5 +1,6 @@
 package com.fowoco.server.auth.domain;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
@@ -24,6 +25,9 @@ public final class UserAccount {
     private final Instant createdAt;
     private final Instant updatedAt;
     private final Instant passwordChangedAt;
+    private final int failedLoginAttempts;
+    private final Instant lockedUntil;
+    private final Instant lastFailedLoginAt;
     private final long version;
 
     public UserAccount(
@@ -39,6 +43,9 @@ public final class UserAccount {
             Instant createdAt,
             Instant updatedAt,
             Instant passwordChangedAt,
+            int failedLoginAttempts,
+            Instant lockedUntil,
+            Instant lastFailedLoginAt,
             long version
     ) {
         this.userId = Objects.requireNonNull(userId, "userId must not be null");
@@ -63,6 +70,12 @@ public final class UserAccount {
         if (passwordChangedAt.isBefore(createdAt)) {
             throw new IllegalArgumentException("passwordChangedAt must not be before createdAt");
         }
+        if (failedLoginAttempts < 0) {
+            throw new IllegalArgumentException("failedLoginAttempts must not be negative");
+        }
+        this.failedLoginAttempts = failedLoginAttempts;
+        this.lockedUntil = lockedUntil;
+        this.lastFailedLoginAt = lastFailedLoginAt;
         if (version < 0) {
             throw new IllegalArgumentException("version must not be negative");
         }
@@ -93,6 +106,9 @@ public final class UserAccount {
                 now,
                 now,
                 now,
+                0,
+                null,
+                null,
                 0L
         );
     }
@@ -127,6 +143,9 @@ public final class UserAccount {
                 createdAt,
                 now,
                 now,
+                0,
+                null,
+                null,
                 version + 1
         );
     }
@@ -149,6 +168,71 @@ public final class UserAccount {
                 createdAt,
                 now,
                 passwordChangedAt,
+                failedLoginAttempts,
+                lockedUntil,
+                lastFailedLoginAt,
+                version + 1
+        );
+    }
+
+    public UserAccount recordFailedLogin(int maxFailedAttempts, Duration lockDuration, Instant now) {
+        Objects.requireNonNull(lockDuration, "lockDuration must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+        if (maxFailedAttempts < 1 || lockDuration.isZero() || lockDuration.isNegative()) {
+            throw new IllegalArgumentException("login protection policy is invalid");
+        }
+        int nextAttempts = lockedUntil != null && !now.isBefore(lockedUntil)
+                ? 1
+                : failedLoginAttempts + 1;
+        Instant nextLockedUntil = nextAttempts >= maxFailedAttempts ? now.plus(lockDuration) : null;
+        return copyWithLoginProtection(nextAttempts, nextLockedUntil, now, now);
+    }
+
+    public UserAccount clearLoginFailures(Instant now) {
+        Objects.requireNonNull(now, "now must not be null");
+        return copyWithLoginProtection(0, null, null, now);
+    }
+
+    public boolean isTemporarilyLocked(Instant now) {
+        Objects.requireNonNull(now, "now must not be null");
+        return lockedUntil != null && now.isBefore(lockedUntil);
+    }
+
+    public boolean isPasswordExpired(Duration maxAge, Instant now) {
+        Objects.requireNonNull(maxAge, "maxAge must not be null");
+        Objects.requireNonNull(now, "now must not be null");
+        return passwordChangedAt.plus(maxAge).isBefore(now);
+    }
+
+    public boolean hasLoginFailures() {
+        return failedLoginAttempts > 0 || lockedUntil != null || lastFailedLoginAt != null;
+    }
+
+    private UserAccount copyWithLoginProtection(
+            int nextFailedAttempts,
+            Instant nextLockedUntil,
+            Instant nextLastFailedLoginAt,
+            Instant now
+    ) {
+        if (now.isBefore(updatedAt)) {
+            throw new IllegalArgumentException("now must not be before updatedAt");
+        }
+        return new UserAccount(
+                userId,
+                companyId,
+                displayName,
+                phone,
+                email,
+                normalizedEmail,
+                passwordHash,
+                role,
+                status,
+                createdAt,
+                now,
+                passwordChangedAt,
+                nextFailedAttempts,
+                nextLockedUntil,
+                nextLastFailedLoginAt,
                 version + 1
         );
     }
@@ -199,6 +283,18 @@ public final class UserAccount {
 
     public Instant passwordChangedAt() {
         return passwordChangedAt;
+    }
+
+    public int failedLoginAttempts() {
+        return failedLoginAttempts;
+    }
+
+    public Instant lockedUntil() {
+        return lockedUntil;
+    }
+
+    public Instant lastFailedLoginAt() {
+        return lastFailedLoginAt;
     }
 
     public long version() {

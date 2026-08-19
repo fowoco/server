@@ -32,7 +32,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
         RefreshTokenProperties.class,
         PasswordResetProperties.class,
         PasswordResetRateLimitProperties.class,
-        AgreementPolicyProperties.class
+        AgreementPolicyProperties.class,
+        LoginProtectionProperties.class
 })
 public class AuthSecurityConfig {
 

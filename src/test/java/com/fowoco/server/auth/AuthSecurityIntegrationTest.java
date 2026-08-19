@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,7 +88,16 @@ class AuthSecurityIntegrationTest {
         jdbcTemplate.update("DELETE FROM refresh_token");
         jdbcTemplate.update("DELETE FROM user_login_event");
         jdbcTemplate.update(
-                "UPDATE user_account SET status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP, version = version + 1"
+                """
+                UPDATE user_account
+                SET status = 'ACTIVE',
+                    failed_login_attempts = 0,
+                    locked_until = NULL,
+                    last_failed_login_at = NULL,
+                    password_changed_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP,
+                    version = version + 1
+                """
         );
         jdbcTemplate.update(
                 "UPDATE company SET status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP, version = version + 1"
@@ -363,6 +373,65 @@ class AuthSecurityIntegrationTest {
                 .isEqualTo(JsonPath.<String>read(wrongPassword.body(), "$.message"));
         assertThat(unknownEmail.headers().firstValue(HttpHeaders.SET_COOKIE)).isEmpty();
         assertThat(wrongPassword.headers().firstValue(HttpHeaders.SET_COOKIE)).isEmpty();
+        assertThat(refreshTokenCount()).isZero();
+    }
+
+    @Test
+    void repeatedPasswordFailuresTemporarilyLockTheAccount() throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            assertThat(login(VIEWER_A_EMAIL, "Wrong-password-1!").statusCode()).isEqualTo(401);
+        }
+
+        HttpResponse<String> lockedResponse = login(VIEWER_A_EMAIL, PASSWORD);
+
+        assertThat(lockedResponse.statusCode()).isEqualTo(423);
+        assertThat(JsonPath.<String>read(lockedResponse.body(), "$.code"))
+                .isEqualTo("ACCOUNT_TEMPORARILY_LOCKED");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT failed_login_attempts FROM user_account WHERE user_id = ?",
+                Integer.class,
+                VIEWER_A
+        )).isEqualTo(5);
+        assertThat(refreshTokenCount()).isZero();
+    }
+
+    @Test
+    void successfulLoginClearsPreviousFailureCount() throws Exception {
+        assertThat(login(VIEWER_A_EMAIL, "Wrong-password-1!").statusCode()).isEqualTo(401);
+
+        assertThat(login(VIEWER_A_EMAIL, PASSWORD).statusCode()).isEqualTo(200);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT failed_login_attempts FROM user_account WHERE user_id = ?",
+                Integer.class,
+                VIEWER_A
+        )).isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT locked_until IS NULL FROM user_account WHERE user_id = ?",
+                Boolean.class,
+                VIEWER_A
+        )).isTrue();
+    }
+
+    @Test
+    void expiredPasswordRequiresResetBeforeLogin() throws Exception {
+        Instant now = Instant.now();
+        jdbcTemplate.update(
+                """
+                UPDATE user_account
+                SET created_at = ?,
+                    password_changed_at = ?,
+                    version = version + 1
+                WHERE user_id = ?
+                """,
+                now.minus(365, ChronoUnit.DAYS),
+                now.minus(181, ChronoUnit.DAYS),
+                VIEWER_A
+        );
+
+        HttpResponse<String> response = login(VIEWER_A_EMAIL, PASSWORD);
+
+        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(JsonPath.<String>read(response.body(), "$.code")).isEqualTo("PASSWORD_EXPIRED");
         assertThat(refreshTokenCount()).isZero();
     }
 
