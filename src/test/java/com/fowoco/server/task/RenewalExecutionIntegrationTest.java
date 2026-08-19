@@ -2,6 +2,7 @@ package com.fowoco.server.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -96,7 +97,7 @@ class RenewalExecutionIntegrationTest {
         reset(runtimeClient);
         reset(documentGenerationClient, fileStorage);
         when(documentGenerationClient.generate(any())).thenReturn(new GeneratedDocumentFile(
-                "표준근로계약서.hwp", "hwp", validHwpFile()
+                "표준근로계약서.hwpx", "hwpx", validHwpxFile()
         ));
         capturedRequest.set(null);
         jdbcTemplate.update("DELETE FROM document_request_draft");
@@ -468,6 +469,8 @@ class RenewalExecutionIntegrationTest {
                 .isEqualTo("standard_labor_contract_v6");
         assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].status"))
                 .isEqualTo("GENERATED");
+        assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].format"))
+                .isEqualTo("hwpx");
         assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].stored_file_id"))
                 .isNotBlank();
         assertThat(JsonPath.<String>read(response.body(), "$.generated_documents[0].worker_document_id"))
@@ -475,9 +478,18 @@ class RenewalExecutionIntegrationTest {
         assertThat(response.body()).doesNotContain("NGUYEN VAN AN", "passport_number");
 
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM stored_file WHERE task_id = ? AND worker_id = ?",
+                """
+                SELECT COUNT(*) FROM stored_file
+                WHERE task_id = ? AND worker_id = ?
+                    AND mime_type = 'application/vnd.hancom.hwpx'
+                    AND LOWER(name) LIKE '%.hwpx'
+                """,
                 Integer.class, TASK_A, WORKER_A
         )).isEqualTo(1);
+        verify(documentGenerationClient).generate(argThat(request ->
+                "hwpx".equals(request.format())
+                        && "standard_labor_contract_v6".equals(request.templateId())
+        ));
         assertThat(jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*) FROM worker_document
@@ -641,7 +653,7 @@ class RenewalExecutionIntegrationTest {
         return new RenewalGeneratedDocument(
                 templateId,
                 "Renewal test document",
-                "hwp",
+                "hwpx",
                 "stub",
                 null,
                 null,
@@ -705,15 +717,15 @@ class RenewalExecutionIntegrationTest {
         );
     }
 
-    private byte[] validHwpFile() {
-        try (org.apache.poi.poifs.filesystem.POIFSFileSystem fileSystem =
-                     new org.apache.poi.poifs.filesystem.POIFSFileSystem()) {
-            byte[] header = new byte[256];
-            byte[] signature = "HWP Document File".getBytes(StandardCharsets.US_ASCII);
-            System.arraycopy(signature, 0, header, 0, signature.length);
-            fileSystem.createDocument(new java.io.ByteArrayInputStream(header), "FileHeader");
-            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
-            fileSystem.writeFilesystem(output);
+    private byte[] validHwpxFile() {
+        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(output)) {
+            zip.putNextEntry(new java.util.zip.ZipEntry("mimetype"));
+            zip.write("application/hwp+zip".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+            zip.putNextEntry(new java.util.zip.ZipEntry("Contents/section0.xml"));
+            zip.write("<xml>Renewal draft</xml>".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
             return output.toByteArray();
         } catch (java.io.IOException exception) {
             throw new IllegalStateException(exception);

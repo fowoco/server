@@ -213,7 +213,7 @@ class AiRunApiIntegrationTest {
         ArgumentCaptor<AiAnalysisRequest> requestCaptor = ArgumentCaptor.forClass(AiAnalysisRequest.class);
         verify(runtimeClient, atLeast(3)).analyze(requestCaptor.capture(), any());
         assertThat(requestCaptor.getAllValues())
-                .allSatisfy(request -> assertThat(request.deadlineMs()).isEqualTo(240_000L));
+                .allSatisfy(request -> assertThat(request.deadlineMs()).isEqualTo(300_000L));
         assertThat(stageCount("PLAN", "PLAN_RUNTIME_CALL", "SUCCESS") - planBefore)
                 .isEqualTo(1);
         assertThat(stageCount("ANALYZE", "SLOT_RESOLUTION", "SUCCESS") - slotBefore)
