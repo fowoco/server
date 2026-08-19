@@ -86,6 +86,23 @@ class AuthOpenApiContractTest {
     }
 
     @Test
+    void signupPolicyDocumentsPublicServerAuthoritativeRules() {
+        JsonNode policy = openApi.at("/paths/~1api~1v1~1auth~1signup-policy/get");
+
+        assertThat(policy.path("operationId").asText()).isEqualTo("getSignupPolicy");
+        assertThat(policy.has("security") && !policy.path("security").isEmpty()).isFalse();
+        assertThat(policy.at("/responses/200/content/application~1json/schema/$ref").asText())
+                .isEqualTo("#/components/schemas/SignupPolicyResponse");
+
+        JsonNode passwordPolicy = openApi.at("/components/schemas/PasswordPolicyResponse/properties");
+        assertThat(passwordPolicy.properties())
+                .extracting(java.util.Map.Entry::getKey)
+                .containsExactlyInAnyOrder(
+                        "min_length", "max_length", "require_letter", "require_digit"
+                );
+    }
+
+    @Test
     void signupSchemasUseSnakeCaseAndDoNotAcceptAuthorityOrExposeSecrets() {
         JsonNode request = openApi.at("/components/schemas/SignupRequest");
         JsonNode requestProperties = request.path("properties");
