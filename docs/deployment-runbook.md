@@ -43,6 +43,8 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 | PII | `PII_ENCRYPTION_KEY_BASE64` | 현재 32바이트 연락처 암호화 키의 Base64 |
 | PII | `PII_ENCRYPTION_KEY_VERSION` | 현재 키 식별 version, 예: `pii-2026-08-v1` |
 | PII | `PII_DECRYPTION_KEYS` | 회전 이전 키 목록, `version=base64`를 쉼표로 구분 |
+| PII | `PII_MAINTENANCE_COMMAND=none` | 일반 Server의 고정값. 일회성 작업에서만 변경 |
+| PII | `PII_MAINTENANCE_BATCH_SIZE=100` | 연락처 전환 작업의 transaction당 처리 건수 |
 | Web | `CORS_ALLOWED_ORIGINS` | 실제 Client HTTPS origin만 허용 |
 | Catalog | `WORKFLOW_CATALOG_LOCATION` | 검증된 `RELEASED` projection 위치 |
 | AI | `AI_RUNTIME_ENABLED=true` | 실제 Runtime 연동 활성화 |
@@ -62,10 +64,57 @@ Secret은 Git과 Actions 로그에 값을 남기지 않고 `kubectl create secre
 기본 활성화하므로 현재 키가 없으면 Server가 기동하지 않습니다. 현재 Infra는 Kubernetes
 Secret 주입까지 지원하며 AWS KMS·Secrets Manager 자동 동기화는 별도 고도화 범위입니다.
 
-키 회전은 새 키와 새 version을 현재 값으로 배포하되, 기존 version과 키를
-`PII_DECRYPTION_KEYS`에 유지한 상태에서 수행합니다. 기존 평문 연락처는 로그인·프로필 수정 등
-계정이 쓰기 transaction에서 조회될 때 암호문으로 점진 전환됩니다. 이전 키 제거 전에는
-DB에서 해당 `phone_key_version` 잔여 건수가 0인지 확인해야 합니다.
+로그인·프로필 수정 시 평문 또는 이전 키 암호문을 현재 키로 다시 암호화하는 방어 로직이
+있지만, 계정 접근 빈도에 의존하는 점진 전환을 배포 완료 기준으로 사용하지 않습니다. 초기
+전환과 키 회전은 아래 일회성 유지보수 명령으로 모든 행을 명시적으로 처리합니다.
+
+| 명령 | 목적 | 완료 조건 |
+| --- | --- | --- |
+| `migrate` | 평문과 이전 키 암호문을 현재 키로 전환 | 처리 후 오류 없이 종료 |
+| `verify` | 전환 완료 여부 검사 | 평문 0건, 이전 키 0건 |
+| `restore-plaintext` | 구버전 애플리케이션 롤백 전 평문 복원 | 암호문 0건 |
+
+유지보수 명령은 PostgreSQL RLS를 우회해야 하므로 일반 Runtime 계정으로 실행되지 않습니다.
+`user_account` 소유자, `BYPASSRLS` 또는 Superuser 권한을 가진 **Flyway 전용 계정**을 일회성
+프로세스에만 주입합니다. 정상 Deployment의 `PII_MAINTENANCE_COMMAND`는 항상 `none`입니다.
+
+### 최초 암호화 전환
+
+1. DB 백업과 복구 절차를 확인합니다.
+2. 새 컬럼과 암호화 코드를 먼저 배포하고 현재 키를 Secret으로 주입합니다.
+3. 쓰기 트래픽을 통제한 뒤 일회성 프로세스에서 `migrate`를 실행합니다.
+4. 같은 키로 `verify`를 실행해 평문과 이전 키 잔여 건수가 0인지 확인합니다.
+5. 정상 Server의 로그인·프로필 조회 Smoke를 수행합니다.
+
+```bash
+export SPRING_MAIN_WEB_APPLICATION_TYPE=none
+export PII_MAINTENANCE_COMMAND=migrate
+export PII_MAINTENANCE_BATCH_SIZE=100
+export DB_RUNTIME_USERNAME="$DB_MIGRATION_USERNAME"
+export DB_RUNTIME_PASSWORD="$DB_MIGRATION_PASSWORD"
+java -jar server.jar
+
+export PII_MAINTENANCE_COMMAND=verify
+java -jar server.jar
+```
+
+Kubernetes에서는 동일 환경변수를 가진 일회성 Job으로 실행합니다. 일반 Deployment의 Secret을
+`migrate`로 바꾸지 않으며, 로그에는 원문·암호문 대신 처리 건수와 키 version만 남습니다.
+
+### 키 회전
+
+1. 새 키와 새 version을 현재 값으로 설정합니다.
+2. 직전 키를 `PII_DECRYPTION_KEYS=old-version=old-base64`에 유지합니다.
+3. 새 설정을 배포한 뒤 `migrate`, `verify`를 순서대로 실행합니다.
+4. DB와 애플리케이션 Smoke를 확인한 뒤 이전 version 잔여 건수가 0일 때만 이전 키를 제거합니다.
+
+### 구버전 애플리케이션 롤백
+
+암호화 도입 이전 버전은 `phone_ciphertext`를 읽지 못하므로 이미지를 먼저 되돌리면 연락처가
+빈 값으로 보입니다. 반드시 모든 복호화 키를 유지한 상태에서 쓰기 트래픽을 통제하고
+`restore-plaintext`를 먼저 실행합니다. 아래 조회에서 암호문 0건을 확인한 다음에만 구버전
+이미지를 배포합니다. 장애 수정 후에는 다시 `migrate`, `verify`를 수행하는 전진 복구를
+우선합니다.
 
 ```sql
 SELECT COUNT(*) AS legacy_plaintext_phone_count
@@ -77,6 +126,10 @@ FROM user_account
 WHERE phone_ciphertext IS NOT NULL
 GROUP BY phone_key_version
 ORDER BY phone_key_version;
+
+SELECT COUNT(*) AS remaining_encrypted_phone_count
+FROM user_account
+WHERE phone_ciphertext IS NOT NULL;
 ```
 
 비밀번호 재설정 메일을 실제로 발송할 때만 다음 값을 `server-env`에 추가합니다. 기본
