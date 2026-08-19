@@ -1,6 +1,7 @@
 package com.fowoco.server.auth.infrastructure.persistence;
 
 import com.fowoco.server.auth.domain.UserAccount;
+import com.fowoco.server.auth.infrastructure.crypto.AccountPiiCipher;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.util.Objects;
@@ -13,15 +14,17 @@ public class JpaUserAccountRepository
         implements com.fowoco.server.auth.application.port.UserAccountRepository {
 
     private final EntityManager entityManager;
+    private final AccountPiiCipher piiCipher;
 
-    public JpaUserAccountRepository(EntityManager entityManager) {
+    public JpaUserAccountRepository(EntityManager entityManager, AccountPiiCipher piiCipher) {
         this.entityManager = entityManager;
+        this.piiCipher = Objects.requireNonNull(piiCipher, "piiCipher must not be null");
     }
 
     @Override
     public void insert(UserAccount userAccount) {
         Objects.requireNonNull(userAccount, "userAccount must not be null");
-        entityManager.persist(UserAccountJpaEntity.fromDomain(userAccount));
+        entityManager.persist(UserAccountJpaEntity.fromDomain(userAccount, piiCipher));
         entityManager.flush();
     }
 
@@ -36,7 +39,7 @@ public class JpaUserAccountRepository
         if (entity == null) {
             throw new IllegalStateException("user account to update was not found");
         }
-        entity.applyState(userAccount);
+        entity.applyState(userAccount, piiCipher);
         entityManager.flush();
     }
 
@@ -70,7 +73,7 @@ public class JpaUserAccountRepository
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
-                .map(UserAccountJpaEntity::toDomain);
+                .map(entity -> entity.toDomain(piiCipher));
     }
 
     @Override
@@ -89,7 +92,7 @@ public class JpaUserAccountRepository
                 .setMaxResults(1)
                 .getResultStream()
                 .findFirst()
-                .map(UserAccountJpaEntity::toDomain);
+                .map(entity -> entity.toDomain(piiCipher));
     }
 
     @Override
@@ -124,6 +127,6 @@ public class JpaUserAccountRepository
         return query
                 .getResultStream()
                 .findFirst()
-                .map(UserAccountJpaEntity::toDomain);
+                .map(entity -> entity.toDomain(piiCipher));
     }
 }

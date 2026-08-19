@@ -176,6 +176,9 @@ class PostgreSqlMigrationTests {
                 .containsEntry("user_id", new ColumnSpec("uuid", false))
                 .containsEntry("company_id", new ColumnSpec("uuid", false))
                 .containsEntry("display_name", new ColumnSpec("varchar", false))
+                .containsEntry("phone", new ColumnSpec("varchar", true))
+                .containsEntry("phone_ciphertext", new ColumnSpec("text", true))
+                .containsEntry("phone_key_version", new ColumnSpec("varchar", true))
                 .containsEntry("normalized_email", new ColumnSpec("varchar", false))
                 .containsEntry("password_hash", new ColumnSpec("varchar", false))
                 .containsEntry("role", new ColumnSpec("varchar", false))
@@ -423,6 +426,8 @@ class PostgreSqlMigrationTests {
                         "fk_user_account_company",
                         "uq_user_account_normalized_email",
                         "uq_user_account_user_company",
+                        "ck_user_account_phone_cipher_pair",
+                        "ck_user_account_phone_single_storage",
                         "pk_refresh_token",
                         "uq_refresh_token_hash",
                         "fk_refresh_token_user_company",
@@ -965,6 +970,27 @@ class PostgreSqlMigrationTests {
                     'test-password-hash', 'HR', 'ACTIVE'
                 )
                 """);
+        assertSqlState(connection, "23514", """
+                INSERT INTO user_account (
+                    user_id, company_id, email, normalized_email,
+                    password_hash, role, status, phone, phone_ciphertext, phone_key_version
+                ) VALUES (
+                    '45000000-0000-0000-0000-000000000001', '%s',
+                    'double.phone@example.com', 'double.phone@example.com',
+                    'test-password-hash', 'HR', 'ACTIVE',
+                    '010-1234-5678', 'v1.example', 'test-v1'
+                )
+                """.formatted(COMPANY_A));
+        assertSqlState(connection, "23514", """
+                INSERT INTO user_account (
+                    user_id, company_id, email, normalized_email,
+                    password_hash, role, status, phone_ciphertext
+                ) VALUES (
+                    '46000000-0000-0000-0000-000000000001', '%s',
+                    'missing.key@example.com', 'missing.key@example.com',
+                    'test-password-hash', 'HR', 'ACTIVE', 'v1.example'
+                )
+                """.formatted(COMPANY_A));
         assertSqlState(connection, "23503", """
                 INSERT INTO refresh_token (
                     refresh_token_id, user_id, company_id,
