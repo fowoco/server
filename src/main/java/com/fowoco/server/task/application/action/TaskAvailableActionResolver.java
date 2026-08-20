@@ -63,13 +63,6 @@ public class TaskAvailableActionResolver {
                     TaskAvailableAction.RUN_RENEWAL
             );
         }
-        if (renewalSupported && renewal.hasMissingSource(DOCUMENT_OCR)) {
-            return TaskActionDecision.of(
-                    TaskAvailableAction.REVIEW_OCR,
-                    "OCR_REVIEW_REQUIRED",
-                    TaskAvailableAction.REVIEW_OCR
-            );
-        }
         if (renewalSupported && renewal.hasMissingSource(USER_INPUT)) {
             return TaskActionDecision.of(
                     TaskAvailableAction.RUN_RENEWAL,
@@ -98,6 +91,15 @@ public class TaskAvailableActionResolver {
                     TaskAvailableAction.REVIEW_WORKER_GUIDE
             );
         }
+        if (renewalSupported
+                && renewal.hasMissingSource(DOCUMENT_OCR)
+                && !renewal.requiresWorkerDocumentCollection()) {
+            return TaskActionDecision.of(
+                    TaskAvailableAction.REVIEW_OCR,
+                    "OCR_REVIEW_REQUIRED",
+                    TaskAvailableAction.REVIEW_OCR
+            );
+        }
 
         List<TaskAvailableAction> available = new ArrayList<>();
         if (renewal.generatedDocumentPresent()) {
@@ -124,17 +126,19 @@ public class TaskAvailableActionResolver {
             boolean executed,
             Set<String> missingSlots,
             Map<String, String> sourceByField,
+            String scenario,
             boolean guideReviewRequired,
             boolean generatedDocumentPresent
     ) {
         private static RenewalProgress from(Map<String, Object> businessData) {
             Object executionValue = businessData.get("renewal_execution");
             if (!(executionValue instanceof Map<?, ?> execution)) {
-                return new RenewalProgress(false, Set.of(), Map.of(), false, false);
+                return new RenewalProgress(false, Set.of(), Map.of(), null, false, false);
             }
 
             Set<String> missingSlots = stringSet(execution.get("missing_slots"));
             Map<String, String> sources = requestedFieldSources(execution.get("requested_fields"));
+            String scenario = stringValue(execution.get("scenario"));
             boolean guideReviewRequired = Boolean.TRUE.equals(execution.get("guide_review_required"));
             boolean generatedDocumentPresent = execution.get("generated_documents") instanceof List<?> documents
                     && !documents.isEmpty();
@@ -142,6 +146,7 @@ public class TaskAvailableActionResolver {
                     true,
                     missingSlots,
                     sources,
+                    scenario,
                     guideReviewRequired,
                     generatedDocumentPresent
             );
@@ -149,6 +154,16 @@ public class TaskAvailableActionResolver {
 
         private boolean hasMissingSource(String source) {
             return missingSlots.stream().anyMatch(slot -> source.equals(sourceByField.get(slot)));
+        }
+
+        private boolean requiresWorkerDocumentCollection() {
+            // DOCUMENT_OCR is a future value source in ask_worker. The document can only arrive
+            // after approval and Worker Link delivery, so it must not block the approval request.
+            return "ask_worker".equals(scenario);
+        }
+
+        private static String stringValue(Object value) {
+            return value instanceof String text && !text.isBlank() ? text : null;
         }
 
         private static Set<String> stringSet(Object value) {

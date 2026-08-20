@@ -213,7 +213,7 @@ class RenewalExecutionIntegrationTest {
     }
 
     @Test
-    void storesAnAgentWorkerMessageAsAnUnsentDraft() throws Exception {
+    void storesAnAgentWorkerMessageAndAllowsApprovalBeforeOcrCollection() throws Exception {
         when(runtimeClient.run(any(), any())).thenAnswer(invocation -> askWorkerResponse(invocation.getArgument(0)));
         String token = login(HR_A_EMAIL);
 
@@ -236,6 +236,19 @@ class RenewalExecutionIntegrationTest {
                 "SELECT COUNT(*) FROM audit_event WHERE action = 'DOCUMENT_REQUEST_DRAFT_SAVED'",
                 Integer.class
         )).isEqualTo(1);
+
+        long taskVersion = ((Number) JsonPath.read(response.body(), "$.task_version")).longValue();
+        HttpResponse<String> task = getTask(token);
+        assertThat(task.statusCode()).isEqualTo(200);
+        assertThat(JsonPath.<String>read(task.body(), "$.next_action"))
+                .isEqualTo("REQUEST_APPROVAL");
+        assertThat(JsonPath.<List<String>>read(task.body(), "$.available_actions"))
+                .containsExactly("REQUEST_APPROVAL");
+
+        HttpResponse<String> approval = requestApproval(token, taskVersion);
+        assertThat(approval.statusCode()).isEqualTo(201);
+        assertThat(JsonPath.<String>read(approval.body(), "$.task_status"))
+                .isEqualTo("READY_FOR_REVIEW");
     }
 
     @Test
@@ -830,6 +843,10 @@ class RenewalExecutionIntegrationTest {
     }
 
     private HttpResponse<String> requestApproval(String token) throws Exception {
+        return requestApproval(token, 0);
+    }
+
+    private HttpResponse<String> requestApproval(String token, long expectedVersion) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(
                         uri("/api/v1/tasks/" + TASK_A + "/approval-requests")
                 )
@@ -837,13 +854,21 @@ class RenewalExecutionIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.ofString("""
                         {
-                          "expected_version":0,
+                          "expected_version":%d,
                           "ai_snapshot":{"intent":"EXPIRY_RENEWAL"},
                           "hr_snapshot":{"worker_id":"%s"},
                           "changed_fields":[],
                           "source_versions":{"workflow_catalog_version":"0.2.0"}
                         }
-                        """.formatted(WORKER_A)))
+                        """.formatted(expectedVersion, WORKER_A)))
+                .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getTask(String token) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/v1/tasks/" + TASK_A))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .GET()
                 .build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
