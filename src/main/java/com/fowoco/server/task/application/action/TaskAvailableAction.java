@@ -1,0 +1,15 @@
+package com.fowoco.server.task.application.action;
+
+public enum TaskAvailableAction {
+    RUN_RENEWAL,
+    PROVIDE_REQUIRED_INFORMATION,
+    COMPLETE_CHECKLIST,
+    REVIEW_OCR,
+    REVIEW_WORKER_GUIDE,
+    REVIEW_GENERATED_DOCUMENT,
+    REQUEST_APPROVAL,
+    APPROVE,
+    ISSUE_WORKER_LINK,
+    REVIEW_WORKER_RESPONSE,
+    COMPLETE_TASK
+}

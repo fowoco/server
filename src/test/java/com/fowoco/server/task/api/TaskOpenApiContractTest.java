@@ -109,6 +109,9 @@ class TaskOpenApiContractTest {
         assertThat(task.has("target_type")).isTrue();
         assertThat(task.has("content_revision")).isTrue();
         assertThat(task.has("missing_required_slots")).isTrue();
+        assertThat(task.has("next_action")).isTrue();
+        assertThat(task.has("available_actions")).isTrue();
+        assertThat(task.has("blocked_reason")).isTrue();
         assertThat(workflow.has("supported_task_types")).isTrue();
         assertThat(workflow.has("source_ids")).isTrue();
     }

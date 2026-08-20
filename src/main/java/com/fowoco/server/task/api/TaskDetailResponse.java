@@ -3,6 +3,8 @@ package com.fowoco.server.task.api;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.fowoco.server.task.application.TaskResult;
+import com.fowoco.server.task.application.action.TaskActionDecision;
+import com.fowoco.server.task.application.action.TaskAvailableAction;
 import com.fowoco.server.task.domain.Task;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
@@ -34,12 +36,15 @@ public record TaskDetailResponse(
         long version,
         List<String> missingRequiredSlots,
         List<TaskChecklistItemResponse> checklistItems,
+        TaskAvailableAction nextAction,
+        List<TaskAvailableAction> availableActions,
+        String blockedReason,
         UUID createdBy,
         UUID updatedBy,
         Instant createdAt,
         Instant updatedAt
 ) {
-    static TaskDetailResponse from(TaskResult result) {
+    static TaskDetailResponse from(TaskResult result, TaskActionDecision actionDecision) {
         Task task = result.task();
         return new TaskDetailResponse(
                 task.taskId(),
@@ -60,6 +65,9 @@ public record TaskDetailResponse(
                 task.version(),
                 result.missingRequiredSlots(),
                 result.checklistItems().stream().map(TaskChecklistItemResponse::from).toList(),
+                actionDecision.nextAction(),
+                actionDecision.availableActions(),
+                actionDecision.blockedReason(),
                 task.createdBy(),
                 task.updatedBy(),
                 task.createdAt(),

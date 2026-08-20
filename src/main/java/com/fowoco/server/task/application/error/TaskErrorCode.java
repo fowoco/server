@@ -37,6 +37,14 @@ public enum TaskErrorCode implements ApiErrorCode {
             HttpStatus.UNPROCESSABLE_CONTENT,
             "이 업무카드에서는 재계약·연장 Agent를 실행할 수 없습니다."
     ),
+    RENEWAL_REQUEST_CONTRACT_INVALID(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "재계약·연장 Agent 요청 정보가 현재 계약과 일치하지 않습니다."
+    ),
+    RENEWAL_WORKFLOW_MISMATCH(
+            HttpStatus.UNPROCESSABLE_CONTENT,
+            "업무카드와 Agent가 선택한 Workflow가 일치하지 않습니다."
+    ),
     INVALID_RENEWAL_SLOT_ANSWER(
             HttpStatus.UNPROCESSABLE_CONTENT,
             "재계약·연장 업무에 제출한 추가 정보를 확인해 주세요."
