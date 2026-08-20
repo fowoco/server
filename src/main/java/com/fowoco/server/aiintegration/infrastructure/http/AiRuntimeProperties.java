@@ -8,6 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.ai-runtime")
 public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
 
+    private static final String ANALYSIS_ENDPOINT_PATH = "/internal/v1/analyses";
+    private static final String RENEWAL_ENDPOINT_PATH = "/internal/v1/workflows/renewal/run";
     private static final int MIN_RESPONSE_BYTES = 1_024;
     private static final int MAX_RESPONSE_BYTES = 10 * 1_024 * 1_024;
     private static final Duration MAX_OVERALL_TIMEOUT = Duration.ofMinutes(5);
@@ -180,12 +182,24 @@ public final class AiRuntimeProperties implements AiRuntimeDeadlinePolicy {
     void validateEnabledConfiguration() {
         requireHttpEndpoint(endpoint);
         requireHttpEndpoint(renewalEndpoint);
+        requireEndpointPath(endpoint, ANALYSIS_ENDPOINT_PATH, "AI_RUNTIME_ENDPOINT");
+        requireEndpointPath(renewalEndpoint, RENEWAL_ENDPOINT_PATH, "AI_RUNTIME_RENEWAL_ENDPOINT");
         requireHttpEndpoint(documentGenerationEndpoint);
         requireHttpEndpoint(documentConversionEndpoint);
         authorizationHeader();
         requirePositive(connectTimeout, "connectTimeout");
         requirePositive(overallTimeout, "overallTimeout");
         requirePositive(documentConversionTimeout, "documentConversionTimeout");
+    }
+
+    private static void requireEndpointPath(URI endpoint, String expectedSuffix, String propertyName) {
+        String path = endpoint.getPath();
+        String normalizedPath = path != null && path.endsWith("/")
+                ? path.substring(0, path.length() - 1)
+                : path;
+        if (normalizedPath == null || !normalizedPath.endsWith(expectedSuffix)) {
+            throw new IllegalStateException(propertyName + " must end with " + expectedSuffix);
+        }
     }
 
     private static URI requireHttpEndpoint(URI value) {
