@@ -6,7 +6,13 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
+import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
 import com.fowoco.server.aiintegration.application.model.AiRuntimeCallContext;
 import com.fowoco.server.aiintegration.application.renewal.RenewalCompanySnapshot;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRunRequest;
@@ -25,6 +31,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.PropertyNamingStrategies;
@@ -58,6 +65,9 @@ class RemoteRenewalRuntimeClientWireMockTest {
                 .withHeader("X-Request-Id", equalTo(request.requestId().toString()))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.worker.stayExpiryDate", equalTo("2027-08-31")
+                ))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
+                        "$.worker.createdAt", equalTo("2026-08-10T00:00:00Z")
                 ))
                 .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath(
                         "$.task.workflowId", equalTo("WF-CON-001")
@@ -112,6 +122,66 @@ class RemoteRenewalRuntimeClientWireMockTest {
                 .isEqualTo("LANGUAGE_ASSISTANT_NOT_CONFIGURED");
         assertThat(response.workerRequestMessage()).isNull();
         assertThat(response.caseSignals()).containsExactly("REVIEW_WORKER_GUIDE");
+    }
+
+    @Test
+    void logsOnlySafeValidationLocationsWhenTheAgentRejectsTheRequest() {
+        RenewalRunRequest request = request();
+        wireMock.stubFor(post(urlEqualTo(PATH))
+                .willReturn(aResponse()
+                        .withStatus(422)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {
+                                  "detail":[
+                                    {
+                                      "type":"missing",
+                                      "loc":["body","phase"],
+                                      "msg":"Field required",
+                                      "input":{"passport_number":"M12345678"}
+                                    },
+                                    {
+                                      "type":"missing",
+                                      "loc":["body","analysisInput"],
+                                      "msg":"Field required"
+                                    }
+                                  ]
+                                }
+                                """)));
+        Logger logger = (Logger) LoggerFactory.getLogger(RemoteRenewalRuntimeClient.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            assertThatThrownBy(() -> client().run(request, AiRuntimeCallContext.withoutTrace()))
+                    .isInstanceOfSatisfying(AiRuntimeCallException.class, exception ->
+                            assertThat(exception.failureCode())
+                                    .isEqualTo(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT));
+
+            assertThat(appender.list).hasSize(1);
+            assertThat(appender.list.get(0).getFormattedMessage())
+                    .contains(
+                            "request_id=" + request.requestId(),
+                            "upstream_status=422",
+                            "phase:missing",
+                            "analysisInput:missing"
+                    )
+                    .doesNotContain("passport_number", "M12345678", "Field required");
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    @Test
+    void treatsMissingRenewalEndpointAsRuntimeUnavailable() {
+        RenewalRunRequest request = request();
+        wireMock.stubFor(post(urlEqualTo(PATH)).willReturn(aResponse().withStatus(404)));
+
+        assertThatThrownBy(() -> client().run(request, AiRuntimeCallContext.withoutTrace()))
+                .isInstanceOfSatisfying(AiRuntimeCallException.class, exception ->
+                        assertThat(exception.failureCode())
+                                .isEqualTo(AiRuntimeFailureCode.RUNTIME_UNAVAILABLE));
     }
 
     private RemoteRenewalRuntimeClient client() {

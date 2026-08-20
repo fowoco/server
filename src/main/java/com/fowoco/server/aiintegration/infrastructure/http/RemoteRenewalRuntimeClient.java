@@ -12,20 +12,28 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** One transport attempt against the Agent-owned Renewal endpoint. */
 public final class RemoteRenewalRuntimeClient implements RenewalRuntimeClient {
 
+    private static final Logger log = LoggerFactory.getLogger(RemoteRenewalRuntimeClient.class);
+    private static final int MAX_VALIDATION_FIELDS = 10;
     private static final Set<AiRuntimeFailureCode> CIRCUIT_FAILURES = EnumSet.of(
             AiRuntimeFailureCode.DEADLINE_EXCEEDED,
             AiRuntimeFailureCode.RATE_LIMITED,
@@ -89,7 +97,7 @@ public final class RemoteRenewalRuntimeClient implements RenewalRuntimeClient {
             if (context.traceParent() != null) {
                 builder.header("traceparent", context.traceParent());
             }
-            RenewalRunResponse response = decode(execute(builder.build()));
+            RenewalRunResponse response = decode(execute(builder.build()), request.requestId());
             circuitBreaker.recordSuccess();
             return response;
         } catch (AiRuntimeCallException exception) {
@@ -134,10 +142,10 @@ public final class RemoteRenewalRuntimeClient implements RenewalRuntimeClient {
         }
     }
 
-    private RenewalRunResponse decode(HttpResponse<byte[]> response) {
+    private RenewalRunResponse decode(HttpResponse<byte[]> response, UUID requestId) {
         int status = response.statusCode();
         if (status < 200 || status >= 300) {
-            throw classifyStatus(status);
+            throw classifyStatus(response, requestId);
         }
         try {
             return objectMapper.readValue(response.body(), RenewalRunResponse.class);
@@ -173,7 +181,8 @@ public final class RemoteRenewalRuntimeClient implements RenewalRuntimeClient {
         return failure(AiRuntimeFailureCode.TRANSPORT_FAILURE, "AI Renewal transport failed.", failure);
     }
 
-    private AiRuntimeCallException classifyStatus(int status) {
+    private AiRuntimeCallException classifyStatus(HttpResponse<byte[]> response, UUID requestId) {
+        int status = response.statusCode();
         if (status == 408) {
             return failure(AiRuntimeFailureCode.DEADLINE_EXCEEDED, "AI Renewal deadline was exceeded.");
         }
@@ -183,10 +192,61 @@ public final class RemoteRenewalRuntimeClient implements RenewalRuntimeClient {
         if (status == 429) {
             return failure(AiRuntimeFailureCode.RATE_LIMITED, "AI Renewal rate limit was reached.");
         }
-        if (status >= 500) {
+        if (status == 404 || status == 405 || status >= 500) {
             return failure(AiRuntimeFailureCode.RUNTIME_UNAVAILABLE, "AI Renewal is unavailable.");
         }
+        if (status == 400 || status == 422) {
+            List<String> validationFields = safeValidationFields(response.body());
+            log.warn(
+                    "event=ai_renewal_request_rejected request_id={} upstream_status={} validation_fields={}",
+                    requestId,
+                    status,
+                    validationFields
+            );
+        }
         return failure(AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT, "AI Renewal rejected the request contract.");
+    }
+
+    /** Extracts only schema locations and validation types; values and Provider messages are never logged. */
+    private List<String> safeValidationFields(byte[] responseBody) {
+        try {
+            JsonNode detail = objectMapper.readTree(responseBody).path("detail");
+            if (!detail.isArray()) {
+                return List.of();
+            }
+            List<String> fields = new ArrayList<>();
+            for (JsonNode validation : detail) {
+                if (fields.size() >= MAX_VALIDATION_FIELDS) {
+                    break;
+                }
+                JsonNode location = validation.path("loc");
+                if (!location.isArray()) {
+                    continue;
+                }
+                List<String> segments = new ArrayList<>();
+                for (JsonNode segment : location) {
+                    String value = safeToken(segment.asString(""));
+                    if (!value.isBlank() && !"body".equals(value)) {
+                        segments.add(value);
+                    }
+                }
+                if (!segments.isEmpty()) {
+                    String type = safeToken(validation.path("type").asString("invalid"));
+                    fields.add(String.join(".", segments) + ":" + type);
+                }
+            }
+            return List.copyOf(fields);
+        } catch (JacksonException exception) {
+            return List.of();
+        }
+    }
+
+    private String safeToken(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String sanitized = value.replaceAll("[^A-Za-z0-9_-]", "");
+        return sanitized.substring(0, Math.min(sanitized.length(), 64));
     }
 
     private Throwable unwrap(Throwable throwable) {
