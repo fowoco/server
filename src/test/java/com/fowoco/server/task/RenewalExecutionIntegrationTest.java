@@ -14,6 +14,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fowoco.server.aiintegration.application.document.DocumentGenerationClient;
 import com.fowoco.server.aiintegration.application.document.GeneratedDocumentFile;
+import com.fowoco.server.aiintegration.application.error.AiRuntimeCallException;
+import com.fowoco.server.aiintegration.application.error.AiRuntimeFailureCode;
 import com.fowoco.server.aiintegration.application.port.RenewalRuntimeClient;
 import com.fowoco.server.aiintegration.application.renewal.RenewalGeneratedDocument;
 import com.fowoco.server.aiintegration.application.renewal.RenewalRequestedField;
@@ -178,6 +180,36 @@ class RenewalExecutionIntegrationTest {
                 "SELECT COUNT(*) FROM audit_event WHERE target_id = ? AND action = 'TASK_UPDATED'",
                 Integer.class, TASK_A
         )).isEqualTo(1);
+    }
+
+    @Test
+    void distinguishesAnInvalidRenewalRequestContract() throws Exception {
+        when(runtimeClient.run(any(), any())).thenThrow(new AiRuntimeCallException(
+                AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT,
+                "invalid test contract"
+        ));
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("RENEWAL_REQUEST_CONTRACT_INVALID");
+    }
+
+    @Test
+    void distinguishesAnUnexpectedAgentWorkflow() throws Exception {
+        when(runtimeClient.run(any(), any())).thenThrow(new AiRuntimeCallException(
+                AiRuntimeFailureCode.UNEXPECTED_WORKFLOW,
+                "unexpected test workflow"
+        ));
+        String token = login(HR_A_EMAIL);
+
+        HttpResponse<String> response = postRenewal(token, 0);
+
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(JsonPath.<String>read(response.body(), "$.code"))
+                .isEqualTo("RENEWAL_WORKFLOW_MISMATCH");
     }
 
     @Test

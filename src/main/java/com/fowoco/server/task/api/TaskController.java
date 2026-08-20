@@ -5,6 +5,7 @@ import com.fowoco.server.auth.application.port.ActorContextProvider;
 import com.fowoco.server.common.web.RequestMetadata;
 import com.fowoco.server.task.application.TaskResult;
 import com.fowoco.server.task.application.TaskWorkflowService;
+import com.fowoco.server.task.application.action.TaskAvailableActionResolver;
 import com.fowoco.server.task.domain.TaskSource;
 import com.fowoco.server.task.domain.TaskStatus;
 import com.fowoco.server.task.domain.TaskTargetType;
@@ -45,13 +46,16 @@ public class TaskController {
 
     private final TaskWorkflowService taskService;
     private final ActorContextProvider actorContextProvider;
+    private final TaskAvailableActionResolver actionResolver;
 
     public TaskController(
             TaskWorkflowService taskService,
-            ActorContextProvider actorContextProvider
+            ActorContextProvider actorContextProvider,
+            TaskAvailableActionResolver actionResolver
     ) {
         this.taskService = taskService;
         this.actorContextProvider = actorContextProvider;
+        this.actionResolver = actionResolver;
     }
 
     @Operation(operationId = "listTasks", summary = "업무카드 목록 조회")
@@ -115,7 +119,7 @@ public class TaskController {
                 .path("/{taskId}")
                 .buildAndExpand(result.task().taskId())
                 .toUri();
-        return ResponseEntity.created(location).body(TaskDetailResponse.from(result));
+        return ResponseEntity.created(location).body(response(result));
     }
 
     @Operation(operationId = "getTask", summary = "업무카드 상세 조회")
@@ -126,7 +130,7 @@ public class TaskController {
     @PreAuthorize("hasAnyRole('ADMIN', 'HR', 'VIEWER')")
     @GetMapping(path = "/{taskId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public TaskDetailResponse findById(@PathVariable UUID taskId) {
-        return TaskDetailResponse.from(taskService.findById(taskId, actor()));
+        return response(taskService.findById(taskId, actor()));
     }
 
     @Operation(
@@ -151,7 +155,7 @@ public class TaskController {
             @Valid @RequestBody UpdateTaskRequest request,
             HttpServletRequest servletRequest
     ) {
-        return TaskDetailResponse.from(taskService.update(
+        return response(taskService.update(
                 taskId,
                 request.toCommand(),
                 actor(),
@@ -183,7 +187,7 @@ public class TaskController {
             @Valid @RequestBody ChangeTaskAssigneeRequest request,
             HttpServletRequest servletRequest
     ) {
-        return TaskDetailResponse.from(taskService.changeAssignee(
+        return response(taskService.changeAssignee(
                 taskId,
                 request.toCommand(),
                 actor(),
@@ -210,7 +214,7 @@ public class TaskController {
             @Valid @RequestBody UpdateChecklistItemRequest request,
             HttpServletRequest servletRequest
     ) {
-        return TaskDetailResponse.from(taskService.updateChecklistItem(
+        return response(taskService.updateChecklistItem(
                 taskId,
                 itemId,
                 request.toCommand(),
@@ -237,7 +241,7 @@ public class TaskController {
             @Valid @RequestBody CancelTaskRequest request,
             HttpServletRequest servletRequest
     ) {
-        return TaskDetailResponse.from(taskService.cancel(
+        return response(taskService.cancel(
                 taskId,
                 request.toCommand(),
                 actor(),
@@ -247,5 +251,9 @@ public class TaskController {
 
     private ActorContext actor() {
         return actorContextProvider.requireCurrentActor();
+    }
+
+    private TaskDetailResponse response(TaskResult result) {
+        return TaskDetailResponse.from(result, actionResolver.resolve(result));
     }
 }

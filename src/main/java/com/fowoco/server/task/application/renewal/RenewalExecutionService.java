@@ -205,9 +205,13 @@ public final class RenewalExecutionService {
     }
 
     private ApiException contractFailure(AiRuntimeFailureCode code) {
-        if (code == AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT
-                || code == AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED
-                || code == AiRuntimeFailureCode.UNEXPECTED_WORKFLOW) {
+        if (code == AiRuntimeFailureCode.INVALID_REQUEST_CONTRACT) {
+            return new ApiException(TaskErrorCode.RENEWAL_REQUEST_CONTRACT_INVALID);
+        }
+        if (code == AiRuntimeFailureCode.UNEXPECTED_WORKFLOW) {
+            return new ApiException(TaskErrorCode.RENEWAL_WORKFLOW_MISMATCH);
+        }
+        if (code == AiRuntimeFailureCode.SENSITIVE_DATA_REJECTED) {
             return new ApiException(TaskErrorCode.RENEWAL_EXECUTION_NOT_ALLOWED);
         }
         return new ApiException(TaskErrorCode.RENEWAL_RUNTIME_UNAVAILABLE);
