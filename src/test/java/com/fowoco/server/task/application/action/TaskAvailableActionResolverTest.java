@@ -41,10 +41,32 @@ class TaskAvailableActionResolverTest {
     }
 
     @Test
-    void ocrMissingFieldMustBeReviewedBeforeManualRenewal() {
+    void workerDocumentCollectionRequiresApprovalBeforeFutureOcrReview() {
+        TaskActionDecision decision = resolver.resolve(result(
+                TaskStatus.DRAFT,
+                renewalExecution(
+                        "ask_worker",
+                        false,
+                        List.of("passport_number"),
+                        List.of(Map.of("key", "passport_number", "source_hint", "DOCUMENT_OCR")),
+                        List.of()
+                ),
+                List.of(completedChecklist()),
+                List.of()
+        ));
+
+        assertThat(decision.nextAction()).isEqualTo(TaskAvailableAction.REQUEST_APPROVAL);
+        assertThat(decision.availableActions()).containsExactly(TaskAvailableAction.REQUEST_APPROVAL);
+        assertThat(decision.blockedReason()).isEqualTo("APPROVAL_REQUIRED_BEFORE_CONTINUATION");
+    }
+
+    @Test
+    void ocrScenarioCanStillRequireReview() {
         TaskActionDecision decision = resolver.resolve(result(
                 TaskStatus.NEEDS_INFO,
                 renewalExecution(
+                        "ocr",
+                        false,
                         List.of("passport_number"),
                         List.of(Map.of("key", "passport_number", "source_hint", "DOCUMENT_OCR")),
                         List.of()
@@ -54,8 +76,28 @@ class TaskAvailableActionResolverTest {
         ));
 
         assertThat(decision.nextAction()).isEqualTo(TaskAvailableAction.REVIEW_OCR);
-        assertThat(decision.availableActions()).doesNotContain(TaskAvailableAction.RUN_RENEWAL);
+        assertThat(decision.availableActions()).containsExactly(TaskAvailableAction.REVIEW_OCR);
         assertThat(decision.blockedReason()).isEqualTo("OCR_REVIEW_REQUIRED");
+    }
+
+    @Test
+    void workerGuideReviewPrecedesApprovalWithFutureOcrFields() {
+        TaskActionDecision decision = resolver.resolve(result(
+                TaskStatus.DRAFT,
+                renewalExecution(
+                        "ask_worker",
+                        true,
+                        List.of("passport_number"),
+                        List.of(Map.of("key", "passport_number", "source_hint", "DOCUMENT_OCR")),
+                        List.of()
+                ),
+                List.of(completedChecklist()),
+                List.of()
+        ));
+
+        assertThat(decision.nextAction()).isEqualTo(TaskAvailableAction.REVIEW_WORKER_GUIDE);
+        assertThat(decision.availableActions()).containsExactly(TaskAvailableAction.REVIEW_WORKER_GUIDE);
+        assertThat(decision.blockedReason()).isEqualTo("WORKER_GUIDE_REVIEW_REQUIRED");
     }
 
     @Test
@@ -169,10 +211,21 @@ class TaskAvailableActionResolverTest {
             List<Map<String, String>> requestedFields,
             List<Map<String, String>> generatedDocuments
     ) {
+        return renewalExecution("generate", false, missingSlots, requestedFields, generatedDocuments);
+    }
+
+    private Map<String, Object> renewalExecution(
+            String scenario,
+            boolean guideReviewRequired,
+            List<String> missingSlots,
+            List<Map<String, String>> requestedFields,
+            List<Map<String, String>> generatedDocuments
+    ) {
         return Map.of("renewal_execution", Map.of(
+                "scenario", scenario,
                 "missing_slots", missingSlots,
                 "requested_fields", requestedFields,
-                "guide_review_required", false,
+                "guide_review_required", guideReviewRequired,
                 "generated_documents", generatedDocuments
         ));
     }
